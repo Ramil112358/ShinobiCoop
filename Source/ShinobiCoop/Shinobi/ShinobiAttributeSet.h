@@ -22,7 +22,11 @@ public:
 	virtual void PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue) override;
 	virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data) override;
 
-	/** Server only. Fires each time Health goes from above 0 to 0. */
+	/**
+	 * Server only. Fires each time Health goes from above 0 to 0.
+	 * Broadcast from inside PostAttributeChange, i.e. mid gameplay-effect-execute: handlers must
+	 * not change Health synchronously from here. Defer (timer / next tick) if a handler needs to.
+	 */
 	FShinobiOutOfHealthDelegate OnOutOfHealth;
 
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Health, Category = "Shinobi")

@@ -64,7 +64,32 @@ void UShinobiAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribu
 {
 	Super::PostAttributeChange(Attribute, OldValue, NewValue);
 	const AActor* Owner = GetOwningActor();
-	if (Attribute == GetHealthAttribute() && OldValue > 0.f && NewValue <= 0.f && Owner && Owner->HasAuthority())
+	const bool bAuthority = Owner && Owner->HasAuthority();
+
+	// When a Max attribute shrinks, force the corresponding current value back down to the new
+	// cap. ApplyModToAttribute does not recurse into Pre/PostGameplayEffectExecute, so this is
+	// safe to call from here, and it internally no-ops on non-authority.
+	if (bAuthority)
+	{
+		if (Attribute == GetMaxHealthAttribute() && GetHealth() > NewValue)
+		{
+			GetOwningAbilitySystemComponent()->ApplyModToAttribute(GetHealthAttribute(), EGameplayModOp::Override, NewValue);
+		}
+		else if (Attribute == GetMaxChakraAttribute() && GetChakra() > NewValue)
+		{
+			GetOwningAbilitySystemComponent()->ApplyModToAttribute(GetChakraAttribute(), EGameplayModOp::Override, NewValue);
+		}
+		else if (Attribute == GetMaxStaminaAttribute() && GetStamina() > NewValue)
+		{
+			GetOwningAbilitySystemComponent()->ApplyModToAttribute(GetStaminaAttribute(), EGameplayModOp::Override, NewValue);
+		}
+		else if (Attribute == GetMaxSubstitutionChargesAttribute() && GetSubstitutionCharges() > NewValue)
+		{
+			GetOwningAbilitySystemComponent()->ApplyModToAttribute(GetSubstitutionChargesAttribute(), EGameplayModOp::Override, NewValue);
+		}
+	}
+
+	if (Attribute == GetHealthAttribute() && OldValue > 0.f && NewValue <= 0.f && bAuthority)
 	{
 		OnOutOfHealth.Broadcast();
 	}

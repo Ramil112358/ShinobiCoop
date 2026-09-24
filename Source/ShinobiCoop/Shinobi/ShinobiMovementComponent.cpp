@@ -101,3 +101,15 @@ FNetworkPredictionData_Client* UShinobiMovementComponent::GetPredictionData_Clie
 	}
 	return ClientPredictionData;
 }
+
+bool UShinobiMovementComponent::ClientUpdatePositionAfterServerUpdate()
+{
+	// Super replays unacked moves via PrepMoveFor/UpdateFromCompressedFlags, which overwrites
+	// bWantsToSprint with each replayed move's flag in turn. The engine does the same
+	// save/restore for bWantsToCrouch around this call (CharacterMovementComponent.cpp), so we
+	// mirror that here: the last replayed move would otherwise win instead of the current input.
+	const bool bRealWantsToSprint = bWantsToSprint;
+	const bool bResult = Super::ClientUpdatePositionAfterServerUpdate();
+	bWantsToSprint = bRealWantsToSprint;
+	return bResult;
+}

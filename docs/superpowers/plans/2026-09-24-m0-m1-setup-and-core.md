@@ -460,7 +460,14 @@ struct FShinobiTestWorld
 		FURL URL;
 		World->InitializeActorsForPlay(URL);
 		World->BeginPlay();
+		// There is no GameMode in this throwaway world, so UWorld::BeginPlay() never calls
+		// GameMode->StartPlay(), which is what normally reaches AWorldSettings::NotifyBeginPlay().
+		// Without it World::HasBegunPlay() stays false and spawned actors never get DispatchBeginPlay.
+		World->GetWorldSettings()->NotifyBeginPlay();
 	}
+
+	FShinobiTestWorld(const FShinobiTestWorld&) = delete;
+	FShinobiTestWorld& operator=(const FShinobiTestWorld&) = delete;
 
 	~FShinobiTestWorld()
 	{
@@ -564,6 +571,7 @@ bool FShinobiAttributeDefaultsTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
 	AShinobiCharacterBase* C = W.Spawn<AShinobiCharacterBase>();
+	TestTrue(TEXT("BeginPlay routed"), C->HasActorBegunPlay());
 	TestEqual(TEXT("Health"), ShinobiTest::Get(C, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
 	TestEqual(TEXT("MaxHealth"), ShinobiTest::Get(C, UShinobiAttributeSet::GetMaxHealthAttribute()), 500.f);
 	TestEqual(TEXT("Chakra"), ShinobiTest::Get(C, UShinobiAttributeSet::GetChakraAttribute()), 100.f);
@@ -700,7 +708,11 @@ public:
 	virtual void PostAttributeChange(const FGameplayAttribute& Attribute, float OldValue, float NewValue) override;
 	virtual void PostGameplayEffectExecute(const FGameplayEffectModCallbackData& Data) override;
 
-	/** Server only. Fires each time Health goes from above 0 to 0. */
+	/**
+	 * Server only. Fires each time Health goes from above 0 to 0.
+	 * Broadcast from inside PostAttributeChange, i.e. mid gameplay-effect-execute: handlers must
+	 * not change Health synchronously from here. Defer (timer / next tick) if a handler needs to.
+	 */
 	FShinobiOutOfHealthDelegate OnOutOfHealth;
 
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Health, Category = "Shinobi")
@@ -824,7 +836,32 @@ void UShinobiAttributeSet::PostAttributeChange(const FGameplayAttribute& Attribu
 {
 	Super::PostAttributeChange(Attribute, OldValue, NewValue);
 	const AActor* Owner = GetOwningActor();
-	if (Attribute == GetHealthAttribute() && OldValue > 0.f && NewValue <= 0.f && Owner && Owner->HasAuthority())
+	const bool bAuthority = Owner && Owner->HasAuthority();
+
+	// When a Max attribute shrinks, force the corresponding current value back down to the new
+	// cap. ApplyModToAttribute does not recurse into Pre/PostGameplayEffectExecute, so this is
+	// safe to call from here, and it internally no-ops on non-authority.
+	if (bAuthority)
+	{
+		if (Attribute == GetMaxHealthAttribute() && GetHealth() > NewValue)
+		{
+			GetOwningAbilitySystemComponent()->ApplyModToAttribute(GetHealthAttribute(), EGameplayModOp::Override, NewValue);
+		}
+		else if (Attribute == GetMaxChakraAttribute() && GetChakra() > NewValue)
+		{
+			GetOwningAbilitySystemComponent()->ApplyModToAttribute(GetChakraAttribute(), EGameplayModOp::Override, NewValue);
+		}
+		else if (Attribute == GetMaxStaminaAttribute() && GetStamina() > NewValue)
+		{
+			GetOwningAbilitySystemComponent()->ApplyModToAttribute(GetStaminaAttribute(), EGameplayModOp::Override, NewValue);
+		}
+		else if (Attribute == GetMaxSubstitutionChargesAttribute() && GetSubstitutionCharges() > NewValue)
+		{
+			GetOwningAbilitySystemComponent()->ApplyModToAttribute(GetSubstitutionChargesAttribute(), EGameplayModOp::Override, NewValue);
+		}
+	}
+
+	if (Attribute == GetHealthAttribute() && OldValue > 0.f && NewValue <= 0.f && bAuthority)
 	{
 		OnOutOfHealth.Broadcast();
 	}
@@ -1025,6 +1062,7 @@ public:
 	virtual float GetMaxSpeed() const override;
 	virtual void UpdateFromCompressedFlags(uint8 Flags) override;
 	virtual FNetworkPredictionData_Client* GetPredictionData_Client() const override;
+	virtual bool ClientUpdatePositionAfterServerUpdate() override;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	float SprintSpeed = 900.f;
@@ -1139,6 +1177,18 @@ FNetworkPredictionData_Client* UShinobiMovementComponent::GetPredictionData_Clie
 	}
 	return ClientPredictionData;
 }
+
+bool UShinobiMovementComponent::ClientUpdatePositionAfterServerUpdate()
+{
+	// Super replays unacked moves via PrepMoveFor/UpdateFromCompressedFlags, which overwrites
+	// bWantsToSprint with each replayed move's flag in turn. The engine does the same
+	// save/restore for bWantsToCrouch around this call (CharacterMovementComponent.cpp), so we
+	// mirror that here: the last replayed move would otherwise win instead of the current input.
+	const bool bRealWantsToSprint = bWantsToSprint;
+	const bool bResult = Super::ClientUpdatePositionAfterServerUpdate();
+	bWantsToSprint = bRealWantsToSprint;
+	return bResult;
+}
 ```
 
 - [ ] **Step 12: Write `Source/ShinobiCoop/Shinobi/Abilities/ShinobiGameplayAbility.h`**
@@ -1221,11 +1271,21 @@ UShinobiMovementComponent* UShinobiGameplayAbility::GetShinobiMovement() const
 
 FActiveGameplayEffectHandle UShinobiGameplayAbility::ApplyEffectToSelf(TSubclassOf<UGameplayEffect> EffectClass) const
 {
-	return ApplyGameplayEffectToOwner(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, EffectClass->GetDefaultObject<UGameplayEffect>(), 1.f);
+	if (!ensure(EffectClass))
+	{
+		return FActiveGameplayEffectHandle();
+	}
+	return ApplyGameplayEffectToOwner(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, EffectClass->GetDefaultObject<UGameplayEffect>(), GetAbilityLevel());
 }
 
 void UShinobiGameplayAbility::ApplyDamage(AShinobiCharacterBase* Target, float Amount) const
 {
+	// Predicted (LocalPredicted) abilities run this on the owning client too; without this guard
+	// the client would apply damage to Target locally in addition to the server's authoritative copy.
+	if (!HasAuthority(&CurrentActivationInfo))
+	{
+		return;
+	}
 	UAbilitySystemComponent* Source = GetAbilitySystemComponentFromActorInfo();
 	if (!Source || !Target)
 	{
@@ -1432,7 +1492,10 @@ void AShinobiCharacterBase::GrantStartupAbilitiesAndEffects()
 			continue;
 		}
 		const UShinobiGameplayAbility* Ability = AbilityClass->GetDefaultObject<UShinobiGameplayAbility>();
-		AbilitySystem->GiveAbility(FGameplayAbilitySpec(AbilityClass, 1, static_cast<int32>(Ability->InputID), this));
+		// Input ID 0 is a valid ASC input slot; None must map to INDEX_NONE so a stray
+		// AbilityLocalInputPressed(0) doesn't activate every unbound ability.
+		const int32 InputID = (Ability->InputID == EShinobiAbilityInputID::None) ? INDEX_NONE : static_cast<int32>(Ability->InputID);
+		AbilitySystem->GiveAbility(FGameplayAbilitySpec(AbilityClass, 1, InputID, this));
 	}
 
 	for (const TSubclassOf<UGameplayEffect>& EffectClass : StartupEffects)
@@ -3449,3 +3512,10 @@ git tag m1-core
 **Placeholder scan:** no TBD/TODO; every code step has complete code.
 
 **Type consistency:** `EShinobiAbilityInputID` {None, Melee, Dodge, Sprint, ChakraCharge} is used consistently by the abilities, the input config and the tests. `ShinobiTest::*` helpers match their uses. The effect class names (`UGE_Damage`, `UGE_ChakraGain`, `UGE_ChakraRegen`, `UGE_StaminaRegen`, `UGE_StaminaRegenDelay`, `UGE_SprintDrain`, `UGE_DodgeCost`, `UGE_DodgeIFrames`, `UGE_ChakraCharge`) match between header, cpp and tests. Montage paths match between `setup_m1.py` and the ability constructors.
+
+---
+
+## Carry-forward notes for M2+
+
+- `UGE_Damage` currently refuses application while the target has `State.Invulnerable`. When M2 adds `UShinobiDamageExec` (perfect dodge → Substitution), remove that application requirement and let the exec zero the damage and fire `Event.Substitution`, otherwise the exec never runs during i-frames.
+- `OnOutOfHealth` carries no instigator; M3 downed/kill logic that needs the attacker should pass the GE context (e.g. broadcast from PostGameplayEffectExecute with `Data.EffectSpec.GetContext()`).

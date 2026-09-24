@@ -86,7 +86,10 @@ void AShinobiCharacterBase::GrantStartupAbilitiesAndEffects()
 			continue;
 		}
 		const UShinobiGameplayAbility* Ability = AbilityClass->GetDefaultObject<UShinobiGameplayAbility>();
-		AbilitySystem->GiveAbility(FGameplayAbilitySpec(AbilityClass, 1, static_cast<int32>(Ability->InputID), this));
+		// Input ID 0 is a valid ASC input slot; None must map to INDEX_NONE so a stray
+		// AbilityLocalInputPressed(0) doesn't activate every unbound ability.
+		const int32 InputID = (Ability->InputID == EShinobiAbilityInputID::None) ? INDEX_NONE : static_cast<int32>(Ability->InputID);
+		AbilitySystem->GiveAbility(FGameplayAbilitySpec(AbilityClass, 1, InputID, this));
 	}
 
 	for (const TSubclassOf<UGameplayEffect>& EffectClass : StartupEffects)

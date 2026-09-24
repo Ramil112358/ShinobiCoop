@@ -25,11 +25,21 @@ UShinobiMovementComponent* UShinobiGameplayAbility::GetShinobiMovement() const
 
 FActiveGameplayEffectHandle UShinobiGameplayAbility::ApplyEffectToSelf(TSubclassOf<UGameplayEffect> EffectClass) const
 {
-	return ApplyGameplayEffectToOwner(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, EffectClass->GetDefaultObject<UGameplayEffect>(), 1.f);
+	if (!ensure(EffectClass))
+	{
+		return FActiveGameplayEffectHandle();
+	}
+	return ApplyGameplayEffectToOwner(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, EffectClass->GetDefaultObject<UGameplayEffect>(), GetAbilityLevel());
 }
 
 void UShinobiGameplayAbility::ApplyDamage(AShinobiCharacterBase* Target, float Amount) const
 {
+	// Predicted (LocalPredicted) abilities run this on the owning client too; without this guard
+	// the client would apply damage to Target locally in addition to the server's authoritative copy.
+	if (!HasAuthority(&CurrentActivationInfo))
+	{
+		return;
+	}
 	UAbilitySystemComponent* Source = GetAbilitySystemComponentFromActorInfo();
 	if (!Source || !Target)
 	{

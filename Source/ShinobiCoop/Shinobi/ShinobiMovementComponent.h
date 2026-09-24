@@ -19,6 +19,7 @@ public:
 	virtual float GetMaxSpeed() const override;
 	virtual void UpdateFromCompressedFlags(uint8 Flags) override;
 	virtual FNetworkPredictionData_Client* GetPredictionData_Client() const override;
+	virtual bool ClientUpdatePositionAfterServerUpdate() override;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	float SprintSpeed = 900.f;

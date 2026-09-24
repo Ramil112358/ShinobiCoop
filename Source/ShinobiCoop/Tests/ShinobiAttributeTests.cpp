@@ -7,6 +7,7 @@ bool FShinobiAttributeDefaultsTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
 	AShinobiCharacterBase* C = W.Spawn<AShinobiCharacterBase>();
+	TestTrue(TEXT("BeginPlay routed"), C->HasActorBegunPlay());
 	TestEqual(TEXT("Health"), ShinobiTest::Get(C, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
 	TestEqual(TEXT("MaxHealth"), ShinobiTest::Get(C, UShinobiAttributeSet::GetMaxHealthAttribute()), 500.f);
 	TestEqual(TEXT("Chakra"), ShinobiTest::Get(C, UShinobiAttributeSet::GetChakraAttribute()), 100.f);

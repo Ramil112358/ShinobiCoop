@@ -30,7 +30,14 @@ struct FShinobiTestWorld
 		FURL URL;
 		World->InitializeActorsForPlay(URL);
 		World->BeginPlay();
+		// There is no GameMode in this throwaway world, so UWorld::BeginPlay() never calls
+		// GameMode->StartPlay(), which is what normally reaches AWorldSettings::NotifyBeginPlay().
+		// Without it World::HasBegunPlay() stays false and spawned actors never get DispatchBeginPlay.
+		World->GetWorldSettings()->NotifyBeginPlay();
 	}
+
+	FShinobiTestWorld(const FShinobiTestWorld&) = delete;
+	FShinobiTestWorld& operator=(const FShinobiTestWorld&) = delete;
 
 	~FShinobiTestWorld()
 	{
