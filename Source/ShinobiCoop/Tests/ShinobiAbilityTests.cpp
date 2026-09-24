@@ -6,6 +6,7 @@
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/Abilities/GA_Sprint.h"
 #include "Shinobi/Abilities/GA_Dodge.h"
+#include "Shinobi/Abilities/GA_ChakraCharge.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSprintTest, "ShinobiCoop.Abilities.SprintDrainsStaminaThenRegenAfterDelay", ShinobiTestFlags)
 bool FShinobiSprintTest::RunTest(const FString& Parameters)
@@ -116,6 +117,27 @@ bool FShinobiDodgeTest::RunTest(const FString& Parameters)
 	ShinobiTest::Press(P, EShinobiAbilityInputID::Dodge);
 	TestTrue(TEXT("Dodge active at exactly 25 stamina"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
 	TestEqual(TEXT("Stamina exactly spent"), ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute()), 0.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChakraChargeTest, "ShinobiCoop.Abilities.ChakraChargeRefillsWhileHeld", ShinobiTestFlags)
+bool FShinobiChakraChargeTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Set(P, UShinobiAttributeSet::GetChakraAttribute(), 0.f);
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
+	TestTrue(TEXT("Charging tag"), ShinobiTest::HasTag(P, ShinobiTags::State_ChakraCharging));
+	W.Tick(1.1f);
+	const float Charged = ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute());
+	TestTrue(FString::Printf(TEXT("~27.5 chakra after 1.1s charge (got %.2f)"), Charged), Charged >= 24.f && Charged <= 35.f);
+
+	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
+	TestFalse(TEXT("Charge ended"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+	TestFalse(TEXT("Charging tag removed"), ShinobiTest::HasTag(P, ShinobiTags::State_ChakraCharging));
+	W.Tick(0.5f);
+	TestTrue(TEXT("Only passive regen after release"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()) <= Charged + 1.5f);
 	return true;
 }
 
