@@ -51,22 +51,22 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
-	InputConfig = UShinobiInputConfig::Build(this);
+	const UShinobiInputConfig& InputConfig = UShinobiInputConfig::Get();
 
 	if (const APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
 		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
 		{
-			Subsystem->AddMappingContext(InputConfig->Context, 0);
+			Subsystem->AddMappingContext(InputConfig.Context, ShinobiInputPriority);
 		}
 	}
 
 	UEnhancedInputComponent* Input = CastChecked<UEnhancedInputComponent>(PlayerInputComponent);
-	Input->BindAction(InputConfig->Move, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Move);
-	Input->BindAction(InputConfig->Look, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Look);
-	Input->BindAction(InputConfig->Jump, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::JumpPressed);
-	Input->BindAction(InputConfig->Jump, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
-	for (const TPair<EShinobiAbilityInputID, TObjectPtr<UInputAction>>& Pair : InputConfig->AbilityActions)
+	Input->BindAction(InputConfig.Move, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Move);
+	Input->BindAction(InputConfig.Look, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Look);
+	Input->BindAction(InputConfig.Jump, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::JumpPressed);
+	Input->BindAction(InputConfig.Jump, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
+	for (const TPair<EShinobiAbilityInputID, TObjectPtr<UInputAction>>& Pair : InputConfig.AbilityActions)
 	{
 		Input->BindAction(Pair.Value, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::AbilityInputPressed, Pair.Key);
 		Input->BindAction(Pair.Value, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::AbilityInputReleased, Pair.Key);

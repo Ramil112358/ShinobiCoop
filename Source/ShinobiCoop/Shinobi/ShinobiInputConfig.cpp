@@ -37,10 +37,18 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 	}
 	AddModifier<UInputModifierNegate>(Ctx->MapKey(Config->Move, EKeys::A), Ctx);
 	Ctx->MapKey(Config->Move, EKeys::D);
-	Ctx->MapKey(Config->Move, EKeys::Gamepad_Left2D);
+	AddModifier<UInputModifierDeadZone>(Ctx->MapKey(Config->Move, EKeys::Gamepad_Left2D), Ctx);
 
 	// Look: mouse + right stick.
-	// ponytail: Y inversion and stick speed are calibration knobs (project has bEnableLegacyInputScales=True)
+	// Y must be negated on both devices: this project has bEnableLegacyInputScales=True
+	// (DefaultInput.ini), so AddControllerPitchInput/AddControllerYawInput apply the engine's
+	// default APlayerController::InputPitchScale=-2.5 / InputYawScale=2.5 (BaseGame.ini) on top of
+	// whatever we send. Mouse2D also picks up an automatic Scalar(0.07) sensitivity modifier from
+	// BaseInput.ini's AxisConfig, since EnhancedInput only auto-applies AxisConfig to mouse keys, not
+	// gamepad axes (see EnhancedInputSubsystemInterface::ApplyAxisPropertyModifiers). Flipping
+	// bEnableLegacyInputScales to False would change the pitch sign and both look speeds, so the
+	// negation here is load-bearing, not a preference; only the stick's Scalar magnitude below is a
+	// calibration knob.
 	Config->Look = MakeAction(Config, TEXT("IA_Look"), EInputActionValueType::Axis2D);
 	{
 		UInputModifierNegate* InvertY = AddModifier<UInputModifierNegate>(Ctx->MapKey(Config->Look, EKeys::Mouse2D), Ctx);
@@ -49,6 +57,8 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 	}
 	{
 		FEnhancedActionKeyMapping& Stick = Ctx->MapKey(Config->Look, EKeys::Gamepad_Right2D);
+		// Dead zone must run first, before the stick is negated/scaled, so it sees the raw axis value.
+		AddModifier<UInputModifierDeadZone>(Stick, Ctx);
 		UInputModifierNegate* InvertY = AddModifier<UInputModifierNegate>(Stick, Ctx);
 		InvertY->bX = false;
 		InvertY->bZ = false;
@@ -73,4 +83,15 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 	AddAbility(EShinobiAbilityInputID::ChakraCharge, TEXT("IA_ChakraCharge"), EKeys::C, EKeys::Gamepad_LeftShoulder);
 
 	return Config;
+}
+
+const UShinobiInputConfig& UShinobiInputConfig::Get()
+{
+	static UShinobiInputConfig* Instance = []
+	{
+		UShinobiInputConfig* Config = Build(GetTransientPackage());
+		Config->AddToRoot(); // lives for the process, like an input asset
+		return Config;
+	}();
+	return *Instance;
 }

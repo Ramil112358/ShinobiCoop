@@ -55,6 +55,7 @@ Spec: `docs/superpowers/specs/2026-09-23-combat-slice-design.md` (milestones M0 
 | `Source/ShinobiCoop/Tests/ShinobiTestWorld.h` | Test world + helpers |
 | `Source/ShinobiCoop/Tests/ShinobiAttributeTests.cpp` | Attribute/effect tests |
 | `Source/ShinobiCoop/Tests/ShinobiAbilityTests.cpp` | Ability tests |
+| `Source/ShinobiCoop/Tests/ShinobiInputTests.cpp` | Input mapping/modifier data tests (no world needed) |
 
 ---
 
@@ -2832,8 +2833,9 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 **Files:**
 - Create: `Source/ShinobiCoop/Shinobi/ShinobiInputConfig.h`, `ShinobiInputConfig.cpp`
 - Replace: `Source/ShinobiCoop/Shinobi/ShinobiPlayerCharacter.h`, `ShinobiPlayerCharacter.cpp`
+- Create: `Source/ShinobiCoop/Tests/ShinobiInputTests.cpp`
 
-No new automated test: input binding needs a local player, so it is covered by the manual check in Task 14. The existing tests guard against regressions.
+Manually verifying feel (mouse/stick look, dead zones, correct WASD directions in-game) needs a local player, so that part is covered by the manual check in Task 14. But the mapping *data* itself (axis math, key counts, dead-zone presence) needs no world or local player, so it gets one automation test below. The existing tests guard against regressions elsewhere.
 
 - [ ] **Step 1: Write `Source/ShinobiCoop/Shinobi/ShinobiInputConfig.h`**
 
@@ -2848,6 +2850,9 @@ No new automated test: input binding needs a local player, so it is covered by t
 class UInputAction;
 class UInputMappingContext;
 
+/** Priority IMC_Shinobi is added at. An M2+ jutsu-modifier context must be added above this. */
+constexpr int32 ShinobiInputPriority = 1;
+
 /** All input actions and the mapping context, constructed in code so no input assets are needed. */
 UCLASS()
 class SHINOBICOOP_API UShinobiInputConfig : public UObject
@@ -2855,7 +2860,14 @@ class SHINOBICOOP_API UShinobiInputConfig : public UObject
 	GENERATED_BODY()
 
 public:
+	/** Builds a fresh config; each call creates its own new UInputAction/UInputMappingContext objects. */
 	static UShinobiInputConfig* Build(UObject* Outer);
+
+	/** Process-wide singleton, rooted so it behaves like a static input asset. Re-adding the same
+	 * UInputMappingContext object to a controller's subsystem replaces its existing entry instead of
+	 * layering a duplicate, so every (re)possession must go through the same instance -- a fresh
+	 * Build() per possession would let a stale, unbound context win priority ties after a re-possess. */
+	static const UShinobiInputConfig& Get();
 
 	UPROPERTY()
 	TObjectPtr<UInputMappingContext> Context;
@@ -2916,10 +2928,18 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 	}
 	AddModifier<UInputModifierNegate>(Ctx->MapKey(Config->Move, EKeys::A), Ctx);
 	Ctx->MapKey(Config->Move, EKeys::D);
-	Ctx->MapKey(Config->Move, EKeys::Gamepad_Left2D);
+	AddModifier<UInputModifierDeadZone>(Ctx->MapKey(Config->Move, EKeys::Gamepad_Left2D), Ctx);
 
 	// Look: mouse + right stick.
-	// ponytail: Y inversion and stick speed are calibration knobs (project has bEnableLegacyInputScales=True)
+	// Y must be negated on both devices: this project has bEnableLegacyInputScales=True
+	// (DefaultInput.ini), so AddControllerPitchInput/AddControllerYawInput apply the engine's
+	// default APlayerController::InputPitchScale=-2.5 / InputYawScale=2.5 (BaseGame.ini) on top of
+	// whatever we send. Mouse2D also picks up an automatic Scalar(0.07) sensitivity modifier from
+	// BaseInput.ini's AxisConfig, since EnhancedInput only auto-applies AxisConfig to mouse keys, not
+	// gamepad axes (see EnhancedInputSubsystemInterface::ApplyAxisPropertyModifiers). Flipping
+	// bEnableLegacyInputScales to False would change the pitch sign and both look speeds, so the
+	// negation here is load-bearing, not a preference; only the stick's Scalar magnitude below is a
+	// calibration knob.
 	Config->Look = MakeAction(Config, TEXT("IA_Look"), EInputActionValueType::Axis2D);
 	{
 		UInputModifierNegate* InvertY = AddModifier<UInputModifierNegate>(Ctx->MapKey(Config->Look, EKeys::Mouse2D), Ctx);
@@ -2928,6 +2948,8 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 	}
 	{
 		FEnhancedActionKeyMapping& Stick = Ctx->MapKey(Config->Look, EKeys::Gamepad_Right2D);
+		// Dead zone must run first, before the stick is negated/scaled, so it sees the raw axis value.
+		AddModifier<UInputModifierDeadZone>(Stick, Ctx);
 		UInputModifierNegate* InvertY = AddModifier<UInputModifierNegate>(Stick, Ctx);
 		InvertY->bX = false;
 		InvertY->bZ = false;
@@ -2953,7 +2975,20 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 
 	return Config;
 }
+
+const UShinobiInputConfig& UShinobiInputConfig::Get()
+{
+	static UShinobiInputConfig* Instance = []
+	{
+		UShinobiInputConfig* Config = Build(GetTransientPackage());
+		Config->AddToRoot(); // lives for the process, like an input asset
+		return Config;
+	}();
+	return *Instance;
+}
 ```
+
+(Review fix: `SetupPlayerInputComponent` originally called `UShinobiInputConfig::Build(this)` per-pawn, storing the result in a per-pawn `UPROPERTY`. That rebuilds a brand-new `UInputMappingContext` object on every (re)possession — e.g. `GameModeBase::RestartPlayer` on the same pawn unpossesses then re-possesses it — and `AddMappingContext` was never paired with a `RemoveMappingContext` for the old one. `IEnhancedInputSubsystemInterface::AddMappingContext` (`EnhancedInputSubsystemInterface.cpp` ~260-271) keys `AppliedInputContextData` by the *IMC object pointer* (`TMap::Add` on an existing key just overwrites its priority), so re-adding the *same* object is idempotent, but two *different* IMC objects both being registered means the older one's now-orphaned key mappings can still resolve and race the newer one on priority ties, and it keeps the old pawn's input actions rooted through level travel. Fix: `UShinobiInputConfig::Get()` builds the config exactly once per process and roots it, exactly like a static input data asset; `SetupPlayerInputComponent` and the per-pawn `InputConfig` `UPROPERTY` were removed in favor of always fetching the same instance.)
 
 - [ ] **Step 3: Replace `Source/ShinobiCoop/Shinobi/ShinobiPlayerCharacter.h`**
 
@@ -2967,7 +3002,6 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 
 class UCameraComponent;
 class USpringArmComponent;
-class UShinobiInputConfig;
 struct FInputActionValue;
 
 /** Player-controlled shinobi: third-person camera, input bound to abilities. */
@@ -2995,9 +3029,6 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	TObjectPtr<UCameraComponent> FollowCamera;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UShinobiInputConfig> InputConfig;
 };
 ```
 
@@ -3057,22 +3088,22 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
-	InputConfig = UShinobiInputConfig::Build(this);
+	const UShinobiInputConfig& InputConfig = UShinobiInputConfig::Get();
 
 	if (const APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
 		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
 		{
-			Subsystem->AddMappingContext(InputConfig->Context, 0);
+			Subsystem->AddMappingContext(InputConfig.Context, ShinobiInputPriority);
 		}
 	}
 
 	UEnhancedInputComponent* Input = CastChecked<UEnhancedInputComponent>(PlayerInputComponent);
-	Input->BindAction(InputConfig->Move, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Move);
-	Input->BindAction(InputConfig->Look, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Look);
-	Input->BindAction(InputConfig->Jump, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::JumpPressed);
-	Input->BindAction(InputConfig->Jump, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
-	for (const TPair<EShinobiAbilityInputID, TObjectPtr<UInputAction>>& Pair : InputConfig->AbilityActions)
+	Input->BindAction(InputConfig.Move, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Move);
+	Input->BindAction(InputConfig.Look, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Look);
+	Input->BindAction(InputConfig.Jump, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::JumpPressed);
+	Input->BindAction(InputConfig.Jump, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
+	for (const TPair<EShinobiAbilityInputID, TObjectPtr<UInputAction>>& Pair : InputConfig.AbilityActions)
 	{
 		Input->BindAction(Pair.Value, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::AbilityInputPressed, Pair.Key);
 		Input->BindAction(Pair.Value, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::AbilityInputReleased, Pair.Key);
@@ -3118,16 +3149,116 @@ void AShinobiPlayerCharacter::AbilityInputReleased(EShinobiAbilityInputID InputI
 }
 ```
 
-- [ ] **Step 5: Build and run tests**
+- [ ] **Step 5: Write `Source/ShinobiCoop/Tests/ShinobiInputTests.cpp`**
+
+No `FShinobiTestWorld`/local player needed: `UShinobiInputConfig::Build` returns plain data, so the test builds its own throwaway config and walks each mapping's `Modifiers` array directly.
+
+```cpp
+#include "Tests/ShinobiTestWorld.h"
+#include "InputMappingContext.h"
+#include "InputModifiers.h"
+#include "Shinobi/ShinobiInputConfig.h"
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+namespace
+{
+	const FEnhancedActionKeyMapping* FindMapping(const TArray<FEnhancedActionKeyMapping>& Mappings, const UInputAction* Action, FKey Key)
+	{
+		for (const FEnhancedActionKeyMapping& Mapping : Mappings)
+		{
+			if (Mapping.Action == Action && Mapping.Key == Key)
+			{
+				return &Mapping;
+			}
+		}
+		return nullptr;
+	}
+
+	/** Runs a mapping's modifiers in order, starting from an Axis2D value of (1, 0). */
+	FVector2D RunModifiers(const FEnhancedActionKeyMapping& Mapping)
+	{
+		FInputActionValue Value(EInputActionValueType::Axis2D, FVector(1.f, 0.f, 0.f));
+		for (const TObjectPtr<UInputModifier>& Modifier : Mapping.Modifiers)
+		{
+			Value = Modifier->ModifyRaw(nullptr, Value, 0.f);
+		}
+		return Value.Get<FVector2D>();
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiInputMappingsTest, "ShinobiCoop.Input.MappingsAreCorrect", ShinobiTestFlags)
+bool FShinobiInputMappingsTest::RunTest(const FString& Parameters)
+{
+	UShinobiInputConfig* Config = UShinobiInputConfig::Build(GetTransientPackage());
+	const TArray<FEnhancedActionKeyMapping>& Mappings = Config->Context->GetMappings();
+
+	const FEnhancedActionKeyMapping* WMapping = FindMapping(Mappings, Config->Move, EKeys::W);
+	const FEnhancedActionKeyMapping* SMapping = FindMapping(Mappings, Config->Move, EKeys::S);
+	const FEnhancedActionKeyMapping* AMapping = FindMapping(Mappings, Config->Move, EKeys::A);
+	const FEnhancedActionKeyMapping* DMapping = FindMapping(Mappings, Config->Move, EKeys::D);
+	if (TestNotNull(TEXT("W mapping exists"), WMapping))
+	{
+		TestEqual(TEXT("W drives forward"), RunModifiers(*WMapping), FVector2D(0.f, 1.f));
+	}
+	if (TestNotNull(TEXT("S mapping exists"), SMapping))
+	{
+		TestEqual(TEXT("S drives backward"), RunModifiers(*SMapping), FVector2D(0.f, -1.f));
+	}
+	if (TestNotNull(TEXT("A mapping exists"), AMapping))
+	{
+		TestEqual(TEXT("A drives left"), RunModifiers(*AMapping), FVector2D(-1.f, 0.f));
+	}
+	if (TestNotNull(TEXT("D mapping exists"), DMapping))
+	{
+		TestEqual(TEXT("D drives right"), RunModifiers(*DMapping), FVector2D(1.f, 0.f));
+	}
+
+	for (const TPair<EShinobiAbilityInputID, TObjectPtr<UInputAction>>& Pair : Config->AbilityActions)
+	{
+		int32 KeyCount = 0;
+		for (const FEnhancedActionKeyMapping& Mapping : Mappings)
+		{
+			if (Mapping.Action == Pair.Value)
+			{
+				++KeyCount;
+			}
+		}
+		TestEqual(*FString::Printf(TEXT("Ability input %d is bound to exactly two keys"), static_cast<int32>(Pair.Key)), KeyCount, 2);
+	}
+
+	const FEnhancedActionKeyMapping* LeftStick = FindMapping(Mappings, Config->Move, EKeys::Gamepad_Left2D);
+	if (TestNotNull(TEXT("Left stick mapping exists"), LeftStick))
+	{
+		TestTrue(TEXT("Left stick's first modifier is a dead zone"),
+			LeftStick->Modifiers.Num() > 0 && LeftStick->Modifiers[0]->IsA<UInputModifierDeadZone>());
+	}
+
+	const FEnhancedActionKeyMapping* RightStick = FindMapping(Mappings, Config->Look, EKeys::Gamepad_Right2D);
+	if (TestNotNull(TEXT("Right stick mapping exists"), RightStick))
+	{
+		TestTrue(TEXT("Right stick's first modifier is a dead zone"),
+			RightStick->Modifiers.Num() > 0 && RightStick->Modifiers[0]->IsA<UInputModifierDeadZone>());
+	}
+
+	return true;
+}
+
+#endif // WITH_DEV_AUTOMATION_TESTS
+```
+
+(TDD note: written against a `ShinobiInputConfig.cpp` that mapped `Gamepad_Left2D`/`Gamepad_Right2D` with no `UInputModifierDeadZone`, this test's Move-mapping and ability-key-count assertions passed immediately, but both "first modifier is a dead zone" assertions failed — confirming Enhanced Input only auto-applies `BaseInput.ini`'s `AxisConfig` dead zones to mouse keys (`EnhancedInputSubsystemInterface::ApplyAxisPropertyModifiers` returns early for non-mouse keys unless `input.GlobalAxisConfigMode` is set to `All`), so raw stick drift was otherwise free to trigger Move/Look. Adding the two `AddModifier<UInputModifierDeadZone>` calls in Step 2 above — the right stick's dead zone ordered before its Negate/Scalar/ScaleByDeltaTime chain — turned the test green.)
+
+- [ ] **Step 6: Build and run tests**
 
 Run:
 ```powershell
 powershell -ExecutionPolicy Bypass -File Scripts\build.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 ```
-Expected: `ALL 15 TESTS PASSED`.
+Expected: `ALL 16 TESTS PASSED`.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```powershell
 git add Source/ShinobiCoop
@@ -3550,7 +3681,7 @@ Run:
 powershell -ExecutionPolicy Bypass -File Scripts\build.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 ```
-Expected: `ALL 16 TESTS PASSED`.
+Expected: `ALL 17 TESTS PASSED` (16 earlier + `TrainingDummyResetsAfterDefeat`).
 
 - [ ] **Step 13: Commit**
 
@@ -3667,7 +3798,7 @@ Expected: `AM_Dodge.uasset`, `AM_Melee_1.uasset`, `AM_Melee_2.uasset`, `AM_Melee
 - [ ] **Step 4: Re-run tests (montages now load inside abilities)**
 
 Run: `powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1`
-Expected: `ALL 16 TESTS PASSED`.
+Expected: `ALL 17 TESTS PASSED` (no new test; montages now load inside abilities that already existed).
 
 - [ ] **Step 5: Commit**
 
@@ -3820,3 +3951,5 @@ git tag m1-core
 - GA_Melee snaps yaw from control rotation on both sides; the server's value can be a move stale. If PktLag tests show corrections during root-motion attack lunges, send the client's yaw to the server under the activation key (ServerSetReplicatedEventWithPayload / CallOrAddReplicatedDelegate).
 - Melee presses during a swing are dropped (no input buffer); M5 feel pass: start the input wait at swing start with a queued flag. Also cache loaded montages in a UPROPERTY on the ability instance (GA_Melee/GA_Dodge call LoadSynchronous on every use).
 - M3: FindHostilesInCone must skip downed/dead targets; server-only LaunchCharacter on a remote player target rubber-bands — use a root-motion-source hit reaction for player targets.
+- Held ability input (Sprint/ChakraCharge) is not released if the pawn is unpossessed mid-hold; both end on their own (stamina 0 / chakra full). If M2/M3 respawn or cutscenes make this visible, call AbilityLocalInputReleased for held IDs from a NotifyControllerChanged override when control is lost.
+- UShinobiInputConfig is a rooted process-wide singleton; M2's RB jutsu-modifier context should be built the same way and added with a priority above ShinobiInputPriority.

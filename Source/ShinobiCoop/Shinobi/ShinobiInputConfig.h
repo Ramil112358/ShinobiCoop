@@ -8,6 +8,9 @@
 class UInputAction;
 class UInputMappingContext;
 
+/** Priority IMC_Shinobi is added at. An M2+ jutsu-modifier context must be added above this. */
+constexpr int32 ShinobiInputPriority = 1;
+
 /** All input actions and the mapping context, constructed in code so no input assets are needed. */
 UCLASS()
 class SHINOBICOOP_API UShinobiInputConfig : public UObject
@@ -15,7 +18,14 @@ class SHINOBICOOP_API UShinobiInputConfig : public UObject
 	GENERATED_BODY()
 
 public:
+	/** Builds a fresh config; each call creates its own new UInputAction/UInputMappingContext objects. */
 	static UShinobiInputConfig* Build(UObject* Outer);
+
+	/** Process-wide singleton, rooted so it behaves like a static input asset. Re-adding the same
+	 * UInputMappingContext object to a controller's subsystem replaces its existing entry instead of
+	 * layering a duplicate, so every (re)possession must go through the same instance -- a fresh
+	 * Build() per possession would let a stale, unbound context win priority ties after a re-possess. */
+	static const UShinobiInputConfig& Get();
 
 	UPROPERTY()
 	TObjectPtr<UInputMappingContext> Context;

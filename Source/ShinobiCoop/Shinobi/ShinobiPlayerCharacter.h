@@ -7,7 +7,6 @@
 
 class UCameraComponent;
 class USpringArmComponent;
-class UShinobiInputConfig;
 struct FInputActionValue;
 
 /** Player-controlled shinobi: third-person camera, input bound to abilities. */
@@ -35,7 +34,4 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	TObjectPtr<UCameraComponent> FollowCamera;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UShinobiInputConfig> InputConfig;
 };
