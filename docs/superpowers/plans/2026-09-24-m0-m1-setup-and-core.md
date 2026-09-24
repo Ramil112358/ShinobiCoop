@@ -107,8 +107,10 @@ Expected: `True`, and a listing including `ShinobiCoop.Build.cs`, `ShinobiCoop.h
 
 **Files:**
 - Create: `.gitignore`, `.gitattributes`
-- Delete: `Source/ShinobiCoop/Variant_Platforming/`, `Source/ShinobiCoop/Variant_SideScrolling/`, `Content/Variant_Platforming/`, `Content/Variant_SideScrolling/`
+- Delete: `Source/ShinobiCoop/Variant_Platforming/`, `Source/ShinobiCoop/Variant_SideScrolling/`, `Content/Variant_Platforming/`, `Content/Variant_SideScrolling/`, and their World Partition folders `Content/__ExternalActors__/Variant_{Platforming,SideScrolling}/`, `Content/__ExternalObjects__/Variant_{Platforming,SideScrolling}/`
 - Modify: `Source/ShinobiCoop/ShinobiCoop.Build.cs`
+
+> **Done 2026-09-24** (`0c92371`, follow-up `chore: widen LFS coverage...`). As executed, the World Partition folders above were also removed, and review follow-ups replaced the `.gitignore`/`.gitattributes` below with anchored ignore rules, `* text=auto`, and LFS coverage for more binary types (see the files in the repo).
 
 - [ ] **Step 1: Write `.gitignore`**
 
