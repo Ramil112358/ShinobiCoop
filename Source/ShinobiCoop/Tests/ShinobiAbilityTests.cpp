@@ -196,6 +196,12 @@ bool FShinobiMeleeComboTest::RunTest(const FString& Parameters)
 	const float Chakra = ShinobiTest::Get(Attacker, UShinobiAttributeSet::GetChakraAttribute());
 	TestTrue(FString::Printf(TEXT("+5 chakra on hit (got %.2f)"), Chakra), Chakra >= 55.f && Chakra <= 56.5f);
 
+	// Attacker chakra is 55.5, well below the 100 max, so this can only be blocked by GA_Melee's
+	// BlockAbilitiesWithTag, not by GA_ChakraCharge's own full-chakra gate.
+	ShinobiTest::Press(Attacker, EShinobiAbilityInputID::ChakraCharge);
+	TestFalse(TEXT("Charge blocked mid-combo"), ShinobiTest::IsActive(Attacker, UGA_ChakraCharge::StaticClass()));
+	ShinobiTest::Release(Attacker, EShinobiAbilityInputID::ChakraCharge);
+
 	ShinobiTest::Press(Attacker, EShinobiAbilityInputID::Melee);
 	W.Tick(0.3f);
 	TestEqual(TEXT("Hit 2: 25 damage"), ShinobiTest::Get(Enemy, Health), 455.f);
@@ -203,8 +209,13 @@ bool FShinobiMeleeComboTest::RunTest(const FString& Parameters)
 	ShinobiTest::Press(Attacker, EShinobiAbilityInputID::Melee);
 	W.Tick(0.3f);
 	TestEqual(TEXT("Hit 3: 40 damage"), ShinobiTest::Get(Enemy, Health), 415.f);
+	// LaunchCharacter only sets PendingLaunchVelocity; CharacterMovementComponent applies it to Velocity
+	// on its next tick, which lands after this one (the hit frame's timer fires from FTimerManager::Tick,
+	// which runs after this substep's tick groups, i.e. after this substep's movement tick already ran).
+	W.Tick(0.1f);
+	TestTrue(FString::Printf(TEXT("Finisher knockback (got %.2f)"), Enemy->GetVelocity().X), Enemy->GetVelocity().X > 100.f);
 
-	W.Tick(0.6f);
+	W.Tick(0.5f);
 	TestFalse(TEXT("Combo ended"), ShinobiTest::IsActive(Attacker, UGA_Melee::StaticClass()));
 	return true;
 }
@@ -223,6 +234,18 @@ bool FShinobiMeleeWindowTest::RunTest(const FString& Parameters)
 	ShinobiTest::Press(Attacker, EShinobiAbilityInputID::Melee);
 	W.Tick(0.3f);
 	TestEqual(TEXT("New combo restarts at hit 1 (20 + 20)"), ShinobiTest::Get(Enemy, Health), 460.f);
+
+	// Invulnerable target: the hit is blocked, so it doesn't count -- no chakra for the attacker.
+	Enemy->GetAbilitySystemComponent()->AddLooseGameplayTag(ShinobiTags::State_Invulnerable);
+	const float ChakraBeforeBlockedHit = ShinobiTest::Get(Attacker, UShinobiAttributeSet::GetChakraAttribute());
+	W.Tick(0.7f); // let the still-active combo's window close (it's at 0.3 of 0.75s; extra margin for timer jitter)
+	TestFalse(TEXT("Second combo ended before third attempt"), ShinobiTest::IsActive(Attacker, UGA_Melee::StaticClass()));
+	ShinobiTest::Press(Attacker, EShinobiAbilityInputID::Melee);
+	W.Tick(0.3f);
+	TestEqual(TEXT("Invulnerable target untouched"), ShinobiTest::Get(Enemy, Health), 460.f);
+	const float ChakraGainedFromBlockedHit = ShinobiTest::Get(Attacker, UShinobiAttributeSet::GetChakraAttribute()) - ChakraBeforeBlockedHit;
+	TestTrue(FString::Printf(TEXT("No chakra from a blocked hit, only passive regen (got +%.2f)"), ChakraGainedFromBlockedHit), ChakraGainedFromBlockedHit < 5.f);
+	Enemy->GetAbilitySystemComponent()->RemoveLooseGameplayTag(ShinobiTags::State_Invulnerable);
 	return true;
 }
 

@@ -32,22 +32,26 @@ FActiveGameplayEffectHandle UShinobiGameplayAbility::ApplyEffectToSelf(TSubclass
 	return ApplyGameplayEffectToOwner(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, EffectClass->GetDefaultObject<UGameplayEffect>(), GetAbilityLevel());
 }
 
-void UShinobiGameplayAbility::ApplyDamage(AShinobiCharacterBase* Target, float Amount) const
+bool UShinobiGameplayAbility::ApplyDamage(AShinobiCharacterBase* Target, float Amount) const
 {
 	// Predicted (LocalPredicted) abilities run this on the owning client too; without this guard
 	// the client would apply damage to Target locally in addition to the server's authoritative copy.
 	if (!HasAuthority(&CurrentActivationInfo))
 	{
-		return;
+		return false;
 	}
 	UAbilitySystemComponent* Source = GetAbilitySystemComponentFromActorInfo();
 	if (!Source || !Target)
 	{
-		return;
+		return false;
 	}
 	FGameplayEffectSpecHandle Spec = MakeOutgoingGameplayEffectSpec(UGE_Damage::StaticClass(), GetAbilityLevel());
 	Spec.Data->SetSetByCallerMagnitude(ShinobiTags::Data_Damage, Amount);
-	Source->ApplyGameplayEffectSpecToTarget(*Spec.Data.Get(), Target->GetAbilitySystemComponent());
+	// For an instant effect, WasSuccessfullyApplied() is true once it executes (GetInstantExecutedHandle());
+	// it comes back false (default-constructed handle) if a GE component blocked application, e.g. GE_Damage's
+	// own IgnoreApplicationIfTargetHas(State.Invulnerable) requirement.
+	const FActiveGameplayEffectHandle Handle = Source->ApplyGameplayEffectSpecToTarget(*Spec.Data.Get(), Target->GetAbilitySystemComponent());
+	return Handle.WasSuccessfullyApplied();
 }
 
 TArray<AShinobiCharacterBase*> UShinobiGameplayAbility::FindHostilesInCone(float Range, float HalfAngleDegrees) const

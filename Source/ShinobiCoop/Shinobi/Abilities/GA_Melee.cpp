@@ -15,6 +15,8 @@ UGA_Melee::UGA_Melee()
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Dodging);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_ChakraCharging);
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);
+	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_ChakraCharge);
+	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);
 
 	ComboDamage = { 20.f, 25.f, 40.f };
 	ComboMontages = {
@@ -59,30 +61,60 @@ void UGA_Melee::StartSwing()
 
 void UGA_Melee::OnHitFrame()
 {
+	AShinobiCharacterBase* Self = GetShinobiCharacter();
+	if (!Self)
+	{
+		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
+		return;
+	}
+	if (!ComboDamage.IsValidIndex(ComboIndex))
+	{
+		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
+		return;
+	}
+
 	const bool bFinisher = ComboIndex >= ComboDamage.Num() - 1;
 
 	if (HasAuthority(&CurrentActivationInfo))
 	{
 		const TArray<AShinobiCharacterBase*> Targets = FindHostilesInCone(Range, HalfAngle);
-		const FVector Origin = GetAvatarActorFromActorInfo()->GetActorLocation();
+		const FVector Origin = Self->GetActorLocation();
+		int32 LandedHits = 0;
 		for (AShinobiCharacterBase* Target : Targets)
 		{
-			ApplyDamage(Target, ComboDamage[ComboIndex]);
+			if (!ApplyDamage(Target, ComboDamage[ComboIndex]))
+			{
+				// e.g. the target is invulnerable: no knockback, no chakra for a hit that didn't land.
+				continue;
+			}
+			++LandedHits;
 			if (bFinisher)
 			{
 				const FVector Push = (Target->GetActorLocation() - Origin).GetSafeNormal2D() * FinisherKnockback + FVector(0.f, 0.f, 200.f);
 				Target->LaunchCharacter(Push, true, true);
 			}
 		}
-		if (Targets.Num() > 0)
+		if (LandedHits > 0)
 		{
 			FGameplayEffectSpecHandle Gain = MakeOutgoingGameplayEffectSpec(UGE_ChakraGain::StaticClass(), GetAbilityLevel());
-			Gain.Data->SetSetByCallerMagnitude(ShinobiTags::Data_ChakraGain, ChakraPerHit * Targets.Num());
+			Gain.Data->SetSetByCallerMagnitude(ShinobiTags::Data_ChakraGain, ChakraPerHit * LandedHits);
 			ApplyGameplayEffectSpecToOwner(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, Gain);
 		}
 	}
 
-	WindowTask = UAbilityTask_WaitDelay::WaitDelay(this, ComboWindow);
+	// This ability is InstancedPerActor, so on a listen server a remote player's copy here is the
+	// server's own separate instance (HasAuthority() true, IsLocallyControlled() false), distinct from
+	// the owning client's predicted instance. The owning client's own window-close is what normally
+	// ends the ability (replicated to the server via ServerEndAbility), so the server copy's timer here
+	// is just a safety net: give it extra time so a combo press already in flight over the network still
+	// lands before this timer forces the ability to end.
+	const bool bServerCopyOfRemote = HasAuthority(&CurrentActivationInfo) && !IsLocallyControlled();
+	const float Window = bServerCopyOfRemote ? ComboWindow + 0.2f : ComboWindow;
+
+	// WindowTask must exist before WaitInputPress is activated below: if the server already received the
+	// client's press, WaitInputPress::Activate() fires OnPress synchronously (CallReplicatedEventDelegateIfSet),
+	// which calls OnComboInput() and ends WindowTask -- that has to be a real task, not a stale/null one.
+	WindowTask = UAbilityTask_WaitDelay::WaitDelay(this, Window);
 	WindowTask->OnFinish.AddDynamic(this, &UGA_Melee::OnComboWindowClosed);
 	WindowTask->ReadyForActivation();
 

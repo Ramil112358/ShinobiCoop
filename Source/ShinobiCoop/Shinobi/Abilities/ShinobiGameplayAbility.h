@@ -37,8 +37,9 @@ protected:
 	/** Applies an effect class (no SetByCaller) to the owner. */
 	FActiveGameplayEffectHandle ApplyEffectToSelf(TSubclassOf<UGameplayEffect> EffectClass) const;
 
-	/** Server only. Applies GE_Damage with Amount from the owner to Target. */
-	void ApplyDamage(AShinobiCharacterBase* Target, float Amount) const;
+	/** Server only. Applies GE_Damage with Amount from the owner to Target. Returns whether the hit
+	 * actually landed (false if not authority, no target, or the effect was blocked, e.g. by invulnerability). */
+	bool ApplyDamage(AShinobiCharacterBase* Target, float Amount) const;
 
 	/** Hostile characters within Range (2D) whose direction is within HalfAngleDegrees of the owner's forward. */
 	TArray<AShinobiCharacterBase*> FindHostilesInCone(float Range, float HalfAngleDegrees) const;

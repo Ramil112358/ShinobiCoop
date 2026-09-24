@@ -1233,8 +1233,9 @@ protected:
 	/** Applies an effect class (no SetByCaller) to the owner. */
 	FActiveGameplayEffectHandle ApplyEffectToSelf(TSubclassOf<UGameplayEffect> EffectClass) const;
 
-	/** Server only. Applies GE_Damage with Amount from the owner to Target. */
-	void ApplyDamage(AShinobiCharacterBase* Target, float Amount) const;
+	/** Server only. Applies GE_Damage with Amount from the owner to Target. Returns whether the hit
+	 * actually landed (false if not authority, no target, or the effect was blocked, e.g. by invulnerability). */
+	bool ApplyDamage(AShinobiCharacterBase* Target, float Amount) const;
 
 	/** Hostile characters within Range (2D) whose direction is within HalfAngleDegrees of the owner's forward. */
 	TArray<AShinobiCharacterBase*> FindHostilesInCone(float Range, float HalfAngleDegrees) const;
@@ -1278,22 +1279,26 @@ FActiveGameplayEffectHandle UShinobiGameplayAbility::ApplyEffectToSelf(TSubclass
 	return ApplyGameplayEffectToOwner(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, EffectClass->GetDefaultObject<UGameplayEffect>(), GetAbilityLevel());
 }
 
-void UShinobiGameplayAbility::ApplyDamage(AShinobiCharacterBase* Target, float Amount) const
+bool UShinobiGameplayAbility::ApplyDamage(AShinobiCharacterBase* Target, float Amount) const
 {
 	// Predicted (LocalPredicted) abilities run this on the owning client too; without this guard
 	// the client would apply damage to Target locally in addition to the server's authoritative copy.
 	if (!HasAuthority(&CurrentActivationInfo))
 	{
-		return;
+		return false;
 	}
 	UAbilitySystemComponent* Source = GetAbilitySystemComponentFromActorInfo();
 	if (!Source || !Target)
 	{
-		return;
+		return false;
 	}
 	FGameplayEffectSpecHandle Spec = MakeOutgoingGameplayEffectSpec(UGE_Damage::StaticClass(), GetAbilityLevel());
 	Spec.Data->SetSetByCallerMagnitude(ShinobiTags::Data_Damage, Amount);
-	Source->ApplyGameplayEffectSpecToTarget(*Spec.Data.Get(), Target->GetAbilitySystemComponent());
+	// For an instant effect, WasSuccessfullyApplied() is true once it executes (GetInstantExecutedHandle());
+	// it comes back false (default-constructed handle) if a GE component blocked application, e.g. GE_Damage's
+	// own IgnoreApplicationIfTargetHas(State.Invulnerable) requirement.
+	const FActiveGameplayEffectHandle Handle = Source->ApplyGameplayEffectSpecToTarget(*Spec.Data.Get(), Target->GetAbilitySystemComponent());
+	return Handle.WasSuccessfullyApplied();
 }
 
 TArray<AShinobiCharacterBase*> UShinobiGameplayAbility::FindHostilesInCone(float Range, float HalfAngleDegrees) const
@@ -2510,6 +2515,12 @@ bool FShinobiMeleeComboTest::RunTest(const FString& Parameters)
 	const float Chakra = ShinobiTest::Get(Attacker, UShinobiAttributeSet::GetChakraAttribute());
 	TestTrue(FString::Printf(TEXT("+5 chakra on hit (got %.2f)"), Chakra), Chakra >= 55.f && Chakra <= 56.5f);
 
+	// Attacker chakra is 55.5, well below the 100 max, so this can only be blocked by GA_Melee's
+	// BlockAbilitiesWithTag, not by GA_ChakraCharge's own full-chakra gate.
+	ShinobiTest::Press(Attacker, EShinobiAbilityInputID::ChakraCharge);
+	TestFalse(TEXT("Charge blocked mid-combo"), ShinobiTest::IsActive(Attacker, UGA_ChakraCharge::StaticClass()));
+	ShinobiTest::Release(Attacker, EShinobiAbilityInputID::ChakraCharge);
+
 	ShinobiTest::Press(Attacker, EShinobiAbilityInputID::Melee);
 	W.Tick(0.3f);
 	TestEqual(TEXT("Hit 2: 25 damage"), ShinobiTest::Get(Enemy, Health), 455.f);
@@ -2517,8 +2528,13 @@ bool FShinobiMeleeComboTest::RunTest(const FString& Parameters)
 	ShinobiTest::Press(Attacker, EShinobiAbilityInputID::Melee);
 	W.Tick(0.3f);
 	TestEqual(TEXT("Hit 3: 40 damage"), ShinobiTest::Get(Enemy, Health), 415.f);
+	// LaunchCharacter only sets PendingLaunchVelocity; CharacterMovementComponent applies it to Velocity
+	// on its next tick, which lands after this one (the hit frame's timer fires from FTimerManager::Tick,
+	// which runs after this substep's tick groups, i.e. after this substep's movement tick already ran).
+	W.Tick(0.1f);
+	TestTrue(FString::Printf(TEXT("Finisher knockback (got %.2f)"), Enemy->GetVelocity().X), Enemy->GetVelocity().X > 100.f);
 
-	W.Tick(0.6f);
+	W.Tick(0.5f);
 	TestFalse(TEXT("Combo ended"), ShinobiTest::IsActive(Attacker, UGA_Melee::StaticClass()));
 	return true;
 }
@@ -2537,9 +2553,23 @@ bool FShinobiMeleeWindowTest::RunTest(const FString& Parameters)
 	ShinobiTest::Press(Attacker, EShinobiAbilityInputID::Melee);
 	W.Tick(0.3f);
 	TestEqual(TEXT("New combo restarts at hit 1 (20 + 20)"), ShinobiTest::Get(Enemy, Health), 460.f);
+
+	// Invulnerable target: the hit is blocked, so it doesn't count -- no chakra for the attacker.
+	Enemy->GetAbilitySystemComponent()->AddLooseGameplayTag(ShinobiTags::State_Invulnerable);
+	const float ChakraBeforeBlockedHit = ShinobiTest::Get(Attacker, UShinobiAttributeSet::GetChakraAttribute());
+	W.Tick(0.7f); // let the still-active combo's window close (it's at 0.3 of 0.75s; extra margin for timer jitter)
+	TestFalse(TEXT("Second combo ended before third attempt"), ShinobiTest::IsActive(Attacker, UGA_Melee::StaticClass()));
+	ShinobiTest::Press(Attacker, EShinobiAbilityInputID::Melee);
+	W.Tick(0.3f);
+	TestEqual(TEXT("Invulnerable target untouched"), ShinobiTest::Get(Enemy, Health), 460.f);
+	const float ChakraGainedFromBlockedHit = ShinobiTest::Get(Attacker, UShinobiAttributeSet::GetChakraAttribute()) - ChakraBeforeBlockedHit;
+	TestTrue(FString::Printf(TEXT("No chakra from a blocked hit, only passive regen (got +%.2f)"), ChakraGainedFromBlockedHit), ChakraGainedFromBlockedHit < 5.f);
+	Enemy->GetAbilitySystemComponent()->RemoveLooseGameplayTag(ShinobiTags::State_Invulnerable);
 	return true;
 }
 ```
+
+(The finisher-knockback and window-close timings above have a `W.Tick(0.1f)`/`W.Tick(0.7f)` margin baked in for two observed timing quirks: `ACharacter::LaunchCharacter` only sets `PendingLaunchVelocity`, which `UCharacterMovementComponent` applies to `Velocity` on its *next* movement tick — and since `FTimerManager::Tick` (which fires `UAbilityTask_WaitDelay`'s callback) runs after that same substep's tick groups, the launch's effect on `GetVelocity()` is one `W.Tick` step behind the hit frame that triggered it. The same one-step-behind timer firing also means a `WaitDelay`'s expiry can land on the *last* sub-step of a `W.Tick` call rather than mid-way through it, so window-close checks need a bit more margin than the nominal `HitDelay + ComboWindow` sum.)
 
 - [ ] **Step 2: Build to see it fail**
 
@@ -2634,6 +2664,8 @@ UGA_Melee::UGA_Melee()
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Dodging);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_ChakraCharging);
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);
+	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_ChakraCharge);
+	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);
 
 	ComboDamage = { 20.f, 25.f, 40.f };
 	ComboMontages = {
@@ -2678,30 +2710,60 @@ void UGA_Melee::StartSwing()
 
 void UGA_Melee::OnHitFrame()
 {
+	AShinobiCharacterBase* Self = GetShinobiCharacter();
+	if (!Self)
+	{
+		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
+		return;
+	}
+	if (!ComboDamage.IsValidIndex(ComboIndex))
+	{
+		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
+		return;
+	}
+
 	const bool bFinisher = ComboIndex >= ComboDamage.Num() - 1;
 
 	if (HasAuthority(&CurrentActivationInfo))
 	{
 		const TArray<AShinobiCharacterBase*> Targets = FindHostilesInCone(Range, HalfAngle);
-		const FVector Origin = GetAvatarActorFromActorInfo()->GetActorLocation();
+		const FVector Origin = Self->GetActorLocation();
+		int32 LandedHits = 0;
 		for (AShinobiCharacterBase* Target : Targets)
 		{
-			ApplyDamage(Target, ComboDamage[ComboIndex]);
+			if (!ApplyDamage(Target, ComboDamage[ComboIndex]))
+			{
+				// e.g. the target is invulnerable: no knockback, no chakra for a hit that didn't land.
+				continue;
+			}
+			++LandedHits;
 			if (bFinisher)
 			{
 				const FVector Push = (Target->GetActorLocation() - Origin).GetSafeNormal2D() * FinisherKnockback + FVector(0.f, 0.f, 200.f);
 				Target->LaunchCharacter(Push, true, true);
 			}
 		}
-		if (Targets.Num() > 0)
+		if (LandedHits > 0)
 		{
 			FGameplayEffectSpecHandle Gain = MakeOutgoingGameplayEffectSpec(UGE_ChakraGain::StaticClass(), GetAbilityLevel());
-			Gain.Data->SetSetByCallerMagnitude(ShinobiTags::Data_ChakraGain, ChakraPerHit * Targets.Num());
+			Gain.Data->SetSetByCallerMagnitude(ShinobiTags::Data_ChakraGain, ChakraPerHit * LandedHits);
 			ApplyGameplayEffectSpecToOwner(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, Gain);
 		}
 	}
 
-	WindowTask = UAbilityTask_WaitDelay::WaitDelay(this, ComboWindow);
+	// This ability is InstancedPerActor, so on a listen server a remote player's copy here is the
+	// server's own separate instance (HasAuthority() true, IsLocallyControlled() false), distinct from
+	// the owning client's predicted instance. The owning client's own window-close is what normally
+	// ends the ability (replicated to the server via ServerEndAbility), so the server copy's timer here
+	// is just a safety net: give it extra time so a combo press already in flight over the network still
+	// lands before this timer forces the ability to end.
+	const bool bServerCopyOfRemote = HasAuthority(&CurrentActivationInfo) && !IsLocallyControlled();
+	const float Window = bServerCopyOfRemote ? ComboWindow + 0.2f : ComboWindow;
+
+	// WindowTask must exist before WaitInputPress is activated below: if the server already received the
+	// client's press, WaitInputPress::Activate() fires OnPress synchronously (CallReplicatedEventDelegateIfSet),
+	// which calls OnComboInput() and ends WindowTask -- that has to be a real task, not a stale/null one.
+	WindowTask = UAbilityTask_WaitDelay::WaitDelay(this, Window);
 	WindowTask->OnFinish.AddDynamic(this, &UGA_Melee::OnComboWindowClosed);
 	WindowTask->ReadyForActivation();
 
@@ -3699,6 +3761,7 @@ User opens `ShinobiCoop.uproject` → Play dropdown (⋮ next to Play) → Numbe
 | 12 | Still laggy: tap Shift repeatedly | Each tap costs exactly one 2.5 drain tick, not more; sprint speed stops within ~one round trip of releasing |
 | 13 | Still laggy: press Shift during Dodge / Chakra Charge | Sprint is blocked (can't start); no position snapping |
 | 14 | Still laggy: dodge in each direction and a backstep | Dash goes the pressed direction ~600 units, no snap-back; backstep with no input |
+| 15 | Client window, `NetEmulation.PktLag 120` + `p.NetShowCorrections 1`: attack combos while swinging the camera | No correction snaps during attack lunges; combo doesn't drop mid-swing |
 
 - [ ] **Step 3: Record results**
 
@@ -3745,3 +3808,6 @@ git tag m1-core
 - Dodge direction is computed separately on client and server from current acceleration (one frame stale; a lost/reordered move makes the server's root-motion force mismatch → corrections for the whole dash). Before M4 internet play (or earlier if `NetEmulation.PktLag`/`PktLoss` tests show corrections), send the direction to the server explicitly (target data or gameplay-event activation) using the freshest input (`GetPendingMovementInputVector()`, fallback acceleration).
 - i-frames are server-only (correct for authority) but shifted by ~one RTT for remote players; if lag playtests show "dodged but got hit", extend server i-frames by min(RTT/2, 100 ms) or give Substitution a grace window.
 - Substitution must cancel GA_Dodge before teleporting, or the constant force keeps pushing the teleported character.
+- GA_Melee snaps yaw from control rotation on both sides; the server's value can be a move stale. If PktLag tests show corrections during root-motion attack lunges, send the client's yaw to the server under the activation key (ServerSetReplicatedEventWithPayload / CallOrAddReplicatedDelegate).
+- Melee presses during a swing are dropped (no input buffer); M5 feel pass: start the input wait at swing start with a queued flag. Also cache loaded montages in a UPROPERTY on the ability instance (GA_Melee/GA_Dodge call LoadSynchronous on every use).
+- M3: FindHostilesInCone must skip downed/dead targets; server-only LaunchCharacter on a remote player target rubber-bands — use a root-motion-source hit reaction for player targets.
