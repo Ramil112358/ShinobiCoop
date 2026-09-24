@@ -87,7 +87,6 @@ Jutsu names (Rasengan, Chidori, Amaterasu) are Naruto IP. Acceptable for a priva
 
 Binary assets are created by Unreal Editor Python scripts (committed under `Scripts/`), re-runnable and idempotent:
 
-- Enhanced Input actions and mapping contexts (KB+M and gamepad).
 - `UJutsuData` and `UEnemyData` assets with the values in §3.
 - Toon post-process material and VFX materials (via `MaterialEditingLibrary`, custom HLSL nodes where needed).
 - Gameplay Cue notify assets derived from C++ cue classes.
@@ -95,6 +94,8 @@ Binary assets are created by Unreal Editor Python scripts (committed under `Scri
 - Animation retarget from Paragon skeletons to Manny (`IKRetargetBatchOperation`).
 
 Scripts run headless: `UnrealEditor-Cmd.exe ShinobiCoop.uproject -run=pythonscript -script=<file>`.
+
+Enhanced Input actions and the mapping context (KB+M and gamepad) are constructed in C++ at runtime (`UShinobiInputConfig`), so no input assets exist.
 
 ## 3. Gameplay rules and numbers
 
@@ -245,7 +246,8 @@ All VFX are spawned through Gameplay Cues.
 ### Animation
 
 - Locomotion, jump and fall from the Third Person template (Manny).
-- Combat animations from Fab **Paragon: Shinbi** and **Paragon: Kallari** (free), retargeted to Manny by script: melee combo, cast/hand-gesture wind-ups, dodge, hit reactions, death.
+- Melee combo (`MM_Attack_01..03`), dodge (`MM_Dash`), hit reactions and deaths come with the template's Manny animations; montages are generated from them by script. Characters use the template's `ABP_Manny_Combat` (has a `DefaultSlot` montage slot).
+- Cast/hand-gesture wind-ups and jutsu strikes from Fab **Paragon: Shinbi** and **Paragon: Kallari** (free), retargeted to Manny by script (needed from M2).
 - Downed: death montage held on the last frame. Revive: reviver plays a channel loop.
 - Hand-seal wind-ups use the closest cast animation plus a glowing-hands effect. Real finger hand seals are deferred.
 - Fallback if Paragon is unavailable: a documented list of Mixamo animations for the user to download.
@@ -293,6 +295,6 @@ Each milestone is playable with 2-player PIE networking.
 
 ## 9. User prerequisites
 
-1. Visual Studio 2022 Community with "Game development with C++" workload (MSVC v143, Windows 11 SDK, Unreal Engine installer component). Exact toolchain version to be verified against UE 5.8 requirements before M0.
-2. Fab: add Paragon: Shinbi and Paragon: Kallari to the project (before M1 animation work).
+1. Visual Studio 2022 17.14+ (MSVC 14.44.35211 or newer) or Visual Studio 2026 (MSVC 14.50.35723 or newer), per `Engine/Config/Windows/Windows_SDK.json` of UE 5.8.2. Workloads: "Game development with C++" and "Desktop development with C++"; components: Windows 11 SDK 10.0.22621, Unreal Engine installer/IDE support, .NET Framework 4.6.2 targeting pack.
+2. Fab: add Paragon: Shinbi and Paragon: Kallari to the project (before M2 jutsu animation work).
 3. Steam installed and logged in; a second PC and Steam account for the M4 real-session test.
