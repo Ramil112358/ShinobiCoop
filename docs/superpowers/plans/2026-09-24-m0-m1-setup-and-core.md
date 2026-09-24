@@ -2211,7 +2211,7 @@ bool FShinobiChakraChargeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Charging tag"), ShinobiTest::HasTag(P, ShinobiTags::State_ChakraCharging));
 	W.Tick(1.1f);
 	const float Charged = ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute());
-	TestTrue(FString::Printf(TEXT("~27 chakra after 1s charge (got %.2f)"), Charged), Charged >= 24.f && Charged <= 35.f);
+	TestTrue(FString::Printf(TEXT("~27.5 chakra after 1.1s charge (got %.2f)"), Charged), Charged >= 24.f && Charged <= 35.f);
 
 	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
 	TestFalse(TEXT("Charge ended"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
