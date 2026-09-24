@@ -74,7 +74,7 @@ public:
 	UGE_StaminaRegen();
 };
 
-/** Blocks stamina regeneration for 1 s after stamina is spent. */
+/** Apply after spending stamina; each application is its own instance, so the block lasts 1 s from the latest one. */
 UCLASS()
 class SHINOBICOOP_API UGE_StaminaRegenDelay : public UShinobiEffect
 {

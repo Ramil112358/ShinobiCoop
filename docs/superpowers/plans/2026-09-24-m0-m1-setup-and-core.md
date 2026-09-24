@@ -1566,7 +1566,8 @@ bool FShinobiInvulnerableTest::RunTest(const FString& Parameters)
 	ShinobiTest::ApplyEffect(C, UGE_DodgeIFrames::StaticClass());
 	ShinobiTest::Damage(C, 50.f);
 	TestEqual(TEXT("No damage during i-frames"), ShinobiTest::Get(C, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
-	W.Tick(0.3f);
+	W.Tick(0.4f);
+	TestFalse(TEXT("I-frames expired"), ShinobiTest::HasTag(C, ShinobiTags::State_Invulnerable));
 	ShinobiTest::Damage(C, 50.f);
 	TestEqual(TEXT("Damage after i-frames"), ShinobiTest::Get(C, UShinobiAttributeSet::GetHealthAttribute()), 450.f);
 	return true;
@@ -1577,10 +1578,11 @@ bool FShinobiChakraRegenTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
 	AShinobiCharacterBase* C = W.Spawn<AShinobiCharacterBase>();
+	W.Tick(0.1f); // Let the deferred on-application tick from the startup UGE_ChakraRegen happen first.
 	ShinobiTest::Set(C, UShinobiAttributeSet::GetChakraAttribute(), 0.f);
 	W.Tick(1.f);
 	const float Chakra = ShinobiTest::Get(C, UShinobiAttributeSet::GetChakraAttribute());
-	TestTrue(FString::Printf(TEXT("Chakra ~2 after 1s (got %.2f)"), Chakra), Chakra >= 1.4f && Chakra <= 2.6f);
+	TestTrue(FString::Printf(TEXT("Chakra ~2 after 1s (got %.2f)"), Chakra), FMath::IsNearlyEqual(Chakra, 2.f, 0.01f));
 	return true;
 }
 
@@ -1596,6 +1598,18 @@ bool FShinobiStaminaRegenDelayTest::RunTest(const FString& Parameters)
 	W.Tick(0.6f);
 	const float Stamina = ShinobiTest::Get(C, UShinobiAttributeSet::GetStaminaAttribute());
 	TestTrue(FString::Printf(TEXT("Regen resumed (got %.2f)"), Stamina), Stamina > 50.f);
+
+	// The block should last 1 s from the LATEST application, not the first: each application is its own
+	// instance, so re-applying mid-block keeps the tag granted past when the first instance would have expired.
+	ShinobiTest::Set(C, UShinobiAttributeSet::GetStaminaAttribute(), 50.f);
+	ShinobiTest::ApplyEffect(C, UGE_StaminaRegenDelay::StaticClass());
+	W.Tick(0.5f);
+	ShinobiTest::ApplyEffect(C, UGE_StaminaRegenDelay::StaticClass());
+	W.Tick(0.9f);
+	TestEqual(TEXT("Still blocked past the first instance's expiry"), ShinobiTest::Get(C, UShinobiAttributeSet::GetStaminaAttribute()), 50.f);
+	W.Tick(0.6f);
+	const float StaminaAfterReapply = ShinobiTest::Get(C, UShinobiAttributeSet::GetStaminaAttribute());
+	TestTrue(FString::Printf(TEXT("Regen resumed after latest delay (got %.2f)"), StaminaAfterReapply), StaminaAfterReapply > 50.f);
 	return true;
 }
 ```
@@ -1626,7 +1640,7 @@ public:
 	UGE_StaminaRegen();
 };
 
-/** Blocks stamina regeneration for 1 s after stamina is spent. */
+/** Apply after spending stamina; each application is its own instance, so the block lasts 1 s from the latest one. */
 UCLASS()
 class SHINOBICOOP_API UGE_StaminaRegenDelay : public UShinobiEffect
 {
@@ -1687,6 +1701,13 @@ UGE_StaminaRegen::UGE_StaminaRegen()
 	SetInfinitePeriodic(0.25f);
 	AddModifier(UShinobiAttributeSet::GetStaminaAttribute(), 5.f);
 	InhibitWhileTargetHas(ShinobiTags::State_StaminaRegenBlocked);
+	// Resume immediately when the block is lifted instead of waiting up to one more period.
+	// bExecutePeriodicEffectOnApplication defaults to true, which would also fire immediately when this
+	// effect is first applied at spawn; ExecuteAndResetPeriod already provides that first free tick via the
+	// initial un-inhibit (every new active effect starts inhibited and is un-inhibited on the same apply), so
+	// leaving both on would double-execute at t=0.
+	PeriodicInhibitionPolicy = EGameplayEffectPeriodInhibitionRemovedPolicy::ExecuteAndResetPeriod;
+	bExecutePeriodicEffectOnApplication = false;
 }
 
 UGE_StaminaRegenDelay::UGE_StaminaRegenDelay()
@@ -1719,6 +1740,9 @@ UGE_ChakraCharge::UGE_ChakraCharge()
 {
 	SetInfinitePeriodic(0.25f);
 	AddModifier(UShinobiAttributeSet::GetChakraAttribute(), 6.25f);
+	// Without this, bExecutePeriodicEffectOnApplication's default (true) grants a free +6.25 on every
+	// activation, so tapping the ability repeatedly beats holding it. Gains should only come from a full period.
+	bExecutePeriodicEffectOnApplication = false;
 }
 ```
 
@@ -2185,7 +2209,7 @@ bool FShinobiChakraChargeTest::RunTest(const FString& Parameters)
 
 	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
 	TestTrue(TEXT("Charging tag"), ShinobiTest::HasTag(P, ShinobiTags::State_ChakraCharging));
-	W.Tick(1.f);
+	W.Tick(1.1f);
 	const float Charged = ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute());
 	TestTrue(FString::Printf(TEXT("~27 chakra after 1s charge (got %.2f)"), Charged), Charged >= 24.f && Charged <= 35.f);
 
@@ -3530,3 +3554,4 @@ git tag m1-core
 - `UGE_Damage` currently refuses application while the target has `State.Invulnerable`. When M2 adds `UShinobiDamageExec` (perfect dodge → Substitution), remove that application requirement and let the exec zero the damage and fire `Event.Substitution`, otherwise the exec never runs during i-frames.
 - `OnOutOfHealth` carries no instigator; M3 downed/kill logic that needs the attacker should pass the GE context (e.g. broadcast from PostGameplayEffectExecute with `Data.EffectSpec.GetContext()`).
 - Raising a Max attribute is order-sensitive: `PreAttributeBaseChange` clamps the current value to the *current* Max, so enemy HP scaling and wave restores must raise MaxHealth (etc.) before setting Health. Lowering a Max re-clamps the current value automatically (`PostAttributeChange`, Task 4 review fix); listeners on the Max attribute's change delegate then see a null `GEModData`.
+- Invulnerability is only an application requirement on `UGE_Damage`: periodic damage applied before a dodge (Burn, Black Flame) keeps ticking through i-frames, and a blocked application reports nothing, so Substitution can't detect it. M2's damage exec should be the single place that checks `State.Invulnerable`.

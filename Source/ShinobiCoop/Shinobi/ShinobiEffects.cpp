@@ -91,6 +91,13 @@ UGE_StaminaRegen::UGE_StaminaRegen()
 	SetInfinitePeriodic(0.25f);
 	AddModifier(UShinobiAttributeSet::GetStaminaAttribute(), 5.f);
 	InhibitWhileTargetHas(ShinobiTags::State_StaminaRegenBlocked);
+	// Resume immediately when the block is lifted instead of waiting up to one more period.
+	// bExecutePeriodicEffectOnApplication defaults to true, which would also fire immediately when this
+	// effect is first applied at spawn; ExecuteAndResetPeriod already provides that first free tick via the
+	// initial un-inhibit (every new active effect starts inhibited and is un-inhibited on the same apply), so
+	// leaving both on would double-execute at t=0.
+	PeriodicInhibitionPolicy = EGameplayEffectPeriodInhibitionRemovedPolicy::ExecuteAndResetPeriod;
+	bExecutePeriodicEffectOnApplication = false;
 }
 
 UGE_StaminaRegenDelay::UGE_StaminaRegenDelay()
@@ -123,4 +130,7 @@ UGE_ChakraCharge::UGE_ChakraCharge()
 {
 	SetInfinitePeriodic(0.25f);
 	AddModifier(UShinobiAttributeSet::GetChakraAttribute(), 6.25f);
+	// Without this, bExecutePeriodicEffectOnApplication's default (true) grants a free +6.25 on every
+	// activation, so tapping the ability repeatedly beats holding it. Gains should only come from a full period.
+	bExecutePeriodicEffectOnApplication = false;
 }

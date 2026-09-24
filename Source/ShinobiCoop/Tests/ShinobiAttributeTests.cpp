@@ -76,7 +76,8 @@ bool FShinobiInvulnerableTest::RunTest(const FString& Parameters)
 	ShinobiTest::ApplyEffect(C, UGE_DodgeIFrames::StaticClass());
 	ShinobiTest::Damage(C, 50.f);
 	TestEqual(TEXT("No damage during i-frames"), ShinobiTest::Get(C, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
-	W.Tick(0.3f);
+	W.Tick(0.4f);
+	TestFalse(TEXT("I-frames expired"), ShinobiTest::HasTag(C, ShinobiTags::State_Invulnerable));
 	ShinobiTest::Damage(C, 50.f);
 	TestEqual(TEXT("Damage after i-frames"), ShinobiTest::Get(C, UShinobiAttributeSet::GetHealthAttribute()), 450.f);
 	return true;
@@ -87,10 +88,11 @@ bool FShinobiChakraRegenTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
 	AShinobiCharacterBase* C = W.Spawn<AShinobiCharacterBase>();
+	W.Tick(0.1f); // Let the deferred on-application tick from the startup UGE_ChakraRegen happen first.
 	ShinobiTest::Set(C, UShinobiAttributeSet::GetChakraAttribute(), 0.f);
 	W.Tick(1.f);
 	const float Chakra = ShinobiTest::Get(C, UShinobiAttributeSet::GetChakraAttribute());
-	TestTrue(FString::Printf(TEXT("Chakra ~2 after 1s (got %.2f)"), Chakra), Chakra >= 1.4f && Chakra <= 2.6f);
+	TestTrue(FString::Printf(TEXT("Chakra ~2 after 1s (got %.2f)"), Chakra), FMath::IsNearlyEqual(Chakra, 2.f, 0.01f));
 	return true;
 }
 
@@ -106,6 +108,18 @@ bool FShinobiStaminaRegenDelayTest::RunTest(const FString& Parameters)
 	W.Tick(0.6f);
 	const float Stamina = ShinobiTest::Get(C, UShinobiAttributeSet::GetStaminaAttribute());
 	TestTrue(FString::Printf(TEXT("Regen resumed (got %.2f)"), Stamina), Stamina > 50.f);
+
+	// The block should last 1 s from the LATEST application, not the first: each application is its own
+	// instance, so re-applying mid-block keeps the tag granted past when the first instance would have expired.
+	ShinobiTest::Set(C, UShinobiAttributeSet::GetStaminaAttribute(), 50.f);
+	ShinobiTest::ApplyEffect(C, UGE_StaminaRegenDelay::StaticClass());
+	W.Tick(0.5f);
+	ShinobiTest::ApplyEffect(C, UGE_StaminaRegenDelay::StaticClass());
+	W.Tick(0.9f);
+	TestEqual(TEXT("Still blocked past the first instance's expiry"), ShinobiTest::Get(C, UShinobiAttributeSet::GetStaminaAttribute()), 50.f);
+	W.Tick(0.6f);
+	const float StaminaAfterReapply = ShinobiTest::Get(C, UShinobiAttributeSet::GetStaminaAttribute());
+	TestTrue(FString::Printf(TEXT("Regen resumed after latest delay (got %.2f)"), StaminaAfterReapply), StaminaAfterReapply > 50.f);
 	return true;
 }
 
