@@ -24,7 +24,7 @@ The slice proves combat is fun and co-op networking works before investing in ar
 | Art style | Anime cel-shaded (post-process toon + outlines) |
 | Architecture | C++ + Gameplay Ability System (GAS) |
 | Engine / tools | Unreal Engine 5.8, Blender 5.2, RTX 5080, 32 GB RAM |
-| Project path | `C:\Users\ahmad\Source\ShinobiCoop` (not OneDrive-synced Documents) |
+| Project path | `C:\Users\ahmad\ShinobiCoop` (not OneDrive-synced Documents) |
 
 ### Research: features borrowed from similar games
 
