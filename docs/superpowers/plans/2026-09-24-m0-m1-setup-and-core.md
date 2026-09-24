@@ -17,6 +17,7 @@ Spec: `docs/superpowers/specs/2026-09-23-combat-slice-design.md` (milestones M0 
 - Project root: `C:\Users\ahmad\ShinobiCoop` (all paths below are relative to it).
 - Engine root: `C:\Program Files\Epic Games\UE_5.8`.
 - **Close the Unreal Editor before running `Scripts/build.ps1`.** Build.bat refuses to build while Live Coding holds the editor DLLs.
+- Run `Scripts/build.ps1`, `Scripts/run_tests.ps1` and `Scripts/run_python.ps1` with the shell tool timeout set to 600000 ms (the scripts time out themselves at 540 s). If a run needs longer (first-time shader/DDC warm-up), run it in the background or pass a larger `-TimeoutSec`.
 - A C++ "failing test" step usually fails by **not compiling** (missing header/type). That is the expected red state.
 - Commit messages end with the trailer:
   ```
@@ -272,7 +273,7 @@ Write-Host "BUILD OK"
 
 ```powershell
 # Runs automation tests headless and prints one line per test. Exit code 1 on any failure.
-param([string]$Filter = "ShinobiCoop", [int]$TimeoutSec = 900)
+param([string]$Filter = "ShinobiCoop", [int]$TimeoutSec = 540)
 $ErrorActionPreference = "Stop"
 $UE = "C:\Program Files\Epic Games\UE_5.8"
 $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
@@ -280,7 +281,7 @@ $Project = Join-Path $Root "ShinobiCoop.uproject"
 $LogDir = Join-Path $Root "Saved\Logs"
 New-Item -ItemType Directory -Force $LogDir | Out-Null
 $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$Log = Join-Path $LogDir "Tests-$Timestamp.log"
+$Log = Join-Path $LogDir "Tests-$Timestamp-$PID.log"
 $StdOut = "$Log.stdout.txt"
 $StdErr = "$Log.stderr.txt"
 
@@ -300,9 +301,16 @@ if (-not $p.WaitForExit($TimeoutSec * 1000)) {
 }
 $ExitCode = $p.ExitCode
 
-$geLines = Select-String -Path $Log -Pattern "LogGameplayEffects: (Warning|Error)"
+if (-not (Test-Path $Log)) {
+    Write-Host "Log file not found (editor exit code $ExitCode). Tail of stdout:"
+    if (Test-Path $StdOut) { Get-Content $StdOut -Tail 40 }
+    Write-Host "Log: $Log"
+    exit 1
+}
+
+$geLines = Select-String -Path $Log -Pattern "LogGameplayEffects: (Warning|Error)|Ensure condition failed|should be added to GEComponents"
 if ($geLines) {
-    Write-Host "--- LogGameplayEffects warnings/errors ---"
+    Write-Host "--- GAS warnings / ensures ---"
     $geLines | ForEach-Object { Write-Host $_.Line }
 }
 
@@ -346,7 +354,7 @@ Write-Host "Log: $Log"
 # Runs an Unreal Python script through the editor's Python commandlet.
 param(
     [Parameter(Mandatory)][string]$Script,
-    [int]$TimeoutSec = 900
+    [int]$TimeoutSec = 540
 )
 $ErrorActionPreference = "Stop"
 $UE = "C:\Program Files\Epic Games\UE_5.8"
@@ -356,7 +364,7 @@ $ScriptPath = (Resolve-Path $Script).Path
 $LogDir = Join-Path $Root "Saved\Logs"
 New-Item -ItemType Directory -Force $LogDir | Out-Null
 $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$Log = Join-Path $LogDir "Python-$Timestamp.log"
+$Log = Join-Path $LogDir "Python-$Timestamp-$PID.log"
 $StdOut = "$Log.stdout.txt"
 $StdErr = "$Log.stderr.txt"
 
@@ -375,7 +383,7 @@ if ($TimedOut -or $ExitCode -ne 0) {
     if ($TimedOut) { Write-Host "TIMEOUT after $TimeoutSec s running $ScriptPath." }
     Write-Host "Tail of log:"
     if (Test-Path $Log) { Get-Content $Log -Tail 40 }
-    Select-String -Path $Log -Pattern "LogPython: Error" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.Line }
+    Select-String -Path $Log -Pattern "Error:" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.Line }
     Write-Host "Log: $Log"
     throw "Python script failed (exit $ExitCode)"
 }

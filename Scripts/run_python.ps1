@@ -1,7 +1,7 @@
 # Runs an Unreal Python script through the editor's Python commandlet.
 param(
     [Parameter(Mandatory)][string]$Script,
-    [int]$TimeoutSec = 900
+    [int]$TimeoutSec = 540
 )
 $ErrorActionPreference = "Stop"
 $UE = "C:\Program Files\Epic Games\UE_5.8"
@@ -11,7 +11,7 @@ $ScriptPath = (Resolve-Path $Script).Path
 $LogDir = Join-Path $Root "Saved\Logs"
 New-Item -ItemType Directory -Force $LogDir | Out-Null
 $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$Log = Join-Path $LogDir "Python-$Timestamp.log"
+$Log = Join-Path $LogDir "Python-$Timestamp-$PID.log"
 $StdOut = "$Log.stdout.txt"
 $StdErr = "$Log.stderr.txt"
 
@@ -30,7 +30,7 @@ if ($TimedOut -or $ExitCode -ne 0) {
     if ($TimedOut) { Write-Host "TIMEOUT after $TimeoutSec s running $ScriptPath." }
     Write-Host "Tail of log:"
     if (Test-Path $Log) { Get-Content $Log -Tail 40 }
-    Select-String -Path $Log -Pattern "LogPython: Error" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.Line }
+    Select-String -Path $Log -Pattern "Error:" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.Line }
     Write-Host "Log: $Log"
     throw "Python script failed (exit $ExitCode)"
 }
