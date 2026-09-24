@@ -1,4 +1,4 @@
-﻿# ShinobiCoop M0 + M1 (Setup + Core Combat) Implementation Plan
+# ShinobiCoop M0 + M1 (Setup + Core Combat) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -76,7 +76,7 @@ Run (PowerShell):
 & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 Get-ChildItem "$(& 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe' -latest -products * -property installationPath)\VC\Tools\MSVC" | Select-Object Name
 ```
-Expected: a folder `14.44.35211` or newer (VS 2022), or `14.50.35723` or newer (VS 2026). Versions `14.44.0â€“14.44.35210` and `14.50.0â€“14.50.35722` are banned by UE 5.8.
+Expected: a folder `14.44.35211` or newer (VS 2022), or `14.50.35723` or newer (VS 2026). Versions `14.44.0–14.44.35210` and `14.50.0–14.50.35722` are banned by UE 5.8.
 
 ---
 
@@ -88,7 +88,7 @@ Expected: a folder `14.44.35211` or newer (VS 2022), or `14.50.35723` or newer (
 
 - [x] **Step 1: Create the project in the Unreal Project Browser**
 
-The user launches Unreal Engine 5.8 â†’ Games â†’ **Third Person** â†’ **C++** â†’ Project Location `C:\Users\ahmad` â†’ Project Name `ShinobiCoop` â†’ Create.
+The user launches Unreal Engine 5.8 → Games → **Third Person** → **C++** → Project Location `C:\Users\ahmad` → Project Name `ShinobiCoop` → Create.
 
 - [x] **Step 2: Close the editor and Visual Studio once the project has opened**
 
@@ -1989,7 +1989,7 @@ void UGA_Dodge::OnDodgeFinished()
 }
 ```
 
-- [ ] **Step 5: Grant the ability** â€” in `ShinobiPlayerCharacter.cpp` add `#include "Shinobi/Abilities/GA_Dodge.h"` and change the startup list to:
+- [ ] **Step 5: Grant the ability** — in `ShinobiPlayerCharacter.cpp` add `#include "Shinobi/Abilities/GA_Dodge.h"` and change the startup list to:
 
 ```cpp
 	StartupAbilities = { UGA_Sprint::StaticClass(), UGA_Dodge::StaticClass() };
@@ -2135,7 +2135,7 @@ void UGA_ChakraCharge::EndAbility(const FGameplayAbilitySpecHandle Handle, const
 }
 ```
 
-- [ ] **Step 5: Grant the ability** â€” in `ShinobiPlayerCharacter.cpp` add `#include "Shinobi/Abilities/GA_ChakraCharge.h"` and set:
+- [ ] **Step 5: Grant the ability** — in `ShinobiPlayerCharacter.cpp` add `#include "Shinobi/Abilities/GA_ChakraCharge.h"` and set:
 
 ```cpp
 	StartupAbilities = { UGA_Sprint::StaticClass(), UGA_Dodge::StaticClass(), UGA_ChakraCharge::StaticClass() };
@@ -2411,7 +2411,7 @@ void UGA_Melee::OnComboWindowClosed()
 }
 ```
 
-- [ ] **Step 5: Grant the ability** â€” in `ShinobiPlayerCharacter.cpp` add `#include "Shinobi/Abilities/GA_Melee.h"` and set:
+- [ ] **Step 5: Grant the ability** — in `ShinobiPlayerCharacter.cpp` add `#include "Shinobi/Abilities/GA_Melee.h"` and set:
 
 ```cpp
 	StartupAbilities = { UGA_Melee::StaticClass(), UGA_Dodge::StaticClass(), UGA_Sprint::StaticClass(), UGA_ChakraCharge::StaticClass() };
@@ -2974,11 +2974,11 @@ class SHINOBICOOP_API AShinobiPlayerController : public APlayerController
 	GENERATED_BODY()
 
 public:
-	/** Console: ShinobiDamageSelf 50 â€” server applies damage to this player's pawn. */
+	/** Console: ShinobiDamageSelf 50 — server applies damage to this player's pawn. */
 	UFUNCTION(Exec)
 	void ShinobiDamageSelf(float Amount);
 
-	/** Console: ShinobiDumpStats â€” logs every character's attributes as this machine sees them. */
+	/** Console: ShinobiDumpStats — logs every character's attributes as this machine sees them. */
 	UFUNCTION(Exec)
 	void ShinobiDumpStats();
 
@@ -3167,7 +3167,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 **Files:**
 - Create: `Scripts/setup_m1.py`
 - Creates assets: `Content/Shinobi/Anims/AM_Melee_1..3.uasset`, `AM_Dodge.uasset`
-- Modifies asset: `Content/ThirdPerson/Lvl_ThirdPerson.umap` (World Settings â†’ GameMode Override)
+- Modifies asset: `Content/ThirdPerson/Lvl_ThirdPerson.umap` (World Settings → GameMode Override)
 
 - [ ] **Step 1: Write `Scripts/setup_m1.py`**
 
@@ -3229,7 +3229,7 @@ set_game_mode()
 Run: `powershell -ExecutionPolicy Bypass -File Scripts\run_python.ps1 -Script Scripts\setup_m1.py`
 Expected output contains 4 lines `[setup_m1] created: /Game/Shinobi/Anims/...` and `[setup_m1] /Game/ThirdPerson/Lvl_ThirdPerson GameMode Override -> /Script/ShinobiCoop.ShinobiGameMode`.
 
-Fallback if `set_game_mode` fails in the commandlet: the user opens `Lvl_ThirdPerson` in the editor â†’ Window â†’ World Settings â†’ GameMode Override â†’ `ShinobiGameMode` â†’ Save.
+Fallback if `set_game_mode` fails in the commandlet: the user opens `Lvl_ThirdPerson` in the editor → Window → World Settings → GameMode Override → `ShinobiGameMode` → Save.
 
 - [ ] **Step 3: Verify assets exist**
 
@@ -3322,7 +3322,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Open the editor and set up 2-player PIE**
 
-User opens `ShinobiCoop.uproject` â†’ Play dropdown (â‹® next to Play) â†’ Number of Players `2`, Net Mode `Play As Listen Server` â†’ Play.
+User opens `ShinobiCoop.uproject` → Play dropdown (⋮ next to Play) → Number of Players `2`, Net Mode `Play As Listen Server` → Play.
 
 - [ ] **Step 2: Walk the checklist in both windows**
 
@@ -3334,7 +3334,7 @@ User opens `ShinobiCoop.uproject` â†’ Play dropdown (â‹® next to Play) 
 | 4 | Hold Shift | Faster run, stamina bar drains, refills ~1 s after release |
 | 5 | Ctrl | Quick dash with dash animation, stamina -25, blocked when stamina < 25 |
 | 6 | Hold C | Character stops, chakra bar fills fast |
-| 7 | LMB Ã—3 near a dummy | Three punch animations; dummy HP text drops 20 â†’ 25 â†’ 40; third hit knocks it back; chakra bar rises |
+| 7 | LMB ×3 near a dummy | Three punch animations; dummy HP text drops 20 → 25 → 40; third hit knocks it back; chakra bar rises |
 | 8 | Beat a dummy to 0 | Resets to 500 after ~1.5 s |
 | 9 | Second window | Sees the first player's animations and the same dummy HP; players can't hit each other |
 | 10 | Console (`~`) `ShinobiDamageSelf 100` in the client window | Client HUD health bar drops by 20% |
@@ -3359,14 +3359,14 @@ git tag m1-core
 
 ## Self-review
 
-**Spec coverage (M0 + M1 rows of Â§8):**
-- M0 "project builds; plugins enabled; git + LFS; automation test harness runs" â†’ Tasks 1â€“3 (harness proven in Task 4).
-- M1 movement, sprint, double jump â†’ Tasks 6, 10 (`JumpMaxCount = 2`).
-- Dodge (600 units / 0.25 s, 0.2 s i-frames, 25 stamina, blocked below 25) â†’ Tasks 5, 7.
-- Melee combo 20/25/40, 0.5 s window, third-hit knockback, +5 chakra per hit â†’ Task 9.
-- Chakra charge +25/s, movement locked â†’ Tasks 5, 8, 10.
-- Attribute values (500/100/100/3), chakra regen +2/s, stamina regen +20/s after 1 s â†’ Tasks 4, 5.
-- Attribute bars â†’ Task 11. Training dummy takes damage â†’ Task 11. Replicated to a second client â†’ Tasks 13, 14.
+**Spec coverage (M0 + M1 rows of §8):**
+- M0 "project builds; plugins enabled; git + LFS; automation test harness runs" → Tasks 1–3 (harness proven in Task 4).
+- M1 movement, sprint, double jump → Tasks 6, 10 (`JumpMaxCount = 2`).
+- Dodge (600 units / 0.25 s, 0.2 s i-frames, 25 stamina, blocked below 25) → Tasks 5, 7.
+- Melee combo 20/25/40, 0.5 s window, third-hit knockback, +5 chakra per hit → Task 9.
+- Chakra charge +25/s, movement locked → Tasks 5, 8, 10.
+- Attribute values (500/100/100/3), chakra regen +2/s, stamina regen +20/s after 1 s → Tasks 4, 5.
+- Attribute bars → Task 11. Training dummy takes damage → Task 11. Replicated to a second client → Tasks 13, 14.
 - Deferred by design (later milestones): jutsu, statuses, interrupts, substitution teleport (M2); enemies, waves, downed/revive (M3); Steam, menus (M4); toon look, hit-stop, damage numbers (M5). Chakra charge being cancelled by hits needs `Event.Hit.Stagger`, which arrives with the damage execution in M2.
 
 **Placeholder scan:** no TBD/TODO; every code step has complete code.
