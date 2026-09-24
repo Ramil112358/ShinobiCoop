@@ -2079,17 +2079,29 @@ bool FShinobiDodgeTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	const FVector Start = P->GetActorLocation();
 
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Sprint);
+	TestTrue(TEXT("Sprint active before dodge"), ShinobiTest::IsActive(P, UGA_Sprint::StaticClass()));
+
+	const float Before = ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute());
 	ShinobiTest::Press(P, EShinobiAbilityInputID::Dodge);
 	TestTrue(TEXT("Dodge active"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
-	TestEqual(TEXT("Dodge cost 25"), ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute()), 75.f);
+	TestFalse(TEXT("Dodge cancels sprint"), ShinobiTest::IsActive(P, UGA_Sprint::StaticClass()));
+	TestEqual(TEXT("Dodge cost 25"), ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute()), Before - 25.f);
 	TestTrue(TEXT("Invulnerable"), ShinobiTest::HasTag(P, ShinobiTags::State_Invulnerable));
 	ShinobiTest::Damage(P, 50.f);
 	TestEqual(TEXT("I-frames block damage"), ShinobiTest::Get(P, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
 
-	W.Tick(0.4f);
+	W.Tick(0.15f);
+	TestTrue(TEXT("Still invulnerable mid-dodge"), ShinobiTest::HasTag(P, ShinobiTags::State_Invulnerable));
+	W.Tick(0.25f);
 	TestFalse(TEXT("Dodge finished"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
 	TestFalse(TEXT("I-frames over"), ShinobiTest::HasTag(P, ShinobiTags::State_Invulnerable));
+
+	const FVector Displacement = (P->GetActorLocation() - Start) * FVector(1.f, 1.f, 0.f);
+	TestTrue(FString::Printf(TEXT("Backstep ~600 on -X (got %s)"), *Displacement.ToString()), Displacement.X < -550.f && Displacement.X > -700.f);
+
 	ShinobiTest::Damage(P, 50.f);
 	TestEqual(TEXT("Damage after dodge"), ShinobiTest::Get(P, UShinobiAttributeSet::GetHealthAttribute()), 450.f);
 
@@ -2097,9 +2109,16 @@ bool FShinobiDodgeTest::RunTest(const FString& Parameters)
 	ShinobiTest::Press(P, EShinobiAbilityInputID::Dodge);
 	TestFalse(TEXT("Dodge blocked below 25 stamina"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
 	TestEqual(TEXT("No stamina spent"), ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute()), 20.f);
+
+	ShinobiTest::Set(P, UShinobiAttributeSet::GetStaminaAttribute(), 25.f);
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Dodge);
+	TestTrue(TEXT("Dodge active at exactly 25 stamina"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
+	TestEqual(TEXT("Stamina exactly spent"), ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute()), 0.f);
 	return true;
 }
 ```
+
+(Dodge cancelling Sprint takes effect before `GA_Dodge::ActivateAbility` runs — `CancelAbilitiesWithTag` is applied in `UGameplayAbility::PreActivate`, ahead of `ActivateAbility`/`CommitAbility` — so `Before` already reflects Sprint's own instant drain tick; the dodge cost is asserted relative to it rather than against a hardcoded 100-stamina baseline. Observed backstep displacement in this test world: ~630 units on -X, comfortably inside the 550-700 tolerance band, which also covers the residual drift from the velocity-clamp tail after the root motion force's `OnFinish`.)
 
 - [ ] **Step 2: Build to see it fail**
 
@@ -2131,7 +2150,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	float Distance = 600.f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
+	UPROPERTY(EditDefaultsOnly, Category = "Shinobi", meta = (ClampMin = "0.05"))
 	float Duration = 0.25f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
@@ -2176,13 +2195,19 @@ void UGA_Dodge::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const F
 		return;
 	}
 
+	const AShinobiCharacterBase* Character = GetShinobiCharacter();
+	if (!Character)
+	{
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+
 	if (HasAuthority(&ActivationInfo))
 	{
 		ApplyEffectToSelf(UGE_DodgeIFrames::StaticClass());
 		ApplyEffectToSelf(UGE_StaminaRegenDelay::StaticClass());
 	}
 
-	const AShinobiCharacterBase* Character = GetShinobiCharacter();
 	FVector Direction = Character->GetCharacterMovement()->GetCurrentAcceleration().GetSafeNormal2D();
 	if (Direction.IsNearlyZero())
 	{
@@ -2191,7 +2216,10 @@ void UGA_Dodge::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const F
 
 	if (UAnimMontage* Anim = Montage.LoadSynchronous())
 	{
-		UAbilityTask_PlayMontageAndWait* Play = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, Anim);
+		// bStopWhenAbilityEnds = false: the 0.25 s dash ends the ability well before the ~0.97 s
+		// animation finishes, and the animation is cosmetic only (root motion is disabled on the
+		// duplicated sequence in Task 12), so let it play out instead of cutting it off.
+		UAbilityTask_PlayMontageAndWait* Play = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, Anim, 1.f, NAME_None, false);
 		Play->ReadyForActivation();
 	}
 
@@ -3385,7 +3413,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Files:**
 - Create: `Scripts/setup_m1.py`
-- Creates assets: `Content/Shinobi/Anims/AM_Melee_1..3.uasset`, `AM_Dodge.uasset`
+- Creates assets: `Content/Shinobi/Anims/AS_Dodge.uasset`, `AM_Melee_1..3.uasset`, `AM_Dodge.uasset`
 - Modifies asset: `Content/ThirdPerson/Lvl_ThirdPerson.umap` (World Settings → GameMode Override)
 
 - [ ] **Step 1: Write `Scripts/setup_m1.py`**
@@ -3393,20 +3421,46 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```python
 """M1 asset setup. Idempotent: safe to re-run.
 
-1. Creates melee/dodge montages from the template's Manny animations (DefaultSlot, matches ABP_Manny_Combat).
-2. Points Lvl_ThirdPerson's GameMode Override (which the template sets to BP_ThirdPersonGameMode) at ShinobiGameMode.
+1. Duplicates the template's dash animation with root motion disabled (see create_dash_sequence).
+2. Creates melee/dodge montages from the template's Manny animations (DefaultSlot, matches ABP_Manny_Combat).
+3. Points Lvl_ThirdPerson's GameMode Override (which the template sets to BP_ThirdPersonGameMode) at ShinobiGameMode.
 """
 import unreal
 
 ANIM_DIR = "/Game/Shinobi/Anims"
+DASH_SOURCE = "/Game/Characters/Mannequins/Anims/Unarmed/Jump/MM_Dash"
+DASH_SEQUENCE = f"{ANIM_DIR}/AS_Dodge"
 MONTAGES = {
     "AM_Melee_1": "/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_01",
     "AM_Melee_2": "/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_02",
     "AM_Melee_3": "/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_03",
-    "AM_Dodge": "/Game/Characters/Mannequins/Anims/Unarmed/Jump/MM_Dash",
+    "AM_Dodge": DASH_SEQUENCE,
 }
 MAP = "/Game/ThirdPerson/Lvl_ThirdPerson"
 GAME_MODE = "/Script/ShinobiCoop.ShinobiGameMode"
+
+
+def create_dash_sequence():
+    # GA_Dodge drives the dash with an AbilityTask_ApplyRootMotionConstantForce. MM_Dash has its own
+    # baked root motion (bEnableRootMotion=True, ~0.97 s), and ABP_Manny_Combat uses
+    # RootMotionFromMontagesOnly; CharacterMovementComponent::ApplyRootMotionToVelocity treats anim
+    # root motion as taking precedence over any other root motion source while it plays
+    # (CharacterMovementComponent.cpp, ApplyRootMotionToVelocity / the ~2952 HasAnimRootMotion() branch:
+    # "Animation root motion overrides Velocity and currently doesn't allow any other root motion
+    # sources"), so playing MM_Dash directly would silently replace our 600-unit/0.25 s dash with the
+    # template's own translation. Duplicate it and turn root motion off so the montage is visual only;
+    # force_root_lock keeps the pelvis from sliding relative to the capsule. Melee montages keep their
+    # own root motion (a forward step on the attack is fine and not fighting another root motion task).
+    if unreal.EditorAssetLibrary.does_asset_exist(DASH_SEQUENCE):
+        unreal.log(f"[setup_m1] exists: {DASH_SEQUENCE}")
+        return
+    duplicated = unreal.EditorAssetLibrary.duplicate_asset(DASH_SOURCE, DASH_SEQUENCE)
+    if duplicated is None:
+        raise RuntimeError(f"failed to duplicate {DASH_SOURCE} -> {DASH_SEQUENCE}")
+    duplicated.set_editor_property("enable_root_motion", False)
+    duplicated.set_editor_property("force_root_lock", True)
+    unreal.EditorAssetLibrary.save_loaded_asset(duplicated)
+    unreal.log(f"[setup_m1] created: {DASH_SEQUENCE}")
 
 
 def create_montages():
@@ -3439,6 +3493,7 @@ def set_game_mode():
     unreal.log(f"[setup_m1] {MAP} GameMode Override -> {GAME_MODE}")
 
 
+create_dash_sequence()
 create_montages()
 set_game_mode()
 ```
@@ -3446,14 +3501,14 @@ set_game_mode()
 - [ ] **Step 2: Run it**
 
 Run: `powershell -ExecutionPolicy Bypass -File Scripts\run_python.ps1 -Script Scripts\setup_m1.py`
-Expected output contains 4 lines `[setup_m1] created: /Game/Shinobi/Anims/...` and `[setup_m1] /Game/ThirdPerson/Lvl_ThirdPerson GameMode Override -> /Script/ShinobiCoop.ShinobiGameMode`.
+Expected output contains 5 lines `[setup_m1] created: /Game/Shinobi/Anims/...` (`AS_Dodge`, `AM_Melee_1`, `AM_Melee_2`, `AM_Melee_3`, `AM_Dodge`) and `[setup_m1] /Game/ThirdPerson/Lvl_ThirdPerson GameMode Override -> /Script/ShinobiCoop.ShinobiGameMode`.
 
 Fallback if `set_game_mode` fails in the commandlet: the user opens `Lvl_ThirdPerson` in the editor → Window → World Settings → GameMode Override → `ShinobiGameMode` → Save.
 
 - [ ] **Step 3: Verify assets exist**
 
 Run: `Get-ChildItem Content\Shinobi\Anims -Name`
-Expected: `AM_Dodge.uasset`, `AM_Melee_1.uasset`, `AM_Melee_2.uasset`, `AM_Melee_3.uasset`.
+Expected: `AM_Dodge.uasset`, `AM_Melee_1.uasset`, `AM_Melee_2.uasset`, `AM_Melee_3.uasset`, `AS_Dodge.uasset`.
 
 - [ ] **Step 4: Re-run tests (montages now load inside abilities)**
 
@@ -3560,6 +3615,7 @@ User opens `ShinobiCoop.uproject` → Play dropdown (⋮ next to Play) → Numbe
 | 11 | In the client window, console `NetEmulation.PktLag 150`, then hold Shift until stamina runs out | No position snapping when sprint ends; stamina bar stops at 0 |
 | 12 | Still laggy: tap Shift repeatedly | Each tap costs exactly one 2.5 drain tick, not more; sprint speed stops within ~one round trip of releasing |
 | 13 | Still laggy: press Shift during Dodge / Chakra Charge | Sprint is blocked (can't start); no position snapping |
+| 14 | Still laggy: dodge in each direction and a backstep | Dash goes the pressed direction ~600 units, no snap-back; backstep with no input |
 
 - [ ] **Step 3: Record results**
 
@@ -3603,3 +3659,6 @@ git tag m1-core
 - `OnOutOfHealth` carries no instigator; M3 downed/kill logic that needs the attacker should pass the GE context (e.g. broadcast from PostGameplayEffectExecute with `Data.EffectSpec.GetContext()`).
 - Raising a Max attribute is order-sensitive: `PreAttributeBaseChange` clamps the current value to the *current* Max, so enemy HP scaling and wave restores must raise MaxHealth (etc.) before setting Health. Lowering a Max re-clamps the current value automatically (`PostAttributeChange`, Task 4 review fix); listeners on the Max attribute's change delegate then see a null `GEModData`.
 - Invulnerability is only an application requirement on `UGE_Damage`: periodic damage applied before a dodge (Burn, Black Flame) keeps ticking through i-frames, and a blocked application reports nothing, so Substitution can't detect it. M2's damage exec should be the single place that checks `State.Invulnerable`.
+- Dodge direction is computed separately on client and server from current acceleration (one frame stale; a lost/reordered move makes the server's root-motion force mismatch → corrections for the whole dash). Before M4 internet play (or earlier if `NetEmulation.PktLag`/`PktLoss` tests show corrections), send the direction to the server explicitly (target data or gameplay-event activation) using the freshest input (`GetPendingMovementInputVector()`, fallback acceleration).
+- i-frames are server-only (correct for authority) but shifted by ~one RTT for remote players; if lag playtests show "dodged but got hit", extend server i-frames by min(RTT/2, 100 ms) or give Substitution a grace window.
+- Substitution must cancel GA_Dodge before teleporting, or the constant force keeps pushing the teleported character.

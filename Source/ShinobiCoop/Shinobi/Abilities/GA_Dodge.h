@@ -20,7 +20,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	float Distance = 600.f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
+	UPROPERTY(EditDefaultsOnly, Category = "Shinobi", meta = (ClampMin = "0.05"))
 	float Duration = 0.25f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")

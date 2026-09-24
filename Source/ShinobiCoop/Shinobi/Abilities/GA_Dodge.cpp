@@ -28,13 +28,19 @@ void UGA_Dodge::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const F
 		return;
 	}
 
+	const AShinobiCharacterBase* Character = GetShinobiCharacter();
+	if (!Character)
+	{
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+
 	if (HasAuthority(&ActivationInfo))
 	{
 		ApplyEffectToSelf(UGE_DodgeIFrames::StaticClass());
 		ApplyEffectToSelf(UGE_StaminaRegenDelay::StaticClass());
 	}
 
-	const AShinobiCharacterBase* Character = GetShinobiCharacter();
 	FVector Direction = Character->GetCharacterMovement()->GetCurrentAcceleration().GetSafeNormal2D();
 	if (Direction.IsNearlyZero())
 	{
@@ -43,7 +49,10 @@ void UGA_Dodge::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const F
 
 	if (UAnimMontage* Anim = Montage.LoadSynchronous())
 	{
-		UAbilityTask_PlayMontageAndWait* Play = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, Anim);
+		// bStopWhenAbilityEnds = false: the 0.25 s dash ends the ability well before the ~0.97 s
+		// animation finishes, and the animation is cosmetic only (root motion is disabled on the
+		// duplicated sequence in Task 12), so let it play out instead of cutting it off.
+		UAbilityTask_PlayMontageAndWait* Play = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, Anim, 1.f, NAME_None, false);
 		Play->ReadyForActivation();
 	}
 

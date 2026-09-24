@@ -81,17 +81,29 @@ bool FShinobiDodgeTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	const FVector Start = P->GetActorLocation();
 
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Sprint);
+	TestTrue(TEXT("Sprint active before dodge"), ShinobiTest::IsActive(P, UGA_Sprint::StaticClass()));
+
+	const float Before = ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute());
 	ShinobiTest::Press(P, EShinobiAbilityInputID::Dodge);
 	TestTrue(TEXT("Dodge active"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
-	TestEqual(TEXT("Dodge cost 25"), ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute()), 75.f);
+	TestFalse(TEXT("Dodge cancels sprint"), ShinobiTest::IsActive(P, UGA_Sprint::StaticClass()));
+	TestEqual(TEXT("Dodge cost 25"), ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute()), Before - 25.f);
 	TestTrue(TEXT("Invulnerable"), ShinobiTest::HasTag(P, ShinobiTags::State_Invulnerable));
 	ShinobiTest::Damage(P, 50.f);
 	TestEqual(TEXT("I-frames block damage"), ShinobiTest::Get(P, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
 
-	W.Tick(0.4f);
+	W.Tick(0.15f);
+	TestTrue(TEXT("Still invulnerable mid-dodge"), ShinobiTest::HasTag(P, ShinobiTags::State_Invulnerable));
+	W.Tick(0.25f);
 	TestFalse(TEXT("Dodge finished"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
 	TestFalse(TEXT("I-frames over"), ShinobiTest::HasTag(P, ShinobiTags::State_Invulnerable));
+
+	const FVector Displacement = (P->GetActorLocation() - Start) * FVector(1.f, 1.f, 0.f);
+	TestTrue(FString::Printf(TEXT("Backstep ~600 on -X (got %s)"), *Displacement.ToString()), Displacement.X < -550.f && Displacement.X > -700.f);
+
 	ShinobiTest::Damage(P, 50.f);
 	TestEqual(TEXT("Damage after dodge"), ShinobiTest::Get(P, UShinobiAttributeSet::GetHealthAttribute()), 450.f);
 
@@ -99,6 +111,11 @@ bool FShinobiDodgeTest::RunTest(const FString& Parameters)
 	ShinobiTest::Press(P, EShinobiAbilityInputID::Dodge);
 	TestFalse(TEXT("Dodge blocked below 25 stamina"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
 	TestEqual(TEXT("No stamina spent"), ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute()), 20.f);
+
+	ShinobiTest::Set(P, UShinobiAttributeSet::GetStaminaAttribute(), 25.f);
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Dodge);
+	TestTrue(TEXT("Dodge active at exactly 25 stamina"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
+	TestEqual(TEXT("Stamina exactly spent"), ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute()), 0.f);
 	return true;
 }
 
