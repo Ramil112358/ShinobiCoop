@@ -3519,3 +3519,4 @@ git tag m1-core
 
 - `UGE_Damage` currently refuses application while the target has `State.Invulnerable`. When M2 adds `UShinobiDamageExec` (perfect dodge → Substitution), remove that application requirement and let the exec zero the damage and fire `Event.Substitution`, otherwise the exec never runs during i-frames.
 - `OnOutOfHealth` carries no instigator; M3 downed/kill logic that needs the attacker should pass the GE context (e.g. broadcast from PostGameplayEffectExecute with `Data.EffectSpec.GetContext()`).
+- Raising a Max attribute is order-sensitive: `PreAttributeBaseChange` clamps the current value to the *current* Max, so enemy HP scaling and wave restores must raise MaxHealth (etc.) before setting Health. Lowering a Max re-clamps the current value automatically (`PostAttributeChange`, Task 4 review fix); listeners on the Max attribute's change delegate then see a null `GEModData`.
