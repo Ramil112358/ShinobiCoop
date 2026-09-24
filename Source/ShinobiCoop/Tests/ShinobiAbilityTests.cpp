@@ -5,6 +5,7 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/Abilities/GA_Sprint.h"
+#include "Shinobi/Abilities/GA_Dodge.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSprintTest, "ShinobiCoop.Abilities.SprintDrainsStaminaThenRegenAfterDelay", ShinobiTestFlags)
 bool FShinobiSprintTest::RunTest(const FString& Parameters)
@@ -72,6 +73,32 @@ bool FShinobiSprintCancelTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Regen delayed after cancel"), ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute()), S);
 	W.Tick(0.5f);
 	TestTrue(TEXT("Regen resumed after cancel"), ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute()) > S);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDodgeTest, "ShinobiCoop.Abilities.DodgeCostsStaminaAndGrantsIFrames", ShinobiTestFlags)
+bool FShinobiDodgeTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Dodge);
+	TestTrue(TEXT("Dodge active"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
+	TestEqual(TEXT("Dodge cost 25"), ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute()), 75.f);
+	TestTrue(TEXT("Invulnerable"), ShinobiTest::HasTag(P, ShinobiTags::State_Invulnerable));
+	ShinobiTest::Damage(P, 50.f);
+	TestEqual(TEXT("I-frames block damage"), ShinobiTest::Get(P, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
+
+	W.Tick(0.4f);
+	TestFalse(TEXT("Dodge finished"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
+	TestFalse(TEXT("I-frames over"), ShinobiTest::HasTag(P, ShinobiTags::State_Invulnerable));
+	ShinobiTest::Damage(P, 50.f);
+	TestEqual(TEXT("Damage after dodge"), ShinobiTest::Get(P, UShinobiAttributeSet::GetHealthAttribute()), 450.f);
+
+	ShinobiTest::Set(P, UShinobiAttributeSet::GetStaminaAttribute(), 20.f);
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Dodge);
+	TestFalse(TEXT("Dodge blocked below 25 stamina"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
+	TestEqual(TEXT("No stamina spent"), ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute()), 20.f);
 	return true;
 }
 
