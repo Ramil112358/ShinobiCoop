@@ -15,10 +15,22 @@ UGA_Sprint::UGA_Sprint()
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Dodging);
 }
 
+bool UGA_Sprint::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, FGameplayTagContainer* OptionalRelevantTags) const
+{
+	if (!Super::CanActivateAbility(Handle, ActorInfo, SourceTags, TargetTags, OptionalRelevantTags))
+	{
+		return false;
+	}
+	const UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
+	// Gating here (rather than in ActivateAbility) means a client at 0 stamina never sends the
+	// activation, and a server-only 0 (lag) is rejected via ClientActivateAbilityFailed instead of
+	// charging the drain effect and stamina-regen delay for an ability that never really started.
+	return ASC && ASC->GetNumericAttribute(UShinobiAttributeSet::GetStaminaAttribute()) > 0.f;
+}
+
 void UGA_Sprint::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
-	const UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
-	if (!CommitAbility(Handle, ActorInfo, ActivationInfo) || ASC->GetNumericAttribute(UShinobiAttributeSet::GetStaminaAttribute()) <= 0.f)
+	if (!CommitAbility(Handle, ActorInfo, ActivationInfo))
 	{
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
@@ -63,12 +75,15 @@ void UGA_Sprint::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGame
 		SetSprinting(false);
 		if (HasAuthority(&ActivationInfo))
 		{
+			// Apply the regen delay before removing the drain: both grant State.StaminaRegenBlocked,
+			// and a granted tag is a count, so applying first keeps the count >= 1 the whole time.
+			// Doing it the other way briefly drops the count to 0, un-inhibiting UGE_StaminaRegen for a frame.
+			ApplyEffectToSelf(UGE_StaminaRegenDelay::StaticClass());
 			if (UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get())
 			{
 				ASC->RemoveActiveGameplayEffect(DrainHandle);
 			}
 			DrainHandle.Invalidate();
-			ApplyEffectToSelf(UGE_StaminaRegenDelay::StaticClass());
 		}
 	}
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);

@@ -1823,11 +1823,40 @@ bool FShinobiSprintExhaustTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	const UShinobiMovementComponent* Move = CastChecked<UShinobiMovementComponent>(P->GetCharacterMovement());
 	ShinobiTest::Set(P, UShinobiAttributeSet::GetStaminaAttribute(), 5.f);
 	ShinobiTest::Press(P, EShinobiAbilityInputID::Sprint);
 	W.Tick(1.f);
 	TestFalse(TEXT("Sprint ended when exhausted"), ShinobiTest::IsActive(P, UGA_Sprint::StaticClass()));
 	TestEqual(TEXT("Stamina empty"), ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute()), 0.f);
+	TestFalse(TEXT("Movement not sprinting after exhaustion"), Move->IsSprinting());
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Sprint);
+	TestFalse(TEXT("Can't start sprint at 0 stamina"), ShinobiTest::IsActive(P, UGA_Sprint::StaticClass()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSprintCancelTest, "ShinobiCoop.Abilities.SprintCancelClearsFlagAndDelaysRegen", ShinobiTestFlags)
+bool FShinobiSprintCancelTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	const UShinobiMovementComponent* Move = CastChecked<UShinobiMovementComponent>(P->GetCharacterMovement());
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Sprint);
+	W.Tick(0.3f);
+
+	FGameplayTagContainer Tags(ShinobiTags::Ability_Sprint);
+	P->GetAbilitySystemComponent()->CancelAbilities(&Tags);
+
+	TestFalse(TEXT("Sprint cancelled"), ShinobiTest::IsActive(P, UGA_Sprint::StaticClass()));
+	TestFalse(TEXT("Movement not sprinting after cancel"), Move->IsSprinting());
+
+	const float S = ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute());
+	W.Tick(0.8f);
+	TestEqual(TEXT("Regen delayed after cancel"), ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute()), S);
+	W.Tick(0.5f);
+	TestTrue(TEXT("Regen resumed after cancel"), ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute()) > S);
 	return true;
 }
 
@@ -1857,6 +1886,7 @@ class SHINOBICOOP_API UGA_Sprint : public UShinobiGameplayAbility
 public:
 	UGA_Sprint();
 
+	virtual bool CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags = nullptr, const FGameplayTagContainer* TargetTags = nullptr, FGameplayTagContainer* OptionalRelevantTags = nullptr) const override;
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
 	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled) override;
 
@@ -1894,10 +1924,22 @@ UGA_Sprint::UGA_Sprint()
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Dodging);
 }
 
+bool UGA_Sprint::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, FGameplayTagContainer* OptionalRelevantTags) const
+{
+	if (!Super::CanActivateAbility(Handle, ActorInfo, SourceTags, TargetTags, OptionalRelevantTags))
+	{
+		return false;
+	}
+	const UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
+	// Gating here (rather than in ActivateAbility) means a client at 0 stamina never sends the
+	// activation, and a server-only 0 (lag) is rejected via ClientActivateAbilityFailed instead of
+	// charging the drain effect and stamina-regen delay for an ability that never really started.
+	return ASC && ASC->GetNumericAttribute(UShinobiAttributeSet::GetStaminaAttribute()) > 0.f;
+}
+
 void UGA_Sprint::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
-	const UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
-	if (!CommitAbility(Handle, ActorInfo, ActivationInfo) || ASC->GetNumericAttribute(UShinobiAttributeSet::GetStaminaAttribute()) <= 0.f)
+	if (!CommitAbility(Handle, ActorInfo, ActivationInfo))
 	{
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
@@ -1942,12 +1984,15 @@ void UGA_Sprint::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGame
 		SetSprinting(false);
 		if (HasAuthority(&ActivationInfo))
 		{
+			// Apply the regen delay before removing the drain: both grant State.StaminaRegenBlocked,
+			// and a granted tag is a count, so applying first keeps the count >= 1 the whole time.
+			// Doing it the other way briefly drops the count to 0, un-inhibiting UGE_StaminaRegen for a frame.
+			ApplyEffectToSelf(UGE_StaminaRegenDelay::StaticClass());
 			if (UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get())
 			{
 				ASC->RemoveActiveGameplayEffect(DrainHandle);
 			}
 			DrainHandle.Invalidate();
-			ApplyEffectToSelf(UGE_StaminaRegenDelay::StaticClass());
 		}
 	}
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
@@ -2005,7 +2050,7 @@ Run:
 powershell -ExecutionPolicy Bypass -File Scripts\build.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 ```
-Expected: `ALL 10 TESTS PASSED`.
+Expected: `ALL 11 TESTS PASSED` (10 earlier + `SprintCancelClearsFlagAndDelaysRegen`).
 
 - [ ] **Step 8: Commit**
 
@@ -2176,7 +2221,7 @@ Run:
 powershell -ExecutionPolicy Bypass -File Scripts\build.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 ```
-Expected: `ALL 11 TESTS PASSED`. (The montage doesn't exist yet; `LoadSynchronous` returns null and the dodge still works.)
+Expected: `ALL 12 TESTS PASSED`. (The montage doesn't exist yet; `LoadSynchronous` returns null and the dodge still works.)
 
 - [ ] **Step 7: Commit**
 
@@ -2322,7 +2367,7 @@ Run:
 powershell -ExecutionPolicy Bypass -File Scripts\build.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 ```
-Expected: `ALL 12 TESTS PASSED`.
+Expected: `ALL 13 TESTS PASSED`.
 
 - [ ] **Step 7: Commit**
 
@@ -2598,7 +2643,7 @@ Run:
 powershell -ExecutionPolicy Bypass -File Scripts\build.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 ```
-Expected: `ALL 14 TESTS PASSED`.
+Expected: `ALL 15 TESTS PASSED`.
 
 - [ ] **Step 7: Commit**
 
@@ -2898,7 +2943,7 @@ Run:
 powershell -ExecutionPolicy Bypass -File Scripts\build.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 ```
-Expected: `ALL 14 TESTS PASSED`.
+Expected: `ALL 15 TESTS PASSED`.
 
 - [ ] **Step 6: Commit**
 
@@ -3323,7 +3368,7 @@ Run:
 powershell -ExecutionPolicy Bypass -File Scripts\build.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 ```
-Expected: `ALL 15 TESTS PASSED`.
+Expected: `ALL 16 TESTS PASSED`.
 
 - [ ] **Step 13: Commit**
 
@@ -3413,7 +3458,7 @@ Expected: `AM_Dodge.uasset`, `AM_Melee_1.uasset`, `AM_Melee_2.uasset`, `AM_Melee
 - [ ] **Step 4: Re-run tests (montages now load inside abilities)**
 
 Run: `powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1`
-Expected: `ALL 15 TESTS PASSED`.
+Expected: `ALL 16 TESTS PASSED`.
 
 - [ ] **Step 5: Commit**
 
@@ -3512,6 +3557,9 @@ User opens `ShinobiCoop.uproject` → Play dropdown (⋮ next to Play) → Numbe
 | 8 | Beat a dummy to 0 | Resets to 500 after ~1.5 s |
 | 9 | Second window | Sees the first player's animations and the same dummy HP; players can't hit each other |
 | 10 | Console (`~`) `ShinobiDamageSelf 100` in the client window | Client HUD health bar drops by 20% |
+| 11 | In the client window, console `NetEmulation.PktLag 150`, then hold Shift until stamina runs out | No position snapping when sprint ends; stamina bar stops at 0 |
+| 12 | Still laggy: tap Shift repeatedly | No extra drain per tap (each tap costs at least one drain tick); sprint speed stops within ~one round trip of releasing |
+| 13 | Still laggy: press Shift during Dodge / Chakra Charge | Sprint is blocked (can't start); no position snapping |
 
 - [ ] **Step 3: Record results**
 

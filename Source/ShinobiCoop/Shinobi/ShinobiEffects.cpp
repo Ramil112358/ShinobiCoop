@@ -112,6 +112,9 @@ UGE_SprintDrain::UGE_SprintDrain()
 	AddModifier(UShinobiAttributeSet::GetStaminaAttribute(), -2.5f);
 	GrantTag(ShinobiTags::State_StaminaRegenBlocked);
 	GrantTag(ShinobiTags::State_Sprinting);
+	// bExecutePeriodicEffectOnApplication is deliberately left at its default (true), the opposite of
+	// UGE_ChakraCharge: sprint should cost something for any tap, however short, instead of letting
+	// taps under 0.25 s drain for free.
 }
 
 UGE_DodgeCost::UGE_DodgeCost()

@@ -89,6 +89,9 @@ float UShinobiMovementComponent::GetMaxSpeed() const
 void UShinobiMovementComponent::UpdateFromCompressedFlags(uint8 Flags)
 {
 	Super::UpdateFromCompressedFlags(Flags);
+	// For a remote client's pawn, the server derives bWantsToSprint from that client's own moves here,
+	// so GA_Sprint's server-side SetSprinting(false) isn't authoritative against a client that keeps
+	// sending the flag; acceptable for friends-only co-op, not for a competitive/anti-cheat setting.
 	bWantsToSprint = (Flags & FSavedMove_Character::FLAG_Custom_0) != 0;
 }
 
