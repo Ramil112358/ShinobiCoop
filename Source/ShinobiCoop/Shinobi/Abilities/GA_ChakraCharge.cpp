@@ -42,6 +42,7 @@ void UGA_ChakraCharge::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 	Release->ReadyForActivation();
 
 	const UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
+	// MaxChakra is read once at activation; if Max can change mid-charge later, compare against the live value.
 	const float MaxChakra = ASC ? ASC->GetNumericAttribute(UShinobiAttributeSet::GetMaxChakraAttribute()) : 0.f;
 	// Broadcasts immediately with the current comparison result (false: CanActivateAbility guarantees
 	// Chakra < MaxChakra here), then again whenever charging pushes Chakra up to the cap.

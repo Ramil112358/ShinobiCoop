@@ -2291,7 +2291,7 @@ bool FShinobiChakraChargeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Charging tag"), ShinobiTest::HasTag(P, ShinobiTags::State_ChakraCharging));
 	W.Tick(1.1f);
 	const float Charged = ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute());
-	TestTrue(FString::Printf(TEXT("~27 chakra after 1.1s charge (got %.2f)"), Charged), Charged >= 26.5f && Charged <= 28.f);
+	TestTrue(FString::Printf(TEXT("~27.5 chakra after 1.1s charge (got %.2f)"), Charged), Charged >= 26.5f && Charged <= 28.f);
 
 	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
 	TestFalse(TEXT("Charge ended"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
@@ -2322,6 +2322,7 @@ bool FShinobiChakraChargeTest::RunTest(const FString& Parameters)
 	// Auto-end when charging pushes chakra up to the cap.
 	ShinobiTest::Set(P, UShinobiAttributeSet::GetChakraAttribute(), 95.f);
 	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
+	TestTrue(TEXT("Charge started from 95"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
 	W.Tick(0.6f);
 	TestFalse(TEXT("Charge auto-ends at full chakra"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
 	TestEqual(TEXT("Chakra capped at max"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 100.f);
@@ -2416,6 +2417,7 @@ void UGA_ChakraCharge::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 	Release->ReadyForActivation();
 
 	const UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
+	// MaxChakra is read once at activation; if Max can change mid-charge later, compare against the live value.
 	const float MaxChakra = ASC ? ASC->GetNumericAttribute(UShinobiAttributeSet::GetMaxChakraAttribute()) : 0.f;
 	// Broadcasts immediately with the current comparison result (false: CanActivateAbility guarantees
 	// Chakra < MaxChakra here), then again whenever charging pushes Chakra up to the cap.

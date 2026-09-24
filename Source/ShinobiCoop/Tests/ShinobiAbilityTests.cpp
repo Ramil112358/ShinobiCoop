@@ -7,6 +7,7 @@
 #include "Shinobi/Abilities/GA_Sprint.h"
 #include "Shinobi/Abilities/GA_Dodge.h"
 #include "Shinobi/Abilities/GA_ChakraCharge.h"
+#include "Shinobi/Abilities/GA_Melee.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSprintTest, "ShinobiCoop.Abilities.SprintDrainsStaminaThenRegenAfterDelay", ShinobiTestFlags)
 bool FShinobiSprintTest::RunTest(const FString& Parameters)
@@ -138,7 +139,7 @@ bool FShinobiChakraChargeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Charging tag"), ShinobiTest::HasTag(P, ShinobiTags::State_ChakraCharging));
 	W.Tick(1.1f);
 	const float Charged = ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute());
-	TestTrue(FString::Printf(TEXT("~27 chakra after 1.1s charge (got %.2f)"), Charged), Charged >= 26.5f && Charged <= 28.f);
+	TestTrue(FString::Printf(TEXT("~27.5 chakra after 1.1s charge (got %.2f)"), Charged), Charged >= 26.5f && Charged <= 28.f);
 
 	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
 	TestFalse(TEXT("Charge ended"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
@@ -169,9 +170,59 @@ bool FShinobiChakraChargeTest::RunTest(const FString& Parameters)
 	// Auto-end when charging pushes chakra up to the cap.
 	ShinobiTest::Set(P, UShinobiAttributeSet::GetChakraAttribute(), 95.f);
 	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
+	TestTrue(TEXT("Charge started from 95"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
 	W.Tick(0.6f);
 	TestFalse(TEXT("Charge auto-ends at full chakra"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
 	TestEqual(TEXT("Chakra capped at max"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 100.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMeleeComboTest, "ShinobiCoop.Abilities.MeleeComboHitsHostilesOnly", ShinobiTestFlags)
+bool FShinobiMeleeComboTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Attacker = W.Spawn<AShinobiPlayerCharacter>(FVector::ZeroVector, FRotator::ZeroRotator); // faces +X
+	AShinobiCharacterBase* Enemy = W.Spawn<AShinobiCharacterBase>(FVector(150.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Ally = W.Spawn<AShinobiPlayerCharacter>(FVector(120.f, 40.f, 0.f));
+	AShinobiCharacterBase* FarEnemy = W.Spawn<AShinobiCharacterBase>(FVector(600.f, 0.f, 0.f));
+	ShinobiTest::Set(Attacker, UShinobiAttributeSet::GetChakraAttribute(), 50.f);
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+
+	ShinobiTest::Press(Attacker, EShinobiAbilityInputID::Melee);
+	W.Tick(0.3f);
+	TestEqual(TEXT("Hit 1: 20 damage"), ShinobiTest::Get(Enemy, Health), 480.f);
+	TestEqual(TEXT("Ally untouched"), ShinobiTest::Get(Ally, Health), 500.f);
+	TestEqual(TEXT("Far enemy untouched"), ShinobiTest::Get(FarEnemy, Health), 500.f);
+	const float Chakra = ShinobiTest::Get(Attacker, UShinobiAttributeSet::GetChakraAttribute());
+	TestTrue(FString::Printf(TEXT("+5 chakra on hit (got %.2f)"), Chakra), Chakra >= 55.f && Chakra <= 56.5f);
+
+	ShinobiTest::Press(Attacker, EShinobiAbilityInputID::Melee);
+	W.Tick(0.3f);
+	TestEqual(TEXT("Hit 2: 25 damage"), ShinobiTest::Get(Enemy, Health), 455.f);
+
+	ShinobiTest::Press(Attacker, EShinobiAbilityInputID::Melee);
+	W.Tick(0.3f);
+	TestEqual(TEXT("Hit 3: 40 damage"), ShinobiTest::Get(Enemy, Health), 415.f);
+
+	W.Tick(0.6f);
+	TestFalse(TEXT("Combo ended"), ShinobiTest::IsActive(Attacker, UGA_Melee::StaticClass()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMeleeWindowTest, "ShinobiCoop.Abilities.MeleeComboResetsAfterWindow", ShinobiTestFlags)
+bool FShinobiMeleeWindowTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Attacker = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* Enemy = W.Spawn<AShinobiCharacterBase>(FVector(150.f, 0.f, 0.f));
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+
+	ShinobiTest::Press(Attacker, EShinobiAbilityInputID::Melee);
+	W.Tick(1.f); // hit at 0.25, window closes at 0.75
+	TestFalse(TEXT("Ended after window"), ShinobiTest::IsActive(Attacker, UGA_Melee::StaticClass()));
+	ShinobiTest::Press(Attacker, EShinobiAbilityInputID::Melee);
+	W.Tick(0.3f);
+	TestEqual(TEXT("New combo restarts at hit 1 (20 + 20)"), ShinobiTest::Get(Enemy, Health), 460.f);
 	return true;
 }
 
