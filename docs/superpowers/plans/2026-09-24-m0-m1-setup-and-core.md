@@ -1548,6 +1548,16 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: Append failing tests to `ShinobiAttributeTests.cpp` (inside the `#if`, before the final `#endif`)**
 
 ```cpp
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMaxShrinkClampsTest, "ShinobiCoop.Core.LoweringMaxClampsCurrent", ShinobiTestFlags)
+bool FShinobiMaxShrinkClampsTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiCharacterBase* C = W.Spawn<AShinobiCharacterBase>();
+	ShinobiTest::Set(C, UShinobiAttributeSet::GetMaxHealthAttribute(), 300.f);
+	TestEqual(TEXT("Health clamped to lowered max"), ShinobiTest::Get(C, UShinobiAttributeSet::GetHealthAttribute()), 300.f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiInvulnerableTest, "ShinobiCoop.Core.InvulnerableIgnoresDamage", ShinobiTestFlags)
 bool FShinobiInvulnerableTest::RunTest(const FString& Parameters)
 {
@@ -1726,7 +1736,7 @@ Run:
 powershell -ExecutionPolicy Bypass -File Scripts\build.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 ```
-Expected: `ALL 7 TESTS PASSED` (4 earlier + `InvulnerableIgnoresDamage`, `ChakraRegensTwoPerSecond`, `StaminaRegenWaitsForDelay`).
+Expected: `ALL 8 TESTS PASSED` (4 earlier + `LoweringMaxClampsCurrent`, `InvulnerableIgnoresDamage`, `ChakraRegensTwoPerSecond`, `StaminaRegenWaitsForDelay`).
 
 - [ ] **Step 7: Commit**
 
@@ -1971,7 +1981,7 @@ Run:
 powershell -ExecutionPolicy Bypass -File Scripts\build.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 ```
-Expected: `ALL 9 TESTS PASSED`.
+Expected: `ALL 10 TESTS PASSED`.
 
 - [ ] **Step 8: Commit**
 
@@ -2142,7 +2152,7 @@ Run:
 powershell -ExecutionPolicy Bypass -File Scripts\build.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 ```
-Expected: `ALL 10 TESTS PASSED`. (The montage doesn't exist yet; `LoadSynchronous` returns null and the dodge still works.)
+Expected: `ALL 11 TESTS PASSED`. (The montage doesn't exist yet; `LoadSynchronous` returns null and the dodge still works.)
 
 - [ ] **Step 7: Commit**
 
@@ -2288,7 +2298,7 @@ Run:
 powershell -ExecutionPolicy Bypass -File Scripts\build.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 ```
-Expected: `ALL 11 TESTS PASSED`.
+Expected: `ALL 12 TESTS PASSED`.
 
 - [ ] **Step 7: Commit**
 
@@ -2564,7 +2574,7 @@ Run:
 powershell -ExecutionPolicy Bypass -File Scripts\build.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 ```
-Expected: `ALL 13 TESTS PASSED`.
+Expected: `ALL 14 TESTS PASSED`.
 
 - [ ] **Step 7: Commit**
 
@@ -2864,7 +2874,7 @@ Run:
 powershell -ExecutionPolicy Bypass -File Scripts\build.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 ```
-Expected: `ALL 13 TESTS PASSED`.
+Expected: `ALL 14 TESTS PASSED`.
 
 - [ ] **Step 6: Commit**
 
@@ -3289,7 +3299,7 @@ Run:
 powershell -ExecutionPolicy Bypass -File Scripts\build.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 ```
-Expected: `ALL 14 TESTS PASSED`.
+Expected: `ALL 15 TESTS PASSED`.
 
 - [ ] **Step 13: Commit**
 
@@ -3379,7 +3389,7 @@ Expected: `AM_Dodge.uasset`, `AM_Melee_1.uasset`, `AM_Melee_2.uasset`, `AM_Melee
 - [ ] **Step 4: Re-run tests (montages now load inside abilities)**
 
 Run: `powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1`
-Expected: `ALL 14 TESTS PASSED`.
+Expected: `ALL 15 TESTS PASSED`.
 
 - [ ] **Step 5: Commit**
 

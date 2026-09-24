@@ -55,3 +55,66 @@ class SHINOBICOOP_API UGE_ChakraGain : public UShinobiEffect
 public:
 	UGE_ChakraGain();
 };
+
+/** Passive chakra regeneration: +2/s. Applied at spawn. */
+UCLASS()
+class SHINOBICOOP_API UGE_ChakraRegen : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_ChakraRegen();
+};
+
+/** Passive stamina regeneration: +20/s, paused while State.StaminaRegenBlocked. Applied at spawn. */
+UCLASS()
+class SHINOBICOOP_API UGE_StaminaRegen : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_StaminaRegen();
+};
+
+/** Blocks stamina regeneration for 1 s after stamina is spent. */
+UCLASS()
+class SHINOBICOOP_API UGE_StaminaRegenDelay : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_StaminaRegenDelay();
+};
+
+/** While sprinting: -10 stamina/s, blocks regen, grants State.Sprinting. */
+UCLASS()
+class SHINOBICOOP_API UGE_SprintDrain : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_SprintDrain();
+};
+
+/** Dodge cost: -25 stamina (used as the ability's cost, so dodge is blocked below 25). */
+UCLASS()
+class SHINOBICOOP_API UGE_DodgeCost : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_DodgeCost();
+};
+
+/** Dodge invulnerability window: 0.2 s of State.Invulnerable. */
+UCLASS()
+class SHINOBICOOP_API UGE_DodgeIFrames : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_DodgeIFrames();
+};
+
+/** While charging chakra: +25 chakra/s. */
+UCLASS()
+class SHINOBICOOP_API UGE_ChakraCharge : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_ChakraCharge();
+};

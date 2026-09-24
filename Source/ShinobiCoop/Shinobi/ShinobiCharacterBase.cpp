@@ -21,6 +21,8 @@ AShinobiCharacterBase::AShinobiCharacterBase(const FObjectInitializer& ObjectIni
 	AbilitySystem->SetReplicationMode(EGameplayEffectReplicationMode::Minimal);
 
 	Attributes = CreateDefaultSubobject<UShinobiAttributeSet>(TEXT("Attributes"));
+
+	StartupEffects = { UGE_ChakraRegen::StaticClass(), UGE_StaminaRegen::StaticClass() };
 }
 
 UAbilitySystemComponent* AShinobiCharacterBase::GetAbilitySystemComponent() const

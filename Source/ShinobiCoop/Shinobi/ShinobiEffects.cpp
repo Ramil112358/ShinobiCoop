@@ -78,3 +78,49 @@ UGE_ChakraGain::UGE_ChakraGain()
 	DurationPolicy = EGameplayEffectDurationType::Instant;
 	AddSetByCallerModifier(UShinobiAttributeSet::GetChakraAttribute(), ShinobiTags::Data_ChakraGain);
 }
+
+// Rates are applied every 0.25 s, so per-period values are a quarter of the per-second rate.
+UGE_ChakraRegen::UGE_ChakraRegen()
+{
+	SetInfinitePeriodic(0.25f);
+	AddModifier(UShinobiAttributeSet::GetChakraAttribute(), 0.5f);
+}
+
+UGE_StaminaRegen::UGE_StaminaRegen()
+{
+	SetInfinitePeriodic(0.25f);
+	AddModifier(UShinobiAttributeSet::GetStaminaAttribute(), 5.f);
+	InhibitWhileTargetHas(ShinobiTags::State_StaminaRegenBlocked);
+}
+
+UGE_StaminaRegenDelay::UGE_StaminaRegenDelay()
+{
+	SetDuration(1.f);
+	GrantTag(ShinobiTags::State_StaminaRegenBlocked);
+}
+
+UGE_SprintDrain::UGE_SprintDrain()
+{
+	SetInfinitePeriodic(0.25f);
+	AddModifier(UShinobiAttributeSet::GetStaminaAttribute(), -2.5f);
+	GrantTag(ShinobiTags::State_StaminaRegenBlocked);
+	GrantTag(ShinobiTags::State_Sprinting);
+}
+
+UGE_DodgeCost::UGE_DodgeCost()
+{
+	DurationPolicy = EGameplayEffectDurationType::Instant;
+	AddModifier(UShinobiAttributeSet::GetStaminaAttribute(), -25.f);
+}
+
+UGE_DodgeIFrames::UGE_DodgeIFrames()
+{
+	SetDuration(0.2f);
+	GrantTag(ShinobiTags::State_Invulnerable);
+}
+
+UGE_ChakraCharge::UGE_ChakraCharge()
+{
+	SetInfinitePeriodic(0.25f);
+	AddModifier(UShinobiAttributeSet::GetChakraAttribute(), 6.25f);
+}

@@ -58,4 +58,55 @@ bool FShinobiChakraGainClampsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMaxShrinkClampsTest, "ShinobiCoop.Core.LoweringMaxClampsCurrent", ShinobiTestFlags)
+bool FShinobiMaxShrinkClampsTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiCharacterBase* C = W.Spawn<AShinobiCharacterBase>();
+	ShinobiTest::Set(C, UShinobiAttributeSet::GetMaxHealthAttribute(), 300.f);
+	TestEqual(TEXT("Health clamped to lowered max"), ShinobiTest::Get(C, UShinobiAttributeSet::GetHealthAttribute()), 300.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiInvulnerableTest, "ShinobiCoop.Core.InvulnerableIgnoresDamage", ShinobiTestFlags)
+bool FShinobiInvulnerableTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiCharacterBase* C = W.Spawn<AShinobiCharacterBase>();
+	ShinobiTest::ApplyEffect(C, UGE_DodgeIFrames::StaticClass());
+	ShinobiTest::Damage(C, 50.f);
+	TestEqual(TEXT("No damage during i-frames"), ShinobiTest::Get(C, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
+	W.Tick(0.3f);
+	ShinobiTest::Damage(C, 50.f);
+	TestEqual(TEXT("Damage after i-frames"), ShinobiTest::Get(C, UShinobiAttributeSet::GetHealthAttribute()), 450.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChakraRegenTest, "ShinobiCoop.Core.ChakraRegensTwoPerSecond", ShinobiTestFlags)
+bool FShinobiChakraRegenTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiCharacterBase* C = W.Spawn<AShinobiCharacterBase>();
+	ShinobiTest::Set(C, UShinobiAttributeSet::GetChakraAttribute(), 0.f);
+	W.Tick(1.f);
+	const float Chakra = ShinobiTest::Get(C, UShinobiAttributeSet::GetChakraAttribute());
+	TestTrue(FString::Printf(TEXT("Chakra ~2 after 1s (got %.2f)"), Chakra), Chakra >= 1.4f && Chakra <= 2.6f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiStaminaRegenDelayTest, "ShinobiCoop.Core.StaminaRegenWaitsForDelay", ShinobiTestFlags)
+bool FShinobiStaminaRegenDelayTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiCharacterBase* C = W.Spawn<AShinobiCharacterBase>();
+	ShinobiTest::Set(C, UShinobiAttributeSet::GetStaminaAttribute(), 50.f);
+	ShinobiTest::ApplyEffect(C, UGE_StaminaRegenDelay::StaticClass());
+	W.Tick(0.9f);
+	TestEqual(TEXT("No regen during delay"), ShinobiTest::Get(C, UShinobiAttributeSet::GetStaminaAttribute()), 50.f);
+	W.Tick(0.6f);
+	const float Stamina = ShinobiTest::Get(C, UShinobiAttributeSet::GetStaminaAttribute());
+	TestTrue(FString::Printf(TEXT("Regen resumed (got %.2f)"), Stamina), Stamina > 50.f);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
