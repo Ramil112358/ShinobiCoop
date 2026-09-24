@@ -2278,22 +2278,58 @@ bool FShinobiChakraChargeTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+
+	// At full chakra (the default), pressing charge should do nothing: no ability, no tag.
+	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
+	TestFalse(TEXT("Can't charge at full chakra"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+	TestFalse(TEXT("No charging tag at full chakra"), ShinobiTest::HasTag(P, ShinobiTags::State_ChakraCharging));
+	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
+
 	ShinobiTest::Set(P, UShinobiAttributeSet::GetChakraAttribute(), 0.f);
 
 	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
 	TestTrue(TEXT("Charging tag"), ShinobiTest::HasTag(P, ShinobiTags::State_ChakraCharging));
 	W.Tick(1.1f);
 	const float Charged = ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute());
-	TestTrue(FString::Printf(TEXT("~27.5 chakra after 1.1s charge (got %.2f)"), Charged), Charged >= 24.f && Charged <= 35.f);
+	TestTrue(FString::Printf(TEXT("~27 chakra after 1.1s charge (got %.2f)"), Charged), Charged >= 26.5f && Charged <= 28.f);
 
 	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
 	TestFalse(TEXT("Charge ended"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
 	TestFalse(TEXT("Charging tag removed"), ShinobiTest::HasTag(P, ShinobiTags::State_ChakraCharging));
 	W.Tick(0.5f);
 	TestTrue(TEXT("Only passive regen after release"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()) <= Charged + 1.5f);
+
+	// Chakra is well below max here, so charging interacts normally with sprint/dodge.
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Sprint);
+	TestTrue(TEXT("Sprint active before charge"), ShinobiTest::IsActive(P, UGA_Sprint::StaticClass()));
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
+	TestFalse(TEXT("Charge cancels sprint"), ShinobiTest::IsActive(P, UGA_Sprint::StaticClass()));
+	TestTrue(TEXT("Charge active"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Sprint);
+	TestFalse(TEXT("Sprint blocked while charging"), ShinobiTest::IsActive(P, UGA_Sprint::StaticClass()));
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Dodge);
+	TestFalse(TEXT("Dodge cancels charge"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+	TestFalse(TEXT("Charging tag removed by dodge"), ShinobiTest::HasTag(P, ShinobiTags::State_ChakraCharging));
+
+	// Let the dodge finish: GA_ChakraCharge blocks activation while State.Dodging is present, and
+	// that tag stays granted for Dodge's full 0.25 s duration, not just until it cancels the charge.
+	W.Tick(0.4f);
+	TestFalse(TEXT("Dodge finished before next charge attempt"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
+
+	// Auto-end when charging pushes chakra up to the cap.
+	ShinobiTest::Set(P, UShinobiAttributeSet::GetChakraAttribute(), 95.f);
+	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
+	W.Tick(0.6f);
+	TestFalse(TEXT("Charge auto-ends at full chakra"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+	TestEqual(TEXT("Chakra capped at max"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 100.f);
 	return true;
 }
 ```
+
+(The deterministic ~27 value observed at review time was actually 27.5 — 4 periodic charge ticks of +6.25 plus 5 periodic regen ticks of +0.5, since `UGE_ChakraRegen`'s own free application-time tick, granted at character spawn, doesn't fire until the first `W.Tick` call in this test and lands inside the 1.1 s window. The `[26.5, 28.0]` bound and message text both already account for this.)
 
 - [ ] **Step 2: Build to see it fail**
 
@@ -2318,12 +2354,16 @@ class SHINOBICOOP_API UGA_ChakraCharge : public UShinobiGameplayAbility
 public:
 	UGA_ChakraCharge();
 
+	virtual bool CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags = nullptr, const FGameplayTagContainer* TargetTags = nullptr, FGameplayTagContainer* OptionalRelevantTags = nullptr) const override;
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
 	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled) override;
 
 private:
 	UFUNCTION()
 	void OnInputReleased(float TimeHeld);
+
+	UFUNCTION()
+	void OnChakraFull(bool bMatchesComparison, float CurrentValue);
 
 	FActiveGameplayEffectHandle ChargeHandle;
 };
@@ -2334,7 +2374,9 @@ private:
 ```cpp
 #include "Shinobi/Abilities/GA_ChakraCharge.h"
 #include "AbilitySystemComponent.h"
+#include "Abilities/Tasks/AbilityTask_WaitAttributeChangeThreshold.h"
 #include "Abilities/Tasks/AbilityTask_WaitInputRelease.h"
+#include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
 
@@ -2345,6 +2387,17 @@ UGA_ChakraCharge::UGA_ChakraCharge()
 	ActivationOwnedTags.AddTag(ShinobiTags::State_ChakraCharging);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Dodging);
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);
+}
+
+bool UGA_ChakraCharge::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, FGameplayTagContainer* OptionalRelevantTags) const
+{
+	if (!Super::CanActivateAbility(Handle, ActorInfo, SourceTags, TargetTags, OptionalRelevantTags))
+	{
+		return false;
+	}
+	const UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
+	// Pressing the key at full chakra should do nothing at all: no sprint cancel, no movement lock.
+	return ASC && ASC->GetNumericAttribute(UShinobiAttributeSet::GetChakraAttribute()) < ASC->GetNumericAttribute(UShinobiAttributeSet::GetMaxChakraAttribute());
 }
 
 void UGA_ChakraCharge::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
@@ -2361,11 +2414,28 @@ void UGA_ChakraCharge::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 	UAbilityTask_WaitInputRelease* Release = UAbilityTask_WaitInputRelease::WaitInputRelease(this);
 	Release->OnRelease.AddDynamic(this, &UGA_ChakraCharge::OnInputReleased);
 	Release->ReadyForActivation();
+
+	const UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
+	const float MaxChakra = ASC ? ASC->GetNumericAttribute(UShinobiAttributeSet::GetMaxChakraAttribute()) : 0.f;
+	// Broadcasts immediately with the current comparison result (false: CanActivateAbility guarantees
+	// Chakra < MaxChakra here), then again whenever charging pushes Chakra up to the cap.
+	UAbilityTask_WaitAttributeChangeThreshold* Full = UAbilityTask_WaitAttributeChangeThreshold::WaitForAttributeChangeThreshold(
+		this, UShinobiAttributeSet::GetChakraAttribute(), EWaitAttributeChangeComparison::GreaterThanOrEqualTo, MaxChakra, false);
+	Full->OnChange.AddDynamic(this, &UGA_ChakraCharge::OnChakraFull);
+	Full->ReadyForActivation();
 }
 
 void UGA_ChakraCharge::OnInputReleased(float TimeHeld)
 {
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+}
+
+void UGA_ChakraCharge::OnChakraFull(bool bMatchesComparison, float CurrentValue)
+{
+	if (bMatchesComparison)
+	{
+		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+	}
 }
 
 void UGA_ChakraCharge::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
@@ -2842,6 +2912,8 @@ protected:
 private:
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
+	/** Ignores the jump input while State.ChakraCharging is present; movement is locked while charging. */
+	void JumpPressed();
 	void AbilityInputPressed(EShinobiAbilityInputID InputID);
 	void AbilityInputReleased(EShinobiAbilityInputID InputID);
 
@@ -2925,7 +2997,7 @@ void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 	UEnhancedInputComponent* Input = CastChecked<UEnhancedInputComponent>(PlayerInputComponent);
 	Input->BindAction(InputConfig->Move, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Move);
 	Input->BindAction(InputConfig->Look, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Look);
-	Input->BindAction(InputConfig->Jump, ETriggerEvent::Started, this, &ACharacter::Jump);
+	Input->BindAction(InputConfig->Jump, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::JumpPressed);
 	Input->BindAction(InputConfig->Jump, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
 	for (const TPair<EShinobiAbilityInputID, TObjectPtr<UInputAction>>& Pair : InputConfig->AbilityActions)
 	{
@@ -2951,6 +3023,15 @@ void AShinobiPlayerCharacter::Look(const FInputActionValue& Value)
 	const FVector2D Axis = Value.Get<FVector2D>();
 	AddControllerYawInput(Axis.X);
 	AddControllerPitchInput(Axis.Y);
+}
+
+void AShinobiPlayerCharacter::JumpPressed()
+{
+	if (AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_ChakraCharging))
+	{
+		return;
+	}
+	Jump();
 }
 
 void AShinobiPlayerCharacter::AbilityInputPressed(EShinobiAbilityInputID InputID)

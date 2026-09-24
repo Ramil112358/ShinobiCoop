@@ -125,19 +125,53 @@ bool FShinobiChakraChargeTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+
+	// At full chakra (the default), pressing charge should do nothing: no ability, no tag.
+	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
+	TestFalse(TEXT("Can't charge at full chakra"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+	TestFalse(TEXT("No charging tag at full chakra"), ShinobiTest::HasTag(P, ShinobiTags::State_ChakraCharging));
+	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
+
 	ShinobiTest::Set(P, UShinobiAttributeSet::GetChakraAttribute(), 0.f);
 
 	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
 	TestTrue(TEXT("Charging tag"), ShinobiTest::HasTag(P, ShinobiTags::State_ChakraCharging));
 	W.Tick(1.1f);
 	const float Charged = ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute());
-	TestTrue(FString::Printf(TEXT("~27.5 chakra after 1.1s charge (got %.2f)"), Charged), Charged >= 24.f && Charged <= 35.f);
+	TestTrue(FString::Printf(TEXT("~27 chakra after 1.1s charge (got %.2f)"), Charged), Charged >= 26.5f && Charged <= 28.f);
 
 	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
 	TestFalse(TEXT("Charge ended"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
 	TestFalse(TEXT("Charging tag removed"), ShinobiTest::HasTag(P, ShinobiTags::State_ChakraCharging));
 	W.Tick(0.5f);
 	TestTrue(TEXT("Only passive regen after release"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()) <= Charged + 1.5f);
+
+	// Chakra is well below max here, so charging interacts normally with sprint/dodge.
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Sprint);
+	TestTrue(TEXT("Sprint active before charge"), ShinobiTest::IsActive(P, UGA_Sprint::StaticClass()));
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
+	TestFalse(TEXT("Charge cancels sprint"), ShinobiTest::IsActive(P, UGA_Sprint::StaticClass()));
+	TestTrue(TEXT("Charge active"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Sprint);
+	TestFalse(TEXT("Sprint blocked while charging"), ShinobiTest::IsActive(P, UGA_Sprint::StaticClass()));
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Dodge);
+	TestFalse(TEXT("Dodge cancels charge"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+	TestFalse(TEXT("Charging tag removed by dodge"), ShinobiTest::HasTag(P, ShinobiTags::State_ChakraCharging));
+
+	// Let the dodge finish: GA_ChakraCharge blocks activation while State.Dodging is present, and
+	// that tag stays granted for Dodge's full 0.25 s duration, not just until it cancels the charge.
+	W.Tick(0.4f);
+	TestFalse(TEXT("Dodge finished before next charge attempt"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
+
+	// Auto-end when charging pushes chakra up to the cap.
+	ShinobiTest::Set(P, UShinobiAttributeSet::GetChakraAttribute(), 95.f);
+	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
+	W.Tick(0.6f);
+	TestFalse(TEXT("Charge auto-ends at full chakra"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+	TestEqual(TEXT("Chakra capped at max"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 100.f);
 	return true;
 }
 
