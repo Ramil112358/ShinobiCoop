@@ -3558,7 +3558,7 @@ User opens `ShinobiCoop.uproject` → Play dropdown (⋮ next to Play) → Numbe
 | 9 | Second window | Sees the first player's animations and the same dummy HP; players can't hit each other |
 | 10 | Console (`~`) `ShinobiDamageSelf 100` in the client window | Client HUD health bar drops by 20% |
 | 11 | In the client window, console `NetEmulation.PktLag 150`, then hold Shift until stamina runs out | No position snapping when sprint ends; stamina bar stops at 0 |
-| 12 | Still laggy: tap Shift repeatedly | No extra drain per tap (each tap costs at least one drain tick); sprint speed stops within ~one round trip of releasing |
+| 12 | Still laggy: tap Shift repeatedly | Each tap costs exactly one 2.5 drain tick, not more; sprint speed stops within ~one round trip of releasing |
 | 13 | Still laggy: press Shift during Dodge / Chakra Charge | Sprint is blocked (can't start); no position snapping |
 
 - [ ] **Step 3: Record results**
