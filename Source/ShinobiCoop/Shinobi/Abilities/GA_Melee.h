@@ -32,6 +32,12 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	float ComboWindow = 0.5f;
 
+	/** Extra seconds added to ComboWindow for the server's copy of a remote player's ability: that
+	 * copy's window-close timer is only a safety net (the owning client's own window-close normally
+	 * ends the ability first, via ServerEndAbility), so give it slack for a combo press in flight. */
+	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
+	float RemoteWindowGrace = 0.2f;
+
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	float Range = 200.f;
 

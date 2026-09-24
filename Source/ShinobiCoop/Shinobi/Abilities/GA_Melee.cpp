@@ -104,12 +104,10 @@ void UGA_Melee::OnHitFrame()
 
 	// This ability is InstancedPerActor, so on a listen server a remote player's copy here is the
 	// server's own separate instance (HasAuthority() true, IsLocallyControlled() false), distinct from
-	// the owning client's predicted instance. The owning client's own window-close is what normally
-	// ends the ability (replicated to the server via ServerEndAbility), so the server copy's timer here
-	// is just a safety net: give it extra time so a combo press already in flight over the network still
-	// lands before this timer forces the ability to end.
+	// the owning client's predicted instance. See RemoteWindowGrace's doc comment for why that copy's
+	// timer gets extra time.
 	const bool bServerCopyOfRemote = HasAuthority(&CurrentActivationInfo) && !IsLocallyControlled();
-	const float Window = bServerCopyOfRemote ? ComboWindow + 0.2f : ComboWindow;
+	const float Window = bServerCopyOfRemote ? ComboWindow + RemoteWindowGrace : ComboWindow;
 
 	// WindowTask must exist before WaitInputPress is activated below: if the server already received the
 	// client's press, WaitInputPress::Activate() fires OnPress synchronously (CallReplicatedEventDelegateIfSet),

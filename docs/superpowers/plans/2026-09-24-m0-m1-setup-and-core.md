@@ -2555,7 +2555,10 @@ bool FShinobiMeleeWindowTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("New combo restarts at hit 1 (20 + 20)"), ShinobiTest::Get(Enemy, Health), 460.f);
 
 	// Invulnerable target: the hit is blocked, so it doesn't count -- no chakra for the attacker.
+	// Chakra must be well below max here, or a wrongly-counted +5 would just get clamped away and
+	// this assertion would pass regardless of whether the landed-hit gating actually works.
 	Enemy->GetAbilitySystemComponent()->AddLooseGameplayTag(ShinobiTags::State_Invulnerable);
+	ShinobiTest::Set(Attacker, UShinobiAttributeSet::GetChakraAttribute(), 50.f);
 	const float ChakraBeforeBlockedHit = ShinobiTest::Get(Attacker, UShinobiAttributeSet::GetChakraAttribute());
 	W.Tick(0.7f); // let the still-active combo's window close (it's at 0.3 of 0.75s; extra margin for timer jitter)
 	TestFalse(TEXT("Second combo ended before third attempt"), ShinobiTest::IsActive(Attacker, UGA_Melee::StaticClass()));
@@ -2570,6 +2573,8 @@ bool FShinobiMeleeWindowTest::RunTest(const FString& Parameters)
 ```
 
 (The finisher-knockback and window-close timings above have a `W.Tick(0.1f)`/`W.Tick(0.7f)` margin baked in for two observed timing quirks: `ACharacter::LaunchCharacter` only sets `PendingLaunchVelocity`, which `UCharacterMovementComponent` applies to `Velocity` on its *next* movement tick — and since `FTimerManager::Tick` (which fires `UAbilityTask_WaitDelay`'s callback) runs after that same substep's tick groups, the launch's effect on `GetVelocity()` is one `W.Tick` step behind the hit frame that triggered it. The same one-step-behind timer firing also means a `WaitDelay`'s expiry can land on the *last* sub-step of a `W.Tick` call rather than mid-way through it, so window-close checks need a bit more margin than the nominal `HitDelay + ComboWindow` sum.)
+
+(The invulnerable-target section's `ShinobiTest::Set(..., 50.f)` matters: without resetting chakra away from its 100/100 max before that section, a wrongly-counted +5 chakra gain would just get clamped away by the Max attribute, and `ChakraGainedFromBlockedHit < 5.f` would pass whether or not the landed-hit gating in `OnHitFrame` actually works. Verified at review time by temporarily making `OnHitFrame` count every target instead of only landed ones: the test then failed with `got +7.00` (2.00 of passive `UGE_ChakraRegen` ticks over the ~1 s elapsed, plus the wrongly-counted +5.00 chakra gain), and with the gating restored it passes with `got +2.00`.)
 
 - [ ] **Step 2: Build to see it fail**
 
@@ -2612,6 +2617,12 @@ public:
 	/** Seconds after a hit during which pressing again continues the combo. */
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	float ComboWindow = 0.5f;
+
+	/** Extra seconds added to ComboWindow for the server's copy of a remote player's ability: that
+	 * copy's window-close timer is only a safety net (the owning client's own window-close normally
+	 * ends the ability first, via ServerEndAbility), so give it slack for a combo press in flight. */
+	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
+	float RemoteWindowGrace = 0.2f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	float Range = 200.f;
@@ -2753,12 +2764,10 @@ void UGA_Melee::OnHitFrame()
 
 	// This ability is InstancedPerActor, so on a listen server a remote player's copy here is the
 	// server's own separate instance (HasAuthority() true, IsLocallyControlled() false), distinct from
-	// the owning client's predicted instance. The owning client's own window-close is what normally
-	// ends the ability (replicated to the server via ServerEndAbility), so the server copy's timer here
-	// is just a safety net: give it extra time so a combo press already in flight over the network still
-	// lands before this timer forces the ability to end.
+	// the owning client's predicted instance. See RemoteWindowGrace's doc comment for why that copy's
+	// timer gets extra time.
 	const bool bServerCopyOfRemote = HasAuthority(&CurrentActivationInfo) && !IsLocallyControlled();
-	const float Window = bServerCopyOfRemote ? ComboWindow + 0.2f : ComboWindow;
+	const float Window = bServerCopyOfRemote ? ComboWindow + RemoteWindowGrace : ComboWindow;
 
 	// WindowTask must exist before WaitInputPress is activated below: if the server already received the
 	// client's press, WaitInputPress::Activate() fires OnPress synchronously (CallReplicatedEventDelegateIfSet),
@@ -3761,7 +3770,7 @@ User opens `ShinobiCoop.uproject` → Play dropdown (⋮ next to Play) → Numbe
 | 12 | Still laggy: tap Shift repeatedly | Each tap costs exactly one 2.5 drain tick, not more; sprint speed stops within ~one round trip of releasing |
 | 13 | Still laggy: press Shift during Dodge / Chakra Charge | Sprint is blocked (can't start); no position snapping |
 | 14 | Still laggy: dodge in each direction and a backstep | Dash goes the pressed direction ~600 units, no snap-back; backstep with no input |
-| 15 | Client window, `NetEmulation.PktLag 120` + `p.NetShowCorrections 1`: attack combos while swinging the camera | No correction snaps during attack lunges; combo doesn't drop mid-swing |
+| 15 | Client window, `NetEmulation.PktLag 120` + `NetEmulation.PktLagVariance 40` + `NetEmulation.PktLoss 2` + `p.NetShowCorrections 1`: attack combos while swinging the camera | No correction snaps during attack lunges; combo doesn't drop mid-swing (fixed lag alone doesn't reproduce the late-press race; the variance and loss are what surface it) |
 
 - [ ] **Step 3: Record results**
 

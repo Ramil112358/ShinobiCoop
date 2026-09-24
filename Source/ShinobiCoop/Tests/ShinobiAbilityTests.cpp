@@ -236,7 +236,10 @@ bool FShinobiMeleeWindowTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("New combo restarts at hit 1 (20 + 20)"), ShinobiTest::Get(Enemy, Health), 460.f);
 
 	// Invulnerable target: the hit is blocked, so it doesn't count -- no chakra for the attacker.
+	// Chakra must be well below max here, or a wrongly-counted +5 would just get clamped away and
+	// this assertion would pass regardless of whether the landed-hit gating actually works.
 	Enemy->GetAbilitySystemComponent()->AddLooseGameplayTag(ShinobiTags::State_Invulnerable);
+	ShinobiTest::Set(Attacker, UShinobiAttributeSet::GetChakraAttribute(), 50.f);
 	const float ChakraBeforeBlockedHit = ShinobiTest::Get(Attacker, UShinobiAttributeSet::GetChakraAttribute());
 	W.Tick(0.7f); // let the still-active combo's window close (it's at 0.3 of 0.75s; extra margin for timer jitter)
 	TestFalse(TEXT("Second combo ended before third attempt"), ShinobiTest::IsActive(Attacker, UGA_Melee::StaticClass()));
