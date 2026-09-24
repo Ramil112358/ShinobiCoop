@@ -17,7 +17,7 @@ Spec: `docs/superpowers/specs/2026-09-23-combat-slice-design.md` (milestones M0 
 - Project root: `C:\Users\ahmad\ShinobiCoop` (all paths below are relative to it).
 - Engine root: `C:\Program Files\Epic Games\UE_5.8`.
 - **Close the Unreal Editor before running `Scripts/build.ps1`.** Build.bat refuses to build while Live Coding holds the editor DLLs.
-- Run `Scripts/build.ps1`, `Scripts/run_tests.ps1` and `Scripts/run_python.ps1` with the shell tool timeout set to 600000 ms (the scripts time out themselves at 540 s). If a run needs longer (first-time shader/DDC warm-up), run it in the background or pass a larger `-TimeoutSec`.
+- Run `Scripts/build.ps1`, `Scripts/run_tests.ps1` and `Scripts/run_python.ps1` with the shell tool timeout set to 600000 ms (`run_tests.ps1`/`run_python.ps1` time out themselves at 540 s; `build.ps1` has no timeout of its own). If a run needs longer (a full rebuild, first-time shader/DDC warm-up), run it in the background or pass a larger `-TimeoutSec`.
 - A C++ "failing test" step usually fails by **not compiling** (missing header/type). That is the expected red state.
 - Commit messages end with the trailer:
   ```
