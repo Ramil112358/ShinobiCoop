@@ -40,14 +40,29 @@ void AShinobiPlayerController::ShinobiDamageSelf(float Amount)
 
 void AShinobiPlayerController::ServerDamageSelf_Implementation(float Amount)
 {
+	ApplyToOwnPawn(UGE_Damage::StaticClass(), ShinobiTags::Data_Damage, Amount);
+}
+
+void AShinobiPlayerController::ShinobiDrainChakra(float Amount)
+{
+	ServerDrainChakra(Amount);
+}
+
+void AShinobiPlayerController::ServerDrainChakra_Implementation(float Amount)
+{
+	ApplyToOwnPawn(UGE_ChakraGain::StaticClass(), ShinobiTags::Data_ChakraGain, -Amount);
+}
+
+void AShinobiPlayerController::ApplyToOwnPawn(TSubclassOf<UGameplayEffect> EffectClass, const FGameplayTag& DataTag, float Magnitude)
+{
 	AShinobiCharacterBase* Shinobi = GetPawn<AShinobiCharacterBase>();
 	if (!Shinobi)
 	{
 		return;
 	}
 	UAbilitySystemComponent* ASC = Shinobi->GetAbilitySystemComponent();
-	FGameplayEffectSpecHandle Spec = ASC->MakeOutgoingSpec(UGE_Damage::StaticClass(), 1.f, ASC->MakeEffectContext());
-	Spec.Data->SetSetByCallerMagnitude(ShinobiTags::Data_Damage, Amount);
+	FGameplayEffectSpecHandle Spec = ASC->MakeOutgoingSpec(EffectClass, 1.f, ASC->MakeEffectContext());
+	Spec.Data->SetSetByCallerMagnitude(DataTag, Magnitude);
 	ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
 }
 

@@ -56,6 +56,12 @@ bool FShinobiChakraGainClampsTest::RunTest(const FString& Parameters)
 	ShinobiTest::Set(C, UShinobiAttributeSet::GetChakraAttribute(), 98.f);
 	ShinobiTest::ApplySetByCaller(C, UGE_ChakraGain::StaticClass(), ShinobiTags::Data_ChakraGain, 5.f);
 	TestEqual(TEXT("Chakra clamped"), ShinobiTest::Get(C, UShinobiAttributeSet::GetChakraAttribute()), 100.f);
+
+	// A negative gain drains chakra (used by the ShinobiDrainChakra dev command) and clamps at 0.
+	ShinobiTest::ApplySetByCaller(C, UGE_ChakraGain::StaticClass(), ShinobiTags::Data_ChakraGain, -60.f);
+	TestEqual(TEXT("Chakra drained"), ShinobiTest::Get(C, UShinobiAttributeSet::GetChakraAttribute()), 40.f);
+	ShinobiTest::ApplySetByCaller(C, UGE_ChakraGain::StaticClass(), ShinobiTags::Data_ChakraGain, -1000.f);
+	TestEqual(TEXT("Chakra drain clamps at 0"), ShinobiTest::Get(C, UShinobiAttributeSet::GetChakraAttribute()), 0.f);
 	return true;
 }
 

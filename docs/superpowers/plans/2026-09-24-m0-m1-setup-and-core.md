@@ -620,6 +620,12 @@ bool FShinobiChakraGainClampsTest::RunTest(const FString& Parameters)
 	ShinobiTest::Set(C, UShinobiAttributeSet::GetChakraAttribute(), 98.f);
 	ShinobiTest::ApplySetByCaller(C, UGE_ChakraGain::StaticClass(), ShinobiTags::Data_ChakraGain, 5.f);
 	TestEqual(TEXT("Chakra clamped"), ShinobiTest::Get(C, UShinobiAttributeSet::GetChakraAttribute()), 100.f);
+
+	// A negative gain drains chakra (used by the ShinobiDrainChakra dev command) and clamps at 0.
+	ShinobiTest::ApplySetByCaller(C, UGE_ChakraGain::StaticClass(), ShinobiTags::Data_ChakraGain, -60.f);
+	TestEqual(TEXT("Chakra drained"), ShinobiTest::Get(C, UShinobiAttributeSet::GetChakraAttribute()), 40.f);
+	ShinobiTest::ApplySetByCaller(C, UGE_ChakraGain::StaticClass(), ShinobiTags::Data_ChakraGain, -1000.f);
+	TestEqual(TEXT("Chakra drain clamps at 0"), ShinobiTest::Get(C, UShinobiAttributeSet::GetChakraAttribute()), 0.f);
 	return true;
 }
 
@@ -3550,7 +3556,9 @@ void UShinobiHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 #include "GameFramework/PlayerController.h"
 #include "ShinobiPlayerController.generated.h"
 
+class UGameplayEffect;
 class UShinobiHUDWidget;
+struct FGameplayTag;
 
 /** Creates the HUD for local players; hosts developer console commands and the smoke-test hook. */
 UCLASS()
@@ -3563,6 +3571,10 @@ public:
 	UFUNCTION(Exec)
 	void ShinobiDamageSelf(float Amount);
 
+	/** Console: ShinobiDrainChakra 60 — server removes chakra from this player's pawn (nothing spends chakra until M2's jutsu). */
+	UFUNCTION(Exec)
+	void ShinobiDrainChakra(float Amount);
+
 	/** Console: ShinobiDumpStats — logs every character's attributes as this machine sees them. */
 	UFUNCTION(Exec)
 	void ShinobiDumpStats();
@@ -3573,6 +3585,12 @@ protected:
 private:
 	UFUNCTION(Server, Reliable)
 	void ServerDamageSelf(float Amount);
+
+	UFUNCTION(Server, Reliable)
+	void ServerDrainChakra(float Amount);
+
+	/** Server only: applies an instant SetByCaller effect to this controller's own pawn. */
+	void ApplyToOwnPawn(TSubclassOf<UGameplayEffect> EffectClass, const FGameplayTag& DataTag, float Magnitude);
 
 	/** With -ShinobiSmoke on a client: damage self, dump stats, quit. Used by Scripts/smoke_m1.ps1. */
 	void RunSmokeTest();
@@ -3627,14 +3645,29 @@ void AShinobiPlayerController::ShinobiDamageSelf(float Amount)
 
 void AShinobiPlayerController::ServerDamageSelf_Implementation(float Amount)
 {
+	ApplyToOwnPawn(UGE_Damage::StaticClass(), ShinobiTags::Data_Damage, Amount);
+}
+
+void AShinobiPlayerController::ShinobiDrainChakra(float Amount)
+{
+	ServerDrainChakra(Amount);
+}
+
+void AShinobiPlayerController::ServerDrainChakra_Implementation(float Amount)
+{
+	ApplyToOwnPawn(UGE_ChakraGain::StaticClass(), ShinobiTags::Data_ChakraGain, -Amount);
+}
+
+void AShinobiPlayerController::ApplyToOwnPawn(TSubclassOf<UGameplayEffect> EffectClass, const FGameplayTag& DataTag, float Magnitude)
+{
 	AShinobiCharacterBase* Shinobi = GetPawn<AShinobiCharacterBase>();
 	if (!Shinobi)
 	{
 		return;
 	}
 	UAbilitySystemComponent* ASC = Shinobi->GetAbilitySystemComponent();
-	FGameplayEffectSpecHandle Spec = ASC->MakeOutgoingSpec(UGE_Damage::StaticClass(), 1.f, ASC->MakeEffectContext());
-	Spec.Data->SetSetByCallerMagnitude(ShinobiTags::Data_Damage, Amount);
+	FGameplayEffectSpecHandle Spec = ASC->MakeOutgoingSpec(EffectClass, 1.f, ASC->MakeEffectContext());
+	Spec.Data->SetSetByCallerMagnitude(DataTag, Magnitude);
 	ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
 }
 
@@ -4027,7 +4060,7 @@ User opens `ShinobiCoop.uproject` → Play dropdown (⋮ next to Play) → Numbe
 | 3 | Space twice | Double jump |
 | 4 | Hold Shift | Faster run, stamina bar drains, refills ~1 s after release |
 | 5 | Ctrl | Quick dash with dash animation, stamina -25, blocked when stamina < 25 |
-| 6 | Hold C | Character stops, chakra bar fills fast |
+| 6 | Chakra starts full and nothing spends it until M2, so first run console `ShinobiDrainChakra 80`, then hold C | Character stops, chakra bar fills fast and charging ends by itself when full. Pressing C at full chakra does nothing (by design) |
 | 7 | LMB ×3 near a dummy | Three punch animations; dummy HP text drops 20 → 25 → 40; third hit knocks it back; chakra bar rises |
 | 8 | Beat a dummy to 0 | Resets to 500 after ~1.5 s |
 | 9 | Second window | Sees the first player's animations and the same dummy HP; players can't hit each other |
