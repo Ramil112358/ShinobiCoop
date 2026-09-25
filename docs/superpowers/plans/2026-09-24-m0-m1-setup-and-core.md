@@ -3953,7 +3953,10 @@ $ClientLog = Join-Path $LogDir "SmokeClient.log"
 # A previous run that was killed out from under this script (Ctrl+C, closed shell) can leave an
 # UnrealEditor.exe still listening on port 7777; a fresh server would then be unreachable while the
 # client silently joins the stale one instead. Clear those out before touching the logs.
-Get-CimInstance Win32_Process -Filter "Name = 'UnrealEditor.exe'" | Where-Object { $_.CommandLine -match '-ShinobiSmoke' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Get-CimInstance Win32_Process -Filter "Name = 'UnrealEditor.exe'" | Where-Object { $_.CommandLine -match '-ShinobiSmoke' } | ForEach-Object {
+    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+    Wait-Process -Id $_.ProcessId -Timeout 10 -ErrorAction SilentlyContinue # release its log handle before the lock check
+}
 
 Remove-Item -LiteralPath $ServerLog, $ClientLog -ErrorAction SilentlyContinue
 if ((Test-Path -LiteralPath $ServerLog) -or (Test-Path -LiteralPath $ClientLog)) {
@@ -3962,6 +3965,7 @@ if ((Test-Path -LiteralPath $ServerLog) -or (Test-Path -LiteralPath $ClientLog))
 $Common = "-game -nullrhi -nosound -unattended -nosplash -ShinobiSmoke"
 
 $server = Start-Process $Editor -PassThru -ArgumentList "`"$Project`" /Game/ThirdPerson/Lvl_ThirdPerson?listen $Common -abslog=`"$ServerLog`""
+$null = $server.Handle # PS 5.1 only reports ExitCode if the handle was opened while the process ran
 $client = $null
 try {
     $deadline = (Get-Date).AddSeconds(240)
