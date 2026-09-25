@@ -1,6 +1,8 @@
 #include "Shinobi/Abilities/GA_ChakraCharge.h"
 #include "AbilitySystemComponent.h"
+#include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "Abilities/Tasks/AbilityTask_WaitInputRelease.h"
+#include "Animation/AnimMontage.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
 
@@ -11,6 +13,7 @@ UGA_ChakraCharge::UGA_ChakraCharge()
 	ActivationOwnedTags.AddTag(ShinobiTags::State_ChakraCharging);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Dodging);
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);
+	Montage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_ChakraCharge.AM_ChakraCharge")));
 }
 
 void UGA_ChakraCharge::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
@@ -24,6 +27,16 @@ void UGA_ChakraCharge::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 	{
 		// At full chakra the +6.25 ticks are clamped away; the effect still runs so charging looks the same.
 		ChargeHandle = ApplyEffectToSelf(UGE_ChakraCharge::StaticClass());
+	}
+	if (UAnimMontage* Anim = Montage.LoadSynchronous())
+	{
+		UAbilityTask_PlayMontageAndWait* Play = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, Anim);
+		Play->ReadyForActivation();
+		// Loop the montage's only section (AnimMontageFactory always names it "Default") while C is held;
+		// PlayMontageAndWait's Activate() -> ASC->PlayMontage() runs synchronously above, so the ASC's
+		// current montage is already set by the time this call runs. The ASC replicates the change.
+		static const FName LoopSection(TEXT("Default"));
+		ActorInfo->AbilitySystemComponent->CurrentMontageSetNextSectionName(LoopSection, LoopSection);
 	}
 	UAbilityTask_WaitInputRelease* Release = UAbilityTask_WaitInputRelease::WaitInputRelease(this);
 	Release->OnRelease.AddDynamic(this, &UGA_ChakraCharge::OnInputReleased);

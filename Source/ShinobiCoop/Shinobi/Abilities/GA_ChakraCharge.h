@@ -4,6 +4,8 @@
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
 #include "GA_ChakraCharge.generated.h"
 
+class UAnimMontage;
+
 /**
  * Hold to charge chakra (Naruto Storm style). Works at any chakra level, including full, so the pose and
  * aura always play; ends on release, dodge, or (M2) a stagger hit. Movement and jump are ignored while
@@ -25,4 +27,8 @@ private:
 	void OnInputReleased(float TimeHeld);
 
 	FActiveGameplayEffectHandle ChargeHandle;
+
+	/** The Mixamo "Power Up" pose, retargeted to Manny; looped while C is held (see ActivateAbility). */
+	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
+	TSoftObjectPtr<UAnimMontage> Montage;
 };
