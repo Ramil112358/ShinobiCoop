@@ -43,6 +43,10 @@ TSharedRef<SWidget> UShinobiHUDWidget::RebuildWidget()
 UProgressBar* UShinobiHUDWidget::AddBar(UVerticalBox* Box, FName Name, const FLinearColor& Color, float Height)
 {
 	USizeBox* SizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+	// Without an explicit width, SProgressBar::ComputeDesiredSize falls back to the 20x12 marquee image
+	// (Starship/CoreWidgets/ProgressBar/ProgressMarquee), so the auto-sized canvas slot above would
+	// otherwise collapse to ~20 px wide.
+	SizeBox->SetWidthOverride(380.f);
 	SizeBox->SetHeightOverride(Height);
 	UProgressBar* Bar = WidgetTree->ConstructWidget<UProgressBar>(UProgressBar::StaticClass(), Name);
 	Bar->SetFillColorAndOpacity(Color);

@@ -3357,6 +3357,7 @@ private:
 #include "Shinobi/ShinobiTrainingDummy.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Components/TextRenderComponent.h"
+#include "Engine/Engine.h"
 #include "GameFramework/PlayerController.h"
 #include "TimerManager.h"
 #include "Shinobi/ShinobiAttributeSet.h"
@@ -3376,6 +3377,12 @@ AShinobiTrainingDummy::AShinobiTrainingDummy(const FObjectInitializer& ObjectIni
 	HealthText->SetTextRenderColor(FColor::Red);
 
 	UseMannequinMesh();
+
+	// Attributes is constructed by AShinobiCharacterBase's constructor, which has already run at this
+	// point, so its defaults are readable here. Avoids showing the widget's default "Text" for a frame.
+	DisplayedHealth = FMath::RoundToInt(Attributes->GetHealth());
+	DisplayedMaxHealth = FMath::RoundToInt(Attributes->GetMaxHealth());
+	HealthText->SetText(FText::FromString(FString::Printf(TEXT("HP %d / %d"), DisplayedHealth, DisplayedMaxHealth)));
 }
 
 void AShinobiTrainingDummy::Tick(float DeltaSeconds)
@@ -3393,9 +3400,11 @@ void AShinobiTrainingDummy::Tick(float DeltaSeconds)
 	}
 
 	// TextRender geometry lies flat facing its local +X axis, so it's mirrored/culled when viewed from
-	// behind. Face the local camera (yaw only) on machines that have one; skip on dedicated servers and
-	// in the test world, where there is no local player.
-	const APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	// behind. Face the local camera (yaw only) on machines that have one. GetFirstPlayerController()
+	// would return any PC in the world -- on a listen server that includes remote clients' PCs, which
+	// all have a camera manager but aren't local -- so use the engine's local-player lookup instead,
+	// which is null on a dedicated server and in the test world.
+	const APlayerController* PC = GEngine ? GEngine->GetFirstLocalPlayerController(GetWorld()) : nullptr;
 	const APlayerCameraManager* CameraManager = PC ? PC->PlayerCameraManager : nullptr;
 	if (CameraManager)
 	{
@@ -3501,6 +3510,10 @@ TSharedRef<SWidget> UShinobiHUDWidget::RebuildWidget()
 UProgressBar* UShinobiHUDWidget::AddBar(UVerticalBox* Box, FName Name, const FLinearColor& Color, float Height)
 {
 	USizeBox* SizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+	// Without an explicit width, SProgressBar::ComputeDesiredSize falls back to the 20x12 marquee image
+	// (Starship/CoreWidgets/ProgressBar/ProgressMarquee), so the auto-sized canvas slot above would
+	// otherwise collapse to ~20 px wide.
+	SizeBox->SetWidthOverride(380.f);
 	SizeBox->SetHeightOverride(Height);
 	UProgressBar* Bar = WidgetTree->ConstructWidget<UProgressBar>(UProgressBar::StaticClass(), Name);
 	Bar->SetFillColorAndOpacity(Color);
