@@ -3767,7 +3767,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 1. Duplicates the template's dash animation with root motion disabled (see create_dash_sequence).
 2. Creates melee/dodge montages from the template's Manny animations (DefaultSlot, matches ABP_Manny_Combat).
-3. Points Lvl_ThirdPerson's GameMode Override (which the template sets to BP_ThirdPersonGameMode) at ShinobiGameMode.
+3. Tunes each montage's blend-in time and (for the dodge) playback rate (see tune_montages).
+4. Points Lvl_ThirdPerson's GameMode Override (which the template sets to BP_ThirdPersonGameMode) at ShinobiGameMode.
 """
 import unreal
 
@@ -3779,6 +3780,20 @@ MONTAGES = {
     "AM_Melee_2": "/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_02",
     "AM_Melee_3": "/Game/Characters/Mannequins/Anims/Unarmed/Attack/MM_Attack_03",
     "AM_Dodge": DASH_SEQUENCE,
+}
+# blend_in: UAnimMontage.BlendIn is an FAlphaBlend struct (Engine/Public/AlphaBlend.h), not a plain
+# float, so it has to be read, have its blend_time set, and written back -- setting a property on the
+# copy get_editor_property() returns does not touch the montage until it's assigned back.
+# rate_scale: UAnimSequenceBase.RateScale (Engine/Classes/Animation/AnimSequenceBase.h). MM_Dash is
+# ~0.97 s and GA_Dodge plays AM_Dodge with bStopWhenAbilityEnds=false (see GA_Dodge.cpp) -- it doesn't
+# stop the montage when the 0.25 s dash (GA_Dodge::Duration) ends, so without this the character keeps
+# playing the dash pose for ~0.7 s after it has physically stopped moving. At 3x it finishes in ~0.32 s,
+# close to when the dash itself ends.
+MONTAGE_TUNING = {
+    "AM_Dodge": {"blend_in": 0.05, "rate_scale": 3.0},
+    "AM_Melee_1": {"blend_in": 0.1},
+    "AM_Melee_2": {"blend_in": 0.1},
+    "AM_Melee_3": {"blend_in": 0.1},
 }
 MAP = "/Game/ThirdPerson/Lvl_ThirdPerson"
 GAME_MODE = "/Script/ShinobiCoop.ShinobiGameMode"
@@ -3810,7 +3825,8 @@ def create_dash_sequence():
     # leaving the dodge broken until someone remembers to check two flags on an animation asset.
     sequence.set_editor_property("enable_root_motion", False)
     sequence.set_editor_property("force_root_lock", True)
-    unreal.EditorAssetLibrary.save_loaded_asset(sequence)
+    if not unreal.EditorAssetLibrary.save_loaded_asset(sequence):
+        raise RuntimeError(f"failed to save {DASH_SEQUENCE}")
 
 
 def create_montages():
@@ -3828,12 +3844,35 @@ def create_montages():
         montage = tools.create_asset(name, ANIM_DIR, unreal.AnimMontage, factory)
         if montage is None:
             raise RuntimeError(f"failed to create {target}")
-        unreal.EditorAssetLibrary.save_loaded_asset(montage)
+        if not unreal.EditorAssetLibrary.save_loaded_asset(montage):
+            raise RuntimeError(f"failed to save {target}")
         unreal.log(f"[setup_m1] created: {target}")
+
+
+def tune_montages():
+    # Applied on every run, not just at creation, for the same reason as create_dash_sequence's
+    # root-motion flags: re-running this script should be enough to put the tuning back if it's ever
+    # reset by hand or by re-creating a montage from its source animation.
+    for name, settings in MONTAGE_TUNING.items():
+        target = f"{ANIM_DIR}/{name}"
+        montage = unreal.load_asset(target)
+        if montage is None:
+            raise RuntimeError(f"missing montage to tune: {target}")
+        if "blend_in" in settings:
+            blend_in = montage.get_editor_property("blend_in")
+            blend_in.set_editor_property("blend_time", settings["blend_in"])
+            montage.set_editor_property("blend_in", blend_in)
+        if "rate_scale" in settings:
+            montage.set_editor_property("rate_scale", settings["rate_scale"])
+        if not unreal.EditorAssetLibrary.save_loaded_asset(montage):
+            raise RuntimeError(f"failed to save {target}")
+        unreal.log(f"[setup_m1] tuned: {target}")
 
 
 def set_game_mode():
     world = unreal.EditorLoadingAndSavingUtils.load_map(MAP)
+    if world is None:
+        raise RuntimeError(f"failed to load map {MAP}")
     game_mode = unreal.load_class(None, GAME_MODE)
     if game_mode is None:
         raise RuntimeError(f"class not found: {GAME_MODE} (build the C++ first)")
@@ -3845,6 +3884,7 @@ def set_game_mode():
 
 create_dash_sequence()
 create_montages()
+tune_montages()
 set_game_mode()
 ```
 
