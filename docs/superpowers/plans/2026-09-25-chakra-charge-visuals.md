@@ -962,6 +962,14 @@ git commit -m "feat: Mixamo power-up pose retargeted to Manny, looping while cha
 
 Rows 3 (other window), 4 (full chakra), 5 (Ctrl dodge) and 7 (loop seam in motion) still need the user.
 
+**User look check (2026-09-25): all rows pass.** In 2-player PIE the user confirmed:
+- the other window sees the same pose and aura;
+- Ctrl while holding C dodges and ends the charge;
+- the loop has no visible pop;
+- the overall look is what they wanted.
+
+No further tuning.
+
 ---
 
 ## Self-review

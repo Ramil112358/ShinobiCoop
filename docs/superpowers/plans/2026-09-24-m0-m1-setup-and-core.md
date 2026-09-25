@@ -4121,8 +4121,21 @@ git tag m1-core
 - M3: FindHostilesInCone must skip downed/dead targets; server-only LaunchCharacter on a remote player target rubber-bands — use a root-motion-source hit reaction for player targets.
 - Held ability input (Sprint/ChakraCharge) is not released if the pawn is unpossessed mid-hold. Sprint ends on its own at 0 stamina, but since 2026-09-25 ChakraCharge runs at full chakra and never auto-ends, so a lost release (unpossess, disconnect, dropped release RPC) leaves the player charging and movement-locked. **Priority for M2:** call AbilityLocalInputReleased for held IDs from a NotifyControllerChanged override when control is lost, and land the stagger-hit cancel on ChakraCharge.
 - UShinobiInputConfig is a rooted process-wide singleton; M2's RB jutsu-modifier context should be built the same way and added with a priority above ShinobiInputPriority.
-- Cheat paths (ServerDamageSelf RPC body, -ShinobiSmoke hook) are compiled into Shipping. Before M4 public sessions, early-return in ServerDamageSelf_Implementation and skip RunSmokeTest under UE_BUILD_SHIPPING (UHT can't wrap the UFUNCTION declarations themselves).
+- Cheat paths (ServerDamageSelf/ServerDrainChakra RPC bodies, -ShinobiSmoke and -ShinobiShot hooks) are compiled into Shipping. Before M4 public sessions, early-return in the Server*_Implementation bodies and skip RunSmokeTest/RunShotTest under UE_BUILD_SHIPPING (UHT can't wrap the UFUNCTION declarations themselves).
 - M3: AShinobiTrainingDummy::HandleOutOfHealth calls Super — when the base class gains downed handling, dummies must not go downed (override without Super, or keep downed logic in the player class). The HUD should collapse when there's no pawn (respawn wait).
 - Runtime string-path loads (aura materials, /Engine/BasicShapes, ability montages via soft paths) aren't seen by the cooker. Before the first packaged/two-PC build (M4), add `+DirectoriesToAlwaysCook=(Path="/Game/Shinobi")` (and BasicShapes) to DefaultGame.ini or switch to EditDefaultsOnly soft-object properties.
 - M5 toon post-process (scene color ÷ base color, posterized) will also divide/band translucent additive effects like the chakra aura rim if it runs after translucency — run it before translucency or mask translucent pixels.
 - Preload ability montages when granted, not on first activation: `GA_ChakraCharge`/`GA_Dodge`/`GA_Melee` all call `Montage.LoadSynchronous()` (or equivalent) the first time the ability actually activates, which means the very first Sprint/Dodge/Melee/ChakraCharge on a given machine pays a synchronous disk-load hitch mid-gameplay. Load the soft references once in `OnGiveAbility` (or the character's `BeginPlay`) instead, matching the existing "cache loaded montages in a UPROPERTY" carry-forward note above.
+
+---
+
+## M1 manual check (2026-09-25)
+
+The user ran the Task 14 checklist in 2-player listen-server PIE on `Lvl_ThirdPerson`.
+
+- **Rows 1–5 and 7–15: pass.** This covers movement, camera, double jump, sprint and stamina, dodge, the melee combo against dummies, dummy reset, what the second window sees, client damage, and all the lag, loss and correction checks.
+- **Row 6 (chakra charge): failed first, now fixed.** Holding C looked like it did nothing, because chakra starts full and the charge was gated off at full. The user then asked for a charge that works even at full chakra, with Naruto Storm–style visuals. That follow-up is plan `2026-09-25-chakra-charge-visuals.md`:
+  - no full-chakra gate;
+  - a looping Mixamo "Power Up" pose;
+  - a thin blue body-overlay aura and a soft light, visible to every player.
+- **Row 6 expected behaviour has changed.** The charge now runs until C is released, you dodge, or (from M2) a stagger hit lands. It also works at full chakra. The user confirmed the pose, the aura, what the second window sees, the dodge cancel and the loop seam on 2026-09-25.
