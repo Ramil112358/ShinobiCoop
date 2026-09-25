@@ -85,6 +85,7 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 	return Config;
 }
 
+// Cached for the process: after Live Coding changes to Build() or to this class's layout, restart the editor.
 const UShinobiInputConfig& UShinobiInputConfig::Get()
 {
 	static UShinobiInputConfig* Instance = []

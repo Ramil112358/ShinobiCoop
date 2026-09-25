@@ -1,0 +1,36 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/PlayerController.h"
+#include "ShinobiPlayerController.generated.h"
+
+class UShinobiHUDWidget;
+
+/** Creates the HUD for local players; hosts developer console commands and the smoke-test hook. */
+UCLASS()
+class SHINOBICOOP_API AShinobiPlayerController : public APlayerController
+{
+	GENERATED_BODY()
+
+public:
+	/** Console: ShinobiDamageSelf 50 — server applies damage to this player's pawn. */
+	UFUNCTION(Exec)
+	void ShinobiDamageSelf(float Amount);
+
+	/** Console: ShinobiDumpStats — logs every character's attributes as this machine sees them. */
+	UFUNCTION(Exec)
+	void ShinobiDumpStats();
+
+protected:
+	virtual void BeginPlay() override;
+
+private:
+	UFUNCTION(Server, Reliable)
+	void ServerDamageSelf(float Amount);
+
+	/** With -ShinobiSmoke on a client: damage self, dump stats, quit. Used by Scripts/smoke_m1.ps1. */
+	void RunSmokeTest();
+
+	UPROPERTY()
+	TObjectPtr<UShinobiHUDWidget> Hud;
+};

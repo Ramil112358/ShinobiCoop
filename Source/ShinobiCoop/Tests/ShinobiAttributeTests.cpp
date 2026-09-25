@@ -1,6 +1,7 @@
 #include "Tests/ShinobiTestWorld.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
+#include "Shinobi/ShinobiTrainingDummy.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiAttributeDefaultsTest, "ShinobiCoop.Core.AttributeDefaults", ShinobiTestFlags)
 bool FShinobiAttributeDefaultsTest::RunTest(const FString& Parameters)
@@ -120,6 +121,18 @@ bool FShinobiStaminaRegenDelayTest::RunTest(const FString& Parameters)
 	W.Tick(0.6f);
 	const float StaminaAfterReapply = ShinobiTest::Get(C, UShinobiAttributeSet::GetStaminaAttribute());
 	TestTrue(FString::Printf(TEXT("Regen resumed after latest delay (got %.2f)"), StaminaAfterReapply), StaminaAfterReapply > 50.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDummyResetTest, "ShinobiCoop.Core.TrainingDummyResetsAfterDefeat", ShinobiTestFlags)
+bool FShinobiDummyResetTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiTrainingDummy* Dummy = W.Spawn<AShinobiTrainingDummy>();
+	ShinobiTest::Damage(Dummy, 1000.f);
+	TestEqual(TEXT("Dummy defeated"), ShinobiTest::Get(Dummy, UShinobiAttributeSet::GetHealthAttribute()), 0.f);
+	W.Tick(2.f);
+	TestEqual(TEXT("Dummy reset to full"), ShinobiTest::Get(Dummy, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
 	return true;
 }
 
