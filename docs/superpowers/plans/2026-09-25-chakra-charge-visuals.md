@@ -32,7 +32,7 @@ Same as `docs/superpowers/plans/2026-09-24-m0-m1-setup-and-core.md` → "Convent
 | `Source/ShinobiCoop/Tests/ShinobiAbilityTests.cpp` | Updated charge test + new aura test |
 | `Scripts/setup_vfx.py` | Builds `M_ChakraAura` and `M_ChakraRing` (idempotent) |
 | `Scripts/setup_chakra_pose.py` | Imports the Mixamo FBX, retargets to Manny, builds `AM_ChakraCharge` (idempotent) |
-| `SourceArt/Mixamo/PowerUp.fbx` | Downloaded by the user (LFS via `*.fbx`) |
+| `SourceArt/Mixamo/Power_Up_30fps.fbx` | Downloaded by the user (LFS via `*.fbx`); the 60 fps copy is not used or committed |
 
 ---
 
@@ -753,10 +753,62 @@ git commit -m "feat: replicated-by-tag chakra charge aura on the player"
 
 ---
 
+### Task 3b: Body-hugging aura (user feedback, 2026-09-25)
+
+The user previewed Tasks 2–3: the cylinder shells read as "trapped in a glass capsule with a lid", too big and washed out to white. Wanted: minimalistic, a slight blue chakra aura around the body. Replace the shells and ground ring with an overlay material on the character's own mesh (UE draws the mesh a second time with it): pushed out ~2.5 cm along the vertex normals, additive, glowing only at the silhouette (fresnel) with faint upward wisps. It follows every animation, including Task 4's pose. Keep a soft chest-height light. Everything else from Task 3 stays (tag-driven, fade, dedicated-server skip, EndPlay teardown, ensure on a missing material).
+
+**Files:**
+- Modify: `Scripts/setup_vfx.py` (build `M_ChakraBodyAura`; delete the old `M_ChakraAura` / `M_ChakraRing` if present)
+- Delete assets: `Content/Shinobi/VFX/M_ChakraAura.uasset`, `Content/Shinobi/VFX/M_ChakraRing.uasset` (git rm)
+- Create asset: `Content/Shinobi/VFX/M_ChakraBodyAura.uasset`
+- Modify: `Source/ShinobiCoop/Shinobi/VFX/ShinobiChakraAuraComponent.h/.cpp`
+- Modify: `Source/ShinobiCoop/Tests/ShinobiAbilityTests.cpp` (`ChakraAuraFollowsCharging`)
+- Modify: `docs/superpowers/specs/2026-09-23-combat-slice-design.md` (§5 "Chakra charge aura" row)
+
+- [ ] **Step 1: Update the test (red).** In `ChakraAuraFollowsCharging` replace the static-mesh-piece assertions with overlay assertions (keep IsCharging/GetFade/tick-disabled checks):
+```cpp
+	USkeletalMeshComponent* Body = P->GetMesh();
+	TestNull(TEXT("No aura overlay at spawn"), Body->GetOverlayMaterial());
+	// ... after the fade-in tick:
+	UMaterialInstanceDynamic* Overlay = Cast<UMaterialInstanceDynamic>(Body->GetOverlayMaterial());
+	if (TestNotNull(TEXT("Aura overlay applied while charging"), Overlay))
+	{
+		TestEqual(TEXT("Overlay is the body aura material"), Overlay->Parent ? Overlay->Parent->GetName() : FString(), FString(TEXT("M_ChakraBodyAura")));
+	}
+	// ... after the fade-out tick:
+	TestNull(TEXT("Aura overlay removed after fade-out"), Body->GetOverlayMaterial());
+```
+(include `Components/SkeletalMeshComponent.h`, `Materials/MaterialInstanceDynamic.h`). Build + run: the new assertions fail (no overlay yet).
+
+- [ ] **Step 2: Material.** In `Scripts/setup_vfx.py` replace the two builders with `build_body_aura()` producing `/Game/Shinobi/VFX/M_ChakraBodyAura`: additive, unlit, **one-sided** (`two_sided=False`), parameters `Color` (0.1, 0.45, 1.0), `Intensity` (2.5), `Fade` (1), `Inflate` (2.5). Graph:
+  - World Position Offset: `VertexNormalWS × Inflate` → `MP_WORLD_POSITION_OFFSET`.
+  - Rim: `Fresnel(exponent 3.0, base_reflect_fraction 0.0)`.
+  - Wisps: `Noise(position = AbsoluteWorldPosition × 0.04 + (0, 0, −Time × 1.2), scale 1, levels 2, output 0..1)` → `Lerp(0.55, 1.0, noise)` (use `MaterialExpressionWorldPosition`, `MaterialExpressionVertexNormalWS`, `MaterialExpressionConstant3Vector`/`AppendVector` for the time offset, `MaterialExpressionLinearInterpolate` with `const_a`/`const_b`).
+  - Emissive = `Color × Intensity × Fade × Rim × Wisps` → SubstrateUnlitBSDF `EmissiveColor` → `MP_FRONT_MATERIAL` (same `finish()` as before).
+  - Before building, delete `/Game/Shinobi/VFX/M_ChakraAura` and `/Game/Shinobi/VFX/M_ChakraRing` if they exist (log `[setup_vfx] removed: …`), raising if a delete fails.
+  Verify pin/property names against 5.8 source as in Task 2 (e.g. the Noise position pin is `"World Position"`, single-`Input` nodes take `""`). Run the script twice (second run idempotent).
+
+- [ ] **Step 3: Component.** Rewrite `UShinobiChakraAuraComponent` around the overlay:
+  - Remove Pieces/PieceMaterials/InnerShell/OuterShell, the mesh loading and `AddPiece`, `SpinSpeed`.
+  - Members: `UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> AuraMaterial;`, `UPROPERTY() TObjectPtr<UMeshComponent> BodyMesh;`, `UPROPERTY() TObjectPtr<UPointLightComponent> Light;` plus the existing ASC/tag/fade state. Public `UMaterialInstanceDynamic* GetAuraMaterial() const`.
+  - Defaults: `Color (0.1, 0.45, 1.0)`, `Intensity 2.5`, `FadeTime 0.15`, `LightIntensity 1500`, new `LightRadius 250`.
+  - BeginPlay: Super; dedicated-server early return; `BodyMesh = Cast<ACharacter>(GetOwner()) ? …->GetMesh() : nullptr`; load `/Game/Shinobi/VFX/M_ChakraBodyAura.M_ChakraBodyAura` with `ensureMsgf` naming the path if missing, create the MID (Color set); create the light with `MakeUniqueObjectName`, attached to this at `FVector(20, 0, 30)` (chest, slightly forward, so the body front picks up blue), shadowless, radius `LightRadius`, `SetVisibility(false)` before `RegisterComponent`; tag-event registration and initial `bCharging` as before; `SetComponentTickEnabled(bCharging)`; `UpdateAura()`.
+  - `UpdateAura()`: `bShouldShow = Fade > 0`; if `BodyMesh && AuraMaterial`: set `Fade`/`Intensity` params and set the mesh overlay to `bShouldShow ? AuraMaterial : nullptr` only when it differs from the current one (`GetOverlayMaterial()`); light visibility + `LightIntensity × Fade × flicker` as before. Add `// ponytail: owns the mesh's single overlay slot; if another effect needs it later (hit flash), move the aura to a leader-posed child mesh.`
+  - Tick: fade interp, Age, `UpdateAura()`, disable tick when faded out.
+  - EndPlay: unregister the tag event; if the mesh's overlay is ours, clear it; destroy the light; reset `Fade = 0`, `bCharging = false`, pointers null.
+  - `IsCharging()` comment: "(always false on a dedicated server)".
+  Build + run tests: `ALL 18 TESTS PASSED`, no ensures, no missing-material warnings.
+
+- [ ] **Step 4: Spec.** Replace the §5 "Chakra charge aura" row with: "Thin blue glow hugging the body: the character mesh's overlay material `M_ChakraBodyAura` (vertex-normal inflate ~2.5 cm, additive unlit, fresnel rim, faint upward noise wisps) + a soft chest-height blue point light; ~0.15 s fade. Driven by `UShinobiChakraAuraComponent` following the replicated `State.ChakraCharging` tag."
+
+- [ ] **Step 5: Commit** (script, new asset, deleted assets via `git rm`, component, test, plan, spec).
+
+---
+
 ### Task 4: Mixamo "Power Up" pose
 
 **Files:**
-- Add (user): `SourceArt/Mixamo/PowerUp.fbx`
+- Add (user, done 2026-09-25): `SourceArt/Mixamo/Power_Up_30fps.fbx` (a `Power_Up_60fps.fbx` copy also exists; leave it untracked)
 - Create: `Scripts/setup_chakra_pose.py`
 - Creates assets: `/Game/Shinobi/Mixamo/…` (imported mesh, skeleton, animation), `/Game/Shinobi/Retarget/IK_Mixamo`, `IK_Manny`, `RTG_MixamoToManny`, `/Game/Shinobi/Anims/AS_PowerUp` (retargeted), `/Game/Shinobi/Anims/AM_ChakraCharge`
 - Modify: `GA_ChakraCharge.h/.cpp` (play the looping montage)
@@ -772,7 +824,7 @@ git commit -m "feat: replicated-by-tag chakra charge aura on the player"
 - [ ] **Step 2: Write `Scripts/setup_chakra_pose.py`**
 
 Implement these stages, each idempotent (skip if the output asset exists) and each raising on failure. Confirm every API against the local 5.8 source first — in particular whether FBX import goes through Interchange in 5.8 (and how `AssetImportTask` options apply), `unreal.IKRigDefinitionFactory` / `unreal.IKRetargetFactory` names, `IKRigController.set_skeletal_mesh` / `apply_auto_generated_retarget_definition` / `apply_auto_fbik`, `IKRetargeterController.set_ik_rig` / `add_default_ops` / `assign_ik_rig_to_all_ops` / `auto_map_chains` / `auto_align_all_bones`, and `IKRetargetBatchOperation.run_batch_retarget(IKRetargetBatchOperationInputs)`.
-1. **Import** `SourceArt/Mixamo/PowerUp.fbx` into `/Game/Shinobi/Mixamo` as a skeletal mesh with its animation (no physics asset, no materials needed).
+1. **Import** `SourceArt/Mixamo/Power_Up_30fps.fbx` into `/Game/Shinobi/Mixamo` as a skeletal mesh with its animation (no physics asset, no materials needed).
 2. **IK rigs**: `/Game/Shinobi/Retarget/IK_Mixamo` on the imported mesh and `/Game/Shinobi/Retarget/IK_Manny` on `/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple`; for each: set the mesh, apply the auto-generated retarget definition (UE's auto-characterizer recognises Mixamo and the UE5 mannequin), apply auto FBIK.
 3. **Retargeter** `/Game/Shinobi/Retarget/RTG_MixamoToManny`: source IK_Mixamo, target IK_Manny, add default ops, assign rigs to all ops, auto-map chains (force remap), auto-align bones on the target if Mixamo's T-pose vs Manny's A-pose needs it (check the result pose in Task 5).
 4. **Retarget** the imported animation to Manny with `run_batch_retarget` (target path `/Game/Shinobi/Anims`, overwrite existing), then rename/ensure the result is `/Game/Shinobi/Anims/AS_PowerUp`.
@@ -810,7 +862,7 @@ Confirm the factory-created montage's section is named `Default` (EnsureStarting
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add SourceArt/Mixamo/PowerUp.fbx Scripts/setup_chakra_pose.py Content/Shinobi/Mixamo Content/Shinobi/Retarget Content/Shinobi/Anims/AS_PowerUp.uasset Content/Shinobi/Anims/AM_ChakraCharge.uasset Source/ShinobiCoop/Shinobi/Abilities/GA_ChakraCharge.h Source/ShinobiCoop/Shinobi/Abilities/GA_ChakraCharge.cpp
+git add SourceArt/Mixamo/Power_Up_30fps.fbx Scripts/setup_chakra_pose.py Content/Shinobi/Mixamo Content/Shinobi/Retarget Content/Shinobi/Anims/AS_PowerUp.uasset Content/Shinobi/Anims/AM_ChakraCharge.uasset Source/ShinobiCoop/Shinobi/Abilities/GA_ChakraCharge.h Source/ShinobiCoop/Shinobi/Abilities/GA_ChakraCharge.cpp
 git commit -m "feat: Mixamo power-up pose retargeted to Manny, looping while charging"
 ```
 
@@ -824,12 +876,11 @@ git commit -m "feat: Mixamo power-up pose retargeted to Manny, looping while cha
 | # | Check | Expected |
 |---|---|---|
 | 1 | Hold C | Power-up pose loops while held; character can't move or jump |
-| 2 | Aura | Blue flame shells rise around the body, counter-rotating, soft top edge; pulsing ring on the ground; blue light flicker on nearby surfaces; fades in/out quickly. Check the two UV assumptions: flames are brightest at the feet and fade toward the head (if reversed, swap the top-fade OneMinus in `setup_vfx.py`), and the ground ring fades out before the plane's corners (no square edge) |
+| 2 | Aura | Thin blue glow hugging the body's silhouette (not a capsule), faint wisps drifting upward, soft blue light on the chest and nearby floor; fades in/out quickly; follows the power-up pose. Tune `Inflate` / `Intensity` / `Color` if too thick, too bright or too faint |
 | 3 | Other window | Sees the same pose and aura on the charging player |
 | 4 | Full chakra | Pose + aura still play; bar stays full |
 | 5 | Release / press Ctrl while holding | Aura fades out, pose blends out; dodge works |
-| 6 | Body tint | Charging player's own body gets a blue tint/rim (the light sits at the capsule centre; if the body isn't lit, offset the light up/forward on the component) |
-| 7 | Shell caps | No flat disc "lid" visible on top of the flame shells (engine Cylinder has caps; if visible, switch the shell mesh to an open cylinder or hide caps via the material) |
+| 6 | Body tint | Charging player's chest/front picks up a soft blue light |
 
 - [ ] **Step 3:** Tune from feedback: aura colour/intensity/spin/fade are `EditDefaultsOnly` on the component; flame direction/top fade live in `Scripts/setup_vfx.py` (re-run it); retarget alignment lives in `Scripts/setup_chakra_pose.py`.
 - [ ] **Step 4:** Record the result at the bottom of this plan and commit.
