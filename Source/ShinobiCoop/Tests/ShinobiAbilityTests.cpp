@@ -233,8 +233,7 @@ bool FShinobiMeleeComboTest::RunTest(const FString& Parameters)
 	const float Chakra = ShinobiTest::Get(Attacker, UShinobiAttributeSet::GetChakraAttribute());
 	TestTrue(FString::Printf(TEXT("+5 chakra on hit (got %.2f)"), Chakra), Chakra >= 55.f && Chakra <= 56.5f);
 
-	// Attacker chakra is 55.5, well below the 100 max, so this can only be blocked by GA_Melee's
-	// BlockAbilitiesWithTag, not by GA_ChakraCharge's own full-chakra gate.
+	// GA_ChakraCharge has no chakra gate, so this can only be blocked by GA_Melee's BlockAbilitiesWithTag.
 	ShinobiTest::Press(Attacker, EShinobiAbilityInputID::ChakraCharge);
 	TestFalse(TEXT("Charge blocked mid-combo"), ShinobiTest::IsActive(Attacker, UGA_ChakraCharge::StaticClass()));
 	ShinobiTest::Release(Attacker, EShinobiAbilityInputID::ChakraCharge);

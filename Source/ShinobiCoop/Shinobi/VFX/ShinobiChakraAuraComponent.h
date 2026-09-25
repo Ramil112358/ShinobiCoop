@@ -13,7 +13,7 @@ class UPointLightComponent;
 /**
  * Chakra-charge aura (body-hugging, Task 3b): a thin blue glow applied as an overlay material on the
  * owner's own skeletal mesh (UMeshComponent::SetOverlayMaterial draws the mesh a second time with it),
- * inflated along the vertex normals so it hugs the silhouette, plus a soft chest-height light. Purely
+ * inflated along the vertex normals so it hugs the silhouette, plus a soft light at the capsule centre. Purely
  * cosmetic and not replicated: it follows the owner's State.ChakraCharging tag, which GAS replicates to
  * every machine (ReplicateActivationOwnedTags), so all players see it, and it always matches the current
  * pose because it is drawn from the same skinned mesh (including Task 4's power-up pose).
