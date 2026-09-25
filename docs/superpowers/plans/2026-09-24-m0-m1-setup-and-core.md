@@ -3949,13 +3949,24 @@ $LogDir = Join-Path $Root "Saved\Logs"
 New-Item -ItemType Directory -Force $LogDir | Out-Null
 $ServerLog = Join-Path $LogDir "SmokeServer.log"
 $ClientLog = Join-Path $LogDir "SmokeClient.log"
-Remove-Item $ServerLog, $ClientLog -ErrorAction SilentlyContinue
+
+# A previous run that was killed out from under this script (Ctrl+C, closed shell) can leave an
+# UnrealEditor.exe still listening on port 7777; a fresh server would then be unreachable while the
+# client silently joins the stale one instead. Clear those out before touching the logs.
+Get-CimInstance Win32_Process -Filter "Name = 'UnrealEditor.exe'" | Where-Object { $_.CommandLine -match '-ShinobiSmoke' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+
+Remove-Item -LiteralPath $ServerLog, $ClientLog -ErrorAction SilentlyContinue
+if ((Test-Path -LiteralPath $ServerLog) -or (Test-Path -LiteralPath $ClientLog)) {
+    throw "Smoke log still locked by another process; close leftover UnrealEditor instances"
+}
 $Common = "-game -nullrhi -nosound -unattended -nosplash -ShinobiSmoke"
 
 $server = Start-Process $Editor -PassThru -ArgumentList "`"$Project`" /Game/ThirdPerson/Lvl_ThirdPerson?listen $Common -abslog=`"$ServerLog`""
+$client = $null
 try {
     $deadline = (Get-Date).AddSeconds(240)
-    while (-not ((Test-Path $ServerLog) -and (Select-String -Path $ServerLog -Pattern "Bringing World .* up for play" -Quiet))) {
+    while (-not ((Test-Path -LiteralPath $ServerLog) -and (Select-String -LiteralPath $ServerLog -Pattern "Bringing World .* up for play" -Quiet))) {
+        if ($server.HasExited) { throw "Server exited before loading the map (exit $($server.ExitCode)); see $ServerLog" }
         if ((Get-Date) -gt $deadline) { throw "Server did not start within 240s" }
         Start-Sleep -Seconds 2
     }
@@ -3965,13 +3976,14 @@ try {
 }
 finally {
     Stop-Process $server -Force -ErrorAction SilentlyContinue
+    if ($client -and -not $client.HasExited) { Stop-Process -Id $client.Id -Force -ErrorAction SilentlyContinue }
 }
 
-$hit = Select-String -Path $ClientLog -Pattern "ShinobiStats .* local=1 H=450\.0"
+$hit = Select-String -LiteralPath $ClientLog -Pattern "ShinobiStats .* local=1 H=450\.0"
 if ($hit) {
     Write-Host "SMOKE PASS: $($hit.Line)"
 } else {
-    Select-String -Path $ClientLog -Pattern "ShinobiStats|Error" | Select-Object -Last 20 | ForEach-Object { Write-Host $_.Line }
+    Select-String -LiteralPath $ClientLog -Pattern "ShinobiStats|Error" | Select-Object -Last 20 | ForEach-Object { Write-Host $_.Line }
     throw "SMOKE FAIL: client never saw its replicated Health drop to 450"
 }
 ```
