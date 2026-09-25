@@ -55,7 +55,7 @@ public:
 	float FadeTime = 0.15f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
-	float LightIntensity = 1500.f;
+	float LightIntensity = 1000.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	float LightRadius = 250.f;

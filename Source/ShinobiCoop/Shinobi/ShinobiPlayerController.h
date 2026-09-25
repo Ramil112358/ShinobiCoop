@@ -43,6 +43,9 @@ private:
 	/** With -ShinobiSmoke on a client: damage self, dump stats, quit. Used by Scripts/smoke_m1.ps1. */
 	void RunSmokeTest();
 
+	/** With -ShinobiShot: turn the camera to face the pawn, hold chakra charge, screenshot, release, quit. Used by Scripts/shot_chakra.ps1. */
+	void RunShotTest();
+
 	UPROPERTY()
 	TObjectPtr<UShinobiHUDWidget> Hud;
 };

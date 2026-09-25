@@ -3,12 +3,15 @@
 #include "EngineUtils.h"
 #include "Misc/App.h"
 #include "Misc/CommandLine.h"
+#include "Misc/Paths.h"
 #include "TimerManager.h"
+#include "UnrealClient.h"
 #include "ShinobiCoop.h"
 #include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
+#include "Shinobi/Abilities/ShinobiGameplayAbility.h"
 #include "Shinobi/UI/ShinobiHUDWidget.h"
 
 void AShinobiPlayerController::BeginPlay()
@@ -30,6 +33,10 @@ void AShinobiPlayerController::BeginPlay()
 	if (GetNetMode() == NM_Client && FParse::Param(FCommandLine::Get(), TEXT("ShinobiSmoke")))
 	{
 		RunSmokeTest();
+	}
+	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiShot")))
+	{
+		RunShotTest();
 	}
 }
 
@@ -87,4 +94,42 @@ void AShinobiPlayerController::RunSmokeTest()
 		ShinobiDumpStats();
 		ConsoleCommand(TEXT("quit"));
 	}), 9.f, false);
+}
+
+void AShinobiPlayerController::RunShotTest()
+{
+	// ponytail: fixed delays; raise them if shaders are still compiling when the first shot lands
+	auto At = [this](float Seconds, TFunction<void()> Fn)
+	{
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
+	};
+	auto ChargeInput = [this](bool bPressed)
+	{
+		if (AShinobiCharacterBase* Shinobi = GetPawn<AShinobiCharacterBase>())
+		{
+			const int32 Input = static_cast<int32>(EShinobiAbilityInputID::ChakraCharge);
+			bPressed ? Shinobi->GetAbilitySystemComponent()->AbilityLocalInputPressed(Input)
+			         : Shinobi->GetAbilitySystemComponent()->AbilityLocalInputReleased(Input);
+		}
+	};
+	auto Shot = [](const TCHAR* Name)
+	{
+		FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Name), false, false);
+	};
+	At(4.f, [this]()
+	{
+		if (const APawn* Shinobi = GetPawn())
+		{
+			SetControlRotation(FRotator(-10.f, Shinobi->GetActorRotation().Yaw + 180.f, 0.f)); // camera in front, looking back
+		}
+	});
+	At(5.f, [Shot]() { Shot(TEXT("ShinobiShot_0_Idle")); });
+	At(5.5f, [ChargeInput]() { ChargeInput(true); });
+	At(6.f, [Shot]() { Shot(TEXT("ShinobiShot_1_Charge")); });
+	At(7.f, [Shot]() { Shot(TEXT("ShinobiShot_2_Charge")); });
+	At(8.f, [Shot]() { Shot(TEXT("ShinobiShot_3_Charge")); });
+	At(8.2f, [ChargeInput]() { ChargeInput(false); });
+	At(8.8f, [Shot]() { Shot(TEXT("ShinobiShot_4_Released")); });
+	At(9.5f, [this]() { ConsoleCommand(TEXT("quit")); });
 }

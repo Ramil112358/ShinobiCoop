@@ -15,8 +15,6 @@ namespace
 	const FName ColorParam(TEXT("Color"));
 	const FName IntensityParam(TEXT("Intensity"));
 	const FName FadeParam(TEXT("Fade"));
-	// Chest height, slightly forward of the capsule centre, so the body's front picks up the blue light.
-	const FVector LightOffset(20.f, 0.f, 30.f);
 }
 
 UShinobiChakraAuraComponent::UShinobiChakraAuraComponent()
@@ -56,7 +54,10 @@ void UShinobiChakraAuraComponent::BeginPlay()
 
 	Light = NewObject<UPointLightComponent>(GetOwner(), MakeUniqueObjectName(GetOwner(), UPointLightComponent::StaticClass(), TEXT("AuraLight")));
 	Light->SetupAttachment(this);
-	Light->SetRelativeLocation(LightOffset);
+	// Stays at the capsule centre, inside the body (shadowless): a soft floor pool around the feet from any camera
+	// angle. A chest-front offset (20, 0, 30) sat ~20 uu off the chest and blew it out to a white hotspot.
+	// No specular: its floor glint lands between pawn and camera and follows the camera around.
+	Light->SetSpecularScale(0.f);
 	Light->SetLightColor(Color);
 	Light->SetAttenuationRadius(LightRadius);
 	Light->SetCastShadows(false);
