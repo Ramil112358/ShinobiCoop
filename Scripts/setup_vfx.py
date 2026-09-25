@@ -1,5 +1,8 @@
 """Chakra charge aura materials. Idempotent: rebuilds both materials from scratch each run.
 
+Close the GUI editor before running: an editor that has these materials loaded would silently
+overwrite the regenerated assets on its next Save All.
+
 M_ChakraAura (flame shells): upward-scrolling procedural noise flames, fresnel rim, soft top fade.
 M_ChakraRing (ground ring): a ring pulsing outward plus a faint centre glow.
 Both: unlit, additive, two-sided; parameters Color (vector), Intensity, Fade (scalars) driven by

@@ -16,7 +16,7 @@ Spec: `docs/superpowers/specs/2026-09-23-combat-slice-design.md` §3 (Chakra row
 
 Same as `docs/superpowers/plans/2026-09-24-m0-m1-setup-and-core.md` → "Conventions (read first)". In short:
 - Project root `C:\Users\ahmad\ShinobiCoop`; engine `C:\Program Files\Epic Games\UE_5.8` (source available locally, use it to confirm APIs).
-- Branch `feature/m0-m1-core`. Close the GUI editor before building.
+- Branch `feature/m0-m1-core`. Close the GUI editor before building **and before running any `Scripts/*.py`** (an open editor holding the generated assets would overwrite them on its next save).
 - `powershell -ExecutionPolicy Bypass -File Scripts\build.ps1`, `...\Scripts\run_tests.ps1`, `...\Scripts\run_python.ps1 -Script <file>` with the shell tool timeout at 600000 ms.
 - Write/Edit tools only for text files (PowerShell 5.1 `Set-Content` corrupts UTF-8).
 - `Config/DefaultEngine.ini` has the user's uncommitted startup-map edit: never stage, revert or commit it. Stage by explicit path.
@@ -184,6 +184,9 @@ Both materials are unlit, additive, two-sided, and expose the same parameters th
 
 ```python
 """Chakra charge aura materials. Idempotent: rebuilds both materials from scratch each run.
+
+Close the GUI editor before running: an editor that has these materials loaded would silently
+overwrite the regenerated assets on its next Save All.
 
 M_ChakraAura (flame shells): upward-scrolling procedural noise flames, fresnel rim, soft top fade.
 M_ChakraRing (ground ring): a ring pulsing outward plus a faint centre glow.
@@ -747,7 +750,7 @@ git commit -m "feat: Mixamo power-up pose retargeted to Manny, looping while cha
 | # | Check | Expected |
 |---|---|---|
 | 1 | Hold C | Power-up pose loops while held; character can't move or jump |
-| 2 | Aura | Blue flame shells rise around the body, counter-rotating, soft top edge; pulsing ring on the ground; blue light flicker on nearby surfaces; fades in/out quickly |
+| 2 | Aura | Blue flame shells rise around the body, counter-rotating, soft top edge; pulsing ring on the ground; blue light flicker on nearby surfaces; fades in/out quickly. Check the two UV assumptions: flames are brightest at the feet and fade toward the head (if reversed, swap the top-fade OneMinus in `setup_vfx.py`), and the ground ring fades out before the plane's corners (no square edge) |
 | 3 | Other window | Sees the same pose and aura on the charging player |
 | 4 | Full chakra | Pose + aura still play; bar stays full |
 | 5 | Release / press Ctrl while holding | Aura fades out, pose blends out; dodge works |
