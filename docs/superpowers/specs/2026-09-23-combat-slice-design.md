@@ -106,7 +106,7 @@ All numbers are initial values stored in data assets and tuned after playtest.
 | Attribute | Max | Regeneration |
 |---|---|---|
 | Health | 500 | None during a wave; full restore between waves; revive sets 30% |
-| Chakra | 100 | +2/s passive; +5 per melee hit landed; +25/s while holding Chakra Charge (movement locked; cancelled by any `Event.Hit.Stagger`) |
+| Chakra | 100 | +2/s passive; +5 per melee hit landed; +25/s while holding Chakra Charge (movement and jump locked; usable at full chakra with no gain — the pose and aura still play; ends only on release, dodge, or any `Event.Hit.Stagger`) |
 | Stamina | 100 | +20/s after 1 s without spending. Sprint costs 10/s (sprint ends at 0 stamina), dodge costs 25 (blocked below 25) |
 | Substitution charges | 3 | +1 charge every 15 s |
 
@@ -240,6 +240,7 @@ One post-process material: lighting quantized into 3 bands (scene color divided 
 | Amaterasu | Black-flame shell mesh with dark-purple emissive rim |
 | Firestorm | Expanding fire sphere, light flash, shockwave ring mesh |
 | Substitution | Log mesh + smoke puff sphere at old position |
+| Chakra charge aura | Two translucent blue flame shells (engine cylinder, unlit additive material: upward-scrolling procedural noise, fresnel rim, top fade, counter-rotating) + pulsing ground ring + flickering blue point light; ~0.15 s fade in/out. Driven by a `UShinobiChakraAuraComponent` on the character that follows the replicated `State.ChakraCharging` tag, so every player sees it without a Gameplay Cue asset |
 
 All VFX are spawned through Gameplay Cues.
 
@@ -250,6 +251,7 @@ All VFX are spawned through Gameplay Cues.
 - Cast/hand-gesture wind-ups and jutsu strikes from Fab **Paragon: Shinbi** and **Paragon: Kallari** (free), retargeted to Manny by script (needed from M2).
 - Downed: death montage held on the last frame. Revive: reviver plays a channel loop.
 - Hand-seal wind-ups use the closest cast animation plus a glowing-hands effect. Real finger hand seals are deferred.
+- Chakra charge pose: Mixamo "Power Up" animation (downloaded by the user to `SourceArt/Mixamo/`), retargeted to Manny by script (auto-generated IK rigs + IK retargeter + `IKRetargetBatchOperation.RunBatchRetarget`), wrapped in a looping `AM_ChakraCharge` montage that `GA_ChakraCharge` plays while held (montages replicate via the ASC).
 - Fallback if Paragon is unavailable: a documented list of Mixamo animations for the user to download.
 
 ### Audio
