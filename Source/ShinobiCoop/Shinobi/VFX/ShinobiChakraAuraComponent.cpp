@@ -27,6 +27,10 @@ UShinobiChakraAuraComponent::UShinobiChakraAuraComponent()
 void UShinobiChakraAuraComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	if (IsNetMode(NM_DedicatedServer))
+	{
+		return; // purely cosmetic: nothing to render on a dedicated server, and no gameplay depends on it
+	}
 
 	UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr, CylinderPath);
 	UStaticMesh* Plane = LoadObject<UStaticMesh>(nullptr, PlanePath);
@@ -35,15 +39,16 @@ void UShinobiChakraAuraComponent::BeginPlay()
 
 	// Engine basic shapes are 100 uu across with the pivot at the centre; this component sits at the
 	// capsule centre (192 uu tall), so -94 is just above the floor.
-	Pieces.Add(AddPiece(TEXT("AuraInnerShell"), Cylinder, AuraMaterial, FVector(0.f, 0.f, 10.f), FVector(1.1f, 1.1f, 2.2f)));
-	Pieces.Add(AddPiece(TEXT("AuraOuterShell"), Cylinder, AuraMaterial, FVector(0.f, 0.f, 25.f), FVector(1.5f, 1.5f, 2.6f)));
-	Pieces.Add(AddPiece(TEXT("AuraGroundRing"), Plane, RingMaterial, FVector(0.f, 0.f, -94.f), FVector(3.f, 3.f, 1.f)));
+	InnerShell = AddPiece(TEXT("AuraInnerShell"), Cylinder, AuraMaterial, AuraMaterialPath, FVector(0.f, 0.f, 10.f), FVector(1.1f, 1.1f, 2.2f));
+	OuterShell = AddPiece(TEXT("AuraOuterShell"), Cylinder, AuraMaterial, AuraMaterialPath, FVector(0.f, 0.f, 25.f), FVector(1.5f, 1.5f, 2.6f));
+	AddPiece(TEXT("AuraGroundRing"), Plane, RingMaterial, RingMaterialPath, FVector(0.f, 0.f, -94.f), FVector(3.f, 3.f, 1.f));
 
-	Light = NewObject<UPointLightComponent>(GetOwner(), TEXT("AuraLight"));
+	Light = NewObject<UPointLightComponent>(GetOwner(), MakeUniqueObjectName(GetOwner(), UPointLightComponent::StaticClass(), TEXT("AuraLight")));
 	Light->SetupAttachment(this);
 	Light->SetLightColor(Color);
 	Light->SetAttenuationRadius(450.f);
 	Light->SetCastShadows(false);
+	Light->SetVisibility(false);
 	Light->RegisterComponent();
 
 	if (const IAbilitySystemInterface* Owner = Cast<IAbilitySystemInterface>(GetOwner()))
@@ -66,12 +71,34 @@ void UShinobiChakraAuraComponent::EndPlay(const EEndPlayReason::Type EndPlayReas
 	{
 		ASC->UnregisterGameplayTagEvent(TagEventHandle, ShinobiTags::State_ChakraCharging, EGameplayTagEventType::NewOrRemoved);
 	}
+	for (UStaticMeshComponent* Piece : Pieces)
+	{
+		if (Piece)
+		{
+			Piece->DestroyComponent();
+		}
+	}
+	Pieces.Reset();
+	PieceMaterials.Reset();
+	InnerShell = nullptr;
+	OuterShell = nullptr;
+	if (Light)
+	{
+		Light->DestroyComponent();
+		Light = nullptr;
+	}
 	Super::EndPlay(EndPlayReason);
 }
 
-UStaticMeshComponent* UShinobiChakraAuraComponent::AddPiece(FName Name, UStaticMesh* Mesh, UMaterialInterface* Material, const FVector& Offset, const FVector& Scale)
+UStaticMeshComponent* UShinobiChakraAuraComponent::AddPiece(FName Name, UStaticMesh* Mesh, UMaterialInterface* Material, const TCHAR* MaterialPath, const FVector& Offset, const FVector& Scale)
 {
-	UStaticMeshComponent* Piece = NewObject<UStaticMeshComponent>(GetOwner(), Name);
+	if (!Material)
+	{
+		ensureMsgf(false, TEXT("UShinobiChakraAuraComponent: missing material %s; skipping aura piece %s"), MaterialPath, *Name.ToString());
+		return nullptr;
+	}
+
+	UStaticMeshComponent* Piece = NewObject<UStaticMeshComponent>(GetOwner(), MakeUniqueObjectName(GetOwner(), UStaticMeshComponent::StaticClass(), Name));
 	Piece->SetupAttachment(this);
 	Piece->SetStaticMesh(Mesh);
 	Piece->SetRelativeLocation(Offset);
@@ -79,14 +106,14 @@ UStaticMeshComponent* UShinobiChakraAuraComponent::AddPiece(FName Name, UStaticM
 	Piece->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Piece->SetGenerateOverlapEvents(false);
 	Piece->SetCastShadow(false);
+
+	UMaterialInstanceDynamic* Dynamic = UMaterialInstanceDynamic::Create(Material, this);
+	Dynamic->SetVectorParameterValue(ColorParam, Color);
+	Piece->SetMaterial(0, Dynamic);
+	Piece->SetVisibility(false);
 	Piece->RegisterComponent();
 
-	UMaterialInstanceDynamic* Dynamic = Material ? UMaterialInstanceDynamic::Create(Material, this) : nullptr;
-	if (Dynamic)
-	{
-		Dynamic->SetVectorParameterValue(ColorParam, Color);
-		Piece->SetMaterial(0, Dynamic);
-	}
+	Pieces.Add(Piece);
 	PieceMaterials.Add(Dynamic);
 	return Piece;
 }
@@ -102,10 +129,13 @@ void UShinobiChakraAuraComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	Fade = FMath::FInterpConstantTo(Fade, bCharging ? 1.f : 0.f, DeltaTime, 1.f / FadeTime);
 	Age += DeltaTime;
-	if (Pieces.Num() >= 2)
+	if (InnerShell)
 	{
-		Pieces[0]->AddRelativeRotation(FRotator(0.f, SpinSpeed * DeltaTime, 0.f));
-		Pieces[1]->AddRelativeRotation(FRotator(0.f, -SpinSpeed * DeltaTime, 0.f));
+		InnerShell->AddRelativeRotation(FRotator(0.f, SpinSpeed * DeltaTime, 0.f));
+	}
+	if (OuterShell)
+	{
+		OuterShell->AddRelativeRotation(FRotator(0.f, -SpinSpeed * DeltaTime, 0.f));
 	}
 	UpdatePieces();
 	if (!bCharging && Fade <= 0.f)
@@ -120,11 +150,8 @@ void UShinobiChakraAuraComponent::UpdatePieces()
 	for (int32 Index = 0; Index < Pieces.Num(); ++Index)
 	{
 		Pieces[Index]->SetVisibility(bShouldShow);
-		if (UMaterialInstanceDynamic* Dynamic = PieceMaterials[Index])
-		{
-			Dynamic->SetScalarParameterValue(FadeParam, Fade);
-			Dynamic->SetScalarParameterValue(IntensityParam, Intensity);
-		}
+		PieceMaterials[Index]->SetScalarParameterValue(FadeParam, Fade);
+		PieceMaterials[Index]->SetScalarParameterValue(IntensityParam, Intensity);
 	}
 	if (Light)
 	{

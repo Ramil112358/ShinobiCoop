@@ -55,16 +55,24 @@ protected:
 
 private:
 	void OnChargingTagChanged(const FGameplayTag Tag, int32 NewCount);
-	UStaticMeshComponent* AddPiece(FName Name, UStaticMesh* Mesh, UMaterialInterface* Material, const FVector& Offset, const FVector& Scale);
+	/** Returns nullptr (and creates nothing) if Material is null; MaterialPath is only for the missing-asset message. */
+	UStaticMeshComponent* AddPiece(FName Name, UStaticMesh* Mesh, UMaterialInterface* Material, const TCHAR* MaterialPath, const FVector& Offset, const FVector& Scale);
 	void UpdatePieces();
 
-	/** 0 inner shell, 1 outer shell, 2 ground ring. */
+	/** Meshes actually created at BeginPlay (a piece is skipped, not added, if its material is missing). */
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMeshComponent>> Pieces;
 
-	/** Parallel to Pieces; entries are null when the material asset is missing (e.g. before setup_vfx.py ran). */
+	/** Parallel to Pieces: one dynamic material instance per successfully created piece. */
 	UPROPERTY()
 	TArray<TObjectPtr<UMaterialInstanceDynamic>> PieceMaterials;
+
+	/** Aliases into Pieces (or null if that piece's material was missing), kept for the counter-rotation in Tick. */
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> InnerShell;
+
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> OuterShell;
 
 	UPROPERTY()
 	TObjectPtr<UPointLightComponent> Light;

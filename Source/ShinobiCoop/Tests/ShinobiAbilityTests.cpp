@@ -9,6 +9,8 @@
 #include "Shinobi/Abilities/GA_ChakraCharge.h"
 #include "Shinobi/Abilities/GA_Melee.h"
 #include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSprintTest, "ShinobiCoop.Abilities.SprintDrainsStaminaThenRegenAfterDelay", ShinobiTestFlags)
 bool FShinobiSprintTest::RunTest(const FString& Parameters)
@@ -264,7 +266,7 @@ bool FShinobiChakraAuraTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
-	const UShinobiChakraAuraComponent* Aura = P->GetChakraAura();
+	UShinobiChakraAuraComponent* Aura = P->GetChakraAura();
 	if (!TestNotNull(TEXT("Player has a chakra aura"), Aura))
 	{
 		return false;
@@ -272,16 +274,47 @@ bool FShinobiChakraAuraTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Not charging at spawn"), Aura->IsCharging());
 	TestEqual(TEXT("Hidden at spawn"), Aura->GetFade(), 0.f);
 
+	TArray<UStaticMeshComponent*> AllMeshes;
+	P->GetComponents<UStaticMeshComponent>(AllMeshes);
+	TArray<UStaticMeshComponent*> AuraPieces;
+	for (UStaticMeshComponent* Mesh : AllMeshes)
+	{
+		if (Mesh->GetAttachParent() == Aura)
+		{
+			AuraPieces.Add(Mesh);
+		}
+	}
+	TestEqual(TEXT("Aura has three pieces"), AuraPieces.Num(), 3);
+	for (UStaticMeshComponent* Piece : AuraPieces)
+	{
+		UMaterialInstanceDynamic* Dynamic = Cast<UMaterialInstanceDynamic>(Piece->GetMaterial(0));
+		if (TestNotNull(TEXT("Piece material is a dynamic instance"), Dynamic))
+		{
+			const FString ParentName = Dynamic->Parent ? Dynamic->Parent->GetName() : FString();
+			TestTrue(TEXT("Piece material parent is an aura material"), ParentName == TEXT("M_ChakraAura") || ParentName == TEXT("M_ChakraRing"));
+		}
+		TestFalse(TEXT("Piece hidden at spawn"), Piece->IsVisible());
+	}
+
 	// Full chakra (the default): charging is visual-only but the aura still shows.
 	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
 	TestTrue(TEXT("Aura follows the charging tag"), Aura->IsCharging());
 	W.Tick(0.3f);
 	TestEqual(TEXT("Aura faded in"), Aura->GetFade(), 1.f);
+	for (UStaticMeshComponent* Piece : AuraPieces)
+	{
+		TestTrue(TEXT("Piece visible while charging"), Piece->IsVisible());
+	}
 
 	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
 	TestFalse(TEXT("Aura stops with the charge"), Aura->IsCharging());
 	W.Tick(0.3f);
 	TestEqual(TEXT("Aura faded out"), Aura->GetFade(), 0.f);
+	for (UStaticMeshComponent* Piece : AuraPieces)
+	{
+		TestFalse(TEXT("Piece hidden after fade-out"), Piece->IsVisible());
+	}
+	TestFalse(TEXT("Tick disabled after fade-out"), Aura->IsComponentTickEnabled());
 	return true;
 }
 

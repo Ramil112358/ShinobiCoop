@@ -400,7 +400,7 @@ git commit -m "feat: chakra aura and ground-ring materials (script-generated, Su
 - Modify: `Source/ShinobiCoop/Shinobi/ShinobiPlayerCharacter.h`, `.cpp`
 - Modify: `Source/ShinobiCoop/Tests/ShinobiAbilityTests.cpp` (new test)
 
-- [ ] **Step 1: Write the failing test** — append to `ShinobiAbilityTests.cpp` (add `#include "Shinobi/VFX/ShinobiChakraAuraComponent.h"` with the other includes):
+- [ ] **Step 1: Write the failing test** — append to `ShinobiAbilityTests.cpp` (add `#include "Shinobi/VFX/ShinobiChakraAuraComponent.h"`, `#include "Components/StaticMeshComponent.h"` and `#include "Materials/MaterialInstanceDynamic.h"` with the other includes):
 
 ```cpp
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChakraAuraTest, "ShinobiCoop.Abilities.ChakraAuraFollowsCharging", ShinobiTestFlags)
@@ -408,7 +408,7 @@ bool FShinobiChakraAuraTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
-	const UShinobiChakraAuraComponent* Aura = P->GetChakraAura();
+	UShinobiChakraAuraComponent* Aura = P->GetChakraAura();
 	if (!TestNotNull(TEXT("Player has a chakra aura"), Aura))
 	{
 		return false;
@@ -416,16 +416,47 @@ bool FShinobiChakraAuraTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Not charging at spawn"), Aura->IsCharging());
 	TestEqual(TEXT("Hidden at spawn"), Aura->GetFade(), 0.f);
 
+	TArray<UStaticMeshComponent*> AllMeshes;
+	P->GetComponents<UStaticMeshComponent>(AllMeshes);
+	TArray<UStaticMeshComponent*> AuraPieces;
+	for (UStaticMeshComponent* Mesh : AllMeshes)
+	{
+		if (Mesh->GetAttachParent() == Aura)
+		{
+			AuraPieces.Add(Mesh);
+		}
+	}
+	TestEqual(TEXT("Aura has three pieces"), AuraPieces.Num(), 3);
+	for (UStaticMeshComponent* Piece : AuraPieces)
+	{
+		UMaterialInstanceDynamic* Dynamic = Cast<UMaterialInstanceDynamic>(Piece->GetMaterial(0));
+		if (TestNotNull(TEXT("Piece material is a dynamic instance"), Dynamic))
+		{
+			const FString ParentName = Dynamic->Parent ? Dynamic->Parent->GetName() : FString();
+			TestTrue(TEXT("Piece material parent is an aura material"), ParentName == TEXT("M_ChakraAura") || ParentName == TEXT("M_ChakraRing"));
+		}
+		TestFalse(TEXT("Piece hidden at spawn"), Piece->IsVisible());
+	}
+
 	// Full chakra (the default): charging is visual-only but the aura still shows.
 	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
 	TestTrue(TEXT("Aura follows the charging tag"), Aura->IsCharging());
 	W.Tick(0.3f);
 	TestEqual(TEXT("Aura faded in"), Aura->GetFade(), 1.f);
+	for (UStaticMeshComponent* Piece : AuraPieces)
+	{
+		TestTrue(TEXT("Piece visible while charging"), Piece->IsVisible());
+	}
 
 	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
 	TestFalse(TEXT("Aura stops with the charge"), Aura->IsCharging());
 	W.Tick(0.3f);
 	TestEqual(TEXT("Aura faded out"), Aura->GetFade(), 0.f);
+	for (UStaticMeshComponent* Piece : AuraPieces)
+	{
+		TestFalse(TEXT("Piece hidden after fade-out"), Piece->IsVisible());
+	}
+	TestFalse(TEXT("Tick disabled after fade-out"), Aura->IsComponentTickEnabled());
 	return true;
 }
 ```
@@ -492,16 +523,24 @@ protected:
 
 private:
 	void OnChargingTagChanged(const FGameplayTag Tag, int32 NewCount);
-	UStaticMeshComponent* AddPiece(FName Name, UStaticMesh* Mesh, UMaterialInterface* Material, const FVector& Offset, const FVector& Scale);
+	/** Returns nullptr (and creates nothing) if Material is null; MaterialPath is only for the missing-asset message. */
+	UStaticMeshComponent* AddPiece(FName Name, UStaticMesh* Mesh, UMaterialInterface* Material, const TCHAR* MaterialPath, const FVector& Offset, const FVector& Scale);
 	void UpdatePieces();
 
-	/** 0 inner shell, 1 outer shell, 2 ground ring. */
+	/** Meshes actually created at BeginPlay (a piece is skipped, not added, if its material is missing). */
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMeshComponent>> Pieces;
 
-	/** Parallel to Pieces; entries are null when the material asset is missing (e.g. before setup_vfx.py ran). */
+	/** Parallel to Pieces: one dynamic material instance per successfully created piece. */
 	UPROPERTY()
 	TArray<TObjectPtr<UMaterialInstanceDynamic>> PieceMaterials;
+
+	/** Aliases into Pieces (or null if that piece's material was missing), kept for the counter-rotation in Tick. */
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> InnerShell;
+
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> OuterShell;
 
 	UPROPERTY()
 	TObjectPtr<UPointLightComponent> Light;
@@ -546,6 +585,10 @@ UShinobiChakraAuraComponent::UShinobiChakraAuraComponent()
 void UShinobiChakraAuraComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	if (IsNetMode(NM_DedicatedServer))
+	{
+		return; // purely cosmetic: nothing to render on a dedicated server, and no gameplay depends on it
+	}
 
 	UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr, CylinderPath);
 	UStaticMesh* Plane = LoadObject<UStaticMesh>(nullptr, PlanePath);
@@ -554,15 +597,16 @@ void UShinobiChakraAuraComponent::BeginPlay()
 
 	// Engine basic shapes are 100 uu across with the pivot at the centre; this component sits at the
 	// capsule centre (192 uu tall), so -94 is just above the floor.
-	Pieces.Add(AddPiece(TEXT("AuraInnerShell"), Cylinder, AuraMaterial, FVector(0.f, 0.f, 10.f), FVector(1.1f, 1.1f, 2.2f)));
-	Pieces.Add(AddPiece(TEXT("AuraOuterShell"), Cylinder, AuraMaterial, FVector(0.f, 0.f, 25.f), FVector(1.5f, 1.5f, 2.6f)));
-	Pieces.Add(AddPiece(TEXT("AuraGroundRing"), Plane, RingMaterial, FVector(0.f, 0.f, -94.f), FVector(3.f, 3.f, 1.f)));
+	InnerShell = AddPiece(TEXT("AuraInnerShell"), Cylinder, AuraMaterial, AuraMaterialPath, FVector(0.f, 0.f, 10.f), FVector(1.1f, 1.1f, 2.2f));
+	OuterShell = AddPiece(TEXT("AuraOuterShell"), Cylinder, AuraMaterial, AuraMaterialPath, FVector(0.f, 0.f, 25.f), FVector(1.5f, 1.5f, 2.6f));
+	AddPiece(TEXT("AuraGroundRing"), Plane, RingMaterial, RingMaterialPath, FVector(0.f, 0.f, -94.f), FVector(3.f, 3.f, 1.f));
 
-	Light = NewObject<UPointLightComponent>(GetOwner(), TEXT("AuraLight"));
+	Light = NewObject<UPointLightComponent>(GetOwner(), MakeUniqueObjectName(GetOwner(), UPointLightComponent::StaticClass(), TEXT("AuraLight")));
 	Light->SetupAttachment(this);
 	Light->SetLightColor(Color);
 	Light->SetAttenuationRadius(450.f);
 	Light->SetCastShadows(false);
+	Light->SetVisibility(false);
 	Light->RegisterComponent();
 
 	if (const IAbilitySystemInterface* Owner = Cast<IAbilitySystemInterface>(GetOwner()))
@@ -585,12 +629,34 @@ void UShinobiChakraAuraComponent::EndPlay(const EEndPlayReason::Type EndPlayReas
 	{
 		ASC->UnregisterGameplayTagEvent(TagEventHandle, ShinobiTags::State_ChakraCharging, EGameplayTagEventType::NewOrRemoved);
 	}
+	for (UStaticMeshComponent* Piece : Pieces)
+	{
+		if (Piece)
+		{
+			Piece->DestroyComponent();
+		}
+	}
+	Pieces.Reset();
+	PieceMaterials.Reset();
+	InnerShell = nullptr;
+	OuterShell = nullptr;
+	if (Light)
+	{
+		Light->DestroyComponent();
+		Light = nullptr;
+	}
 	Super::EndPlay(EndPlayReason);
 }
 
-UStaticMeshComponent* UShinobiChakraAuraComponent::AddPiece(FName Name, UStaticMesh* Mesh, UMaterialInterface* Material, const FVector& Offset, const FVector& Scale)
+UStaticMeshComponent* UShinobiChakraAuraComponent::AddPiece(FName Name, UStaticMesh* Mesh, UMaterialInterface* Material, const TCHAR* MaterialPath, const FVector& Offset, const FVector& Scale)
 {
-	UStaticMeshComponent* Piece = NewObject<UStaticMeshComponent>(GetOwner(), Name);
+	if (!Material)
+	{
+		ensureMsgf(false, TEXT("UShinobiChakraAuraComponent: missing material %s; skipping aura piece %s"), MaterialPath, *Name.ToString());
+		return nullptr;
+	}
+
+	UStaticMeshComponent* Piece = NewObject<UStaticMeshComponent>(GetOwner(), MakeUniqueObjectName(GetOwner(), UStaticMeshComponent::StaticClass(), Name));
 	Piece->SetupAttachment(this);
 	Piece->SetStaticMesh(Mesh);
 	Piece->SetRelativeLocation(Offset);
@@ -598,14 +664,14 @@ UStaticMeshComponent* UShinobiChakraAuraComponent::AddPiece(FName Name, UStaticM
 	Piece->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Piece->SetGenerateOverlapEvents(false);
 	Piece->SetCastShadow(false);
+
+	UMaterialInstanceDynamic* Dynamic = UMaterialInstanceDynamic::Create(Material, this);
+	Dynamic->SetVectorParameterValue(ColorParam, Color);
+	Piece->SetMaterial(0, Dynamic);
+	Piece->SetVisibility(false);
 	Piece->RegisterComponent();
 
-	UMaterialInstanceDynamic* Dynamic = Material ? UMaterialInstanceDynamic::Create(Material, this) : nullptr;
-	if (Dynamic)
-	{
-		Dynamic->SetVectorParameterValue(ColorParam, Color);
-		Piece->SetMaterial(0, Dynamic);
-	}
+	Pieces.Add(Piece);
 	PieceMaterials.Add(Dynamic);
 	return Piece;
 }
@@ -621,10 +687,13 @@ void UShinobiChakraAuraComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	Fade = FMath::FInterpConstantTo(Fade, bCharging ? 1.f : 0.f, DeltaTime, 1.f / FadeTime);
 	Age += DeltaTime;
-	if (Pieces.Num() >= 2)
+	if (InnerShell)
 	{
-		Pieces[0]->AddRelativeRotation(FRotator(0.f, SpinSpeed * DeltaTime, 0.f));
-		Pieces[1]->AddRelativeRotation(FRotator(0.f, -SpinSpeed * DeltaTime, 0.f));
+		InnerShell->AddRelativeRotation(FRotator(0.f, SpinSpeed * DeltaTime, 0.f));
+	}
+	if (OuterShell)
+	{
+		OuterShell->AddRelativeRotation(FRotator(0.f, -SpinSpeed * DeltaTime, 0.f));
 	}
 	UpdatePieces();
 	if (!bCharging && Fade <= 0.f)
@@ -639,11 +708,8 @@ void UShinobiChakraAuraComponent::UpdatePieces()
 	for (int32 Index = 0; Index < Pieces.Num(); ++Index)
 	{
 		Pieces[Index]->SetVisibility(bShouldShow);
-		if (UMaterialInstanceDynamic* Dynamic = PieceMaterials[Index])
-		{
-			Dynamic->SetScalarParameterValue(FadeParam, Fade);
-			Dynamic->SetScalarParameterValue(IntensityParam, Intensity);
-		}
+		PieceMaterials[Index]->SetScalarParameterValue(FadeParam, Fade);
+		PieceMaterials[Index]->SetScalarParameterValue(IntensityParam, Intensity);
 	}
 	if (Light)
 	{
@@ -668,7 +734,13 @@ void UShinobiChakraAuraComponent::UpdatePieces()
 	ChakraAura->SetupAttachment(RootComponent);
 ```
 
-Deviation found while building: `UpdatePieces()`'s local `bVisible` shadows `USceneComponent::bVisible` (C4458, treated as an error in this project), since `UShinobiChakraAuraComponent` derives from `USceneComponent`. Renamed the local to `bShouldShow` (reflected in the code block above); no other change needed.
+Deviations found while building and in code review (all reflected in the code blocks above):
+- `UpdatePieces()`'s local `bVisible` shadowed `USceneComponent::bVisible` (C4458, treated as an error in this project), since `UShinobiChakraAuraComponent` derives from `USceneComponent`. Renamed the local to `bShouldShow`.
+- Code review (commit `628807d`) required: a missing aura/ring material must not fall back to an opaque engine-default mesh — `AddPiece` now `ensureMsgf`s and skips the piece entirely (doesn't add to `Pieces`/`PieceMaterials`) when `Material` is null; the fixed 0=inner/1=outer/2=ring indexing this relied on for the counter-rotating spin is gone, replaced by explicit `InnerShell`/`OuterShell` members so the spin stays correct even if one shell's material is missing.
+- `BeginPlay` must tolerate running twice (or two auras on one actor): piece and light names now go through `MakeUniqueObjectName(GetOwner(), <class>, BaseName)` instead of the fixed name (confirmed against `Engine/Source/Runtime/CoreUObject/Public/UObject/UObjectGlobals.h`); `EndPlay` now `DestroyComponent()`s every piece and the light, then `Reset()`s both arrays and nulls `Light`/`InnerShell`/`OuterShell`, in addition to unregistering the tag event.
+- Dedicated server: `BeginPlay` returns immediately after `Super::BeginPlay()` when `IsNetMode(NM_DedicatedServer)` — purely cosmetic, nothing to render server-side, and no gameplay reads this component.
+- `AddPiece` and the light now call `SetMaterial`/`SetVisibility(false)` before `RegisterComponent()` to avoid building a throwaway render state.
+- Strengthened `ChakraAuraFollowsCharging` (still 18 tests total): it now collects the aura's attached `UStaticMeshComponent`s via `P->GetComponents<UStaticMeshComponent>()` filtered by attach parent, asserts there are exactly 3, that each one's material is a `UMaterialInstanceDynamic` whose `Parent` is `M_ChakraAura` or `M_ChakraRing`, checks `IsVisible()` at each fade stage, and checks `Aura->IsComponentTickEnabled()` is false after fade-out.
 
 - [ ] **Step 6: Build and run tests** — expected `ALL 18 TESTS PASSED`. Log must show no ensures from the aura; missing-material warnings are not acceptable here (Task 2 created them).
 
@@ -756,6 +828,8 @@ git commit -m "feat: Mixamo power-up pose retargeted to Manny, looping while cha
 | 3 | Other window | Sees the same pose and aura on the charging player |
 | 4 | Full chakra | Pose + aura still play; bar stays full |
 | 5 | Release / press Ctrl while holding | Aura fades out, pose blends out; dodge works |
+| 6 | Body tint | Charging player's own body gets a blue tint/rim (the light sits at the capsule centre; if the body isn't lit, offset the light up/forward on the component) |
+| 7 | Shell caps | No flat disc "lid" visible on top of the flame shells (engine Cylinder has caps; if visible, switch the shell mesh to an open cylinder or hide caps via the material) |
 
 - [ ] **Step 3:** Tune from feedback: aura colour/intensity/spin/fade are `EditDefaultsOnly` on the component; flame direction/top fade live in `Scripts/setup_vfx.py` (re-run it); retarget alignment lives in `Scripts/setup_chakra_pose.py`.
 - [ ] **Step 4:** Record the result at the bottom of this plan and commit.
