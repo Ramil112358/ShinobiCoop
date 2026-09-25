@@ -12,7 +12,7 @@ Stages (see the plan, docs/superpowers/plans/2026-09-25-chakra-charge-visuals.md
      animation; no physics asset, no materials). Skip if already imported.
   2. Build /Game/Shinobi/Retarget/IK_Mixamo (on the imported mesh) and IK_Manny (on SKM_Manny_Simple):
      auto-generated retarget definition + auto FBIK on each. Skip if already built.
-  3. (Re)configure /Game/Shinobi/Retarget/RTG_MixamoToManny every run: default op stack, EXACT chain
+  3. (Re)configure /Game/Shinobi/Retarget/RTG_MixamoToManny every run: op stack wiped and rebuilt, EXACT chain
      mapping, target bones auto-aligned, Run IK Rig op disabled, Root Motion op reconfigured. See
      configure_retargeter()'s docstring -- this matches Epic's own auto-retarget setup
      (SRetargetAnimAssetsWindow.cpp's FProceduralRetargetAssets::AutoGenerateIKRetargetAsset).
@@ -54,7 +54,8 @@ assets via one-off Python queries) before writing this:
   ERetargetAutoAlignMethod are plain UENUM()s (not all BlueprintType), which Python still binds. Every
   enum value used below was confirmed by listing it directly, e.g. list(unreal.RootMotionSource) ->
   [RootMotionSource.COPY_FROM_SOURCE_ROOT, RootMotionSource.GENERATE_FROM_TARGET_PELVIS].
-- UIKRetargeterController.AddDefaultOps() (IKRetargeterController.cpp) adds exactly 5 ops, in this order:
+- UIKRetargeterController.AddDefaultOps() (IKRetargeterController.cpp) adds exactly 5 ops (to an empty
+  stack -- it does NOT skip non-singleton ops already present, hence remove_all_ops() first), in this order:
   Pelvis Motion, FK Chains, Run IK Rig, Root Motion, Remap Curves -- confirmed both by reading the source
   and by listing the built RTG_MixamoToManny's actual op stack. There's no "IK Chains" or "IK Solve" op in
   5.8; the UIKRetargeterController class header's own doc comment listing those is stale.
@@ -237,7 +238,14 @@ def configure_retargeter(controller, ik_mixamo, ik_manny):
     """
     controller.set_ik_rig(unreal.RetargetSourceOrTarget.SOURCE, ik_mixamo)
     controller.set_ik_rig(unreal.RetargetSourceOrTarget.TARGET, ik_manny)
-    controller.add_default_ops()  # no-op if already present: Pelvis Motion, FK Chains, Run IK Rig, Root Motion, Remap Curves
+    # Rebuild the op stack from scratch every run, like Epic does (SRetargetAnimAssetsWindow.cpp): AddRetargetOp
+    # only refuses duplicates of singleton ops (just Remap Curves), so add_default_ops() alone on an existing
+    # asset appends a second Pelvis Motion/FK Chains/Run IK Rig/Root Motion with default settings each run.
+    controller.remove_all_ops()
+    controller.add_default_ops()  # Pelvis Motion, FK Chains, Run IK Rig, Root Motion, Remap Curves
+    num_ops = controller.get_num_retarget_ops()
+    if num_ops != 5:
+        raise RuntimeError(f"[configure_retargeter] expected exactly 5 default ops, got {num_ops}")
     controller.assign_ik_rig_to_all_ops(unreal.RetargetSourceOrTarget.SOURCE, ik_mixamo)
     controller.assign_ik_rig_to_all_ops(unreal.RetargetSourceOrTarget.TARGET, ik_manny)
 
@@ -439,7 +447,7 @@ def verify_result(as_power_up, mixamo_anim, am_chakra_charge, manny_mesh):
     told apart from a source clip that simply doesn't move that bone much. Raises only if EVERY sampled
     bone is static (a real sign the retarget produced a frozen pose); an individual static bone is logged,
     not raised on, since it may just reflect the source clip. Also logs a rough loop-seam indicator (how
-    far the pelvis differs between the clip's first and last frame) for the Task 5 visual check.
+    far arm/hand/spine/head rotations differ between the clip's first and last frame) for Task 5.
     What this CANNOT confirm headlessly: whether the retarget pose actually *looks* right (no twisted
     limbs, correct T-pose/A-pose alignment, no foot sliding, no visible pop on the loop seam) -- that
     needs the user's eyes, Task 5."""
@@ -485,22 +493,21 @@ def verify_result(as_power_up, mixamo_anim, am_chakra_charge, manny_mesh):
     if not any_moves:
         raise RuntimeError(f"[verify] every sampled bone is static on AS_PowerUp: {deviation_log}")
 
-    first_pelvis = unreal.AnimationLibrary.get_bone_pose_for_time(as_power_up, "pelvis", 0.0, False)
-    last_pelvis = unreal.AnimationLibrary.get_bone_pose_for_time(as_power_up, "pelvis", play_length, False)
-    dx = last_pelvis.translation.x - first_pelvis.translation.x
-    dy = last_pelvis.translation.y - first_pelvis.translation.y
-    dz = last_pelvis.translation.z - first_pelvis.translation.z
-    seam_translation = (dx * dx + dy * dy + dz * dz) ** 0.5
-    seam_rotation = quat_deviation(first_pelvis.rotation, last_pelvis.rotation)
+    # Loop seam on limb/spine rotations, not the pelvis: the Root Motion op makes root follow the pelvis, so
+    # the pelvis's parent-relative transform barely changes whatever the body does (review finding).
+    seam_bones = [target for target, _ in CHECK_BONE_PAIRS] + ["spine_03", "head"]
+    seam_log = ", ".join(
+        f"{bone}={quat_deviation(bone_rotation(as_power_up, bone, 0.0), bone_rotation(as_power_up, bone, play_length)):.4f}"
+        for bone in seam_bones
+    )
 
     unreal.log(
         f"[setup_chakra_pose] verify: skeleton=Manny length={play_length:.2f}s frames={num_frames} "
         f"section={section_name} slots={slot_names} bones=[{', '.join(deviation_log)}]"
     )
     unreal.log(
-        f"[setup_chakra_pose] verify: loop seam (pelvis, first vs last frame) "
-        f"translation={seam_translation:.2f}uu rotation_deviation={seam_rotation:.4f} -- a visible pop in "
-        f"Task 5 despite a small value here would point elsewhere (e.g. blend timing, not the pose data)"
+        f"[setup_chakra_pose] verify: loop seam (rotation deviation, first vs last frame) [{seam_log}] -- "
+        f"rough indicator only; Task 5 decides whether the loop visibly pops"
     )
     unreal.log(
         "[setup_chakra_pose] verify: pose correctness (T-pose/A-pose alignment, no twisted limbs, foot "

@@ -890,6 +890,13 @@ Note the target/source bone-deviation pairs are now nearly identical (e.g. `uppe
 
 Re-run (idempotency): every stage logged `exists`/re-`configured`/re-`retargeted` and the verification repeated byte-for-byte identically — idempotent, including the retargeter reconfiguration and re-retarget.
 
+**Re-review fix (duplicate ops).** The idempotency claim above was wrong: `add_default_ops()` only skips singleton ops (Remap Curves), so each re-run appended another Pelvis Motion / FK Chains / Run IK Rig / Root Motion with default settings. The RTG grew to 13 ops (71.9 KB), and a stale Root Motion op later in the stack still copied the root from Hips. `configure_retargeter()` now calls `remove_all_ops()` before `add_default_ops()` (as Epic's `SRetargetAnimAssetsWindow.cpp` does) and raises unless exactly 5 ops exist. After the fix the RTG is 23.9 KB, stays that size across re-runs, and no longer contains `CopyFromSourceRoot`. The loop-seam indicator now compares arm, hand, spine and head rotations instead of the pelvis, because the pelvis's local transform barely changes once root follows pelvis. Output:
+```
+bones=[upperarm_l=0.2673(src LeftArm=0.2673), upperarm_r=0.2438(src RightArm=0.2438), hand_l=0.0092(src LeftHand=0.0096), hand_r=0.0368(src RightHand=0.0381)]
+loop seam (rotation deviation, first vs last frame) [upperarm_l=0.0000, upperarm_r=0.0000, hand_l=0.0000, hand_r=0.0000, spine_03=0.0000, head=0.0000]
+```
+18/18 tests pass.
+
 - [x] **Step 4: Play the montage from the ability**
 
 `GA_ChakraCharge.h` adds `TSoftObjectPtr<UAnimMontage> Montage` (`EditDefaultsOnly`, forward-declared `class UAnimMontage;`). `GA_ChakraCharge.cpp` sets it in the constructor to `/Game/Shinobi/Anims/AM_ChakraCharge.AM_ChakraCharge`, and in `ActivateAbility`, right after the successful `CommitAbility`, plays it and loops its `"Default"` section — but only once confirmed it's actually the ASC's current montage (a code-review fix: guards against looping a different, still-playing montage forever if `PlayMontage` ever silently failed):
@@ -940,7 +947,7 @@ git commit -m "feat: Mixamo power-up pose retargeted to Manny, looping while cha
 | 4 | Full chakra | Pose + aura still play; bar stays full |
 | 5 | Release / press Ctrl while holding | Aura fades out, pose blends out; dodge works |
 | 6 | Body tint | Charging player's chest/front picks up a soft blue light |
-| 7 | Loop seam | No visible pop when the power-up clip loops (the read-only check in `Scripts/setup_chakra_pose.py` found ~0 pelvis delta between the first and last frame, so a pop here would point at something else, e.g. blend timing, not the pose data). If it pops, split the montage into an intro section plus a "Loop" section and loop only the latter (`AnimMontage::CompositeSections`, then have `GA_ChakraCharge` target `"Loop"` instead of `"Default"`) |
+| 7 | Loop seam | No visible pop when the power-up clip loops (the script's rough check found arm, hand, spine and head rotations identical at the first and last frame, so a pop is unlikely but only your eyes can confirm it). If it pops, split the montage into an intro section plus a "Loop" section and loop only the latter (`AnimMontage::CompositeSections`, then have `GA_ChakraCharge` target `"Loop"` instead of `"Default"`) |
 
 - [ ] **Step 3:** Tune from feedback: aura colour/intensity/fade/light are `EditDefaultsOnly` on the component; the inflate amount, rim fresnel, and wisp look live in `Scripts/setup_vfx.py`'s `build_body_aura()` (re-run it); retarget alignment lives in `Scripts/setup_chakra_pose.py`.
 - [ ] **Step 4:** Record the result at the bottom of this plan and commit.
