@@ -28,9 +28,9 @@ private:
 
 	FTimerHandle ResetTimer;
 
-	/** Last values written to HealthText, so Tick only calls SetText (which unconditionally marks
-	 * render state dirty) when the rounded HP or MaxHP actually changed. -1 never matches a real
-	 * attribute value, so the first Tick always refreshes the text. */
+	/** Last values written to HealthText. Seeded from Attributes in the constructor, so Tick only calls
+	 * SetText (which unconditionally marks render state dirty) when the rounded HP or MaxHP actually
+	 * changes rather than on every frame. */
 	int32 DisplayedHealth = -1;
 	int32 DisplayedMaxHealth = -1;
 };

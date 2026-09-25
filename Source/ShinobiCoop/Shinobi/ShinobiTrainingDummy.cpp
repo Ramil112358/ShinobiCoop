@@ -1,7 +1,7 @@
 #include "Shinobi/ShinobiTrainingDummy.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Components/TextRenderComponent.h"
-#include "Engine/Engine.h"
+#include "Engine/GameInstance.h"
 #include "GameFramework/PlayerController.h"
 #include "TimerManager.h"
 #include "Shinobi/ShinobiAttributeSet.h"
@@ -46,9 +46,10 @@ void AShinobiTrainingDummy::Tick(float DeltaSeconds)
 	// TextRender geometry lies flat facing its local +X axis, so it's mirrored/culled when viewed from
 	// behind. Face the local camera (yaw only) on machines that have one. GetFirstPlayerController()
 	// would return any PC in the world -- on a listen server that includes remote clients' PCs, which
-	// all have a camera manager but aren't local -- so use the engine's local-player lookup instead,
-	// which is null on a dedicated server and in the test world.
-	const APlayerController* PC = GEngine ? GEngine->GetFirstLocalPlayerController(GetWorld()) : nullptr;
+	// all have a camera manager but aren't local -- so use the game instance's local-player lookup
+	// instead, which is null on a dedicated server and in the test world.
+	const UGameInstance* GI = GetGameInstance();
+	const APlayerController* PC = GI ? GI->GetFirstLocalPlayerController(GetWorld()) : nullptr;
 	const APlayerCameraManager* CameraManager = PC ? PC->PlayerCameraManager : nullptr;
 	if (CameraManager)
 	{

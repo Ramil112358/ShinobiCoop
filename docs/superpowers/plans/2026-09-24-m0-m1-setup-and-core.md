@@ -3343,9 +3343,9 @@ private:
 
 	FTimerHandle ResetTimer;
 
-	/** Last values written to HealthText, so Tick only calls SetText (which unconditionally marks
-	 * render state dirty) when the rounded HP or MaxHP actually changed. -1 never matches a real
-	 * attribute value, so the first Tick always refreshes the text. */
+	/** Last values written to HealthText. Seeded from Attributes in the constructor, so Tick only calls
+	 * SetText (which unconditionally marks render state dirty) when the rounded HP or MaxHP actually
+	 * changes rather than on every frame. */
 	int32 DisplayedHealth = -1;
 	int32 DisplayedMaxHealth = -1;
 };
@@ -3357,7 +3357,7 @@ private:
 #include "Shinobi/ShinobiTrainingDummy.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Components/TextRenderComponent.h"
-#include "Engine/Engine.h"
+#include "Engine/GameInstance.h"
 #include "GameFramework/PlayerController.h"
 #include "TimerManager.h"
 #include "Shinobi/ShinobiAttributeSet.h"
@@ -3402,9 +3402,10 @@ void AShinobiTrainingDummy::Tick(float DeltaSeconds)
 	// TextRender geometry lies flat facing its local +X axis, so it's mirrored/culled when viewed from
 	// behind. Face the local camera (yaw only) on machines that have one. GetFirstPlayerController()
 	// would return any PC in the world -- on a listen server that includes remote clients' PCs, which
-	// all have a camera manager but aren't local -- so use the engine's local-player lookup instead,
-	// which is null on a dedicated server and in the test world.
-	const APlayerController* PC = GEngine ? GEngine->GetFirstLocalPlayerController(GetWorld()) : nullptr;
+	// all have a camera manager but aren't local -- so use the game instance's local-player lookup
+	// instead, which is null on a dedicated server and in the test world.
+	const UGameInstance* GI = GetGameInstance();
+	const APlayerController* PC = GI ? GI->GetFirstLocalPlayerController(GetWorld()) : nullptr;
 	const APlayerCameraManager* CameraManager = PC ? PC->PlayerCameraManager : nullptr;
 	if (CameraManager)
 	{
@@ -3511,8 +3512,8 @@ UProgressBar* UShinobiHUDWidget::AddBar(UVerticalBox* Box, FName Name, const FLi
 {
 	USizeBox* SizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 	// Without an explicit width, SProgressBar::ComputeDesiredSize falls back to the 20x12 marquee image
-	// (Starship/CoreWidgets/ProgressBar/ProgressMarquee), so the auto-sized canvas slot above would
-	// otherwise collapse to ~20 px wide.
+	// (the runtime UMG style's Common/ProgressBar_Marquee brush, set up in UMGCoreStyle.cpp), so the
+	// auto-sized canvas slot above would otherwise collapse to ~20 px wide.
 	SizeBox->SetWidthOverride(380.f);
 	SizeBox->SetHeightOverride(Height);
 	UProgressBar* Bar = WidgetTree->ConstructWidget<UProgressBar>(UProgressBar::StaticClass(), Name);
@@ -3795,15 +3796,21 @@ def create_dash_sequence():
     # force_root_lock keeps the pelvis from sliding relative to the capsule. Melee montages keep their
     # own root motion (a forward step on the attack is fine and not fighting another root motion task).
     if unreal.EditorAssetLibrary.does_asset_exist(DASH_SEQUENCE):
+        sequence = unreal.load_asset(DASH_SEQUENCE)
         unreal.log(f"[setup_m1] exists: {DASH_SEQUENCE}")
-        return
-    duplicated = unreal.EditorAssetLibrary.duplicate_asset(DASH_SOURCE, DASH_SEQUENCE)
-    if duplicated is None:
-        raise RuntimeError(f"failed to duplicate {DASH_SOURCE} -> {DASH_SEQUENCE}")
-    duplicated.set_editor_property("enable_root_motion", False)
-    duplicated.set_editor_property("force_root_lock", True)
-    unreal.EditorAssetLibrary.save_loaded_asset(duplicated)
-    unreal.log(f"[setup_m1] created: {DASH_SEQUENCE}")
+    else:
+        sequence = unreal.EditorAssetLibrary.duplicate_asset(DASH_SOURCE, DASH_SEQUENCE)
+        if sequence is None:
+            raise RuntimeError(f"failed to duplicate {DASH_SOURCE} -> {DASH_SEQUENCE}")
+        unreal.log(f"[setup_m1] created: {DASH_SEQUENCE}")
+
+    # Re-applied on every run, not just at creation: this is the property that makes the whole dodge
+    # work (see above), so if it's ever reset -- a reimport, a manual edit, someone re-duplicating the
+    # source by hand -- re-running this script must be enough to put it right again rather than silently
+    # leaving the dodge broken until someone remembers to check two flags on an animation asset.
+    sequence.set_editor_property("enable_root_motion", False)
+    sequence.set_editor_property("force_root_lock", True)
+    unreal.EditorAssetLibrary.save_loaded_asset(sequence)
 
 
 def create_montages():
