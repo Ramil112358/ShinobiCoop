@@ -3,78 +3,41 @@
 Close the GUI editor before running: an editor that has this material loaded would silently
 overwrite the regenerated asset on its next Save All.
 
-Task 3b (2026-09-25, user feedback): the earlier two-shell-plus-ring approach (M_ChakraAura /
-M_ChakraRing, built by this script's previous version) read as "trapped in a glass capsule with a
-lid" -- too big and washed out to white. Replaced with a body-hugging overlay material applied via
-UMeshComponent::SetOverlayMaterial on the character's own skeletal mesh: the mesh is drawn a second
-time with this material, so the aura silhouette always matches the current pose exactly (including
-Task 4's power-up pose) with no separate meshes to size or align. M_ChakraAura and M_ChakraRing are
-deleted by this script if present.
+Task 3b (2026-09-25, user feedback): replaced the earlier two-shell-plus-ring look (M_ChakraAura /
+M_ChakraRing -- too big, washed out to white) with a body-hugging overlay material applied via
+UMeshComponent::SetOverlayMaterial on the character's own skeletal mesh, so the aura silhouette
+always matches the current pose exactly. Deletes the old M_ChakraAura / M_ChakraRing if present.
 
-M_ChakraBodyAura: unlit, additive, one-sided (an overlay mesh batch reuses the character's own
-front-facing triangles, so back-face culling behaves like the base mesh and two-sided is not
-needed). Inflates along the vertex normal (World Position Offset) so it reads as a thin shell
-around the body rather than a decal on the skin, glows only at the silhouette (Fresnel), and adds
-faint upward-drifting noise wisps sampled in absolute world space (so the wisp pattern doesn't
-stretch or stick to the mesh's UVs as it animates). Parameters: Color (vector), Intensity, Fade,
-Inflate (scalars), driven by UShinobiChakraAuraComponent.
+M_ChakraBodyAura: unlit, additive, one-sided. Inflates along the vertex normal (World Position
+Offset) so it reads as a thin shell around the body rather than a decal on the skin, glows only at
+the silhouette (Fresnel), and adds faint upward-drifting noise wisps sampled in absolute world space
+(so the pattern doesn't stretch or stick to the mesh's UVs as it animates). Parameters: Color
+(vector), Intensity, Fade, Inflate (scalars), driven by UShinobiChakraAuraComponent. Substrate
+routing (emissive -> SubstrateUnlitBSDF.EmissiveColor -> MP_FRONT_MATERIAL) is unchanged from the
+previous version of this script.
 
-Overlay + World Position Offset, confirmed against the 5.8 engine source (this is the key risk this
-task's plan called out -- an overlay that ignored WPO would have forced a different approach):
-FSkeletalMeshSceneProxy::GetOverlayMeshBatch (Engine/Source/Runtime/Engine/Private/
-SkeletalMeshSceneProxy.cpp) builds the overlay draw as `OutOverlayMeshBatch = FMeshBatch(MeshBatch)`
--- a copy of the SAME mesh batch used for the base draw (same vertex factory, same skinned/morphed
-vertex data, same bone matrices) -- and only swaps `MaterialRenderProxy` to the overlay material's
-proxy and sets `bOverlayMaterial = true`. `bOverlayMaterial` (Engine/Source/Runtime/Engine/Public/
-MeshBatch.h) is read in exactly two places outside proxies that just copy it through
-(FSkeletalMeshSceneProxy, StaticMeshBatch.cpp): SceneVisibility.cpp uses it only to exempt overlay
-draws from distance culling. Nothing in the renderer special-cases `bOverlayMaterial` to strip World
-Position Offset, and WPO is evaluated by the vertex shader compiled for whichever material the mesh
-batch's `MaterialRenderProxy` points at -- which for the overlay batch is the overlay material, using
-the same vertex factory (and therefore the same per-vertex normal/skinning inputs `VertexNormalWS`
-needs) as the base draw. So an overlay material's WPO applies normally, including on a skinned mesh
-following an animated pose. `GetOverlayMaterial()` / `SetOverlayMaterial()` live on UMeshComponent
-(Engine/Source/Runtime/Engine/Classes/Components/MeshComponent.h): `GetOverlayMaterial(bool
-bGetMaterialSlot = false, int32 SlotIndex = 0) const` and `SetOverlayMaterial(UMaterialInterface*
-NewOverlayMaterial, bool bSetMaterialSlot = false, int32 SlotIndex = 0)`.
+Also bakes MATUSAGE_SkeletalMesh into the asset (`set_base_material_usage`, then asserts it stuck via
+`has_material_usage`): an overlay material missing this flag is silently nulled out by
+FSkeletalMeshSceneProxy outside the editor (UMaterial::SetMaterialUsage only auto-adds a missing flag
+when GIsEditor && !bIsGame, which is false in PIE/-game/cooked), so it must be baked into the asset
+here rather than left to auto-detection. Full engine-source evidence is in the plan's Task 3b
+"Findings from building this task" block.
 
-Substrate routing (r.Substrate=True, confirmed against the 5.8 engine source, unchanged from the
-previous version of this script): UMaterialExpressionSubstrateUnlitBSDF's Emissive Color input is
-connected, then the BSDF node is wired into the material's Front Material slot
-(unreal.MaterialProperty.MP_FRONT_MATERIAL). Unlit + additive still uses MP_FrontMaterial
-exclusively in 5.8, so no different route is needed.
-
-Pin/property names confirmed against the engine source for this material's new nodes:
-- World Position Offset is `unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET`
-  (EMaterialProperty::MP_WorldPositionOffset in Engine/Source/Runtime/Engine/Public/SceneTypes.h),
-  connected the same way as MP_FRONT_MATERIAL via `MaterialEditingLibrary.connect_material_property`.
-- UMaterialExpressionVertexNormalWS (Engine/Source/Runtime/Engine/Public/Materials/
-  MaterialExpressionVertexNormalWS.h) takes no inputs and exposes no editable properties -- it is
-  wired only as a source, never a `node(..., **props)` target.
-- UMaterialExpressionWorldPosition (.../MaterialExpressionWorldPosition.h) likewise takes no inputs;
-  its one property, `WorldPositionShaderOffset` (python `world_position_shader_offset`), defaults to
-  `WPT_Default` (absolute world position, offsets included), which is fine here since this node only
-  feeds the emissive/wisp branch, not the WPO branch itself.
-- UMaterialExpressionConstant2Vector's two float properties are named `R` and `G` in C++ (python
-  `r`/`g`) even though the editor displays them as "X"/"Y"
-  (Engine/Source/Runtime/Engine/Public/Materials/MaterialExpressionConstant2Vector.h) -- confirmed
-  by reading the header rather than assumed from the display name.
-- UMaterialExpressionLinearInterpolate's inputs are plain FExpressionInput properties `A`, `B`,
-  `Alpha` with no GetInputName() override (.../MaterialExpressionLinearInterpolate.h), so (like the
-  Add/Multiply/Subtract nodes already in this script) they connect by their literal property names;
-  its unconnected-fallback float properties are `ConstA`/`ConstB`/`ConstAlpha` (python
-  `const_a`/`const_b`/`const_alpha`).
-- UMaterialExpressionFresnel's unconnected-fallback float properties are `Exponent`/
-  `BaseReflectFraction` (python `exponent`/`base_reflect_fraction`); its input pins
-  (`ExponentIn`/`BaseReflectFractionIn`/`Normal`) are left unconnected here, so only the properties
-  are set (Engine/Source/Runtime/Engine/Public/Materials/MaterialExpressionFresnel.h).
-- The Noise node's Position input is still targeted by the pin name "World Position" (not the
-  property name "Position"), exactly as established in the previous version of this script and
-  reconfirmed unchanged in MaterialExpressionNoise.h/.cpp for 5.8.
-
-All were confirmed by reading the engine headers directly (not by trial-and-error against the
-Python API), since this task called for verifying every expression/property name against source
-before writing the graph code.
+Pin/property names confirmed against the 5.8 engine source for this material's nodes (full evidence
+in the plan, as above):
+- World Position Offset is `unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET`.
+- `MaterialExpressionVertexNormalWS` / `MaterialExpressionWorldPosition` take no inputs and expose no
+  properties relevant here (WorldPositionShaderOffset's default `WPT_Default` is fine since this node
+  only feeds the emissive/wisp branch, not the WPO branch).
+- `MaterialExpressionConstant2Vector`'s float properties are named `r`/`g` in Python, not `x`/`y`,
+  despite the editor's "X"/"Y" display names.
+- `MaterialExpressionLinearInterpolate` connects via plain `A`/`B`/`Alpha`; its unconnected-fallback
+  properties are `const_a`/`const_b`/`const_alpha`.
+- `MaterialExpressionFresnel`'s unconnected-fallback properties are `exponent`/`base_reflect_fraction`.
+- The Noise node's Position input pin is still `"World Position"`, not the property name `"Position"`
+  (established in the previous version of this script, reconfirmed unchanged for 5.8).
+- `set_base_material_usage` / `has_material_usage` are the current (5.8) MaterialEditingLibrary API
+  for usage flags; the older `SetMaterialUsage` is deprecated in favour of `SetBaseMaterialUsage`.
 """
 import unreal
 
@@ -90,7 +53,7 @@ def remove_if_exists(path):
         unreal.log(f"[setup_vfx] removed: {path}")
 
 
-def fresh_material(name, two_sided=True):
+def fresh_material(name, two_sided):
     path = f"{VFX_DIR}/{name}"
     remove_if_exists(path)
     material = TOOLS.create_asset(name, VFX_DIR, unreal.Material, unreal.MaterialFactoryNew())
@@ -112,6 +75,15 @@ def node(material, cls, x, y, **props):
 def link(src, dst, dst_input, src_output=""):
     if not MEL.connect_material_expressions(src, src_output, dst, dst_input):
         raise RuntimeError(f"failed to connect {src.get_name()}.{src_output} -> {dst.get_name()}.{dst_input}")
+
+
+def require_skeletal_mesh_usage(material):
+    """Bake MATUSAGE_SkeletalMesh into the asset; see the module docstring for why this can't be left
+    to editor auto-detection. Raises if the flag didn't actually stick."""
+    MEL.set_base_material_usage(material, unreal.MaterialUsage.MATUSAGE_SKELETAL_MESH, True)
+    if not MEL.has_material_usage(material, unreal.MaterialUsage.MATUSAGE_SKELETAL_MESH):
+        raise RuntimeError(f"{material.get_name()} did not accept MATUSAGE_SkeletalMesh")
+    unreal.log(f"[setup_vfx] usage flag confirmed: {material.get_name()} MATUSAGE_SkeletalMesh")
 
 
 def finish(material, emissive):
@@ -186,6 +158,7 @@ def build_body_aura():
     emissive = node(m, unreal.MaterialExpressionMultiply, -200, 0)
     link(cifr, emissive, "A")
     link(wisps, emissive, "B")
+    require_skeletal_mesh_usage(m)
     finish(m, emissive)
 
 

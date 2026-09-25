@@ -3,6 +3,7 @@
 #include "AbilitySystemInterface.h"
 #include "Components/MeshComponent.h"
 #include "Components/PointLightComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
@@ -39,14 +40,20 @@ void UShinobiChakraAuraComponent::BeginPlay()
 	{
 		AuraMaterial = UMaterialInstanceDynamic::Create(Material, this);
 		AuraMaterial->SetVectorParameterValue(ColorParam, Color);
+		AuraMaterial->SetScalarParameterValue(IntensityParam, Intensity); // constant; only Fade changes per tick
+		if (BodyMesh)
+		{
+			// ponytail: owns the mesh's single overlay slot; if another effect needs it later (hit
+			// flash), move the aura to a leader-posed child mesh. Applied once here and never toggled
+			// again (see the class comment): charging only ever changes the Fade parameter.
+			BodyMesh->SetOverlayMaterial(AuraMaterial);
+		}
 	}
 	else
 	{
 		ensureMsgf(false, TEXT("UShinobiChakraAuraComponent: missing material %s"), BodyAuraMaterialPath);
 	}
 
-	// ponytail: owns the mesh's single overlay slot; if another effect needs it later (hit flash),
-	// move the aura to a leader-posed child mesh.
 	Light = NewObject<UPointLightComponent>(GetOwner(), MakeUniqueObjectName(GetOwner(), UPointLightComponent::StaticClass(), TEXT("AuraLight")));
 	Light->SetupAttachment(this);
 	Light->SetRelativeLocation(LightOffset);
@@ -112,19 +119,16 @@ void UShinobiChakraAuraComponent::TickComponent(float DeltaTime, ELevelTick Tick
 
 void UShinobiChakraAuraComponent::UpdateAura()
 {
-	const bool bShouldShow = Fade > 0.f;
-	if (BodyMesh && AuraMaterial)
+	// The overlay itself is applied once at BeginPlay and never toggled (see the class comment); only
+	// the Fade parameter changes here, which is enough since Fade == 0 makes the additive overlay
+	// contribute nothing.
+	if (AuraMaterial)
 	{
 		AuraMaterial->SetScalarParameterValue(FadeParam, Fade);
-		AuraMaterial->SetScalarParameterValue(IntensityParam, Intensity);
-		UMaterialInterface* const Desired = bShouldShow ? static_cast<UMaterialInterface*>(AuraMaterial) : nullptr;
-		if (BodyMesh->GetOverlayMaterial() != Desired)
-		{
-			BodyMesh->SetOverlayMaterial(Desired);
-		}
 	}
 	if (Light)
 	{
+		const bool bShouldShow = Fade > 0.f;
 		// ponytail: two-sine flicker; swap for a curve asset if art direction wants a specific rhythm
 		const float Flicker = 0.8f + 0.2f * FMath::Sin(Age * 23.f) * FMath::Sin(Age * 7.f);
 		Light->SetVisibility(bShouldShow);

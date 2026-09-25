@@ -11,6 +11,7 @@
 #include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSprintTest, "ShinobiCoop.Abilities.SprintDrainsStaminaThenRegenAfterDelay", ShinobiTestFlags)
 bool FShinobiSprintTest::RunTest(const FString& Parameters)
@@ -274,25 +275,39 @@ bool FShinobiChakraAuraTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Not charging at spawn"), Aura->IsCharging());
 	TestEqual(TEXT("Hidden at spawn"), Aura->GetFade(), 0.f);
 
+	UMaterialInstanceDynamic* AuraMaterial = Aura->GetAuraMaterial();
+	if (!TestNotNull(TEXT("Aura material created"), AuraMaterial))
+	{
+		return false;
+	}
+	// Regression guard: an overlay material missing MATUSAGE_SkeletalMesh compiles and runs fine
+	// under -nullrhi (this test's mode) but is silently nulled out by FSkeletalMeshSceneProxy in a
+	// real PIE/-game/cooked render, so this can't be caught by rendering behaviour in this test --
+	// only by asserting the flag is actually baked into the asset.
+	TestTrue(TEXT("Aura material usable on skeletal meshes"), AuraMaterial->GetUsageByFlag(MATUSAGE_SkeletalMesh));
+	TestEqual(TEXT("Aura material parent is the body aura material"), AuraMaterial->Parent ? AuraMaterial->Parent->GetName() : FString(), FString(TEXT("M_ChakraBodyAura")));
+
+	// The overlay is applied once at BeginPlay and left in place (never toggled) to avoid re-triggering
+	// PSO precache / proxy recreation on every charge start; visibility is driven purely by the Fade
+	// material parameter (0 = the additive overlay contributes nothing).
 	USkeletalMeshComponent* Body = P->GetMesh();
-	TestNull(TEXT("No aura overlay at spawn"), Body->GetOverlayMaterial());
+	TestTrue(TEXT("Overlay applied from spawn"), Body->GetOverlayMaterial() == AuraMaterial);
+	TestEqual(TEXT("Fade param 0 at spawn"), AuraMaterial->K2_GetScalarParameterValue(TEXT("Fade")), 0.f);
 
 	// Full chakra (the default): charging is visual-only but the aura still shows.
 	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
 	TestTrue(TEXT("Aura follows the charging tag"), Aura->IsCharging());
 	W.Tick(0.3f);
 	TestEqual(TEXT("Aura faded in"), Aura->GetFade(), 1.f);
-	UMaterialInstanceDynamic* Overlay = Cast<UMaterialInstanceDynamic>(Body->GetOverlayMaterial());
-	if (TestNotNull(TEXT("Aura overlay applied while charging"), Overlay))
-	{
-		TestEqual(TEXT("Overlay is the body aura material"), Overlay->Parent ? Overlay->Parent->GetName() : FString(), FString(TEXT("M_ChakraBodyAura")));
-	}
+	TestTrue(TEXT("Overlay stays applied while charging"), Body->GetOverlayMaterial() == AuraMaterial);
+	TestEqual(TEXT("Fade param 1 while charging"), AuraMaterial->K2_GetScalarParameterValue(TEXT("Fade")), 1.f);
 
 	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
 	TestFalse(TEXT("Aura stops with the charge"), Aura->IsCharging());
 	W.Tick(0.3f);
 	TestEqual(TEXT("Aura faded out"), Aura->GetFade(), 0.f);
-	TestNull(TEXT("Aura overlay removed after fade-out"), Body->GetOverlayMaterial());
+	TestTrue(TEXT("Overlay stays applied after fade-out (Fade param hides it instead)"), Body->GetOverlayMaterial() == AuraMaterial);
+	TestEqual(TEXT("Fade param 0 after fade-out"), AuraMaterial->K2_GetScalarParameterValue(TEXT("Fade")), 0.f);
 	TestFalse(TEXT("Tick disabled after fade-out"), Aura->IsComponentTickEnabled());
 	return true;
 }

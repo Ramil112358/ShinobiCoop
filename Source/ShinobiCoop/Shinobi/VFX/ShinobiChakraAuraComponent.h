@@ -17,6 +17,14 @@ class UPointLightComponent;
  * cosmetic and not replicated: it follows the owner's State.ChakraCharging tag, which GAS replicates to
  * every machine (ReplicateActivationOwnedTags), so all players see it, and it always matches the current
  * pose because it is drawn from the same skinned mesh (including Task 4's power-up pose).
+ *
+ * The overlay is applied once at BeginPlay and left in place for the component's lifetime; charging is
+ * driven purely by the material's Fade parameter (0 = the additive overlay contributes nothing), never
+ * by toggling SetOverlayMaterial. Toggling it triggers PSO precache + MarkRenderStateDirty on the
+ * skinned mesh, which with r.PSOPrecache.ProxyCreationStrategy=1 can delay recreating the skinned proxy
+ * in -game/packaged builds -- the character could vanish for a few frames on the first charge. The
+ * always-applied overlay costs one extra translucent skinned draw per character, which is fine for the
+ * 2-4 players this project targets.
  */
 UCLASS(ClassGroup = (Shinobi), meta = (BlueprintSpawnableComponent))
 class SHINOBICOOP_API UShinobiChakraAuraComponent : public USceneComponent
