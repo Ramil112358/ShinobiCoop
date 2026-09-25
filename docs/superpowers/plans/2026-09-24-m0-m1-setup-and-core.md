@@ -3876,7 +3876,15 @@ def set_game_mode():
     game_mode = unreal.load_class(None, GAME_MODE)
     if game_mode is None:
         raise RuntimeError(f"class not found: {GAME_MODE} (build the C++ first)")
-    world.get_world_settings().set_editor_property("default_game_mode", game_mode)
+    world_settings = world.get_world_settings()
+    # Unreal's Python bindings intern one wrapper object per underlying UObject, so this equality
+    # check is reliable (verified empirically: two independently-obtained wrappers for the same class
+    # are `is`-identical). Skipping the save when it's already correct avoids resaving the map -- and
+    # so a new LFS blob -- on every single run, which SaveMap did unconditionally before.
+    if world_settings.get_editor_property("default_game_mode") == game_mode:
+        unreal.log(f"[setup_m1] GameMode Override already {GAME_MODE}")
+        return
+    world_settings.set_editor_property("default_game_mode", game_mode)
     if not unreal.EditorLoadingAndSavingUtils.save_map(world, MAP):
         raise RuntimeError(f"failed to save {MAP}")
     unreal.log(f"[setup_m1] {MAP} GameMode Override -> {GAME_MODE}")
