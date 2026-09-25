@@ -127,11 +127,15 @@ bool FShinobiChakraChargeTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 
-	// At full chakra (the default), pressing charge should do nothing: no ability, no tag.
+	// At full chakra (the default) charging still works: the pose and aura play, chakra just can't rise.
 	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
-	TestFalse(TEXT("Can't charge at full chakra"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
-	TestFalse(TEXT("No charging tag at full chakra"), ShinobiTest::HasTag(P, ShinobiTags::State_ChakraCharging));
+	TestTrue(TEXT("Can charge at full chakra"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+	TestTrue(TEXT("Charging tag at full chakra"), ShinobiTest::HasTag(P, ShinobiTags::State_ChakraCharging));
+	W.Tick(0.3f);
+	TestTrue(TEXT("Still charging at full chakra"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+	TestEqual(TEXT("Chakra stays at max"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 100.f);
 	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
+	TestFalse(TEXT("Release ends full-chakra charge"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
 
 	ShinobiTest::Set(P, UShinobiAttributeSet::GetChakraAttribute(), 0.f);
 
@@ -167,13 +171,15 @@ bool FShinobiChakraChargeTest::RunTest(const FString& Parameters)
 	W.Tick(0.4f);
 	TestFalse(TEXT("Dodge finished before next charge attempt"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
 
-	// Auto-end when charging pushes chakra up to the cap.
+	// Charging keeps going after chakra reaches the cap; only release (or dodge / a stagger hit) ends it.
 	ShinobiTest::Set(P, UShinobiAttributeSet::GetChakraAttribute(), 95.f);
 	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
 	TestTrue(TEXT("Charge started from 95"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
 	W.Tick(0.6f);
-	TestFalse(TEXT("Charge auto-ends at full chakra"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+	TestTrue(TEXT("Charge continues at full chakra"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
 	TestEqual(TEXT("Chakra capped at max"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 100.f);
+	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
+	TestFalse(TEXT("Release ends charge"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
 	return true;
 }
 

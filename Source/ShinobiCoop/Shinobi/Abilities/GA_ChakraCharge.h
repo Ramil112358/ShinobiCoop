@@ -4,7 +4,11 @@
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
 #include "GA_ChakraCharge.generated.h"
 
-/** Hold to refill chakra quickly. Movement input is ignored while State.ChakraCharging is present. */
+/**
+ * Hold to charge chakra (Naruto Storm style). Works at any chakra level, including full, so the pose and
+ * aura always play; ends on release, dodge, or (M2) a stagger hit. Movement and jump are ignored while
+ * State.ChakraCharging is present.
+ */
 UCLASS()
 class SHINOBICOOP_API UGA_ChakraCharge : public UShinobiGameplayAbility
 {
@@ -13,16 +17,12 @@ class SHINOBICOOP_API UGA_ChakraCharge : public UShinobiGameplayAbility
 public:
 	UGA_ChakraCharge();
 
-	virtual bool CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags = nullptr, const FGameplayTagContainer* TargetTags = nullptr, FGameplayTagContainer* OptionalRelevantTags = nullptr) const override;
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
 	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled) override;
 
 private:
 	UFUNCTION()
 	void OnInputReleased(float TimeHeld);
-
-	UFUNCTION()
-	void OnChakraFull(bool bMatchesComparison, float CurrentValue);
 
 	FActiveGameplayEffectHandle ChargeHandle;
 };
