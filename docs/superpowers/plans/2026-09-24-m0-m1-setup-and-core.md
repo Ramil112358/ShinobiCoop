@@ -3790,7 +3790,7 @@ MONTAGES = {
 # playing the dash pose for ~0.7 s after it has physically stopped moving. At 3x it finishes in ~0.32 s,
 # close to when the dash itself ends.
 MONTAGE_TUNING = {
-    "AM_Dodge": {"blend_in": 0.05, "rate_scale": 3.0},
+    "AM_Dodge": {"blend_in": 0.05, "blend_out": 0.1, "rate_scale": 3.0},
     "AM_Melee_1": {"blend_in": 0.1},
     "AM_Melee_2": {"blend_in": 0.1},
     "AM_Melee_3": {"blend_in": 0.1},
@@ -3862,6 +3862,10 @@ def tune_montages():
             blend_in = montage.get_editor_property("blend_in")
             blend_in.set_editor_property("blend_time", settings["blend_in"])
             montage.set_editor_property("blend_in", blend_in)
+        if "blend_out" in settings:
+            blend_out = montage.get_editor_property("blend_out")
+            blend_out.set_editor_property("blend_time", settings["blend_out"])
+            montage.set_editor_property("blend_out", blend_out)
         if "rate_scale" in settings:
             montage.set_editor_property("rate_scale", settings["rate_scale"])
         if not unreal.EditorAssetLibrary.save_loaded_asset(montage):
@@ -3899,7 +3903,9 @@ set_game_mode()
 - [ ] **Step 2: Run it**
 
 Run: `powershell -ExecutionPolicy Bypass -File Scripts\run_python.ps1 -Script Scripts\setup_m1.py`
-Expected output contains 5 lines `[setup_m1] created: /Game/Shinobi/Anims/...` (`AS_Dodge`, `AM_Melee_1`, `AM_Melee_2`, `AM_Melee_3`, `AM_Dodge`) and `[setup_m1] /Game/ThirdPerson/Lvl_ThirdPerson GameMode Override -> /Script/ShinobiCoop.ShinobiGameMode`.
+Expected output contains 5 lines `[setup_m1] created: /Game/Shinobi/Anims/...` (`AS_Dodge`, `AM_Melee_1`, `AM_Melee_2`, `AM_Melee_3`, `AM_Dodge`), 4 lines `[setup_m1] tuned: /Game/Shinobi/Anims/...` (one per `MONTAGE_TUNING` entry), and `[setup_m1] /Game/ThirdPerson/Lvl_ThirdPerson GameMode Override -> /Script/ShinobiCoop.ShinobiGameMode`.
+
+On a re-run, the create-step lines become `[setup_m1] exists: ...` and the GameMode line becomes `[setup_m1] GameMode Override already /Script/ShinobiCoop.ShinobiGameMode` (the `tuned:` lines still print every run — tuning is re-applied unconditionally).
 
 Fallback if `set_game_mode` fails in the commandlet: the user opens `Lvl_ThirdPerson` in the editor → Window → World Settings → GameMode Override → `ShinobiGameMode` → Save.
 

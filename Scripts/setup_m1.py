@@ -25,7 +25,7 @@ MONTAGES = {
 # playing the dash pose for ~0.7 s after it has physically stopped moving. At 3x it finishes in ~0.32 s,
 # close to when the dash itself ends.
 MONTAGE_TUNING = {
-    "AM_Dodge": {"blend_in": 0.05, "rate_scale": 3.0},
+    "AM_Dodge": {"blend_in": 0.05, "blend_out": 0.1, "rate_scale": 3.0},
     "AM_Melee_1": {"blend_in": 0.1},
     "AM_Melee_2": {"blend_in": 0.1},
     "AM_Melee_3": {"blend_in": 0.1},
@@ -97,6 +97,10 @@ def tune_montages():
             blend_in = montage.get_editor_property("blend_in")
             blend_in.set_editor_property("blend_time", settings["blend_in"])
             montage.set_editor_property("blend_in", blend_in)
+        if "blend_out" in settings:
+            blend_out = montage.get_editor_property("blend_out")
+            blend_out.set_editor_property("blend_time", settings["blend_out"])
+            montage.set_editor_property("blend_out", blend_out)
         if "rate_scale" in settings:
             montage.set_editor_property("rate_scale", settings["rate_scale"])
         if not unreal.EditorAssetLibrary.save_loaded_asset(montage):
