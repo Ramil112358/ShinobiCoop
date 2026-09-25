@@ -923,7 +923,7 @@ Confirmed the factory-created montage's section is named `Default` (`EnsureStart
 git add SourceArt/Mixamo/Power_Up_30fps.fbx Scripts/setup_chakra_pose.py Content/Shinobi/Mixamo Content/Shinobi/Retarget Content/Shinobi/Anims/AS_PowerUp.uasset Content/Shinobi/Anims/AM_ChakraCharge.uasset Source/ShinobiCoop/Shinobi/Abilities/GA_ChakraCharge.h Source/ShinobiCoop/Shinobi/Abilities/GA_ChakraCharge.cpp Source/ShinobiCoop/Tests/ShinobiAbilityTests.cpp docs/superpowers/plans/2026-09-25-chakra-charge-visuals.md
 git commit -m "feat: Mixamo power-up pose retargeted to Manny, looping while charging"
 ```
-(later amended by a follow-up commit for the code-review retarget-setup fixes, in the same style — see the plan's commit history for the actual SHAs.)
+(followed by a code-review fix commit, `1933d2d`, "fix: retarget setup to match Epic's own reference flow (review)", covering the `configure_retargeter` changes, `verify_result` improvements, `GA_ChakraCharge.cpp`'s current-montage guard, and the `ChakraChargeRefillsWhileHeld` test extension.)
 
 ---
 
