@@ -1,6 +1,7 @@
 #include "Shinobi/ShinobiGameMode.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerStart.h"
+#include "ShinobiCoop.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiPlayerController.h"
 #include "Shinobi/ShinobiTrainingDummy.h"
@@ -18,6 +19,7 @@ void AShinobiGameMode::BeginPlay()
 	TActorIterator<APlayerStart> Start(GetWorld());
 	if (!Start)
 	{
+		UE_LOG(LogShinobiCoop, Warning, TEXT("AShinobiGameMode::BeginPlay: no PlayerStart found, skipping training dummy spawn"));
 		return;
 	}
 	const FVector Origin = Start->GetActorLocation();

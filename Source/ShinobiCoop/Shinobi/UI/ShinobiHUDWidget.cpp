@@ -23,13 +23,15 @@ TSharedRef<SWidget> UShinobiHUDWidget::RebuildWidget()
 	{
 		UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Root"));
 		WidgetTree->RootWidget = Root;
+		// Bars are read-only; never eat cursor/click input meant for the game or other widgets.
+		Root->SetVisibility(ESlateVisibility::HitTestInvisible);
 
 		UVerticalBox* Bars = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Bars"));
 		UCanvasPanelSlot* BarsSlot = Root->AddChildToCanvas(Bars);
 		BarsSlot->SetAnchors(FAnchors(0.f, 1.f));
 		BarsSlot->SetAlignment(FVector2D(0.f, 1.f));
 		BarsSlot->SetPosition(FVector2D(40.f, -40.f));
-		BarsSlot->SetSize(FVector2D(380.f, 70.f));
+		BarsSlot->SetAutoSize(true);
 
 		HealthBar = AddBar(Bars, TEXT("HealthBar"), HealthColor, 22.f);
 		ChakraBar = AddBar(Bars, TEXT("ChakraBar"), ChakraColor, 16.f);

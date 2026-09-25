@@ -20,8 +20,12 @@ void AShinobiPlayerController::BeginPlay()
 	}
 	if (FApp::CanEverRender())
 	{
+		// CreateWidget returns null if this controller has no Player attached yet.
 		Hud = CreateWidget<UShinobiHUDWidget>(this, UShinobiHUDWidget::StaticClass());
-		Hud->AddToViewport();
+		if (Hud)
+		{
+			Hud->AddToViewport();
+		}
 	}
 	if (GetNetMode() == NM_Client && FParse::Param(FCommandLine::Get(), TEXT("ShinobiSmoke")))
 	{

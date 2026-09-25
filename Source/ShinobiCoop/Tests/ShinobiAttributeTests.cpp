@@ -131,8 +131,16 @@ bool FShinobiDummyResetTest::RunTest(const FString& Parameters)
 	AShinobiTrainingDummy* Dummy = W.Spawn<AShinobiTrainingDummy>();
 	ShinobiTest::Damage(Dummy, 1000.f);
 	TestEqual(TEXT("Dummy defeated"), ShinobiTest::Get(Dummy, UShinobiAttributeSet::GetHealthAttribute()), 0.f);
-	W.Tick(2.f);
+	W.Tick(1.f);
+	TestEqual(TEXT("Still defeated before the reset delay"), ShinobiTest::Get(Dummy, UShinobiAttributeSet::GetHealthAttribute()), 0.f);
+	W.Tick(1.f);
 	TestEqual(TEXT("Dummy reset to full"), ShinobiTest::Get(Dummy, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
+
+	// The reset timer must re-arm: a second defeat should reset again, not just fire once ever.
+	ShinobiTest::Damage(Dummy, 1000.f);
+	TestEqual(TEXT("Dummy defeated again"), ShinobiTest::Get(Dummy, UShinobiAttributeSet::GetHealthAttribute()), 0.f);
+	W.Tick(2.f);
+	TestEqual(TEXT("Dummy reset to full again"), ShinobiTest::Get(Dummy, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
 	return true;
 }
 

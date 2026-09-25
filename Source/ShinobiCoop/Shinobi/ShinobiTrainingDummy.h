@@ -27,4 +27,10 @@ private:
 	TObjectPtr<UTextRenderComponent> HealthText;
 
 	FTimerHandle ResetTimer;
+
+	/** Last values written to HealthText, so Tick only calls SetText (which unconditionally marks
+	 * render state dirty) when the rounded HP or MaxHP actually changed. -1 never matches a real
+	 * attribute value, so the first Tick always refreshes the text. */
+	int32 DisplayedHealth = -1;
+	int32 DisplayedMaxHealth = -1;
 };

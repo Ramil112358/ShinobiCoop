@@ -3291,8 +3291,16 @@ bool FShinobiDummyResetTest::RunTest(const FString& Parameters)
 	AShinobiTrainingDummy* Dummy = W.Spawn<AShinobiTrainingDummy>();
 	ShinobiTest::Damage(Dummy, 1000.f);
 	TestEqual(TEXT("Dummy defeated"), ShinobiTest::Get(Dummy, UShinobiAttributeSet::GetHealthAttribute()), 0.f);
-	W.Tick(2.f);
+	W.Tick(1.f);
+	TestEqual(TEXT("Still defeated before the reset delay"), ShinobiTest::Get(Dummy, UShinobiAttributeSet::GetHealthAttribute()), 0.f);
+	W.Tick(1.f);
 	TestEqual(TEXT("Dummy reset to full"), ShinobiTest::Get(Dummy, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
+
+	// The reset timer must re-arm: a second defeat should reset again, not just fire once ever.
+	ShinobiTest::Damage(Dummy, 1000.f);
+	TestEqual(TEXT("Dummy defeated again"), ShinobiTest::Get(Dummy, UShinobiAttributeSet::GetHealthAttribute()), 0.f);
+	W.Tick(2.f);
+	TestEqual(TEXT("Dummy reset to full again"), ShinobiTest::Get(Dummy, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
 	return true;
 }
 ```
@@ -3334,6 +3342,12 @@ private:
 	TObjectPtr<UTextRenderComponent> HealthText;
 
 	FTimerHandle ResetTimer;
+
+	/** Last values written to HealthText, so Tick only calls SetText (which unconditionally marks
+	 * render state dirty) when the rounded HP or MaxHP actually changed. -1 never matches a real
+	 * attribute value, so the first Tick always refreshes the text. */
+	int32 DisplayedHealth = -1;
+	int32 DisplayedMaxHealth = -1;
 };
 ```
 
@@ -3341,7 +3355,9 @@ private:
 
 ```cpp
 #include "Shinobi/ShinobiTrainingDummy.h"
+#include "Camera/PlayerCameraManager.h"
 #include "Components/TextRenderComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "TimerManager.h"
 #include "Shinobi/ShinobiAttributeSet.h"
 
@@ -3365,8 +3381,28 @@ AShinobiTrainingDummy::AShinobiTrainingDummy(const FObjectInitializer& ObjectIni
 void AShinobiTrainingDummy::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	// ponytail: per-frame text refresh; switch to an attribute-change delegate if dummies multiply
-	HealthText->SetText(FText::FromString(FString::Printf(TEXT("HP %.0f / %.0f"), Attributes->GetHealth(), Attributes->GetMaxHealth())));
+
+	// ponytail: per-frame poll with change detection; switch to an attribute-change delegate if dummies multiply
+	const int32 CurrentHealth = FMath::RoundToInt(Attributes->GetHealth());
+	const int32 CurrentMaxHealth = FMath::RoundToInt(Attributes->GetMaxHealth());
+	if (CurrentHealth != DisplayedHealth || CurrentMaxHealth != DisplayedMaxHealth)
+	{
+		DisplayedHealth = CurrentHealth;
+		DisplayedMaxHealth = CurrentMaxHealth;
+		HealthText->SetText(FText::FromString(FString::Printf(TEXT("HP %d / %d"), DisplayedHealth, DisplayedMaxHealth)));
+	}
+
+	// TextRender geometry lies flat facing its local +X axis, so it's mirrored/culled when viewed from
+	// behind. Face the local camera (yaw only) on machines that have one; skip on dedicated servers and
+	// in the test world, where there is no local player.
+	const APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	const APlayerCameraManager* CameraManager = PC ? PC->PlayerCameraManager : nullptr;
+	if (CameraManager)
+	{
+		const FVector CameraLocation = CameraManager->GetCameraLocation();
+		const FVector TextLocation = HealthText->GetComponentLocation();
+		HealthText->SetWorldRotation(FRotator(0.f, (CameraLocation - TextLocation).Rotation().Yaw, 0.f));
+	}
 }
 
 void AShinobiTrainingDummy::HandleOutOfHealth()
@@ -3445,13 +3481,15 @@ TSharedRef<SWidget> UShinobiHUDWidget::RebuildWidget()
 	{
 		UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Root"));
 		WidgetTree->RootWidget = Root;
+		// Bars are read-only; never eat cursor/click input meant for the game or other widgets.
+		Root->SetVisibility(ESlateVisibility::HitTestInvisible);
 
 		UVerticalBox* Bars = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Bars"));
 		UCanvasPanelSlot* BarsSlot = Root->AddChildToCanvas(Bars);
 		BarsSlot->SetAnchors(FAnchors(0.f, 1.f));
 		BarsSlot->SetAlignment(FVector2D(0.f, 1.f));
 		BarsSlot->SetPosition(FVector2D(40.f, -40.f));
-		BarsSlot->SetSize(FVector2D(380.f, 70.f));
+		BarsSlot->SetAutoSize(true);
 
 		HealthBar = AddBar(Bars, TEXT("HealthBar"), HealthColor, 22.f);
 		ChakraBar = AddBar(Bars, TEXT("ChakraBar"), ChakraColor, 16.f);
@@ -3555,8 +3593,12 @@ void AShinobiPlayerController::BeginPlay()
 	}
 	if (FApp::CanEverRender())
 	{
+		// CreateWidget returns null if this controller has no Player attached yet.
 		Hud = CreateWidget<UShinobiHUDWidget>(this, UShinobiHUDWidget::StaticClass());
-		Hud->AddToViewport();
+		if (Hud)
+		{
+			Hud->AddToViewport();
+		}
 	}
 	if (GetNetMode() == NM_Client && FParse::Param(FCommandLine::Get(), TEXT("ShinobiSmoke")))
 	{
@@ -3635,6 +3677,7 @@ protected:
 #include "Shinobi/ShinobiGameMode.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerStart.h"
+#include "ShinobiCoop.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiPlayerController.h"
 #include "Shinobi/ShinobiTrainingDummy.h"
@@ -3652,6 +3695,7 @@ void AShinobiGameMode::BeginPlay()
 	TActorIterator<APlayerStart> Start(GetWorld());
 	if (!Start)
 	{
+		UE_LOG(LogShinobiCoop, Warning, TEXT("AShinobiGameMode::BeginPlay: no PlayerStart found, skipping training dummy spawn"));
 		return;
 	}
 	const FVector Origin = Start->GetActorLocation();
@@ -3954,3 +3998,5 @@ git tag m1-core
 - M3: FindHostilesInCone must skip downed/dead targets; server-only LaunchCharacter on a remote player target rubber-bands — use a root-motion-source hit reaction for player targets.
 - Held ability input (Sprint/ChakraCharge) is not released if the pawn is unpossessed mid-hold; both end on their own (stamina 0 / chakra full). If M2/M3 respawn or cutscenes make this visible, call AbilityLocalInputReleased for held IDs from a NotifyControllerChanged override when control is lost.
 - UShinobiInputConfig is a rooted process-wide singleton; M2's RB jutsu-modifier context should be built the same way and added with a priority above ShinobiInputPriority.
+- Cheat paths (ServerDamageSelf RPC body, -ShinobiSmoke hook) are compiled into Shipping. Before M4 public sessions, early-return in ServerDamageSelf_Implementation and skip RunSmokeTest under UE_BUILD_SHIPPING (UHT can't wrap the UFUNCTION declarations themselves).
+- M3: AShinobiTrainingDummy::HandleOutOfHealth calls Super — when the base class gains downed handling, dummies must not go downed (override without Super, or keep downed logic in the player class). The HUD should collapse when there's no pawn (respawn wait).

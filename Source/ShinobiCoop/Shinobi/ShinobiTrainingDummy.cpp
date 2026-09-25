@@ -1,5 +1,7 @@
 #include "Shinobi/ShinobiTrainingDummy.h"
+#include "Camera/PlayerCameraManager.h"
 #include "Components/TextRenderComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "TimerManager.h"
 #include "Shinobi/ShinobiAttributeSet.h"
 
@@ -23,8 +25,28 @@ AShinobiTrainingDummy::AShinobiTrainingDummy(const FObjectInitializer& ObjectIni
 void AShinobiTrainingDummy::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	// ponytail: per-frame text refresh; switch to an attribute-change delegate if dummies multiply
-	HealthText->SetText(FText::FromString(FString::Printf(TEXT("HP %.0f / %.0f"), Attributes->GetHealth(), Attributes->GetMaxHealth())));
+
+	// ponytail: per-frame poll with change detection; switch to an attribute-change delegate if dummies multiply
+	const int32 CurrentHealth = FMath::RoundToInt(Attributes->GetHealth());
+	const int32 CurrentMaxHealth = FMath::RoundToInt(Attributes->GetMaxHealth());
+	if (CurrentHealth != DisplayedHealth || CurrentMaxHealth != DisplayedMaxHealth)
+	{
+		DisplayedHealth = CurrentHealth;
+		DisplayedMaxHealth = CurrentMaxHealth;
+		HealthText->SetText(FText::FromString(FString::Printf(TEXT("HP %d / %d"), DisplayedHealth, DisplayedMaxHealth)));
+	}
+
+	// TextRender geometry lies flat facing its local +X axis, so it's mirrored/culled when viewed from
+	// behind. Face the local camera (yaw only) on machines that have one; skip on dedicated servers and
+	// in the test world, where there is no local player.
+	const APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	const APlayerCameraManager* CameraManager = PC ? PC->PlayerCameraManager : nullptr;
+	if (CameraManager)
+	{
+		const FVector CameraLocation = CameraManager->GetCameraLocation();
+		const FVector TextLocation = HealthText->GetComponentLocation();
+		HealthText->SetWorldRotation(FRotator(0.f, (CameraLocation - TextLocation).Rotation().Yaw, 0.f));
+	}
 }
 
 void AShinobiTrainingDummy::HandleOutOfHealth()
