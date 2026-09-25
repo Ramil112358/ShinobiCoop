@@ -240,7 +240,7 @@ One post-process material: lighting quantized into 3 bands (scene color divided 
 | Amaterasu | Black-flame shell mesh with dark-purple emissive rim |
 | Firestorm | Expanding fire sphere, light flash, shockwave ring mesh |
 | Substitution | Log mesh + smoke puff sphere at old position |
-| Chakra charge aura | Two translucent blue flame shells (engine cylinder, unlit additive material: upward-scrolling procedural noise, fresnel rim, top fade, counter-rotating) + pulsing ground ring + flickering blue point light; ~0.15 s fade in/out. Driven by a `UShinobiChakraAuraComponent` on the character that follows the replicated `State.ChakraCharging` tag, so every player sees it without a Gameplay Cue asset |
+| Chakra charge aura | Thin blue glow hugging the body: the character mesh's overlay material `M_ChakraBodyAura` (vertex-normal inflate ~2.5 cm, additive unlit, fresnel rim, faint upward noise wisps) + a soft chest-height blue point light; ~0.15 s fade. Driven by `UShinobiChakraAuraComponent` following the replicated `State.ChakraCharging` tag |
 
 All VFX are spawned through Gameplay Cues.
 

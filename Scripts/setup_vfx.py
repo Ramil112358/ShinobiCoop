@@ -1,41 +1,80 @@
-"""Chakra charge aura materials. Idempotent: rebuilds both materials from scratch each run.
+"""Chakra charge aura material. Idempotent: rebuilds M_ChakraBodyAura from scratch each run.
 
-Close the GUI editor before running: an editor that has these materials loaded would silently
-overwrite the regenerated assets on its next Save All.
+Close the GUI editor before running: an editor that has this material loaded would silently
+overwrite the regenerated asset on its next Save All.
 
-M_ChakraAura (flame shells): upward-scrolling procedural noise flames, fresnel rim, soft top fade.
-M_ChakraRing (ground ring): a ring pulsing outward plus a faint centre glow.
-Both: unlit, additive, two-sided; parameters Color (vector), Intensity, Fade (scalars) driven by
-UShinobiChakraAuraComponent.
+Task 3b (2026-09-25, user feedback): the earlier two-shell-plus-ring approach (M_ChakraAura /
+M_ChakraRing, built by this script's previous version) read as "trapped in a glass capsule with a
+lid" -- too big and washed out to white. Replaced with a body-hugging overlay material applied via
+UMeshComponent::SetOverlayMaterial on the character's own skeletal mesh: the mesh is drawn a second
+time with this material, so the aura silhouette always matches the current pose exactly (including
+Task 4's power-up pose) with no separate meshes to size or align. M_ChakraAura and M_ChakraRing are
+deleted by this script if present.
 
-Substrate routing (r.Substrate=True, confirmed against the 5.8 engine source):
-UMaterialExpressionSubstrateUnlitBSDF's Emissive Color input is connected, then the BSDF node is wired
-into the material's Front Material slot (unreal.MaterialProperty.MP_FRONT_MATERIAL). Unlit + additive
-still uses MP_FrontMaterial exclusively in 5.8 (UMaterial::IsPropertyActive's Substrate branch for the
-unlit shading model returns true only for MP_FrontMaterial), so no different route is needed.
+M_ChakraBodyAura: unlit, additive, one-sided (an overlay mesh batch reuses the character's own
+front-facing triangles, so back-face culling behaves like the base mesh and two-sided is not
+needed). Inflates along the vertex normal (World Position Offset) so it reads as a thin shell
+around the body rather than a decal on the skin, glows only at the silhouette (Fresnel), and adds
+faint upward-drifting noise wisps sampled in absolute world space (so the wisp pattern doesn't
+stretch or stick to the mesh's UVs as it animates). Parameters: Color (vector), Intensity, Fade,
+Inflate (scalars), driven by UShinobiChakraAuraComponent.
 
-Two pin names differ from the naive assumption, both confirmed against the engine source:
-- UMaterialExpressionSubstrateUnlitBSDF does not override GetInputName(), so
-  MaterialEditingLibrary.connect_material_expressions must target the raw FExpressionInput property
-  name "EmissiveColor" (no space) -- not the doc-comment phrase "Emissive Color".
-  UMaterialGraphNode::GetShortenPinName (which is what would otherwise turn a long pin name into a
-  shorter display name, e.g. Coordinates -> UVs) only remaps a fixed list of special-cased names and
-  EmissiveColor is not one of them, so the property name passes through unchanged
-  (Engine/Source/Runtime/Engine/Public/Materials/MaterialExpressionSubstrate.h and
-  Engine/Source/Editor/UnrealEd/Private/MaterialGraphNode.cpp).
-- UMaterialExpressionNoise DOES override GetInputName() for its Position input: it returns
-  GetWorldPositionInputName(WorldPositionOriginType), which for the default WorldPositionOriginType
-  (Absolute) is "World Position" (with a space), not the property name "Position"
-  (Engine/Source/Runtime/Engine/Private/Materials/MaterialExpressionNoise.cpp and MaterialShared.cpp).
-- Every single-input node whose only FExpressionInput property is literally named "Input" (Abs, Frac,
-  Length, OneMinus, Saturate, ComponentMask, ...) can't be targeted by the string "Input" either:
-  UMaterialGraphNode::GetShortenPinName explicitly maps the pin name "Input" to NAME_None, and
-  MaterialEditingLibrary's internal GetExpressionInputByName treats a None/empty ToInputName as "return
-  the expression's first input" rather than "no match". So the correct dst_input for these nodes is the
-  empty string "" (which also happens to be simpler and can't typo against a property name).
+Overlay + World Position Offset, confirmed against the 5.8 engine source (this is the key risk this
+task's plan called out -- an overlay that ignored WPO would have forced a different approach):
+FSkeletalMeshSceneProxy::GetOverlayMeshBatch (Engine/Source/Runtime/Engine/Private/
+SkeletalMeshSceneProxy.cpp) builds the overlay draw as `OutOverlayMeshBatch = FMeshBatch(MeshBatch)`
+-- a copy of the SAME mesh batch used for the base draw (same vertex factory, same skinned/morphed
+vertex data, same bone matrices) -- and only swaps `MaterialRenderProxy` to the overlay material's
+proxy and sets `bOverlayMaterial = true`. `bOverlayMaterial` (Engine/Source/Runtime/Engine/Public/
+MeshBatch.h) is read in exactly two places outside proxies that just copy it through
+(FSkeletalMeshSceneProxy, StaticMeshBatch.cpp): SceneVisibility.cpp uses it only to exempt overlay
+draws from distance culling. Nothing in the renderer special-cases `bOverlayMaterial` to strip World
+Position Offset, and WPO is evaluated by the vertex shader compiled for whichever material the mesh
+batch's `MaterialRenderProxy` points at -- which for the overlay batch is the overlay material, using
+the same vertex factory (and therefore the same per-vertex normal/skinning inputs `VertexNormalWS`
+needs) as the base draw. So an overlay material's WPO applies normally, including on a skinned mesh
+following an animated pose. `GetOverlayMaterial()` / `SetOverlayMaterial()` live on UMeshComponent
+(Engine/Source/Runtime/Engine/Classes/Components/MeshComponent.h): `GetOverlayMaterial(bool
+bGetMaterialSlot = false, int32 SlotIndex = 0) const` and `SetOverlayMaterial(UMaterialInterface*
+NewOverlayMaterial, bool bSetMaterialSlot = false, int32 SlotIndex = 0)`.
 
-All three were found by running the script and reading the raised "failed to connect" error against the
-engine source, exactly per this task's requirement to raise rather than silently skip.
+Substrate routing (r.Substrate=True, confirmed against the 5.8 engine source, unchanged from the
+previous version of this script): UMaterialExpressionSubstrateUnlitBSDF's Emissive Color input is
+connected, then the BSDF node is wired into the material's Front Material slot
+(unreal.MaterialProperty.MP_FRONT_MATERIAL). Unlit + additive still uses MP_FrontMaterial
+exclusively in 5.8, so no different route is needed.
+
+Pin/property names confirmed against the engine source for this material's new nodes:
+- World Position Offset is `unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET`
+  (EMaterialProperty::MP_WorldPositionOffset in Engine/Source/Runtime/Engine/Public/SceneTypes.h),
+  connected the same way as MP_FRONT_MATERIAL via `MaterialEditingLibrary.connect_material_property`.
+- UMaterialExpressionVertexNormalWS (Engine/Source/Runtime/Engine/Public/Materials/
+  MaterialExpressionVertexNormalWS.h) takes no inputs and exposes no editable properties -- it is
+  wired only as a source, never a `node(..., **props)` target.
+- UMaterialExpressionWorldPosition (.../MaterialExpressionWorldPosition.h) likewise takes no inputs;
+  its one property, `WorldPositionShaderOffset` (python `world_position_shader_offset`), defaults to
+  `WPT_Default` (absolute world position, offsets included), which is fine here since this node only
+  feeds the emissive/wisp branch, not the WPO branch itself.
+- UMaterialExpressionConstant2Vector's two float properties are named `R` and `G` in C++ (python
+  `r`/`g`) even though the editor displays them as "X"/"Y"
+  (Engine/Source/Runtime/Engine/Public/Materials/MaterialExpressionConstant2Vector.h) -- confirmed
+  by reading the header rather than assumed from the display name.
+- UMaterialExpressionLinearInterpolate's inputs are plain FExpressionInput properties `A`, `B`,
+  `Alpha` with no GetInputName() override (.../MaterialExpressionLinearInterpolate.h), so (like the
+  Add/Multiply/Subtract nodes already in this script) they connect by their literal property names;
+  its unconnected-fallback float properties are `ConstA`/`ConstB`/`ConstAlpha` (python
+  `const_a`/`const_b`/`const_alpha`).
+- UMaterialExpressionFresnel's unconnected-fallback float properties are `Exponent`/
+  `BaseReflectFraction` (python `exponent`/`base_reflect_fraction`); its input pins
+  (`ExponentIn`/`BaseReflectFractionIn`/`Normal`) are left unconnected here, so only the properties
+  are set (Engine/Source/Runtime/Engine/Public/Materials/MaterialExpressionFresnel.h).
+- The Noise node's Position input is still targeted by the pin name "World Position" (not the
+  property name "Position"), exactly as established in the previous version of this script and
+  reconfirmed unchanged in MaterialExpressionNoise.h/.cpp for 5.8.
+
+All were confirmed by reading the engine headers directly (not by trial-and-error against the
+Python API), since this task called for verifying every expression/property name against source
+before writing the graph code.
 """
 import unreal
 
@@ -44,17 +83,22 @@ MEL = unreal.MaterialEditingLibrary
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 
 
-def fresh_material(name):
-    path = f"{VFX_DIR}/{name}"
+def remove_if_exists(path):
     if unreal.EditorAssetLibrary.does_asset_exist(path):
         if not unreal.EditorAssetLibrary.delete_asset(path):
             raise RuntimeError(f"could not delete {path} (is it open in the editor?)")
+        unreal.log(f"[setup_vfx] removed: {path}")
+
+
+def fresh_material(name, two_sided=True):
+    path = f"{VFX_DIR}/{name}"
+    remove_if_exists(path)
     material = TOOLS.create_asset(name, VFX_DIR, unreal.Material, unreal.MaterialFactoryNew())
     if material is None:
         raise RuntimeError(f"failed to create {path}")
     material.set_editor_property("blend_mode", unreal.BlendMode.BLEND_ADDITIVE)
     material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
-    material.set_editor_property("two_sided", True)
+    material.set_editor_property("two_sided", two_sided)
     return material
 
 
@@ -70,26 +114,9 @@ def link(src, dst, dst_input, src_output=""):
         raise RuntimeError(f"failed to connect {src.get_name()}.{src_output} -> {dst.get_name()}.{dst_input}")
 
 
-def shared_params(material):
-    color = node(material, unreal.MaterialExpressionVectorParameter, -1200, -300,
-                 parameter_name="Color", default_value=unreal.LinearColor(0.15, 0.55, 1.0, 1.0))
-    intensity = node(material, unreal.MaterialExpressionScalarParameter, -1200, -150,
-                     parameter_name="Intensity", default_value=6.0)
-    fade = node(material, unreal.MaterialExpressionScalarParameter, -1200, 0,
-                parameter_name="Fade", default_value=1.0)
-    # color * intensity * fade
-    ci = node(material, unreal.MaterialExpressionMultiply, -1000, -250)
-    link(color, ci, "A")
-    link(intensity, ci, "B")
-    cif = node(material, unreal.MaterialExpressionMultiply, -850, -200)
-    link(ci, cif, "A")
-    link(fade, cif, "B")
-    return cif
-
-
 def finish(material, emissive):
     """Substrate: emissive -> Unlit BSDF -> Front Material."""
-    unlit = node(material, unreal.MaterialExpressionSubstrateUnlitBSDF, 200, 0)
+    unlit = node(material, unreal.MaterialExpressionSubstrateUnlitBSDF, 400, 0)
     link(emissive, unlit, "EmissiveColor")
     if not MEL.connect_material_property(unlit, "", unreal.MaterialProperty.MP_FRONT_MATERIAL):
         raise RuntimeError(f"failed to connect Front Material on {material.get_name()}")
@@ -101,92 +128,67 @@ def finish(material, emissive):
     unreal.log(f"[setup_vfx] built: {material.get_path_name()}")
 
 
-def build_aura():
-    m = fresh_material("M_ChakraAura")
-    tint = shared_params(m)
-    uv = node(m, unreal.MaterialExpressionTextureCoordinate, -1400, 250, u_tiling=4.0, v_tiling=1.5)
-    pan = node(m, unreal.MaterialExpressionPanner, -1200, 250, speed_x=0.0, speed_y=-1.2)  # flames rise
-    link(uv, pan, "Coordinate")
-    time = node(m, unreal.MaterialExpressionTime, -1200, 400)
-    slow = node(m, unreal.MaterialExpressionMultiply, -1050, 400, const_b=0.7)
-    link(time, slow, "A")
-    pos = node(m, unreal.MaterialExpressionAppendVector, -900, 300)
-    link(pan, pos, "A")
-    link(slow, pos, "B")
-    noise = node(m, unreal.MaterialExpressionNoise, -750, 300, scale=3.0, levels=3, output_min=0.0, output_max=1.0)
-    # MaterialExpressionNoise overrides GetInputName() to return GetWorldPositionInputName(WorldPositionOriginType)
-    # for its Position input; the default WorldPositionOriginType (Absolute) yields "World Position", not the
-    # property name "Position" (Engine/Source/Runtime/Engine/Private/Materials/MaterialExpressionNoise.cpp and
-    # MaterialShared.cpp's GetWorldPositionInputName). Confirmed the hard way: the naive "Position" name raised
-    # "failed to connect ... -> MaterialExpressionNoise_0.Position" on the first run.
-    link(pos, noise, "World Position")
-    flame = node(m, unreal.MaterialExpressionPower, -600, 300, const_exponent=2.0)
-    link(noise, flame, "Base")
-    # Top fade: 1 at the bottom of the shell, 0 at the top. If the engine cylinder's V runs the other way,
-    # the manual check (Task 5) flips this by swapping the OneMinus.
-    v = node(m, unreal.MaterialExpressionComponentMask, -1200, 550, r=False, g=True, b=False, a=False)
-    raw_uv = node(m, unreal.MaterialExpressionTextureCoordinate, -1400, 550)
-    link(raw_uv, v, "")
-    top_fade = node(m, unreal.MaterialExpressionOneMinus, -1050, 550)
-    link(v, top_fade, "")
-    fresnel = node(m, unreal.MaterialExpressionFresnel, -750, 550, exponent=2.5)
-    rim = node(m, unreal.MaterialExpressionAdd, -600, 550, const_b=0.35)
-    link(fresnel, rim, "A")
-    shape = node(m, unreal.MaterialExpressionMultiply, -450, 350)
-    link(flame, shape, "A")
-    link(top_fade, shape, "B")
-    shaped = node(m, unreal.MaterialExpressionMultiply, -300, 400)
-    link(shape, shaped, "A")
-    link(rim, shaped, "B")
-    emissive = node(m, unreal.MaterialExpressionMultiply, -100, 0)
-    link(tint, emissive, "A")
-    link(shaped, emissive, "B")
+def build_body_aura():
+    m = fresh_material("M_ChakraBodyAura", two_sided=False)
+
+    color = node(m, unreal.MaterialExpressionVectorParameter, -1200, -300,
+                 parameter_name="Color", default_value=unreal.LinearColor(0.1, 0.45, 1.0, 1.0))
+    intensity = node(m, unreal.MaterialExpressionScalarParameter, -1200, -150,
+                     parameter_name="Intensity", default_value=2.5)
+    fade = node(m, unreal.MaterialExpressionScalarParameter, -1200, 0,
+                parameter_name="Fade", default_value=1.0)
+    inflate = node(m, unreal.MaterialExpressionScalarParameter, -1200, 700,
+                   parameter_name="Inflate", default_value=2.5)
+
+    # World Position Offset: push the overlay shell out along the vertex normal so it hugs the body
+    # instead of z-fighting with the skin.
+    normal_ws = node(m, unreal.MaterialExpressionVertexNormalWS, -1000, 700)
+    wpo = node(m, unreal.MaterialExpressionMultiply, -800, 700)
+    link(normal_ws, wpo, "A")
+    link(inflate, wpo, "B")
+    if not MEL.connect_material_property(wpo, "", unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET):
+        raise RuntimeError(f"failed to connect World Position Offset on {m.get_name()}")
+
+    # Rim: glow only at the silhouette, not across the whole body.
+    rim = node(m, unreal.MaterialExpressionFresnel, -1000, -450, exponent=3.0, base_reflect_fraction=0.0)
+
+    # Wisps: faint upward-drifting noise. Sampled in absolute world space (not mesh UVs) so the
+    # pattern doesn't stretch or stick as the pose animates.
+    world_pos = node(m, unreal.MaterialExpressionWorldPosition, -1200, 200)
+    scaled_pos = node(m, unreal.MaterialExpressionMultiply, -1000, 200, const_b=0.04)
+    link(world_pos, scaled_pos, "A")
+    time = node(m, unreal.MaterialExpressionTime, -1200, 350)
+    rise = node(m, unreal.MaterialExpressionMultiply, -1050, 350, const_b=-1.2)
+    link(time, rise, "A")
+    xy_zero = node(m, unreal.MaterialExpressionConstant2Vector, -1000, 400, r=0.0, g=0.0)
+    time_offset = node(m, unreal.MaterialExpressionAppendVector, -900, 380)
+    link(xy_zero, time_offset, "A")
+    link(rise, time_offset, "B")
+    wisp_pos = node(m, unreal.MaterialExpressionAdd, -800, 300)
+    link(scaled_pos, wisp_pos, "A")
+    link(time_offset, wisp_pos, "B")
+    noise = node(m, unreal.MaterialExpressionNoise, -650, 300, scale=1.0, levels=2, output_min=0.0, output_max=1.0)
+    # See module docstring: the Position input's pin name is "World Position", not "Position".
+    link(wisp_pos, noise, "World Position")
+    wisps = node(m, unreal.MaterialExpressionLinearInterpolate, -500, 300, const_a=0.55, const_b=1.0)
+    link(noise, wisps, "Alpha")
+
+    # Emissive = Color * Intensity * Fade * Rim * Wisps
+    ci = node(m, unreal.MaterialExpressionMultiply, -700, -300)
+    link(color, ci, "A")
+    link(intensity, ci, "B")
+    cif = node(m, unreal.MaterialExpressionMultiply, -550, -250)
+    link(ci, cif, "A")
+    link(fade, cif, "B")
+    cifr = node(m, unreal.MaterialExpressionMultiply, -400, -150)
+    link(cif, cifr, "A")
+    link(rim, cifr, "B")
+    emissive = node(m, unreal.MaterialExpressionMultiply, -200, 0)
+    link(cifr, emissive, "A")
+    link(wisps, emissive, "B")
     finish(m, emissive)
 
 
-def build_ring():
-    m = fresh_material("M_ChakraRing")
-    tint = shared_params(m)
-    uv = node(m, unreal.MaterialExpressionTextureCoordinate, -1400, 250)
-    centred = node(m, unreal.MaterialExpressionSubtract, -1250, 250, const_b=0.5)
-    link(uv, centred, "A")
-    dist = node(m, unreal.MaterialExpressionLength, -1100, 250)
-    link(centred, dist, "")
-    radius = node(m, unreal.MaterialExpressionMultiply, -950, 250, const_b=2.0)  # 0 centre .. 1 edge
-    link(dist, radius, "A")
-    time = node(m, unreal.MaterialExpressionTime, -1250, 450)
-    rate = node(m, unreal.MaterialExpressionMultiply, -1100, 450, const_b=1.2)
-    link(time, rate, "A")
-    pulse = node(m, unreal.MaterialExpressionFrac, -950, 450)  # 0..1 expanding
-    link(rate, pulse, "")
-    gap = node(m, unreal.MaterialExpressionSubtract, -800, 350)
-    link(radius, gap, "A")
-    link(pulse, gap, "B")
-    gap_abs = node(m, unreal.MaterialExpressionAbs, -650, 350)
-    link(gap, gap_abs, "")
-    band = node(m, unreal.MaterialExpressionMultiply, -500, 350, const_b=8.0)  # ring width ~1/8
-    link(gap_abs, band, "A")
-    ring = node(m, unreal.MaterialExpressionOneMinus, -350, 350)
-    link(band, ring, "")
-    ring_sat = node(m, unreal.MaterialExpressionSaturate, -200, 350)
-    link(ring, ring_sat, "")
-    edge = node(m, unreal.MaterialExpressionOneMinus, -800, 550)  # fade toward the plane edge
-    link(radius, edge, "")
-    edge_sat = node(m, unreal.MaterialExpressionSaturate, -650, 550)
-    link(edge, edge_sat, "")
-    glow = node(m, unreal.MaterialExpressionMultiply, -500, 550, const_b=0.25)
-    link(edge_sat, glow, "A")
-    body = node(m, unreal.MaterialExpressionAdd, -350, 500)
-    link(ring_sat, body, "A")
-    link(glow, body, "B")
-    shaped = node(m, unreal.MaterialExpressionMultiply, -200, 500)
-    link(body, shaped, "A")
-    link(edge_sat, shaped, "B")
-    emissive = node(m, unreal.MaterialExpressionMultiply, -100, 0)
-    link(tint, emissive, "A")
-    link(shaped, emissive, "B")
-    finish(m, emissive)
-
-
-build_aura()
-build_ring()
+remove_if_exists(f"{VFX_DIR}/M_ChakraAura")
+remove_if_exists(f"{VFX_DIR}/M_ChakraRing")
+build_body_aura()

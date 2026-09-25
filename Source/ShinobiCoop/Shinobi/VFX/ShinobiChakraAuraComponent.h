@@ -7,15 +7,16 @@
 
 class UAbilitySystemComponent;
 class UMaterialInstanceDynamic;
-class UMaterialInterface;
+class UMeshComponent;
 class UPointLightComponent;
-class UStaticMesh;
-class UStaticMeshComponent;
 
 /**
- * Chakra-charge aura (Naruto Storm style): two counter-rotating flame shells, a pulsing ground ring and a
- * flickering light. Purely cosmetic and not replicated: it follows the owner's State.ChakraCharging tag,
- * which GAS replicates to every machine (ReplicateActivationOwnedTags), so all players see it.
+ * Chakra-charge aura (body-hugging, Task 3b): a thin blue glow applied as an overlay material on the
+ * owner's own skeletal mesh (UMeshComponent::SetOverlayMaterial draws the mesh a second time with it),
+ * inflated along the vertex normals so it hugs the silhouette, plus a soft chest-height light. Purely
+ * cosmetic and not replicated: it follows the owner's State.ChakraCharging tag, which GAS replicates to
+ * every machine (ReplicateActivationOwnedTags), so all players see it, and it always matches the current
+ * pose because it is drawn from the same skinned mesh (including Task 4's power-up pose).
  */
 UCLASS(ClassGroup = (Shinobi), meta = (BlueprintSpawnableComponent))
 class SHINOBICOOP_API UShinobiChakraAuraComponent : public USceneComponent
@@ -27,27 +28,29 @@ public:
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-	/** True while the owner has State.ChakraCharging. */
+	/** True while the owner has State.ChakraCharging (always false on a dedicated server). */
 	bool IsCharging() const { return bCharging; }
 
 	/** 0 = hidden, 1 = fully faded in. */
 	float GetFade() const { return Fade; }
 
-	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
-	FLinearColor Color = FLinearColor(0.15f, 0.55f, 1.f);
+	/** The dynamic overlay material instance, or nullptr if the aura material asset is missing. */
+	UMaterialInstanceDynamic* GetAuraMaterial() const { return AuraMaterial; }
 
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
-	float Intensity = 6.f;
+	FLinearColor Color = FLinearColor(0.1f, 0.45f, 1.f);
+
+	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
+	float Intensity = 2.5f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi", meta = (ClampMin = "0.01"))
 	float FadeTime = 0.15f;
 
-	/** Degrees per second; the outer shell spins the other way. */
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
-	float SpinSpeed = 120.f;
+	float LightIntensity = 1500.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
-	float LightIntensity = 8000.f;
+	float LightRadius = 250.f;
 
 protected:
 	virtual void BeginPlay() override;
@@ -55,24 +58,15 @@ protected:
 
 private:
 	void OnChargingTagChanged(const FGameplayTag Tag, int32 NewCount);
-	/** Returns nullptr (and creates nothing) if Material is null; MaterialPath is only for the missing-asset message. */
-	UStaticMeshComponent* AddPiece(FName Name, UStaticMesh* Mesh, UMaterialInterface* Material, const TCHAR* MaterialPath, const FVector& Offset, const FVector& Scale);
-	void UpdatePieces();
+	void UpdateAura();
 
-	/** Meshes actually created at BeginPlay (a piece is skipped, not added, if its material is missing). */
+	/** The owner's skeletal mesh; the aura is applied to this mesh's overlay material slot. */
 	UPROPERTY()
-	TArray<TObjectPtr<UStaticMeshComponent>> Pieces;
+	TObjectPtr<UMeshComponent> BodyMesh;
 
-	/** Parallel to Pieces: one dynamic material instance per successfully created piece. */
+	/** Dynamic instance of M_ChakraBodyAura; null (and nothing applied) if the asset is missing. */
 	UPROPERTY()
-	TArray<TObjectPtr<UMaterialInstanceDynamic>> PieceMaterials;
-
-	/** Aliases into Pieces (or null if that piece's material was missing), kept for the counter-rotation in Tick. */
-	UPROPERTY()
-	TObjectPtr<UStaticMeshComponent> InnerShell;
-
-	UPROPERTY()
-	TObjectPtr<UStaticMeshComponent> OuterShell;
+	TObjectPtr<UMaterialInstanceDynamic> AuraMaterial;
 
 	UPROPERTY()
 	TObjectPtr<UPointLightComponent> Light;

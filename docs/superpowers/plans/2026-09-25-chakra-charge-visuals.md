@@ -391,6 +391,12 @@ git add Scripts/setup_vfx.py Content/Shinobi/VFX
 git commit -m "feat: chakra aura and ground-ring materials (script-generated, Substrate unlit additive)"
 ```
 
+**Superseded by Task 3b (2026-09-25):** after the user previewed this two-shell-plus-ring look it read
+as "trapped in a glass capsule with a lid" and too big/washed out. `Scripts/setup_vfx.py` no longer
+contains `build_aura()`/`build_ring()`; it now deletes `M_ChakraAura`/`M_ChakraRing` if present and
+builds a single body-hugging overlay material, `M_ChakraBodyAura` (see Task 3b Step 2 for the current
+script and graph). The code block above is kept as a record of the first iteration.
+
 ---
 
 ### Task 3: Aura component on the player
@@ -751,6 +757,13 @@ git add Source/ShinobiCoop/Shinobi/VFX Source/ShinobiCoop/Shinobi/ShinobiPlayerC
 git commit -m "feat: replicated-by-tag chakra charge aura on the player"
 ```
 
+**Superseded by Task 3b (2026-09-25):** the header/cpp above (Pieces/PieceMaterials/InnerShell/
+OuterShell/AddPiece/UpdatePieces/SpinSpeed) is the first iteration's shape. `UShinobiChakraAuraComponent`
+was rewritten around `UMeshComponent::SetOverlayMaterial` on the owner's own skeletal mesh instead of
+spawned shell/ring meshes; see Task 3b Step 3 for the current header/cpp. Everything else from this
+task (tag-driven, fade, dedicated-server skip, `EndPlay` teardown, `ensureMsgf` on a missing material,
+`MakeUniqueObjectName`) carried over unchanged.
+
 ---
 
 ### Task 3b: Body-hugging aura (user feedback, 2026-09-25)
@@ -765,7 +778,7 @@ The user previewed Tasks 2–3: the cylinder shells read as "trapped in a glass 
 - Modify: `Source/ShinobiCoop/Tests/ShinobiAbilityTests.cpp` (`ChakraAuraFollowsCharging`)
 - Modify: `docs/superpowers/specs/2026-09-23-combat-slice-design.md` (§5 "Chakra charge aura" row)
 
-- [ ] **Step 1: Update the test (red).** In `ChakraAuraFollowsCharging` replace the static-mesh-piece assertions with overlay assertions (keep IsCharging/GetFade/tick-disabled checks):
+- [x] **Step 1: Update the test (red).** In `ChakraAuraFollowsCharging` replace the static-mesh-piece assertions with overlay assertions (keep IsCharging/GetFade/tick-disabled checks):
 ```cpp
 	USkeletalMeshComponent* Body = P->GetMesh();
 	TestNull(TEXT("No aura overlay at spawn"), Body->GetOverlayMaterial());
@@ -780,7 +793,7 @@ The user previewed Tasks 2–3: the cylinder shells read as "trapped in a glass 
 ```
 (include `Components/SkeletalMeshComponent.h`, `Materials/MaterialInstanceDynamic.h`). Build + run: the new assertions fail (no overlay yet).
 
-- [ ] **Step 2: Material.** In `Scripts/setup_vfx.py` replace the two builders with `build_body_aura()` producing `/Game/Shinobi/VFX/M_ChakraBodyAura`: additive, unlit, **one-sided** (`two_sided=False`), parameters `Color` (0.1, 0.45, 1.0), `Intensity` (2.5), `Fade` (1), `Inflate` (2.5). Graph:
+- [x] **Step 2: Material.** In `Scripts/setup_vfx.py` replace the two builders with `build_body_aura()` producing `/Game/Shinobi/VFX/M_ChakraBodyAura`: additive, unlit, **one-sided** (`two_sided=False`), parameters `Color` (0.1, 0.45, 1.0), `Intensity` (2.5), `Fade` (1), `Inflate` (2.5). Graph:
   - World Position Offset: `VertexNormalWS × Inflate` → `MP_WORLD_POSITION_OFFSET`.
   - Rim: `Fresnel(exponent 3.0, base_reflect_fraction 0.0)`.
   - Wisps: `Noise(position = AbsoluteWorldPosition × 0.04 + (0, 0, −Time × 1.2), scale 1, levels 2, output 0..1)` → `Lerp(0.55, 1.0, noise)` (use `MaterialExpressionWorldPosition`, `MaterialExpressionVertexNormalWS`, `MaterialExpressionConstant3Vector`/`AppendVector` for the time offset, `MaterialExpressionLinearInterpolate` with `const_a`/`const_b`).
@@ -788,7 +801,7 @@ The user previewed Tasks 2–3: the cylinder shells read as "trapped in a glass 
   - Before building, delete `/Game/Shinobi/VFX/M_ChakraAura` and `/Game/Shinobi/VFX/M_ChakraRing` if they exist (log `[setup_vfx] removed: …`), raising if a delete fails.
   Verify pin/property names against 5.8 source as in Task 2 (e.g. the Noise position pin is `"World Position"`, single-`Input` nodes take `""`). Run the script twice (second run idempotent).
 
-- [ ] **Step 3: Component.** Rewrite `UShinobiChakraAuraComponent` around the overlay:
+- [x] **Step 3: Component.** Rewrite `UShinobiChakraAuraComponent` around the overlay:
   - Remove Pieces/PieceMaterials/InnerShell/OuterShell, the mesh loading and `AddPiece`, `SpinSpeed`.
   - Members: `UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> AuraMaterial;`, `UPROPERTY() TObjectPtr<UMeshComponent> BodyMesh;`, `UPROPERTY() TObjectPtr<UPointLightComponent> Light;` plus the existing ASC/tag/fade state. Public `UMaterialInstanceDynamic* GetAuraMaterial() const`.
   - Defaults: `Color (0.1, 0.45, 1.0)`, `Intensity 2.5`, `FadeTime 0.15`, `LightIntensity 1500`, new `LightRadius 250`.
@@ -799,9 +812,15 @@ The user previewed Tasks 2–3: the cylinder shells read as "trapped in a glass 
   - `IsCharging()` comment: "(always false on a dedicated server)".
   Build + run tests: `ALL 18 TESTS PASSED`, no ensures, no missing-material warnings.
 
-- [ ] **Step 4: Spec.** Replace the §5 "Chakra charge aura" row with: "Thin blue glow hugging the body: the character mesh's overlay material `M_ChakraBodyAura` (vertex-normal inflate ~2.5 cm, additive unlit, fresnel rim, faint upward noise wisps) + a soft chest-height blue point light; ~0.15 s fade. Driven by `UShinobiChakraAuraComponent` following the replicated `State.ChakraCharging` tag."
+- [x] **Step 4: Spec.** Replace the §5 "Chakra charge aura" row with: "Thin blue glow hugging the body: the character mesh's overlay material `M_ChakraBodyAura` (vertex-normal inflate ~2.5 cm, additive unlit, fresnel rim, faint upward noise wisps) + a soft chest-height blue point light; ~0.15 s fade. Driven by `UShinobiChakraAuraComponent` following the replicated `State.ChakraCharging` tag."
 
-- [ ] **Step 5: Commit** (script, new asset, deleted assets via `git rm`, component, test, plan, spec).
+Findings from building this task:
+- **Overlay + WPO risk (called out in Task 2's list of things to verify), resolved in favour of the overlay approach:** confirmed against the 5.8 source that an overlay material's World Position Offset is honoured on a skinned mesh. `FSkeletalMeshSceneProxy::GetOverlayMeshBatch` (`Engine/Source/Runtime/Engine/Private/SkeletalMeshSceneProxy.cpp`) builds the overlay draw as `OutOverlayMeshBatch = FMeshBatch(MeshBatch)` — a copy of the *same* mesh batch used for the base draw (same vertex factory, same skinned vertex data, same bone matrices) — and only swaps `MaterialRenderProxy` to the overlay material's proxy and sets `bOverlayMaterial = true`. `bOverlayMaterial` (`Engine/Source/Runtime/Engine/Public/MeshBatch.h`) is read in exactly one other place (`SceneVisibility.cpp`), only to exempt overlay draws from distance culling; nothing strips WPO for it. So no different approach was needed.
+- Every expression/property/pin name in `build_body_aura()` (`MP_WORLD_POSITION_OFFSET`, `MaterialExpressionVertexNormalWS` and `MaterialExpressionWorldPosition` taking no settable properties, `MaterialExpressionConstant2Vector`'s `r`/`g` properties despite the "X"/"Y" display names, `MaterialExpressionLinearInterpolate`'s `A`/`B`/`Alpha`/`const_a`/`const_b` names, `MaterialExpressionFresnel`'s `exponent`/`base_reflect_fraction`) was confirmed by reading the engine headers before writing the script, and the script's first run succeeded with no "failed to connect" errors — no naming surprises this time (contrast Task 2, which needed three fixes).
+- `GetOverlayMaterial()`/`SetOverlayMaterial()` (`Engine/Source/Runtime/Engine/Classes/Components/MeshComponent.h`) both take optional `bGetMaterialSlot`/`bSetMaterialSlot` + `SlotIndex` arguments the plan's test and component code don't need; calling with no arguments targets the single global overlay slot, which is what both use.
+- No other deviations: the component's tag-driven fade, dedicated-server early-out in `BeginPlay`, `EndPlay` teardown (unregister tag event, clear the overlay only if it's still ours, destroy the light, null the pointers), and `ensureMsgf` on a missing material all carried over from Task 3 unchanged.
+
+- [x] **Step 5: Commit** (script, new asset, deleted assets via `git rm`, component, test, plan, spec).
 
 ---
 

@@ -9,7 +9,7 @@
 #include "Shinobi/Abilities/GA_ChakraCharge.h"
 #include "Shinobi/Abilities/GA_Melee.h"
 #include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
-#include "Components/StaticMeshComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSprintTest, "ShinobiCoop.Abilities.SprintDrainsStaminaThenRegenAfterDelay", ShinobiTestFlags)
@@ -274,46 +274,25 @@ bool FShinobiChakraAuraTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Not charging at spawn"), Aura->IsCharging());
 	TestEqual(TEXT("Hidden at spawn"), Aura->GetFade(), 0.f);
 
-	TArray<UStaticMeshComponent*> AllMeshes;
-	P->GetComponents<UStaticMeshComponent>(AllMeshes);
-	TArray<UStaticMeshComponent*> AuraPieces;
-	for (UStaticMeshComponent* Mesh : AllMeshes)
-	{
-		if (Mesh->GetAttachParent() == Aura)
-		{
-			AuraPieces.Add(Mesh);
-		}
-	}
-	TestEqual(TEXT("Aura has three pieces"), AuraPieces.Num(), 3);
-	for (UStaticMeshComponent* Piece : AuraPieces)
-	{
-		UMaterialInstanceDynamic* Dynamic = Cast<UMaterialInstanceDynamic>(Piece->GetMaterial(0));
-		if (TestNotNull(TEXT("Piece material is a dynamic instance"), Dynamic))
-		{
-			const FString ParentName = Dynamic->Parent ? Dynamic->Parent->GetName() : FString();
-			TestTrue(TEXT("Piece material parent is an aura material"), ParentName == TEXT("M_ChakraAura") || ParentName == TEXT("M_ChakraRing"));
-		}
-		TestFalse(TEXT("Piece hidden at spawn"), Piece->IsVisible());
-	}
+	USkeletalMeshComponent* Body = P->GetMesh();
+	TestNull(TEXT("No aura overlay at spawn"), Body->GetOverlayMaterial());
 
 	// Full chakra (the default): charging is visual-only but the aura still shows.
 	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
 	TestTrue(TEXT("Aura follows the charging tag"), Aura->IsCharging());
 	W.Tick(0.3f);
 	TestEqual(TEXT("Aura faded in"), Aura->GetFade(), 1.f);
-	for (UStaticMeshComponent* Piece : AuraPieces)
+	UMaterialInstanceDynamic* Overlay = Cast<UMaterialInstanceDynamic>(Body->GetOverlayMaterial());
+	if (TestNotNull(TEXT("Aura overlay applied while charging"), Overlay))
 	{
-		TestTrue(TEXT("Piece visible while charging"), Piece->IsVisible());
+		TestEqual(TEXT("Overlay is the body aura material"), Overlay->Parent ? Overlay->Parent->GetName() : FString(), FString(TEXT("M_ChakraBodyAura")));
 	}
 
 	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
 	TestFalse(TEXT("Aura stops with the charge"), Aura->IsCharging());
 	W.Tick(0.3f);
 	TestEqual(TEXT("Aura faded out"), Aura->GetFade(), 0.f);
-	for (UStaticMeshComponent* Piece : AuraPieces)
-	{
-		TestFalse(TEXT("Piece hidden after fade-out"), Piece->IsVisible());
-	}
+	TestNull(TEXT("Aura overlay removed after fade-out"), Body->GetOverlayMaterial());
 	TestFalse(TEXT("Tick disabled after fade-out"), Aura->IsComponentTickEnabled());
 	return true;
 }
