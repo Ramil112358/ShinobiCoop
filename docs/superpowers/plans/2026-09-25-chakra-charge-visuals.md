@@ -635,10 +635,10 @@ void UShinobiChakraAuraComponent::TickComponent(float DeltaTime, ELevelTick Tick
 
 void UShinobiChakraAuraComponent::UpdatePieces()
 {
-	const bool bVisible = Fade > 0.f;
+	const bool bShouldShow = Fade > 0.f;
 	for (int32 Index = 0; Index < Pieces.Num(); ++Index)
 	{
-		Pieces[Index]->SetVisibility(bVisible);
+		Pieces[Index]->SetVisibility(bShouldShow);
 		if (UMaterialInstanceDynamic* Dynamic = PieceMaterials[Index])
 		{
 			Dynamic->SetScalarParameterValue(FadeParam, Fade);
@@ -649,7 +649,7 @@ void UShinobiChakraAuraComponent::UpdatePieces()
 	{
 		// ponytail: two-sine flicker; swap for a curve asset if art direction wants a specific rhythm
 		const float Flicker = 0.8f + 0.2f * FMath::Sin(Age * 23.f) * FMath::Sin(Age * 7.f);
-		Light->SetVisibility(bVisible);
+		Light->SetVisibility(bShouldShow);
 		Light->SetIntensity(LightIntensity * Fade * Flicker);
 	}
 }
@@ -667,6 +667,8 @@ void UShinobiChakraAuraComponent::UpdatePieces()
 	ChakraAura = CreateDefaultSubobject<UShinobiChakraAuraComponent>(TEXT("ChakraAura"));
 	ChakraAura->SetupAttachment(RootComponent);
 ```
+
+Deviation found while building: `UpdatePieces()`'s local `bVisible` shadows `USceneComponent::bVisible` (C4458, treated as an error in this project), since `UShinobiChakraAuraComponent` derives from `USceneComponent`. Renamed the local to `bShouldShow` (reflected in the code block above); no other change needed.
 
 - [ ] **Step 6: Build and run tests** — expected `ALL 18 TESTS PASSED`. Log must show no ensures from the aura; missing-material warnings are not acceptable here (Task 2 created them).
 

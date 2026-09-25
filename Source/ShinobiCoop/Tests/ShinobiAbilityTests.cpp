@@ -8,6 +8,7 @@
 #include "Shinobi/Abilities/GA_Dodge.h"
 #include "Shinobi/Abilities/GA_ChakraCharge.h"
 #include "Shinobi/Abilities/GA_Melee.h"
+#include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSprintTest, "ShinobiCoop.Abilities.SprintDrainsStaminaThenRegenAfterDelay", ShinobiTestFlags)
 bool FShinobiSprintTest::RunTest(const FString& Parameters)
@@ -255,6 +256,32 @@ bool FShinobiMeleeWindowTest::RunTest(const FString& Parameters)
 	const float ChakraGainedFromBlockedHit = ShinobiTest::Get(Attacker, UShinobiAttributeSet::GetChakraAttribute()) - ChakraBeforeBlockedHit;
 	TestTrue(FString::Printf(TEXT("No chakra from a blocked hit, only passive regen (got +%.2f)"), ChakraGainedFromBlockedHit), ChakraGainedFromBlockedHit < 5.f);
 	Enemy->GetAbilitySystemComponent()->RemoveLooseGameplayTag(ShinobiTags::State_Invulnerable);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChakraAuraTest, "ShinobiCoop.Abilities.ChakraAuraFollowsCharging", ShinobiTestFlags)
+bool FShinobiChakraAuraTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	const UShinobiChakraAuraComponent* Aura = P->GetChakraAura();
+	if (!TestNotNull(TEXT("Player has a chakra aura"), Aura))
+	{
+		return false;
+	}
+	TestFalse(TEXT("Not charging at spawn"), Aura->IsCharging());
+	TestEqual(TEXT("Hidden at spawn"), Aura->GetFade(), 0.f);
+
+	// Full chakra (the default): charging is visual-only but the aura still shows.
+	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
+	TestTrue(TEXT("Aura follows the charging tag"), Aura->IsCharging());
+	W.Tick(0.3f);
+	TestEqual(TEXT("Aura faded in"), Aura->GetFade(), 1.f);
+
+	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
+	TestFalse(TEXT("Aura stops with the charge"), Aura->IsCharging());
+	W.Tick(0.3f);
+	TestEqual(TEXT("Aura faded out"), Aura->GetFade(), 0.f);
 	return true;
 }
 
