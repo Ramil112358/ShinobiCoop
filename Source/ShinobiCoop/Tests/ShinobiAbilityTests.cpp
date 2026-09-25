@@ -9,6 +9,8 @@
 #include "Shinobi/Abilities/GA_ChakraCharge.h"
 #include "Shinobi/Abilities/GA_Melee.h"
 #include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
@@ -135,11 +137,36 @@ bool FShinobiChakraChargeTest::RunTest(const FString& Parameters)
 	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
 	TestTrue(TEXT("Can charge at full chakra"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
 	TestTrue(TEXT("Charging tag at full chakra"), ShinobiTest::HasTag(P, ShinobiTags::State_ChakraCharging));
+
+	// The pose: GA_ChakraCharge loads AM_ChakraCharge and loops its one ("Default") section while held.
+	UAbilitySystemComponent* ASC = P->GetAbilitySystemComponent();
+	UAnimMontage* ChargeMontage = ASC->GetCurrentMontage();
+	if (TestNotNull(TEXT("Charging plays a montage"), ChargeMontage))
+	{
+		TestEqual(TEXT("Charging plays AM_ChakraCharge"), ChargeMontage->GetName(), FString(TEXT("AM_ChakraCharge")));
+		TestEqual(TEXT("Montage set to loop its Default section"), ASC->CurrentMontageGetNextSectionName(), FName(TEXT("Default")));
+	}
+
 	W.Tick(0.3f);
 	TestTrue(TEXT("Still charging at full chakra"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
 	TestEqual(TEXT("Chakra stays at max"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 100.f);
+
+	// AS_PowerUp is ~2.37 s; tick well past it (and its Default section's loop point) to prove the montage
+	// keeps playing under CurrentMontageSetNextSectionName's loop instead of stopping on its own.
+	UAnimInstance* AnimInstance = P->GetMesh()->GetAnimInstance();
+	W.Tick(2.67f);
+	if (ChargeMontage && TestNotNull(TEXT("Player has an anim instance"), AnimInstance))
+	{
+		TestTrue(TEXT("Montage still playing past clip length (looping)"), AnimInstance->Montage_IsPlaying(ChargeMontage));
+	}
+	TestTrue(TEXT("Ability still active after looping past clip length"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+
 	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
 	TestFalse(TEXT("Release ends full-chakra charge"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+	if (ChargeMontage && AnimInstance)
+	{
+		TestTrue(TEXT("Montage stopping or stopped after release"), AnimInstance->Montage_GetIsStopped(ChargeMontage));
+	}
 
 	ShinobiTest::Set(P, UShinobiAttributeSet::GetChakraAttribute(), 0.f);
 

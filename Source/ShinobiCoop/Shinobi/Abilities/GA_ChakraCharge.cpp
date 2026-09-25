@@ -34,9 +34,15 @@ void UGA_ChakraCharge::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 		Play->ReadyForActivation();
 		// Loop the montage's only section (AnimMontageFactory always names it "Default") while C is held;
 		// PlayMontageAndWait's Activate() -> ASC->PlayMontage() runs synchronously above, so the ASC's
-		// current montage is already set by the time this call runs. The ASC replicates the change.
-		static const FName LoopSection(TEXT("Default"));
-		ActorInfo->AbilitySystemComponent->CurrentMontageSetNextSectionName(LoopSection, LoopSection);
+		// current montage should already be ours by the time this call runs. Guard on GetCurrentMontage()
+		// still being Anim: if PlayMontage silently failed (e.g. no AnimInstance) the ASC's current montage
+		// would be whatever was already playing (e.g. AM_Dodge), and looping *that* forever would be wrong.
+		UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
+		if (ASC && ASC->GetCurrentMontage() == Anim)
+		{
+			static const FName LoopSection(TEXT("Default"));
+			ASC->CurrentMontageSetNextSectionName(LoopSection, LoopSection);
+		}
 	}
 	UAbilityTask_WaitInputRelease* Release = UAbilityTask_WaitInputRelease::WaitInputRelease(this);
 	Release->OnRelease.AddDynamic(this, &UGA_ChakraCharge::OnInputReleased);

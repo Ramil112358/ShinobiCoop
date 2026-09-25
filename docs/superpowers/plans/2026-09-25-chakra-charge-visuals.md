@@ -852,360 +852,78 @@ Done 2026-09-25 as `SourceArt/Mixamo/Power_Up_30fps.fbx` (a `Power_Up_60fps.fbx`
 All the APIs listed to confirm checked out against the 5.8 source exactly as expected — no surprises, unlike Task 2's material graph. In particular:
 - **FBX import route**: `Interchange.FeatureFlags.Import.FBX` defaults to `true` in 5.8 (`InterchangeFbxTranslator.cpp`), but the legacy `AssetImportTask` + `FbxImportUI` route still works headlessly: `UAssetToolsImpl::ImportAssetTasks` (`Engine/Source/Developer/AssetTools/Private/AssetTools.cpp`) detects Interchange is enabled and calls `InterchangeManager.ConvertImportData()` to translate the `FbxImportUI` options into an Interchange pipeline automatically. No Interchange-specific Python API (`UInterchangeManager.import_asset`, source data, pipeline stacks) was needed.
 - **Factories**: `UIKRigDefinitionFactory.CreateNewIKRigAsset(path, name)` is a `BlueprintCallable static` convenience (`IKRigDefinitionFactory.h`) → `unreal.IKRigDefinitionFactory.create_new_ik_rig_asset(path, name)`. `UIKRetargetFactory` has no such static, so `RTG_MixamoToManny` is created via `AssetToolsHelpers.get_asset_tools().create_asset(name, path, unreal.IKRetargeter, unreal.IKRetargetFactory())`.
-- **Mixamo `mixamorig:` prefix**: `FAutoCharacterizer` (`IKRigAutoCharacterizer.cpp`) strips the skeleton's largest common bone-name prefix before matching a template (`FAbstractHierarchy::GenerateCleanBoneNames` / `FindLargestCommonPrefix`), and ships a built-in "Mixamo" template keyed on un-prefixed names (`"Hips"`, `"Spine"`, ...). So a Mixamo skeleton's `mixamorig:` prefix is stripped automatically and the template still matches; confirmed empirically too — `apply_auto_generated_retarget_definition()` returned `true` for both `IK_Mixamo` and `IK_Manny` on the first run.
-- **Enums**: `ERetargetSourceOrTarget`, `EAutoMapChainType`, `ERetargetAutoAlignMethod` are plain `UENUM()`s (not all `BlueprintType`) but Python still binds them: `unreal.RetargetSourceOrTarget.SOURCE`/`TARGET`, `unreal.AutoMapChainType.EXACT`/`FUZZY`/`CLEAR`, `unreal.RetargetAutoAlignMethod.CHAIN_TO_CHAIN`/etc.
-- **Montage slot/section**: `AnimMontageFactory` always names the starting section `"Default"` (`EnsureStartingSection`) and the one slot `"DefaultSlot"` (`UAnimMontage::UAnimMontage` → `AddSlot(FAnimSlotGroup::DefaultSlotName)`) — matches `ABP_Manny_Combat`'s `DefaultSlot` node and every other montage `setup_m1.py` builds, so no extra wiring needed.
+- **Mixamo `mixamorig:` prefix**: stripped at *import* time, not by the IK Rig auto-characterizer: `UInterchangeFbxTranslator`'s `bKeepFbxNamespace` defaults to `false` (`InterchangeFbxTranslator.cpp` ~line 309), so the FBX SDK-level parse strips the "mixamorig:" FBX namespace before the skeleton is ever created in Unreal. Confirmed empirically: `IKRigController.get_retarget_root()` on the built `IK_Mixamo` returns `"Hips"`, not `"mixamorig:Hips"`. (`FAutoCharacterizer::GenerateCleanBoneNames` in `IKRigAutoCharacterizer.cpp` *also* strips a skeleton's largest common bone-name prefix before template-matching, as a fallback for skeletons that keep such a prefix — e.g. an import with `bKeepFbxNamespace=true` — but that fallback isn't what's operative on this particular import.) Manny matches the built-in "UE5 Mannequin" template directly.
+- **Enums**: `ERetargetSourceOrTarget`, `EAutoMapChainType`, `ERootMotionSource`, `ERootMotionHeightSource`, `ERetargetAutoAlignMethod` are plain `UENUM()`s (not all `BlueprintType`) but Python still binds them — every value used was confirmed by listing it directly, e.g. `list(unreal.RootMotionSource)` → `[RootMotionSource.COPY_FROM_SOURCE_ROOT, RootMotionSource.GENERATE_FROM_TARGET_PELVIS]`.
+- **Montage slot/section**: `AnimMontageFactory` always names the starting section `"Default"` (`EnsureStartingSection`) and the one slot `"DefaultSlot"` (`UAnimMontage::UAnimMontage` → `AddSlot(FAnimSlotGroup::DefaultSlotName)`) — matches `ABP_Manny_Combat`'s `DefaultSlot` node and every other montage `setup_m1.py` builds. `verify_result()` confirms this by reading the real section/slot names back (`get_section_name`/`AnimationLibrary.get_montage_slot_names`) rather than assuming them.
+- **`AddDefaultOps()`'s actual op list** (`IKRetargeterController.cpp`): exactly 5 ops, in this order — Pelvis Motion, FK Chains, **Run IK Rig**, Root Motion, Remap Curves. Confirmed both by reading the source and by listing a built retargeter's real op stack. There is **no** "IK Chains"/"IK Solve" op in 5.8; the `UIKRetargeterController` class header's own doc comment claiming that list is stale.
 
-One naming detail not fully specified in the original stage list: `IKRetargetBatchOperation.run_batch_retarget` renames/moves the duplicated animation using `Search`/`Replace`/`Prefix`/`Suffix` against the *source* asset's own name (a Mixamo FBX animation take, not the destination filename) — so the script leaves those blank and renames the single result to `AS_PowerUp` afterwards via `EditorAssetLibrary.rename_asset`.
+**Code review (2026-09-25) found the retarget setup didn't match Epic's own reference flow and fixed it** — see `configure_retargeter()`'s docstring in the script for full detail; summary:
+- **Chain mapping was `FUZZY`, causing a crumpled fist.** Manny's IK rig has per-finger metacarpal chains (`LeftIndexMetacarpal`, ...) that Mixamo has no counterpart for; fuzzy string-matching cross-wired them onto the finger chains instead of leaving them unmapped. Fixed to `EXACT` — matches Epic's own comment in `SRetargetAnimAssetsWindow.cpp`'s `FProceduralRetargetAssets::AutoGenerateIKRetargetAsset` ("use only exact chain mapping in the auto-retarget (default is fuzzy which can map toes to fingers and other chaos)"), which is what the in-editor "Auto Generate" button runs. Confirmed both skeletons' matching chains share canonical names (e.g. `get_source_chain("LeftArm")` → `"LeftArm"`).
+- **The Run IK Rig op was left enabled**, the likely cause of arm/hand clipping — Epic disables it by default too ("auto-IK is not yet robust enough, still useful for manual editing though"). Now disabled via `set_retarget_op_enabled`.
+- **Root Motion op left at its default `CopyFromSourceRoot`**, which is meaningless for Mixamo: its root-motion bone falls back to `Hips` (no separate root above the pelvis), so "copying root motion from the source root" was really just copying the pelvis. Now conditionally reconfigured to `GenerateFromTargetPelvis` + `SnapToGround` + `RotateWithPelvis` (matching Epic's own conditional: target has a separate root from its pelvis, but source's root *is* its pelvis) — confirmed via the op's own bone-reference getters rather than hardcoded. `AS_PowerUp` also gets `enable_root_motion=False` explicitly (a separate flag from the retarget op; controls in-game playback).
+- **The retargeter's configuration and the batch retarget itself now re-run on every script run**, not just at creation, so this fix takes effect on an `RTG_MixamoToManny`/`AS_PowerUp` built by the old code. The batch retarget produces `AS_PowerUp` directly via `Search`/`Replace` (rather than a separate rename step), with `overwrite_existing_files=True` so `IKRetargetBatchOperation::OverwriteExistingAssets` reroutes existing references (e.g. `AM_ChakraCharge`'s slot track) onto the fresh result before deleting the old one.
+- `verify_result()` now: samples bone rotation across the *whole* clip (not two points) and compares each target bone's deviation against the corresponding *source* Mixamo bone (so a naturally-still source bone isn't misread as a retarget bug); raises only if every sampled bone is static; reads section/slot names for real; and logs a first-vs-last-frame pelvis delta as a loop-seam indicator for Task 5.
+- `find_imported_mixamo_assets()` now checks fixed, confirmed import-output paths instead of scanning the folder for "the last asset of each type".
+- `GA_ChakraCharge.cpp` now only loops the montage's section if `ASC->GetCurrentMontage() == Anim` (guards against looping a still-playing different montage, e.g. `AM_Dodge`, forever if `PlayMontage` ever silently failed).
+- `ShinobiAbilityTests.cpp`'s `ChakraChargeRefillsWhileHeld` extended (still 18 tests total) to assert: pressing C makes the ASC's current montage `AM_ChakraCharge` with next-section `"Default"`; ticking well past the clip's ~2.37 s length the montage is still playing (looping); releasing stops/blends it out (`Montage_GetIsStopped`).
 
-Final script:
-```python
-"""Chakra charge pose: imports the Mixamo "Power Up" animation, retargets it onto the UE5 mannequin
-(Manny), and builds the looping AM_ChakraCharge montage GA_ChakraCharge plays. Idempotent: each stage
-skips (and logs "exists") if its output asset is already there.
-
-Close the GUI editor before running: an editor holding these assets would overwrite them on its next
-Save All.
-
-Stages (see the plan, docs/superpowers/plans/2026-09-25-chakra-charge-visuals.md, Task 4):
-  1. Import SourceArt/Mixamo/Power_Up_30fps.fbx into /Game/Shinobi/Mixamo (skeletal mesh + skeleton +
-     animation; no physics asset, no materials).
-  2. Build /Game/Shinobi/Retarget/IK_Mixamo (on the imported mesh) and IK_Manny (on SKM_Manny_Simple):
-     auto-generated retarget definition + auto FBIK on each.
-  3. Build /Game/Shinobi/Retarget/RTG_MixamoToManny: default op stack, chains fuzzy-auto-mapped, target
-     bones auto-aligned (Mixamo's T-pose vs Manny's A-pose).
-  4. Batch-retarget the imported animation to /Game/Shinobi/Anims/AS_PowerUp.
-  5. Build /Game/Shinobi/Anims/AM_ChakraCharge (AnimMontageFactory, DefaultSlot, tuned blend in/out).
-Then a read-only verification: AS_PowerUp uses Manny's skeleton, has a non-zero length and frame count,
-AM_ChakraCharge references it, and a few key bones actually move between sampled times (not a frozen
-T-pose). See verify_result()'s docstring for what this can and can't confirm.
-
-Confirmed against the 5.8 engine source before writing this (see the plan's Task 4 for file citations):
-- AssetImportTask + FbxImportUI still works as the FBX import route in 5.8: even though
-  Interchange.FeatureFlags.Import.FBX defaults to true (InterchangeFbxTranslator.cpp), AssetTools's
-  ImportAssetTasks (Engine/Source/Developer/AssetTools/Private/AssetTools.cpp) auto-detects Interchange
-  is enabled and calls InterchangeManager.ConvertImportData() to translate the legacy FbxImportUI options
-  into an Interchange pipeline automatically -- no separate Interchange-specific Python API is needed.
-- UIKRigDefinitionFactory.create_new_ik_rig_asset(path, name) is a BlueprintCallable static convenience
-  (IKRigDefinitionFactory.h). UIKRetargetFactory has no such static, so IK rig creation differs: IK_Manny
-  and RTG_MixamoToManny go through AssetTools.create_asset with an explicit factory instance.
-- FAutoCharacterizer (IKRigAutoCharacterizer.cpp) strips the skeleton's largest common bone-name prefix
-  before matching a template (FAbstractHierarchy::GenerateCleanBoneNames), and it ships a "Mixamo"
-  template built from un-prefixed bone names ("Hips", "Spine", ...), so a Mixamo skeleton's "mixamorig:"
-  prefix is stripped automatically and the template still matches; Manny matches the built-in UE5
-  mannequin template. Both templates set a pelvis bone and full bone chains, so
-  apply_auto_generated_retarget_definition() is expected to return true for both meshes.
-- AnimMontageFactory always names its one starting section "Default" (EnsureStartingSection,
-  AnimMontageFactory.cpp) and its one slot "DefaultSlot" (UAnimMontage::UAnimMontage ->
-  AddSlot(FAnimSlotGroup::DefaultSlotName)), matching ABP_Manny_Combat's DefaultSlot node and
-  GA_ChakraCharge.cpp's CurrentMontageSetNextSectionName("Default", "Default") call -- same as every
-  other montage Scripts/setup_m1.py builds, so no extra slot/section wiring is needed here.
-- ERetargetSourceOrTarget, EAutoMapChainType and ERetargetAutoAlignMethod are plain UENUM()s (not all
-  BlueprintType), which Python still binds: unreal.RetargetSourceOrTarget.SOURCE/TARGET,
-  unreal.AutoMapChainType.EXACT/FUZZY/CLEAR, unreal.RetargetAutoAlignMethod.CHAIN_TO_CHAIN/...
-"""
-import unreal
-
-MIXAMO_DIR = "/Game/Shinobi/Mixamo"
-RETARGET_DIR = "/Game/Shinobi/Retarget"
-ANIM_DIR = "/Game/Shinobi/Anims"
-MANNY_MESH_PATH = "/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"
-FBX_SOURCE = unreal.Paths.convert_relative_path_to_full(
-    unreal.Paths.project_dir() + "SourceArt/Mixamo/Power_Up_30fps.fbx"
-)
-AS_POWER_UP = f"{ANIM_DIR}/AS_PowerUp"
-AM_CHAKRA_CHARGE = f"{ANIM_DIR}/AM_ChakraCharge"
-
-TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
-
-
-def find_imported_mixamo_assets():
-    """Returns (mesh, skeleton, anim) already under MIXAMO_DIR, or (None, None, None) if nothing's there
-    yet (list_assets on a not-yet-existing directory just returns an empty list)."""
-    mesh = skeleton = anim = None
-    for path in unreal.EditorAssetLibrary.list_assets(MIXAMO_DIR, recursive=True, include_folder=False):
-        asset = unreal.load_asset(path)
-        if isinstance(asset, unreal.SkeletalMesh):
-            mesh = asset
-        elif isinstance(asset, unreal.Skeleton):
-            skeleton = asset
-        elif isinstance(asset, unreal.AnimSequence):
-            anim = asset
-    return mesh, skeleton, anim
-
-
-def import_mixamo_fbx():
-    mesh, skeleton, anim = find_imported_mixamo_assets()
-    if mesh and skeleton and anim:
-        unreal.log(f"[setup_chakra_pose] exists: {mesh.get_path_name()}")
-        return mesh, skeleton, anim
-
-    if not unreal.EditorAssetLibrary.does_directory_exist(MIXAMO_DIR):
-        unreal.EditorAssetLibrary.make_directory(MIXAMO_DIR)
-
-    options = unreal.FbxImportUI()
-    options.import_mesh = True
-    options.import_as_skeletal = True
-    options.mesh_type_to_import = unreal.FBXImportType.FBXIT_SKELETAL_MESH
-    options.create_physics_asset = False
-    options.import_animations = True
-    options.import_materials = False
-    options.import_textures = False
-
-    task = unreal.AssetImportTask()
-    task.filename = FBX_SOURCE
-    task.destination_path = MIXAMO_DIR
-    task.automated = True
-    task.save = True
-    task.replace_existing = True
-    task.options = options
-
-    TOOLS.import_asset_tasks([task])
-    objects = task.get_objects()
-    if not objects:
-        raise RuntimeError(f"import produced no objects for {FBX_SOURCE}")
-
-    mesh = next((o for o in objects if isinstance(o, unreal.SkeletalMesh)), None)
-    skeleton = next((o for o in objects if isinstance(o, unreal.Skeleton)), None)
-    anim = next((o for o in objects if isinstance(o, unreal.AnimSequence)), None)
-    if not (mesh and skeleton and anim):
-        raise RuntimeError(
-            f"import of {FBX_SOURCE} did not produce mesh+skeleton+animation, got: "
-            f"{[o.get_path_name() for o in objects]}"
-        )
-    unreal.log(
-        f"[setup_chakra_pose] created: {mesh.get_path_name()}, {skeleton.get_path_name()}, "
-        f"{anim.get_path_name()}"
-    )
-    return mesh, skeleton, anim
-
-
-def build_ik_rig(name, mesh):
-    path = f"{RETARGET_DIR}/{name}"
-    if unreal.EditorAssetLibrary.does_asset_exist(path):
-        unreal.log(f"[setup_chakra_pose] exists: {path}")
-        return unreal.load_asset(path)
-
-    rig = unreal.IKRigDefinitionFactory.create_new_ik_rig_asset(RETARGET_DIR, name)
-    if rig is None:
-        raise RuntimeError(f"failed to create {path}")
-
-    controller = unreal.IKRigController.get_controller(rig)
-    if not controller.set_skeletal_mesh(mesh):
-        raise RuntimeError(f"failed to set skeletal mesh on {path}")
-    if not controller.apply_auto_generated_retarget_definition():
-        raise RuntimeError(f"auto-characterization did not recognize the skeleton for {path}")
-    if not controller.apply_auto_fbik():
-        raise RuntimeError(f"auto FBIK setup failed for {path}")
-    if not unreal.EditorAssetLibrary.save_loaded_asset(rig):
-        raise RuntimeError(f"failed to save {path}")
-    unreal.log(f"[setup_chakra_pose] created: {path}")
-    return rig
-
-
-def build_retargeter(ik_mixamo, ik_manny):
-    path = f"{RETARGET_DIR}/RTG_MixamoToManny"
-    if unreal.EditorAssetLibrary.does_asset_exist(path):
-        unreal.log(f"[setup_chakra_pose] exists: {path}")
-        return unreal.load_asset(path)
-
-    retargeter = TOOLS.create_asset(
-        "RTG_MixamoToManny", RETARGET_DIR, unreal.IKRetargeter, unreal.IKRetargetFactory()
-    )
-    if retargeter is None:
-        raise RuntimeError(f"failed to create {path}")
-
-    controller = unreal.IKRetargeterController.get_controller(retargeter)
-    controller.set_ik_rig(unreal.RetargetSourceOrTarget.SOURCE, ik_mixamo)
-    controller.set_ik_rig(unreal.RetargetSourceOrTarget.TARGET, ik_manny)
-    controller.add_default_ops()  # Pelvis Motion, FK Chains, IK Chains, IK Solve, Root Motion
-    controller.assign_ik_rig_to_all_ops(unreal.RetargetSourceOrTarget.SOURCE, ik_mixamo)
-    controller.assign_ik_rig_to_all_ops(unreal.RetargetSourceOrTarget.TARGET, ik_manny)
-    controller.auto_map_chains(unreal.AutoMapChainType.FUZZY, True)
-    # Mixamo exports in a T-pose; Manny's reference pose is an A-pose. Align Manny's mapped-chain bones
-    # to match Mixamo's chain directions so the retarget doesn't wind up with twisted/crossed arms.
-    controller.auto_align_all_bones(
-        unreal.RetargetSourceOrTarget.TARGET, unreal.RetargetAutoAlignMethod.CHAIN_TO_CHAIN
-    )
-
-    if not unreal.EditorAssetLibrary.save_loaded_asset(retargeter):
-        raise RuntimeError(f"failed to save {path}")
-    unreal.log(f"[setup_chakra_pose] created: {path}")
-    return retargeter
-
-
-def retarget_animation(mixamo_mesh, manny_mesh, retargeter, source_anim):
-    if unreal.EditorAssetLibrary.does_asset_exist(AS_POWER_UP):
-        unreal.log(f"[setup_chakra_pose] exists: {AS_POWER_UP}")
-        return unreal.load_asset(AS_POWER_UP)
-
-    source_data = unreal.EditorAssetLibrary.find_asset_data(source_anim.get_path_name())
-    inputs = unreal.IKRetargetBatchOperationInputs()
-    inputs.assets_to_retarget = [source_data]
-    inputs.source_mesh = mixamo_mesh
-    inputs.target_mesh = manny_mesh
-    inputs.ik_retarget_asset = retargeter
-    inputs.target_path = ANIM_DIR
-    inputs.use_source_path = False
-    inputs.include_referenced_assets = False
-    inputs.overwrite_existing_files = True
-    inputs.retain_additive_flags = True
-
-    results = unreal.IKRetargetBatchOperation.run_batch_retarget(inputs)
-    if not results:
-        raise RuntimeError(f"batch retarget produced no assets for {source_anim.get_path_name()}")
-
-    # Search/Replace/Prefix/Suffix are all left blank, so the retargeted asset keeps the source
-    # AnimSequence's own name (Mixamo FBX animation takes are typically named "mixamo.com", not the
-    # destination filename) -- rename it to the plan's AS_PowerUp.
-    result_path = str(results[0].package_name)
-    if result_path != AS_POWER_UP:
-        if not unreal.EditorAssetLibrary.rename_asset(result_path, AS_POWER_UP):
-            raise RuntimeError(f"failed to rename {result_path} -> {AS_POWER_UP}")
-
-    result = unreal.load_asset(AS_POWER_UP)
-    if result is None:
-        raise RuntimeError(f"retarget result not found at {AS_POWER_UP}")
-    unreal.log(f"[setup_chakra_pose] created: {AS_POWER_UP}")
-    return result
-
-
-def build_montage(as_power_up):
-    if not unreal.EditorAssetLibrary.does_asset_exist(AM_CHAKRA_CHARGE):
-        factory = unreal.AnimMontageFactory()
-        factory.set_editor_property("source_animation", as_power_up)
-        montage = TOOLS.create_asset("AM_ChakraCharge", ANIM_DIR, unreal.AnimMontage, factory)
-        if montage is None:
-            raise RuntimeError(f"failed to create {AM_CHAKRA_CHARGE}")
-        unreal.log(f"[setup_chakra_pose] created: {AM_CHAKRA_CHARGE}")
-    else:
-        montage = unreal.load_asset(AM_CHAKRA_CHARGE)
-        unreal.log(f"[setup_chakra_pose] exists: {AM_CHAKRA_CHARGE}")
-
-    # Re-applied every run, like setup_m1.py's tune_montages: FAlphaBlend has to be read, have its
-    # blend_time set, and written back -- setting a property on the copy get_editor_property() returns
-    # does not touch the montage until it's assigned back.
-    blend_in = montage.get_editor_property("blend_in")
-    blend_in.set_editor_property("blend_time", 0.15)
-    montage.set_editor_property("blend_in", blend_in)
-    blend_out = montage.get_editor_property("blend_out")
-    blend_out.set_editor_property("blend_time", 0.2)
-    montage.set_editor_property("blend_out", blend_out)
-    if not unreal.EditorAssetLibrary.save_loaded_asset(montage):
-        raise RuntimeError(f"failed to save {AM_CHAKRA_CHARGE}")
-    unreal.log(f"[setup_chakra_pose] tuned: {AM_CHAKRA_CHARGE}")
-    return montage
-
-
-def verify_result(as_power_up, am_chakra_charge, manny_mesh):
-    """Read-only sanity check, run every time (not just on first creation): confirms AS_PowerUp is on
-    Manny's skeleton, has a real length/frame count, AM_ChakraCharge references it, and that a few key
-    bones actually move over the clip (not a frozen pose -- would indicate a broken chain mapping).
-    What this CANNOT confirm headlessly: whether the retarget pose actually *looks* right (no twisted
-    limbs, correct T-pose/A-pose alignment, no foot sliding) -- that needs the user's eyes, Task 5."""
-    manny_skeleton = manny_mesh.get_editor_property("skeleton")
-    anim_skeleton = as_power_up.get_editor_property("skeleton")
-    if anim_skeleton != manny_skeleton:
-        raise RuntimeError(
-            f"[verify] AS_PowerUp skeleton is "
-            f"{anim_skeleton.get_path_name() if anim_skeleton else None}, expected Manny's "
-            f"{manny_skeleton.get_path_name()}"
-        )
-
-    play_length = as_power_up.get_play_length()
-    num_frames = unreal.AnimationLibrary.get_num_frames(as_power_up)
-    if play_length <= 0.0 or num_frames <= 1:
-        raise RuntimeError(f"[verify] AS_PowerUp has no length: {play_length}s, {num_frames} frames")
-
-    slot_tracks = am_chakra_charge.get_editor_property("slot_anim_tracks")
-    referenced = None
-    if slot_tracks:
-        segments = slot_tracks[0].get_editor_property("anim_track").get_editor_property("anim_segments")
-        if segments:
-            referenced = segments[0].get_editor_property("anim_reference")
-    if referenced != as_power_up:
-        raise RuntimeError(f"[verify] AM_ChakraCharge does not reference AS_PowerUp (got {referenced})")
-
-    moved_bones = []
-    for bone in ("upperarm_l", "upperarm_r", "hand_l", "hand_r"):
-        start = unreal.AnimationLibrary.get_bone_pose_for_time(as_power_up, bone, 0.0, False)
-        end = unreal.AnimationLibrary.get_bone_pose_for_time(as_power_up, bone, play_length * 0.5, False)
-        q0, q1 = start.rotation, end.rotation
-        # |dot| close to 1 means near-identical rotation; use this rather than .rotator() since FQuat's
-        # X/Y/Z/W are the confirmed-reflected properties (NoExportTypes.h) and Rotator() is not a UFUNCTION.
-        dot = abs(q0.x * q1.x + q0.y * q1.y + q0.z * q1.z + q0.w * q1.w)
-        moved_bones.append(f"{bone}={'moves' if dot < 0.999 else 'STATIC'}")
-
-    unreal.log(
-        f"[setup_chakra_pose] verify: skeleton=Manny length={play_length:.2f}s frames={num_frames} "
-        f"section=Default slot=DefaultSlot bones=[{', '.join(moved_bones)}]"
-    )
-    unreal.log(
-        "[setup_chakra_pose] verify: pose correctness (T-pose/A-pose alignment, no twisted limbs, foot "
-        "placement) needs the user's eyes in Task 5 -- cannot be checked headlessly."
-    )
-
-
-mixamo_mesh, mixamo_skeleton, mixamo_anim = import_mixamo_fbx()
-ik_mixamo = build_ik_rig("IK_Mixamo", mixamo_mesh)
-manny_mesh = unreal.load_asset(MANNY_MESH_PATH)
-if manny_mesh is None:
-    raise RuntimeError(f"missing {MANNY_MESH_PATH}")
-ik_manny = build_ik_rig("IK_Manny", manny_mesh)
-retargeter = build_retargeter(ik_mixamo, ik_manny)
-as_power_up = retarget_animation(mixamo_mesh, manny_mesh, retargeter, mixamo_anim)
-am_chakra_charge = build_montage(as_power_up)
-verify_result(as_power_up, am_chakra_charge, manny_mesh)
-```
+See `Scripts/setup_chakra_pose.py` for the current, authoritative script (kept here as prose rather than a full code copy, to avoid the two drifting apart).
 
 - [x] **Step 3: Run it**, then re-run to prove idempotency. Verify with a read-only check that `AM_ChakraCharge` exists, uses `AS_PowerUp`, and `AS_PowerUp`'s skeleton is Manny's.
 
-First run created every asset with no errors (log per stage):
+Run against the already-existing (pre-fix) assets — exercises the "re-apply on every run" path, not just fresh creation:
 ```
-[setup_chakra_pose] created: /Game/Shinobi/Mixamo/Power_Up_30fps.Power_Up_30fps, /Game/Shinobi/Mixamo/Power_Up_30fps_Skeleton.Power_Up_30fps_Skeleton, /Game/Shinobi/Mixamo/Power_Up_30fps_Anim.Power_Up_30fps_Anim
-[setup_chakra_pose] created: /Game/Shinobi/Retarget/IK_Mixamo
-[setup_chakra_pose] created: /Game/Shinobi/Retarget/IK_Manny
-[setup_chakra_pose] created: /Game/Shinobi/Retarget/RTG_MixamoToManny
-[setup_chakra_pose] created: /Game/Shinobi/Anims/AS_PowerUp
-[setup_chakra_pose] created: /Game/Shinobi/Anims/AM_ChakraCharge
+[setup_chakra_pose] exists: /Game/Shinobi/Mixamo/Power_Up_30fps.Power_Up_30fps
+[setup_chakra_pose] exists: /Game/Shinobi/Retarget/IK_Mixamo
+[setup_chakra_pose] exists: /Game/Shinobi/Retarget/IK_Manny
+[setup_chakra_pose] exists: /Game/Shinobi/Retarget/RTG_MixamoToManny
+[setup_chakra_pose] root motion: generating from Manny's pelvis (source root 'Hips' has no motion of its own distinct from its pelvis 'Hips')
+[setup_chakra_pose] configured: /Game/Shinobi/Retarget/RTG_MixamoToManny
+[setup_chakra_pose] retargeted: /Game/Shinobi/Anims/AS_PowerUp
+[setup_chakra_pose] exists: /Game/Shinobi/Anims/AM_ChakraCharge
 [setup_chakra_pose] tuned: /Game/Shinobi/Anims/AM_ChakraCharge
-[setup_chakra_pose] verify: skeleton=Manny length=2.37s frames=71 section=Default slot=DefaultSlot bones=[upperarm_l=moves, upperarm_r=moves, hand_l=STATIC, hand_r=moves]
-[setup_chakra_pose] verify: pose correctness (T-pose/A-pose alignment, no twisted limbs, foot placement) needs the user's eyes in Task 5 -- cannot be checked headlessly.
+[setup_chakra_pose] verify: skeleton=Manny length=2.37s frames=71 section=Default slots=['DefaultSlot'] bones=[upperarm_l=0.2670(src LeftArm=0.2673), upperarm_r=0.2429(src RightArm=0.2438), hand_l=0.0102(src LeftHand=0.0096), hand_r=0.0379(src RightHand=0.0381)]
+[setup_chakra_pose] verify: loop seam (pelvis, first vs last frame) translation=0.00uu rotation_deviation=0.0000 -- a visible pop in Task 5 despite a small value here would point elsewhere (e.g. blend timing, not the pose data)
+[setup_chakra_pose] verify: pose correctness (T-pose/A-pose alignment, no twisted limbs, foot placement, whether the loop seam pops) needs the user's eyes in Task 5 -- cannot be checked headlessly.
 ```
-Second run: every stage logged `exists` and the verification repeated identically (skeleton=Manny, length=2.37s, frames=71, same bone-motion results) — idempotent. `hand_l` reads `STATIC` over the first half of the clip (fingers/wrist don't rotate much while the arm itself moves; 3 of 4 sampled bones show clear motion) — not a red flag on its own, but worth an extra look at the hands specifically during the Task 5 visual check.
+Note the target/source bone-deviation pairs are now nearly identical (e.g. `upperarm_l=0.2670` vs source `LeftArm=0.2673`) — the retarget preserves the source motion closely, and `hand_l`'s small deviation matches an equally small source deviation (`0.0102` vs `0.0096`), confirming the earlier "STATIC" reading was the source clip barely rotating that hand, not a retarget bug. The loop seam is essentially zero (pelvis identical at first/last frame) — a good sign for Task 5's loop-pop check.
+
+Re-run (idempotency): every stage logged `exists`/re-`configured`/re-`retargeted` and the verification repeated byte-for-byte identically — idempotent, including the retargeter reconfiguration and re-retarget.
 
 - [x] **Step 4: Play the montage from the ability**
 
-`GA_ChakraCharge.h`: add
-```cpp
-	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
-	TSoftObjectPtr<UAnimMontage> Montage;
-```
-(forward-declare `class UAnimMontage;`). `GA_ChakraCharge.cpp`: include `Abilities/Tasks/AbilityTask_PlayMontageAndWait.h` and `Animation/AnimMontage.h`; in the constructor:
-```cpp
-	Montage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_ChakraCharge.AM_ChakraCharge")));
-```
-and in `ActivateAbility`, right after the successful `CommitAbility`:
+`GA_ChakraCharge.h` adds `TSoftObjectPtr<UAnimMontage> Montage` (`EditDefaultsOnly`, forward-declared `class UAnimMontage;`). `GA_ChakraCharge.cpp` sets it in the constructor to `/Game/Shinobi/Anims/AM_ChakraCharge.AM_ChakraCharge`, and in `ActivateAbility`, right after the successful `CommitAbility`, plays it and loops its `"Default"` section — but only once confirmed it's actually the ASC's current montage (a code-review fix: guards against looping a different, still-playing montage forever if `PlayMontage` ever silently failed):
 ```cpp
 	if (UAnimMontage* Anim = Montage.LoadSynchronous())
 	{
 		UAbilityTask_PlayMontageAndWait* Play = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, Anim);
 		Play->ReadyForActivation();
-		// Loop the montage's only section while C is held; the ASC replicates the next-section change.
-		static const FName LoopSection(TEXT("Default"));
-		ActorInfo->AbilitySystemComponent->CurrentMontageSetNextSectionName(LoopSection, LoopSection);
+		// Loop the montage's only section (AnimMontageFactory always names it "Default") while C is held;
+		// PlayMontageAndWait's Activate() -> ASC->PlayMontage() runs synchronously above, so the ASC's
+		// current montage should already be ours by the time this call runs. Guard on GetCurrentMontage()
+		// still being Anim: if PlayMontage silently failed (e.g. no AnimInstance) the ASC's current montage
+		// would be whatever was already playing (e.g. AM_Dodge), and looping *that* forever would be wrong.
+		UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
+		if (ASC && ASC->GetCurrentMontage() == Anim)
+		{
+			static const FName LoopSection(TEXT("Default"));
+			ASC->CurrentMontageSetNextSectionName(LoopSection, LoopSection);
+		}
 	}
 ```
-Confirm the factory-created montage's section is named `Default` (EnsureStartingSection) and that `CurrentMontageSetNextSectionName` is valid right after the task activates (the montage must be the ASC's current montage).
+Confirmed the factory-created montage's section is named `Default` (`EnsureStartingSection`) and that `CurrentMontageSetNextSectionName` is valid right after the task activates (`PlayMontageAndWait::Activate()` calls `ASC->PlayMontage()` synchronously, so `LocalAnimMontageInfo.AnimMontage` is already set by the time the guarded call above runs).
 
-- [ ] **Step 5: Build and run tests** — expected `ALL 18 TESTS PASSED` (the charge test now loads the montage; no missing-asset warnings).
+`ShinobiAbilityTests.cpp`'s `ChakraChargeRefillsWhileHeld` test (still 18 tests total, no new test added) was extended to cover this end-to-end: after pressing C, `ASC->GetCurrentMontage()->GetName() == "AM_ChakraCharge"` and `ASC->CurrentMontageGetNextSectionName() == "Default"`; after ticking 2.67 s (past the ~2.37 s clip length) `AnimInstance->Montage_IsPlaying(ChargeMontage)` is still true (proving the loop, not just a one-shot play); after releasing, `AnimInstance->Montage_GetIsStopped(ChargeMontage)` is true. All of this passed in the headless test world without needing to weaken any assertion — the test-spawned `AShinobiPlayerCharacter` gets its mesh + `ABP_Manny_Combat` anim instance from `AShinobiCharacterBase::UseMannequinMesh()` in its native C++ constructor (no Blueprint dependency), so montage playback works the same as in existing melee/dodge tests.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 5: Build and run tests** — `ALL 18 TESTS PASSED`, including the extended `ChakraChargeRefillsWhileHeld`. No missing-asset warnings in the log.
+
+- [x] **Step 6: Commit**
 
 ```powershell
-git add SourceArt/Mixamo/Power_Up_30fps.fbx Scripts/setup_chakra_pose.py Content/Shinobi/Mixamo Content/Shinobi/Retarget Content/Shinobi/Anims/AS_PowerUp.uasset Content/Shinobi/Anims/AM_ChakraCharge.uasset Source/ShinobiCoop/Shinobi/Abilities/GA_ChakraCharge.h Source/ShinobiCoop/Shinobi/Abilities/GA_ChakraCharge.cpp
+git add SourceArt/Mixamo/Power_Up_30fps.fbx Scripts/setup_chakra_pose.py Content/Shinobi/Mixamo Content/Shinobi/Retarget Content/Shinobi/Anims/AS_PowerUp.uasset Content/Shinobi/Anims/AM_ChakraCharge.uasset Source/ShinobiCoop/Shinobi/Abilities/GA_ChakraCharge.h Source/ShinobiCoop/Shinobi/Abilities/GA_ChakraCharge.cpp Source/ShinobiCoop/Tests/ShinobiAbilityTests.cpp docs/superpowers/plans/2026-09-25-chakra-charge-visuals.md
 git commit -m "feat: Mixamo power-up pose retargeted to Manny, looping while charging"
 ```
+(later amended by a follow-up commit for the code-review retarget-setup fixes, in the same style — see the plan's commit history for the actual SHAs.)
 
 ---
 
@@ -1222,6 +940,7 @@ git commit -m "feat: Mixamo power-up pose retargeted to Manny, looping while cha
 | 4 | Full chakra | Pose + aura still play; bar stays full |
 | 5 | Release / press Ctrl while holding | Aura fades out, pose blends out; dodge works |
 | 6 | Body tint | Charging player's chest/front picks up a soft blue light |
+| 7 | Loop seam | No visible pop when the power-up clip loops (the read-only check in `Scripts/setup_chakra_pose.py` found ~0 pelvis delta between the first and last frame, so a pop here would point at something else, e.g. blend timing, not the pose data). If it pops, split the montage into an intro section plus a "Loop" section and loop only the latter (`AnimMontage::CompositeSections`, then have `GA_ChakraCharge` target `"Loop"` instead of `"Default"`) |
 
 - [ ] **Step 3:** Tune from feedback: aura colour/intensity/fade/light are `EditDefaultsOnly` on the component; the inflate amount, rim fresnel, and wisp look live in `Scripts/setup_vfx.py`'s `build_body_aura()` (re-run it); retarget alignment lives in `Scripts/setup_chakra_pose.py`.
 - [ ] **Step 4:** Record the result at the bottom of this plan and commit.
