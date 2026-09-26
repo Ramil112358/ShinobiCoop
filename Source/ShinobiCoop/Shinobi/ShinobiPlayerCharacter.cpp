@@ -20,7 +20,6 @@
 #include "Shinobi/Abilities/GA_Sprint.h"
 #include "Shinobi/Abilities/GA_Substitution.h"
 #include "Shinobi/ShinobiEffects.h"
-#include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
 
 AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -57,8 +56,6 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;
 
-	ChakraAura = CreateDefaultSubobject<UShinobiChakraAuraComponent>(TEXT("ChakraAura"));
-	ChakraAura->SetupAttachment(RootComponent);
 
 	UseMannequinMesh();
 }

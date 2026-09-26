@@ -51,6 +51,10 @@ private:
 	 * Fireball and retry it on cooldown for a HUD screenshot (cooldown + red flash), quit. Used by Scripts/shot_chakra.ps1. */
 	void RunShotTest();
 
+	/** With -ShinobiJutsuShot: casts each jutsu at the dummy ahead and screenshots every effect, then quits.
+	 * Used by `Scripts/shot_chakra.ps1 -Jutsu`. */
+	void RunJutsuShotTest();
+
 	UPROPERTY()
 	TObjectPtr<UShinobiHUDWidget> Hud;
 };

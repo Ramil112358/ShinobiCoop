@@ -12,7 +12,8 @@ M_ChakraBodyAura: unlit, additive, one-sided. Inflates along the vertex normal (
 Offset) so it reads as a thin shell around the body rather than a decal on the skin, glows only at
 the silhouette (Fresnel), and adds faint upward-drifting noise wisps sampled in absolute world space
 (so the pattern doesn't stretch or stick to the mesh's UVs as it animates). Parameters: Color
-(vector), Intensity, Fade, Inflate (scalars), driven by UShinobiChakraAuraComponent. Substrate
+(vector), Intensity, Fade, Inflate, Core (scalars), driven by UShinobiChakraAuraComponent and, via
+ShinobiVfx::MakeGlow, by every other M2b effect (Core 1 = solid glow for orbs and bursts). Substrate
 routing (emissive -> SubstrateUnlitBSDF.EmissiveColor -> MP_FRONT_MATERIAL) is unchanged from the
 previous version of this script.
 
@@ -121,8 +122,14 @@ def build_body_aura():
     if not MEL.connect_material_property(wpo, "", unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET):
         raise RuntimeError(f"failed to connect World Position Offset on {m.get_name()}")
 
-    # Rim: glow only at the silhouette, not across the whole body.
+    # Rim: glow only at the silhouette, not across the whole body. Core blends toward a solid glow
+    # (0 = rim only, the body aura; 1 = glowing all over, for jutsu orbs and impact bursts, M2b).
     rim = node(m, unreal.MaterialExpressionFresnel, -1000, -450, exponent=3.0, base_reflect_fraction=0.0)
+    core = node(m, unreal.MaterialExpressionScalarParameter, -1200, -600,
+                parameter_name="Core", default_value=0.0)
+    rim_or_core = node(m, unreal.MaterialExpressionLinearInterpolate, -800, -450, const_b=1.0)
+    link(rim, rim_or_core, "A")
+    link(core, rim_or_core, "Alpha")
 
     # Wisps: faint upward-drifting noise. Sampled in absolute world space (not mesh UVs) so the
     # pattern doesn't stretch or stick as the pose animates.
@@ -154,7 +161,7 @@ def build_body_aura():
     link(fade, cif, "B")
     cifr = node(m, unreal.MaterialExpressionMultiply, -400, -150)
     link(cif, cifr, "A")
-    link(rim, cifr, "B")
+    link(rim_or_core, cifr, "B")
     emissive = node(m, unreal.MaterialExpressionMultiply, -200, 0)
     link(cifr, emissive, "A")
     link(wisps, emissive, "B")

@@ -14,6 +14,7 @@ UGA_Fireball::UGA_Fireball()
 	Cooldown = 4.f;
 	WindUp = 0.4f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Fireball);
+	ActivationOwnedTags.AddTag(ShinobiTags::State_Casting_Fireball); // hand orb (UShinobiCastFxComponent)
 }
 
 void UGA_Fireball::ExecuteJutsu()

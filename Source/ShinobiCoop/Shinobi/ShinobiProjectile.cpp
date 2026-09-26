@@ -1,4 +1,5 @@
 #include "Shinobi/ShinobiProjectile.h"
+#include "Components/PointLightComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -7,6 +8,8 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiCombat.h"
+#include "Shinobi/VFX/ShinobiBurst.h"
+#include "Shinobi/VFX/ShinobiVfx.h"
 
 AShinobiProjectile::AShinobiProjectile()
 {
@@ -28,8 +31,9 @@ AShinobiProjectile::AShinobiProjectile()
 	Collision->OnComponentHit.AddDynamic(this, &AShinobiProjectile::OnHit);
 	RootComponent = Collision;
 
-	// ponytail: a grey ball until M2b's fire VFX
+	// Fire look: a glowing sphere (material set in BeginPlay) plus an orange light.
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
+	Mesh->SetCastShadow(false);
 	Mesh->SetupAttachment(Collision);
 	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Mesh->SetRelativeScale3D(FVector(0.4f)); // the engine sphere is 100 units across
@@ -39,11 +43,27 @@ AShinobiProjectile::AShinobiProjectile()
 		Mesh->SetStaticMesh(Sphere.Object);
 	}
 
+	Light = CreateDefaultSubobject<UPointLightComponent>(TEXT("Light"));
+	Light->SetupAttachment(Collision);
+	Light->SetLightColor(ShinobiVfx::Colors::Fire);
+	Light->SetIntensity(5000.f);
+	Light->SetAttenuationRadius(400.f);
+	Light->SetCastShadows(false);
+
 	Movement = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("Movement"));
 	Movement->InitialSpeed = 2500.f;
 	Movement->MaxSpeed = 2500.f;
 	Movement->ProjectileGravityScale = 0.f;
 	Movement->bRotationFollowsVelocity = true;
+}
+
+void AShinobiProjectile::BeginPlay()
+{
+	Super::BeginPlay();
+	if (!IsNetMode(NM_DedicatedServer))
+	{
+		Mesh->SetMaterial(0, ShinobiVfx::MakeGlow(this, ShinobiVfx::Colors::Fire, 8.f, 1.f));
+	}
 }
 
 void AShinobiProjectile::OnOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
@@ -73,6 +93,7 @@ void AShinobiProjectile::Explode(AShinobiCharacterBase* DirectTarget, const FVec
 		return;
 	}
 	bExploded = true;
+	AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::Fire, Location);
 
 	const AShinobiCharacterBase* Caster = Cast<AShinobiCharacterBase>(GetInstigator());
 	if (UAbilitySystemComponent* Source = Caster ? Caster->GetAbilitySystemComponent() : nullptr)

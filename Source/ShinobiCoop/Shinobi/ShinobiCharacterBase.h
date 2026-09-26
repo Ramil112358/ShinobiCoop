@@ -9,6 +9,8 @@ class UAbilitySystemComponent;
 class UGameplayEffect;
 class UShinobiAttributeSet;
 class UShinobiGameplayAbility;
+class UShinobiCastFxComponent;
+class UShinobiChakraAuraComponent;
 
 UENUM(BlueprintType)
 enum class EShinobiTeam : uint8
@@ -29,6 +31,11 @@ public:
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 	UShinobiAttributeSet* GetAttributes() const { return Attributes; }
 
+	/** Body aura: chakra charge and status glows (burn, black flame, shock). */
+	UShinobiChakraAuraComponent* GetChakraAura() const { return ChakraAura; }
+	/** Hand orb shown while a jutsu is active. */
+	UShinobiCastFxComponent* GetCastFx() const { return CastFx; }
+
 	EShinobiTeam GetTeam() const { return Team; }
 	bool IsHostileTo(const AShinobiCharacterBase* Other) const { return Other && Other != this && Other->Team != Team; }
 
@@ -48,6 +55,12 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UShinobiAttributeSet> Attributes;
+
+	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
+	TObjectPtr<UShinobiChakraAuraComponent> ChakraAura;
+
+	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
+	TObjectPtr<UShinobiCastFxComponent> CastFx;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	EShinobiTeam Team = EShinobiTeam::Enemies;

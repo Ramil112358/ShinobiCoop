@@ -3,6 +3,7 @@
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiTags.h"
+#include "Shinobi/VFX/ShinobiBurst.h"
 
 UGA_Rasengan::UGA_Rasengan()
 {
@@ -13,6 +14,7 @@ UGA_Rasengan::UGA_Rasengan()
 	Cooldown = 10.f;
 	WindUp = 0.8f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Rasengan);
+	ActivationOwnedTags.AddTag(ShinobiTags::State_Casting_Rasengan); // hand orb (UShinobiCastFxComponent)
 }
 
 void UGA_Rasengan::ExecuteJutsu()
@@ -28,6 +30,7 @@ void UGA_Rasengan::ExecuteJutsu()
 			const bool bBurning = Victim->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Burning);
 			if (ApplyDamage(Victim, Damage))
 			{
+				AShinobiBurst::Spawn(Victim->GetWorld(), EShinobiBurst::Spiral, Victim->GetActorLocation());
 				const FVector Push = (Victim->GetActorLocation() - Self->GetActorLocation()).GetSafeNormal2D() * Knockback + FVector(0.f, 0.f, 300.f);
 				Victim->LaunchCharacter(Push, true, true);
 				if (bBurning)
@@ -42,6 +45,7 @@ void UGA_Rasengan::ExecuteJutsu()
 
 void UGA_Rasengan::Firestorm(AShinobiCharacterBase* Center) const
 {
+	AShinobiBurst::Spawn(Center->GetWorld(), EShinobiBurst::Firestorm, Center->GetActorLocation());
 	UAbilitySystemComponent* Source = GetAbilitySystemComponentFromActorInfo();
 	for (const AShinobiCharacterBase* Caught : ShinobiCombat::FindHostilesInRadius(GetShinobiCharacter(), Center->GetActorLocation(), FirestormRadius))
 	{

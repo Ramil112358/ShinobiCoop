@@ -26,6 +26,11 @@ namespace ShinobiTags
 	// Not "State.Shocked.Bonus": a child tag matches its parent, so it would count as a stun.
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_ShockBonus);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Staggered);
+	// While a jutsu is active (wind-up and execution); drives the hand orb on every machine.
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Casting_Fireball);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Casting_Chidori);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Casting_Rasengan);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Casting_Amaterasu);
 
 	// Ability identity (asset tags)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Melee);

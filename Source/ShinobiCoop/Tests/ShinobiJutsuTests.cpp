@@ -5,6 +5,9 @@
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiProjectile.h"
+#include "Shinobi/VFX/ShinobiBurst.h"
+#include "Shinobi/VFX/ShinobiCastFxComponent.h"
+#include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
 #include "Shinobi/Abilities/GA_Amaterasu.h"
 #include "Shinobi/Abilities/GA_ChakraCharge.h"
 #include "Shinobi/Abilities/GA_Chidori.h"
@@ -355,4 +358,22 @@ bool FShinobiSubstitutionOnceTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiJutsuVfxTest, "ShinobiCoop.Jutsu.VfxFollowCastingStatusAndImpact", ShinobiTestFlags)
+bool FShinobiJutsuVfxTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(600.f, 0.f, 0.f));
+	ShinobiTest::Hover(P);
+	ShinobiTest::Hover(E);
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	TestTrue(TEXT("Fire orb in hand during the wind-up"), P->GetCastFx()->GetShownTag() == ShinobiTags::State_Casting_Fireball);
+	W.Tick(0.9f); // thrown at ~0.45-0.5, hits at ~0.7
+	TestFalse(TEXT("Orb gone once the jutsu ends"), P->GetCastFx()->GetShownTag().IsValid());
+	TestEqual(TEXT("One fire burst at the impact"), ShinobiTest::CountActors<AShinobiBurst>(W), 1);
+	TestTrue(TEXT("Burning target glows with the burn aura"), E->GetChakraAura()->GetShownTag() == ShinobiTags::State_Burning_Normal);
+	TestEqual(TEXT("Burn aura faded in"), E->GetChakraAura()->GetFade(), 1.f);
+	return true;
+}
 #endif // WITH_DEV_AUTOMATION_TESTS

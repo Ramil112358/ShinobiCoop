@@ -4,6 +4,7 @@
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
+#include "Shinobi/VFX/ShinobiBurst.h"
 
 UGA_Chidori::UGA_Chidori()
 {
@@ -14,6 +15,7 @@ UGA_Chidori::UGA_Chidori()
 	Cooldown = 8.f;
 	WindUp = 0.6f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Chidori);
+	ActivationOwnedTags.AddTag(ShinobiTags::State_Casting_Chidori); // hand orb (UShinobiCastFxComponent)
 }
 
 void UGA_Chidori::ExecuteJutsu()
@@ -57,6 +59,7 @@ void UGA_Chidori::OnDashFinished()
 		AShinobiCharacterBase* Victim = FindNearestHostileInCone(StrikeRange, 60.f);
 		if (Victim && ApplyDamage(Victim, Damage))
 		{
+			AShinobiBurst::Spawn(Victim->GetWorld(), EShinobiBurst::Lightning, Victim->GetActorLocation());
 			// Bonus after the hit, so it boosts the follow-up rather than this strike.
 			UAbilitySystemComponent* Source = GetAbilitySystemComponentFromActorInfo();
 			ShinobiCombat::ApplyStatus(Source, Victim, UGE_Shock::StaticClass());

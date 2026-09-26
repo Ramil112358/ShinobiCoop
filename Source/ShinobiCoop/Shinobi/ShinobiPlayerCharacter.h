@@ -7,7 +7,6 @@
 
 class UCameraComponent;
 class USpringArmComponent;
-class UShinobiChakraAuraComponent;
 struct FInputActionValue;
 
 /** Player-controlled shinobi: third-person camera, input bound to abilities. */
@@ -18,8 +17,6 @@ class SHINOBICOOP_API AShinobiPlayerCharacter : public AShinobiCharacterBase
 
 public:
 	AShinobiPlayerCharacter(const FObjectInitializer& ObjectInitializer);
-
-	UShinobiChakraAuraComponent* GetChakraAura() const { return ChakraAura; }
 
 	/** False while charging chakra, shocked or staggered: move and jump input are ignored. */
 	bool CanMove() const;
@@ -43,7 +40,4 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	TObjectPtr<UCameraComponent> FollowCamera;
-
-	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
-	TObjectPtr<UShinobiChakraAuraComponent> ChakraAura;
 };

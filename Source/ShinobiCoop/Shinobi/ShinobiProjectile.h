@@ -6,6 +6,7 @@
 
 class AShinobiCharacterBase;
 class UGameplayEffect;
+class UPointLightComponent;
 class UProjectileMovementComponent;
 class USphereComponent;
 class UStaticMeshComponent;
@@ -41,6 +42,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	float StatusDamagePerTick = 0.f;
 
+protected:
+	virtual void BeginPlay() override;
+
 private:
 	UFUNCTION()
 	void OnOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
@@ -56,6 +60,9 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UStaticMeshComponent> Mesh;
+
+	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
+	TObjectPtr<UPointLightComponent> Light;
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UProjectileMovementComponent> Movement;

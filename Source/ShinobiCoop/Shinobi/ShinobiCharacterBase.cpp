@@ -10,6 +10,8 @@
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
+#include "Shinobi/VFX/ShinobiCastFxComponent.h"
+#include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
 
 AShinobiCharacterBase::AShinobiCharacterBase(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.SetDefaultSubobjectClass<UShinobiMovementComponent>(ACharacter::CharacterMovementComponentName))
@@ -21,6 +23,11 @@ AShinobiCharacterBase::AShinobiCharacterBase(const FObjectInitializer& ObjectIni
 	AbilitySystem->SetReplicationMode(EGameplayEffectReplicationMode::Minimal);
 
 	Attributes = CreateDefaultSubobject<UShinobiAttributeSet>(TEXT("Attributes"));
+
+	ChakraAura = CreateDefaultSubobject<UShinobiChakraAuraComponent>(TEXT("ChakraAura"));
+	ChakraAura->SetupAttachment(RootComponent);
+	CastFx = CreateDefaultSubobject<UShinobiCastFxComponent>(TEXT("CastFx"));
+	CastFx->SetupAttachment(RootComponent);
 
 	StartupEffects = { UGE_ChakraRegen::StaticClass(), UGE_StaminaRegen::StaticClass() };
 }

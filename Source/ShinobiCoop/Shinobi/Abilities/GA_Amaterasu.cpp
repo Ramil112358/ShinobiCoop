@@ -13,6 +13,7 @@ UGA_Amaterasu::UGA_Amaterasu()
 	Cooldown = 20.f;
 	WindUp = 0.5f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Amaterasu);
+	ActivationOwnedTags.AddTag(ShinobiTags::State_Casting_Amaterasu); // hand orb (UShinobiCastFxComponent)
 }
 
 bool UGA_Amaterasu::PrepareJutsu()

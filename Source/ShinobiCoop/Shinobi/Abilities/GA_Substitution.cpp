@@ -5,6 +5,7 @@
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiTags.h"
+#include "Shinobi/VFX/ShinobiBurst.h"
 
 UGA_Substitution::UGA_Substitution()
 {
@@ -33,6 +34,7 @@ void UGA_Substitution::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 
 	const FVector Behind = Attacker->GetActorLocation() - Attacker->GetActorForwardVector().GetSafeNormal2D() * BehindDistance;
 	const FRotator FaceAttacker(0.f, (Attacker->GetActorLocation() - Behind).Rotation().Yaw, 0.f);
+	AShinobiBurst::Spawn(Self->GetWorld(), EShinobiBurst::Substitution, Self->GetActorLocation()); // the log left behind
 	Self->TeleportTo(Behind, FaceAttacker); // stays put if something blocks the spot; the hit is negated either way
 	if (UShinobiMovementComponent* Movement = GetShinobiMovement())
 	{

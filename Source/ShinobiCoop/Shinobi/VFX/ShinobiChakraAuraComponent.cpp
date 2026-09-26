@@ -6,21 +6,44 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "Materials/MaterialInstanceDynamic.h"
-#include "Materials/MaterialInterface.h"
 #include "Shinobi/ShinobiTags.h"
+#include "Shinobi/VFX/ShinobiVfx.h"
 
 namespace
 {
-	const TCHAR* BodyAuraMaterialPath = TEXT("/Game/Shinobi/VFX/M_ChakraBodyAura.M_ChakraBodyAura");
-	const FName ColorParam(TEXT("Color"));
-	const FName IntensityParam(TEXT("Intensity"));
-	const FName FadeParam(TEXT("Fade"));
+	struct FAuraLook
+	{
+		FGameplayTag Tag;
+		FLinearColor Color;
+		float Intensity;
+		bool bFlicker;
+	};
+
+	/** Highest priority first: the first tag the owner has is the one shown. Built on first use, after the
+	 * native tags are registered (a file-scope table would copy them before they have values). */
+	const TArray<FAuraLook>& Looks()
+	{
+		static const TArray<FAuraLook> Table = {
+			{ ShinobiTags::State_Burning_Black, ShinobiVfx::Colors::BlackFlame, 4.f, false },
+			{ ShinobiTags::State_Burning_Normal, ShinobiVfx::Colors::Fire, 2.5f, false },
+			{ ShinobiTags::State_Shocked, ShinobiVfx::Colors::Lightning, 4.f, true },
+			{ ShinobiTags::State_ChakraCharging, ShinobiVfx::Colors::Chakra, 2.5f, false },
+		};
+		return Table;
+	}
+
+	constexpr float BodyInflate = 2.5f;
 }
 
 UShinobiChakraAuraComponent::UShinobiChakraAuraComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
-	PrimaryComponentTick.bStartWithTickEnabled = false; // only ticks while charging or fading
+	PrimaryComponentTick.bStartWithTickEnabled = false; // only ticks while shown or fading
+}
+
+FGameplayTag UShinobiChakraAuraComponent::GetShownTag() const
+{
+	return ShownIndex == INDEX_NONE ? FGameplayTag() : Looks()[ShownIndex].Tag;
 }
 
 void UShinobiChakraAuraComponent::BeginPlay()
@@ -34,22 +57,16 @@ void UShinobiChakraAuraComponent::BeginPlay()
 	const ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
 	BodyMesh = OwnerCharacter ? OwnerCharacter->GetMesh() : nullptr;
 
-	if (UMaterialInterface* Material = LoadObject<UMaterialInterface>(nullptr, BodyAuraMaterialPath))
+	AuraMaterial = ShinobiVfx::MakeGlow(this, ShinobiVfx::Colors::Chakra, 2.5f, 0.f, BodyInflate);
+	if (AuraMaterial)
 	{
-		AuraMaterial = UMaterialInstanceDynamic::Create(Material, this);
-		AuraMaterial->SetVectorParameterValue(ColorParam, Color);
-		AuraMaterial->SetScalarParameterValue(IntensityParam, Intensity); // constant; only Fade changes per tick
+		AuraMaterial->SetScalarParameterValue(TEXT("Fade"), 0.f);
 		if (BodyMesh)
 		{
-			// ponytail: owns the mesh's single overlay slot; if another effect needs it later (hit
-			// flash), move the aura to a leader-posed child mesh. Applied once here and never toggled
-			// again (see the class comment): charging only ever changes the Fade parameter.
+			// ponytail: owns the mesh's single overlay slot; if another effect needs it later (hit flash),
+			// move the aura to a leader-posed child mesh. Applied once here and never toggled again.
 			BodyMesh->SetOverlayMaterial(AuraMaterial);
 		}
-	}
-	else
-	{
-		ensureMsgf(false, TEXT("UShinobiChakraAuraComponent: missing material %s"), BodyAuraMaterialPath);
 	}
 
 	Light = NewObject<UPointLightComponent>(GetOwner(), MakeUniqueObjectName(GetOwner(), UPointLightComponent::StaticClass(), TEXT("AuraLight")));
@@ -58,7 +75,6 @@ void UShinobiChakraAuraComponent::BeginPlay()
 	// angle. A chest-front offset (20, 0, 30) sat ~20 uu off the chest and blew it out to a white hotspot.
 	// No specular: its floor glint lands between pawn and camera and follows the camera around.
 	Light->SetSpecularScale(0.f);
-	Light->SetLightColor(Color);
 	Light->SetAttenuationRadius(LightRadius);
 	Light->SetCastShadows(false);
 	Light->SetVisibility(false);
@@ -70,11 +86,14 @@ void UShinobiChakraAuraComponent::BeginPlay()
 	}
 	if (UAbilitySystemComponent* ASC = AbilitySystem.Get())
 	{
-		TagEventHandle = ASC->RegisterGameplayTagEvent(ShinobiTags::State_ChakraCharging, EGameplayTagEventType::NewOrRemoved)
-			.AddUObject(this, &UShinobiChakraAuraComponent::OnChargingTagChanged);
-		bCharging = ASC->HasMatchingGameplayTag(ShinobiTags::State_ChakraCharging);
+		for (const FAuraLook& Look : Looks())
+		{
+			TagEventHandles.Add(ASC->RegisterGameplayTagEvent(Look.Tag, EGameplayTagEventType::NewOrRemoved)
+				.AddUObject(this, &UShinobiChakraAuraComponent::OnStateTagChanged));
+		}
 	}
-	SetComponentTickEnabled(bCharging);
+	RefreshShownState();
+	SetComponentTickEnabled(ShownIndex != INDEX_NONE);
 	UpdateAura();
 }
 
@@ -82,8 +101,12 @@ void UShinobiChakraAuraComponent::EndPlay(const EEndPlayReason::Type EndPlayReas
 {
 	if (UAbilitySystemComponent* ASC = AbilitySystem.Get())
 	{
-		ASC->UnregisterGameplayTagEvent(TagEventHandle, ShinobiTags::State_ChakraCharging, EGameplayTagEventType::NewOrRemoved);
+		for (int32 Index = 0; Index < TagEventHandles.Num(); ++Index)
+		{
+			ASC->UnregisterGameplayTagEvent(TagEventHandles[Index], Looks()[Index].Tag, EGameplayTagEventType::NewOrRemoved);
+		}
 	}
+	TagEventHandles.Reset();
 	if (BodyMesh && BodyMesh->GetOverlayMaterial() == AuraMaterial)
 	{
 		BodyMesh->SetOverlayMaterial(nullptr);
@@ -97,22 +120,52 @@ void UShinobiChakraAuraComponent::EndPlay(const EEndPlayReason::Type EndPlayReas
 	}
 	Fade = 0.f;
 	bCharging = false;
+	ShownIndex = INDEX_NONE;
 	Super::EndPlay(EndPlayReason);
 }
 
-void UShinobiChakraAuraComponent::OnChargingTagChanged(const FGameplayTag Tag, int32 NewCount)
+void UShinobiChakraAuraComponent::OnStateTagChanged(const FGameplayTag Tag, int32 NewCount)
 {
-	bCharging = NewCount > 0;
-	SetComponentTickEnabled(true); // fade in or out
+	RefreshShownState();
+	SetComponentTickEnabled(true); // fade in, switch look, or fade out
+}
+
+void UShinobiChakraAuraComponent::RefreshShownState()
+{
+	const UAbilitySystemComponent* ASC = AbilitySystem.Get();
+	bCharging = ASC && ASC->HasMatchingGameplayTag(ShinobiTags::State_ChakraCharging);
+	int32 NewIndex = INDEX_NONE;
+	for (int32 Index = 0; ASC && Index < Looks().Num(); ++Index)
+	{
+		if (ASC->HasMatchingGameplayTag(Looks()[Index].Tag))
+		{
+			NewIndex = Index;
+			break;
+		}
+	}
+	ShownIndex = NewIndex;
+	if (NewIndex == INDEX_NONE)
+	{
+		return; // the material and light keep the last look's colour while fading out
+	}
+	if (AuraMaterial)
+	{
+		AuraMaterial->SetVectorParameterValue(TEXT("Color"), Looks()[NewIndex].Color);
+	}
+	if (Light)
+	{
+		Light->SetLightColor(Looks()[NewIndex].Color);
+	}
 }
 
 void UShinobiChakraAuraComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	Fade = FMath::FInterpConstantTo(Fade, bCharging ? 1.f : 0.f, DeltaTime, 1.f / FadeTime);
+	const bool bShown = ShownIndex != INDEX_NONE;
+	Fade = FMath::FInterpConstantTo(Fade, bShown ? 1.f : 0.f, DeltaTime, 1.f / FadeTime);
 	Age += DeltaTime;
 	UpdateAura();
-	if (!bCharging && Fade <= 0.f)
+	if (!bShown && Fade <= 0.f)
 	{
 		SetComponentTickEnabled(false);
 	}
@@ -120,19 +173,21 @@ void UShinobiChakraAuraComponent::TickComponent(float DeltaTime, ELevelTick Tick
 
 void UShinobiChakraAuraComponent::UpdateAura()
 {
-	// The overlay itself is applied once at BeginPlay and never toggled (see the class comment); only
-	// the Fade parameter changes here, which is enough since Fade == 0 makes the additive overlay
-	// contribute nothing.
+	// ponytail: two-sine flicker; swap for a curve asset if art direction wants a specific rhythm
+	const float Flicker = 0.8f + 0.2f * FMath::Sin(Age * 23.f) * FMath::Sin(Age * 7.f);
 	if (AuraMaterial)
 	{
-		AuraMaterial->SetScalarParameterValue(FadeParam, Fade);
+		AuraMaterial->SetScalarParameterValue(TEXT("Fade"), Fade);
+		if (ShownIndex != INDEX_NONE) // while fading out, keep the last look's intensity
+		{
+			const FAuraLook& Look = Looks()[ShownIndex];
+			// Shock crackles: a hard random flicker instead of the soft sine.
+			AuraMaterial->SetScalarParameterValue(TEXT("Intensity"), Look.bFlicker ? Look.Intensity * FMath::FRandRange(0.3f, 1.6f) : Look.Intensity);
+		}
 	}
 	if (Light)
 	{
-		const bool bShouldShow = Fade > 0.f;
-		// ponytail: two-sine flicker; swap for a curve asset if art direction wants a specific rhythm
-		const float Flicker = 0.8f + 0.2f * FMath::Sin(Age * 23.f) * FMath::Sin(Age * 7.f);
-		Light->SetVisibility(bShouldShow);
+		Light->SetVisibility(Fade > 0.f);
 		Light->SetIntensity(LightIntensity * Fade * Flicker);
 	}
 }

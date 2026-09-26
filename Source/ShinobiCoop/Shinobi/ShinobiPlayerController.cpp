@@ -13,6 +13,7 @@
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
 #include "Shinobi/UI/ShinobiHUDWidget.h"
+#include "Shinobi/VFX/ShinobiBurst.h"
 
 void AShinobiPlayerController::BeginPlay()
 {
@@ -37,6 +38,10 @@ void AShinobiPlayerController::BeginPlay()
 	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiShot")))
 	{
 		RunShotTest();
+	}
+	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiJutsuShot")))
+	{
+		RunJutsuShotTest();
 	}
 }
 
@@ -164,4 +169,46 @@ void AShinobiPlayerController::RunShotTest()
 	At(9.6f, [Input]() { Input(EShinobiAbilityInputID::Jutsu1, true); Input(EShinobiAbilityInputID::Jutsu1, false); });
 	At(9.7f, [Shot]() { Shot(TEXT("ShinobiShot_5_Hud"), true); });
 	At(10.5f, [this]() { ConsoleCommand(TEXT("quit")); });
+}
+
+void AShinobiPlayerController::RunJutsuShotTest()
+{
+	// ponytail: fixed timeline against the training dummy straight ahead of the PlayerStart; retune if the map changes
+	auto At = [this](float Seconds, TFunction<void()> Fn)
+	{
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
+	};
+	auto Shot = [](const TCHAR* Name)
+	{
+		FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Name), false, false);
+	};
+	auto CastJutsu = [this](int32 JutsuSlot)
+	{
+		ShinobiDrainChakra(-100.f); // refill first, so every jutsu in the sequence is affordable
+		ShinobiCast(JutsuSlot);
+	};
+	At(2.f, [this]() { SetControlRotation(FRotator(-8.f, GetControlRotation().Yaw, 0.f)); }); // the dummies stand lower
+	At(3.f, [CastJutsu]() { CastJutsu(1); }); // Fireball
+	At(3.25f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_01_FireballWindUp")); });
+	At(3.55f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_03_FireballImpact")); });
+	At(4.6f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_04_Burn")); });
+	At(5.f, [CastJutsu]() { CastJutsu(4); }); // Amaterasu
+	At(6.f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_05_BlackFlame")); });
+	At(6.5f, [CastJutsu]() { CastJutsu(2); }); // Chidori
+	At(6.9f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_06_ChidoriWindUp")); });
+	At(7.35f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_07_ChidoriHit")); });
+	At(9.f, [CastJutsu]() { CastJutsu(3); }); // Rasengan; the black flame is still burning, so Firestorm goes off
+	At(9.5f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_08_RasenganWindUp")); });
+	At(9.95f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_09_Firestorm")); });
+	At(10.5f, [this]()
+	{
+		if (const APawn* Shinobi = GetPawn())
+		{
+			AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::Substitution, Shinobi->GetActorLocation() + Shinobi->GetActorForwardVector() * 250.f);
+			AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::Fire, Shinobi->GetActorLocation() + Shinobi->GetActorForwardVector() * 250.f + Shinobi->GetActorRightVector() * 250.f);
+		}
+	});
+	At(10.7f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_10_Substitution")); });
+	At(11.5f, [this]() { ConsoleCommand(TEXT("quit")); });
 }

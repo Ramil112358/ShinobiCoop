@@ -20,6 +20,10 @@ namespace ShinobiTags
 	UE_DEFINE_GAMEPLAY_TAG(State_Shocked, "State.Shocked");
 	UE_DEFINE_GAMEPLAY_TAG(State_ShockBonus, "State.ShockBonus");
 	UE_DEFINE_GAMEPLAY_TAG(State_Staggered, "State.Staggered");
+	UE_DEFINE_GAMEPLAY_TAG(State_Casting_Fireball, "State.Casting.Fireball");
+	UE_DEFINE_GAMEPLAY_TAG(State_Casting_Chidori, "State.Casting.Chidori");
+	UE_DEFINE_GAMEPLAY_TAG(State_Casting_Rasengan, "State.Casting.Rasengan");
+	UE_DEFINE_GAMEPLAY_TAG(State_Casting_Amaterasu, "State.Casting.Amaterasu");
 
 	UE_DEFINE_GAMEPLAY_TAG(Ability_Melee, "Ability.Melee");
 	UE_DEFINE_GAMEPLAY_TAG(Ability_Dodge, "Ability.Dodge");
