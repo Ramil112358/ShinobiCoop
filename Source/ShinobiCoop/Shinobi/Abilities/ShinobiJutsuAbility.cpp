@@ -1,7 +1,9 @@
 #include "Shinobi/Abilities/ShinobiJutsuAbility.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
+#include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "Abilities/Tasks/AbilityTask_WaitDelay.h"
+#include "Animation/AnimMontage.h"
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
 #include "Engine/World.h"
 #include "GameFramework/Controller.h"
@@ -43,6 +45,15 @@ void UShinobiJutsuAbility::ActivateAbility(const FGameplayAbilitySpecHandle Hand
 	}
 	FaceAim(nullptr);
 
+	if (UAnimMontage* Anim = CastMontage.LoadSynchronous())
+	{
+		// ponytail: capped speed-up (1-2.5x) so fast wind-ups don't turn the clip into a twitch; per-jutsu CastReleaseFraction tunes the sync
+		const float Rate = FMath::Clamp(Anim->GetPlayLength() * CastReleaseFraction / WindUp, 1.f, 2.5f);
+		// bStopWhenAbilityEnds = false: let the follow-through finish after the jutsu fires (the interrupt stops it).
+		UAbilityTask_PlayMontageAndWait* Play = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, Anim, Rate, NAME_None, false);
+		Play->ReadyForActivation();
+	}
+
 	// Event.Hit.Stagger is only sent on the server, so only the server's copy gets interrupted; its cancel
 	// replicates to the owning client.
 	InterruptTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, ShinobiTags::Event_Hit_Stagger, nullptr, true);
@@ -70,6 +81,7 @@ void UShinobiJutsuAbility::OnInterruptedByHit(FGameplayEventData Payload)
 	FGameplayEffectSpecHandle Refund = MakeOutgoingGameplayEffectSpec(UGE_ChakraGain::StaticClass(), GetAbilityLevel());
 	Refund.Data->SetSetByCallerMagnitude(ShinobiTags::Data_ChakraGain, ChakraCost * InterruptRefundFraction);
 	ApplyGameplayEffectSpecToOwner(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, Refund);
+	MontageStop(0.2f); // the cast was broken: don't finish the throw
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
 }
 

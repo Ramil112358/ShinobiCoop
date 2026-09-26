@@ -1,4 +1,5 @@
 #include "Shinobi/Abilities/GA_Rasengan.h"
+#include "Animation/AnimMontage.h"
 #include "AbilitySystemComponent.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiCombat.h"
@@ -15,6 +16,7 @@ UGA_Rasengan::UGA_Rasengan()
 	WindUp = 0.8f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Rasengan);
 	ActivationOwnedTags.AddTag(ShinobiTags::State_Casting_Rasengan); // hand orb (UShinobiCastFxComponent)
+	CastMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Rasengan.AM_Rasengan")));
 }
 
 void UGA_Rasengan::ExecuteJutsu()

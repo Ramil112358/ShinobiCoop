@@ -16,7 +16,7 @@
 
 **Deviation from the spec:** the spec says "All VFX are spawned through Gameplay Cues". Here, persistent effects follow replicated tags and one-shots are replicated actors. Native C++ cue notifies would still need Blueprint assets and cue-manager asset paths, while this approach is two classes and one component. Revisit in M5 if cue batching or pooling becomes worth it.
 
-**Deferred to M2b part 2 (needs the user's Mixamo downloads):** hand-seal and cast wind-up animations (`Cast`, `Fireball`, `Chidori`, `Rasengan`, `Amaterasu` FBX files in `SourceArt/Mixamo/`), retargeted with the `setup_chakra_pose.py` pipeline, then played during `WindUp`.
+**Part 2, done 2026-09-26 (was deferred for the downloads):** hand-seal and cast wind-up animations (`Cast`, `Fireball`, `Chidori`, `Rasengan`, `Amaterasu` FBX files in `SourceArt/Mixamo/`), retargeted with the `setup_chakra_pose.py` pipeline, then played during `WindUp`.
 
 ## Steps
 1. Tags `State.Casting.*`, and the jutsu grant them. ✔
@@ -28,3 +28,13 @@
 7. Test `ShinobiCoop.Jutsu.VfxFollowCastingStatusAndImpact`, plus the existing aura test, which must still pass.
 8. Build, run the tests, `setup_vfx.py`, `shot_chakra.ps1 -Jutsu`, look at every shot and tune. Then the smoke test.
 9. One light review, then the user's look check (together with M2a's 16-row check).
+
+## Part 2: cast animations (done)
+
+Mixamo has no Naruto hand seals or jutsu-specific moves, so each jutsu uses one generic spell cast from the user's downloads, all in the `JUTSU_CLIPS` table in `Scripts/setup_jutsu_anims.py`: Fireball = `Fireball`, Chidori = `Standing 1H Magic Attack 01`, Rasengan = `Standing 2H Magic Attack 01`, Amaterasu = `Standing 1H Magic Attack 03`.
+
+- **Pipeline.** Each clip is imported animation-only onto the Power Up Mixamo skeleton, retargeted with `RTG_MixamoToManny`, root-locked with no root motion, and wrapped in `AM_<Jutsu>`.
+- **Playback.** `UShinobiJutsuAbility::CastMontage` plays from activation. It is sped up (capped at 1–2.5×) so that `CastReleaseFraction` (0.45) of the clip lands at the end of the wind-up. The follow-through keeps playing after the jutsu fires; a staggering interrupt stops it.
+- **Checked:** by the `-ShinobiJutsuShot` screenshots. 42/42 tests and the smoke test pass.
+
+**Real hand seals (optional later):** video-to-mocap with finger tracking (e.g. DeepMotion Animate 3D, Rokoko Vision or Move.ai) from a hand-seal reference video, retargeted the same way. Or key 3–5 seal poses on Manny's finger bones in Blender. Or a paid ninja/hand-seal pack from Fab.

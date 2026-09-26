@@ -6,6 +6,7 @@
 
 class UAbilitySystemComponent;
 class UAbilityTask_WaitGameplayEvent;
+class UAnimMontage;
 
 /** What the HUD shows for one jutsu slot. */
 struct FShinobiJutsuSlotState
@@ -48,6 +49,14 @@ public:
 	/** Hand-seal wind-up before the jutsu fires; a staggering hit interrupts it. */
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu", meta = (ClampMin = "0.01"))
 	float WindUp = 0.5f;
+
+	/** Cast animation (a Mixamo clip, built by Scripts/setup_jutsu_anims.py), played from activation. */
+	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
+	TSoftObjectPtr<UAnimMontage> CastMontage;
+
+	/** Where in the clip the jutsu is released (0-1); the clip is sped up so that point meets the end of the wind-up. */
+	UPROPERTY(EditDefaultsOnly, Category = "Jutsu", meta = (ClampMin = "0.05", ClampMax = "1"))
+	float CastReleaseFraction = 0.45f;
 
 	/** For the HUD; safe to call on the class default object. */
 	FShinobiJutsuSlotState GetSlotState(const UAbilitySystemComponent& ASC) const;

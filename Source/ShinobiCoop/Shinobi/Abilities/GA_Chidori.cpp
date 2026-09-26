@@ -1,4 +1,5 @@
 #include "Shinobi/Abilities/GA_Chidori.h"
+#include "Animation/AnimMontage.h"
 #include "Abilities/Tasks/AbilityTask_ApplyRootMotionConstantForce.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiCombat.h"
@@ -16,6 +17,7 @@ UGA_Chidori::UGA_Chidori()
 	WindUp = 0.6f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Chidori);
 	ActivationOwnedTags.AddTag(ShinobiTags::State_Casting_Chidori); // hand orb (UShinobiCastFxComponent)
+	CastMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Chidori.AM_Chidori")));
 }
 
 void UGA_Chidori::ExecuteJutsu()

@@ -1,4 +1,5 @@
 #include "Shinobi/Abilities/GA_Fireball.h"
+#include "Animation/AnimMontage.h"
 #include "Engine/World.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiEffects.h"
@@ -15,6 +16,7 @@ UGA_Fireball::UGA_Fireball()
 	WindUp = 0.4f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Fireball);
 	ActivationOwnedTags.AddTag(ShinobiTags::State_Casting_Fireball); // hand orb (UShinobiCastFxComponent)
+	CastMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Fireball.AM_Fireball")));
 }
 
 void UGA_Fireball::ExecuteJutsu()

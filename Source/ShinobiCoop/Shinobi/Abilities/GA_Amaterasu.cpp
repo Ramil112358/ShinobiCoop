@@ -1,4 +1,5 @@
 #include "Shinobi/Abilities/GA_Amaterasu.h"
+#include "Animation/AnimMontage.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiEffects.h"
@@ -14,6 +15,7 @@ UGA_Amaterasu::UGA_Amaterasu()
 	WindUp = 0.5f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Amaterasu);
 	ActivationOwnedTags.AddTag(ShinobiTags::State_Casting_Amaterasu); // hand orb (UShinobiCastFxComponent)
+	CastMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Amaterasu.AM_Amaterasu")));
 }
 
 bool UGA_Amaterasu::PrepareJutsu()
