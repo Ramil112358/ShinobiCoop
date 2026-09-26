@@ -18,6 +18,8 @@
 #include "Shinobi/Abilities/GA_Melee.h"
 #include "Shinobi/Abilities/GA_Rasengan.h"
 #include "Shinobi/Abilities/GA_Sprint.h"
+#include "Shinobi/Abilities/GA_Substitution.h"
+#include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
 
 AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& ObjectInitializer)
@@ -28,7 +30,9 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 	StartupAbilities = {
 		UGA_Melee::StaticClass(), UGA_Dodge::StaticClass(), UGA_Sprint::StaticClass(), UGA_ChakraCharge::StaticClass(),
 		UGA_Fireball::StaticClass(), UGA_Chidori::StaticClass(), UGA_Rasengan::StaticClass(), UGA_Amaterasu::StaticClass(),
+		UGA_Substitution::StaticClass(),
 	};
+	StartupEffects.Add(UGE_SubstitutionRegen::StaticClass());
 
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;

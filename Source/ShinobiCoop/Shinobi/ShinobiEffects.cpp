@@ -208,3 +208,16 @@ UGE_JutsuCooldown::UGE_JutsuCooldown()
 	SetByCaller.DataTag = ShinobiTags::Data_Cooldown;
 	DurationMagnitude = FGameplayEffectModifierMagnitude(SetByCaller);
 }
+
+UGE_SubstitutionCost::UGE_SubstitutionCost()
+{
+	DurationPolicy = EGameplayEffectDurationType::Instant;
+	AddModifier(UShinobiAttributeSet::GetSubstitutionChargesAttribute(), -1.f);
+}
+
+UGE_SubstitutionRegen::UGE_SubstitutionRegen()
+{
+	SetInfinitePeriodic(15.f);
+	AddModifier(UShinobiAttributeSet::GetSubstitutionChargesAttribute(), 1.f);
+	bExecutePeriodicEffectOnApplication = false; // a fresh spawn already has full charges
+}

@@ -181,3 +181,21 @@ class SHINOBICOOP_API UGE_JutsuCooldown : public UShinobiEffect
 public:
 	UGE_JutsuCooldown();
 };
+
+/** Substitution cost: -1 charge (used as the ability's cost, so it can't fire at 0). */
+UCLASS()
+class SHINOBICOOP_API UGE_SubstitutionCost : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_SubstitutionCost();
+};
+
+/** +1 Substitution charge every 15 s. Applied at spawn to players. */
+UCLASS()
+class SHINOBICOOP_API UGE_SubstitutionRegen : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_SubstitutionRegen();
+};

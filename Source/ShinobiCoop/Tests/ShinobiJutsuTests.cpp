@@ -12,6 +12,7 @@
 #include "Shinobi/Abilities/GA_Fireball.h"
 #include "Shinobi/Abilities/GA_Melee.h"
 #include "Shinobi/Abilities/GA_Rasengan.h"
+#include "Shinobi/Abilities/GA_Substitution.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiProjectileTest, "ShinobiCoop.Jutsu.ProjectileHitsFirstHostileAndSplashes", ShinobiTestFlags)
 bool FShinobiProjectileTest::RunTest(const FString& Parameters)
@@ -282,6 +283,42 @@ bool FShinobiRasenganBlackFlameTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Black flame also sets off Firestorm"), ShinobiTest::Get(BlackFlamed, Health), 150.f);
 	TestTrue(TEXT("Black flame survives Firestorm"), ShinobiTest::HasTag(BlackFlamed, ShinobiTags::State_Burning_Black));
 	TestEqual(TEXT("Not burning: just the 150 hit"), ShinobiTest::Get(NotBurning, Health), 350.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSubstitutionTest, "ShinobiCoop.Jutsu.SubstitutionTeleportsBehindAttacker", ShinobiTestFlags)
+bool FShinobiSubstitutionTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(300.f, 0.f, 0.f), FRotator(0.f, 180.f, 0.f)); // faces P
+	UAbilitySystemComponent* EnemySource = E->GetAbilitySystemComponent();
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+	const FGameplayAttribute Charges = UShinobiAttributeSet::GetSubstitutionChargesAttribute();
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Dodge);
+	TestFalse(TEXT("Perfect dodge: the hit doesn't land"), ShinobiCombat::ApplyDamage(EnemySource, P, 50.f));
+	TestEqual(TEXT("No damage"), ShinobiTest::Get(P, Health), 500.f);
+	TestEqual(TEXT("One charge spent"), ShinobiTest::Get(P, Charges), 2.f);
+	TestFalse(TEXT("Dodge cancelled"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
+	const FVector Behind(450.f, 0.f, 0.f); // 150 behind E, which faces -X
+	TestTrue(FString::Printf(TEXT("Teleported behind the attacker (at %s)"), *P->GetActorLocation().ToString()), FVector::Dist2D(P->GetActorLocation(), Behind) < 50.f);
+	TestTrue(FString::Printf(TEXT("Facing the attacker (yaw %.0f)"), P->GetActorRotation().Yaw), FMath::Abs(FRotator::NormalizeAxis(P->GetActorRotation().Yaw - 180.f)) < 5.f);
+	TestTrue(TEXT("Attacker staggered"), ShinobiTest::HasTag(E, ShinobiTags::State_Staggered));
+	W.Tick(0.6f);
+	TestFalse(TEXT("Stagger over after 0.5 s"), ShinobiTest::HasTag(E, ShinobiTags::State_Staggered));
+
+	// Out of charges: the dodge still avoids the hit, but nobody teleports.
+	ShinobiTest::Set(P, Charges, 0.f);
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Dodge);
+	const FVector Before = P->GetActorLocation();
+	ShinobiCombat::ApplyDamage(EnemySource, P, 50.f);
+	TestEqual(TEXT("Out of charges: still no damage"), ShinobiTest::Get(P, Health), 500.f);
+	TestTrue(TEXT("Out of charges: no teleport"), P->GetActorLocation().Equals(Before));
+	TestEqual(TEXT("Charges stay at 0"), ShinobiTest::Get(P, Charges), 0.f);
+
+	W.Tick(15.1f); // the regen started at spawn: +1 at 15 s
+	TestEqual(TEXT("+1 charge every 15 s"), ShinobiTest::Get(P, Charges), 1.f);
 	return true;
 }
 
