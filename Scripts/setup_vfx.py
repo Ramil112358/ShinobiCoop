@@ -61,6 +61,9 @@ def fresh_material(name, two_sided):
     if material is None:
         raise RuntimeError(f"failed to create {path}")
     material.set_editor_property("blend_mode", unreal.BlendMode.BLEND_ADDITIVE)
+    # After DOF: composited after the toon post-process (M_ToonPost, Scene Color After DOF), whose lighting remap
+    # would otherwise flatten every glow into the surface behind it (M5 bug: jutsu invisible).
+    material.set_editor_property("translucency_pass", unreal.MaterialTranslucencyPass.MTP_AFTER_DOF)
     material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
     material.set_editor_property("two_sided", two_sided)
     return material

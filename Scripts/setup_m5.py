@@ -1,7 +1,9 @@
 """M5 look & feel assets. Idempotent (rebuilds everything it owns); close the GUI editor and build the C++ first.
 
 1. M_ShinobiSolid (flat colour, Substrate) + one instance per arena colour.
-2. M_ToonPost: the toon post-process. One Custom HLSL node, after tonemapping:
+2. M_ToonPost: the toon post-process. One Custom HLSL node at Scene Color After DOF (linear HDR, before tonemapping).
+   Its input excludes after-DOF translucency, where every jutsu glow renders (Scripts/setup_vfx.py), so the remap
+   can't flatten the glows away (it did when it ran after tonemapping):
    - lighting = scene colour / diffuse colour, posterised into 3 soft bands and re-multiplied (pixels with no diffuse,
      i.e. emissive VFX, and the sky are left alone);
    - outlines from a cross-shaped depth + normal edge test;
@@ -49,13 +51,14 @@ float3 n0 = SceneTextureLookup(uv, 8, false).rgb;
 const float SkyDepth = 500000.0;
 float3 col = sc;
 
-// Toon bands: split the lighting out (scene / diffuse), posterise it into shadow / mid / lit, re-multiply.
+// Toon bands: split the lighting out (scene / diffuse), posterise it into shadow / mid / lit, re-multiply. Linear,
+// pre-exposed light levels measured in the Training Grounds: shadow ~0.15-0.3, shaded side ~0.5-1, sunlit ~2-2.6.
 float dmax = max(max(dc.r, dc.g), dc.b);
 if (d0 < SkyDepth && dmax > 0.03)
 {
     float3 light = sc / max(dc, 0.03);
     float l = dot(light, float3(0.3, 0.59, 0.11));
-    float band = 0.5 + 0.28 * smoothstep(0.22, 0.30, l) + 0.3 * smoothstep(0.70, 0.78, l);
+    float band = 0.3 + 0.55 * smoothstep(0.3, 0.4, l) + 0.85 * smoothstep(1.1, 1.4, l);
     col = dc * band * lerp(1.0, light / max(l, 0.001), 0.35); // keep a little of the light's tint
 }
 
@@ -149,7 +152,7 @@ def custom_input(name):
 def build_toon_post():
     m = fresh("M_ToonPost", unreal.Material, unreal.MaterialFactoryNew())
     m.set_editor_property("material_domain", unreal.MaterialDomain.MD_POST_PROCESS)
-    m.set_editor_property("blendable_location", unreal.BlendableLocation.BL_SCENE_COLOR_AFTER_TONEMAPPING)
+    m.set_editor_property("blendable_location", unreal.BlendableLocation.BL_SCENE_COLOR_AFTER_DOF)
     scene = node(m, unreal.MaterialExpressionSceneTexture, -700, 0, scene_texture_id=unreal.SceneTextureId.PPI_POST_PROCESS_INPUT0)
     texel = node(m, unreal.MaterialExpressionSceneTexelSize, -700, 200)
     custom = node(m, unreal.MaterialExpressionCustom, -300, 0, code=TOON_HLSL, output_type=unreal.CustomMaterialOutputType.CMOT_FLOAT3,
