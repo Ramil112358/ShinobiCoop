@@ -20,6 +20,8 @@ namespace ShinobiTags
 	UE_DEFINE_GAMEPLAY_TAG(State_Shocked, "State.Shocked");
 	UE_DEFINE_GAMEPLAY_TAG(State_ShockBonus, "State.ShockBonus");
 	UE_DEFINE_GAMEPLAY_TAG(State_Staggered, "State.Staggered");
+	UE_DEFINE_GAMEPLAY_TAG(State_Downed, "State.Downed");
+	UE_DEFINE_GAMEPLAY_TAG(State_Dead, "State.Dead");
 	UE_DEFINE_GAMEPLAY_TAG(State_Casting_Fireball, "State.Casting.Fireball");
 	UE_DEFINE_GAMEPLAY_TAG(State_Casting_Chidori, "State.Casting.Chidori");
 	UE_DEFINE_GAMEPLAY_TAG(State_Casting_Rasengan, "State.Casting.Rasengan");
@@ -31,6 +33,7 @@ namespace ShinobiTags
 	UE_DEFINE_GAMEPLAY_TAG(Ability_ChakraCharge, "Ability.ChakraCharge");
 	UE_DEFINE_GAMEPLAY_TAG(Ability_Jutsu, "Ability.Jutsu");
 	UE_DEFINE_GAMEPLAY_TAG(Ability_Substitution, "Ability.Substitution");
+	UE_DEFINE_GAMEPLAY_TAG(Ability_Revive, "Ability.Revive");
 
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_Fireball, "Cooldown.Jutsu.Fireball");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_Chidori, "Cooldown.Jutsu.Chidori");

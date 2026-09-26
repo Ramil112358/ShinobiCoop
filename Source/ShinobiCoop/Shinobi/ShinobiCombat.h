@@ -24,6 +24,9 @@ namespace ShinobiCombat
 	 */
 	SHINOBICOOP_API bool ApplyStatus(UAbilitySystemComponent* Source, const AShinobiCharacterBase* Target, TSubclassOf<UGameplayEffect> Effect, float DamagePerTick = 0.f);
 
-	/** Characters hostile to Caster whose location is within Radius (3D) of Center. */
+	/** Applies GE_Shock with its duration scaled by the target's stun multiplier (boss: 1.5 s x 0.33). */
+	SHINOBICOOP_API bool ApplyStun(UAbilitySystemComponent* Source, const AShinobiCharacterBase* Target);
+
+	/** Living (not downed or dead) characters hostile to Caster whose location is within Radius (3D) of Center. */
 	SHINOBICOOP_API TArray<AShinobiCharacterBase*> FindHostilesInRadius(const AShinobiCharacterBase* Caster, const FVector& Center, float Radius);
 }

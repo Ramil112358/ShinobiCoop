@@ -4,11 +4,13 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "UObject/ConstructorHelpers.h"
 #include "ShinobiCoop.h"
 #include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiMovementComponent.h"
+#include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
 #include "Shinobi/VFX/ShinobiCastFxComponent.h"
 #include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
@@ -41,6 +43,7 @@ void AShinobiCharacterBase::BeginPlay()
 {
 	Super::BeginPlay();
 	AbilitySystem->InitAbilityActorInfo(this, this);
+	AbilitySystem->RegisterGameplayTagEvent(ShinobiTags::State_Dead).AddUObject(this, &AShinobiCharacterBase::OnDeadTagChanged);
 	if (HasAuthority())
 	{
 		Attributes->OnOutOfHealth.AddUObject(this, &AShinobiCharacterBase::HandleOutOfHealth);
@@ -65,13 +68,31 @@ void AShinobiCharacterBase::HandleOutOfHealth()
 	UE_LOG(LogShinobiCoop, Log, TEXT("%s is out of health"), *GetName());
 }
 
-void AShinobiCharacterBase::UseMannequinMesh()
+bool AShinobiCharacterBase::IsAlive() const
+{
+	return !AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Downed) && !AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Dead);
+}
+
+void AShinobiCharacterBase::OnDeadTagChanged(const FGameplayTag Tag, int32 Count)
+{
+	if (Count <= 0)
+	{
+		return;
+	}
+	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	GetCharacterMovement()->DisableMovement();
+	GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
+	GetMesh()->SetSimulatePhysics(true);
+}
+
+void AShinobiCharacterBase::UseMannequinMesh(bool bQuinn)
 {
 	static ConstructorHelpers::FObjectFinder<USkeletalMesh> MannyMesh(TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"));
+	static ConstructorHelpers::FObjectFinder<USkeletalMesh> QuinnMesh(TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple.SKM_Quinn_Simple"));
 	static ConstructorHelpers::FClassFinder<UAnimInstance> MannyAnim(TEXT("/Game/Variant_Combat/Anims/ABP_Manny_Combat"));
-	if (MannyMesh.Succeeded())
+	if (bQuinn ? QuinnMesh.Succeeded() : MannyMesh.Succeeded())
 	{
-		GetMesh()->SetSkeletalMeshAsset(MannyMesh.Object);
+		GetMesh()->SetSkeletalMeshAsset(bQuinn ? QuinnMesh.Object : MannyMesh.Object);
 	}
 	if (MannyAnim.Succeeded())
 	{

@@ -151,6 +151,7 @@ class SHINOBICOOP_API UGE_Shock : public UShinobiEffect
 {
 	GENERATED_BODY()
 public:
+	static constexpr float Seconds = 1.5f; // scaled per target by ShinobiCombat::ApplyStun
 	UGE_Shock();
 };
 
@@ -208,4 +209,22 @@ class SHINOBICOOP_API UGE_SubstitutionCooldown : public UShinobiEffect
 	GENERATED_BODY()
 public:
 	UGE_SubstitutionCooldown();
+};
+
+/** Downed (players at 0 HP): State.Downed until revived or bled out. Removed by the revive or the game mode. */
+UCLASS()
+class SHINOBICOOP_API UGE_Downed : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_Downed();
+};
+
+/** Dead: State.Dead (enemies at 0 HP; players after bleeding out, until the next wave respawns them). */
+UCLASS()
+class SHINOBICOOP_API UGE_Dead : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_Dead();
 };

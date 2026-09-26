@@ -64,7 +64,7 @@ void UGA_Chidori::OnDashFinished()
 			AShinobiBurst::Spawn(Victim->GetWorld(), EShinobiBurst::Lightning, Victim->GetActorLocation());
 			// Bonus after the hit, so it boosts the follow-up rather than this strike.
 			UAbilitySystemComponent* Source = GetAbilitySystemComponentFromActorInfo();
-			ShinobiCombat::ApplyStatus(Source, Victim, UGE_Shock::StaticClass());
+			ShinobiCombat::ApplyStun(Source, Victim);
 			ShinobiCombat::ApplyStatus(Source, Victim, UGE_ShockBonus::StaticClass());
 		}
 	}

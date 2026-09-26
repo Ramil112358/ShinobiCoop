@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "AbilitySystemInterface.h"
+#include "GameplayTagContainer.h"
 #include "ShinobiCharacterBase.generated.h"
 
 class UAbilitySystemComponent;
@@ -39,6 +40,12 @@ public:
 	EShinobiTeam GetTeam() const { return Team; }
 	bool IsHostileTo(const AShinobiCharacterBase* Other) const { return Other && Other != this && Other->Team != Team; }
 
+	/** False once downed or dead: out of the fight, so not a target. */
+	bool IsAlive() const;
+
+	/** Stuns (Shock) last this many times their normal duration (the boss shrugs them off faster). */
+	float GetStunMultiplier() const { return StunMultiplier; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void PossessedBy(AController* NewController) override;
@@ -47,8 +54,11 @@ protected:
 	/** Server only. Called each time Health reaches 0. */
 	virtual void HandleOutOfHealth();
 
-	/** Constructor-only: Manny mesh + combat anim blueprint from the template content. */
-	void UseMannequinMesh();
+	/** Constructor-only: Manny (or Quinn) mesh + combat anim blueprint from the template content. */
+	void UseMannequinMesh(bool bQuinn = false);
+
+	UPROPERTY(EditDefaultsOnly, Category = "Shinobi", meta = (ClampMin = "0"))
+	float StunMultiplier = 1.f;
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UAbilitySystemComponent> AbilitySystem;
@@ -73,5 +83,8 @@ protected:
 
 private:
 	void GrantStartupAbilitiesAndEffects();
+
+	/** Every machine: State.Dead turns the body into a ragdoll with no capsule collision or movement. */
+	void OnDeadTagChanged(const FGameplayTag Tag, int32 Count);
 	bool bStartupGranted = false;
 };

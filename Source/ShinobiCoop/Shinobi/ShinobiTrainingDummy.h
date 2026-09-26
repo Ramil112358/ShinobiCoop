@@ -4,10 +4,10 @@
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "ShinobiTrainingDummy.generated.h"
 
-class UTextRenderComponent;
+class UShinobiOverheadTextComponent;
 
 /**
- * Enemy-team punching bag. Shows its health (and, until M2b's cue VFX, its statuses) above its head and resets
+ * Enemy-team punching bag. Shows its health and statuses above its head and resets
  * 1.5 s after being defeated. With the dev cvar Shinobi.DummyAttack on, it punches the nearest player within reach
  * every 2 s, so Substitution, jutsu interrupts and the chakra-charge cancel can be tried before M3's enemies.
  */
@@ -32,9 +32,6 @@ protected:
 private:
 	void ResetHealth();
 
-	/** Rewrites HealthText only when the rounded HP, max HP or status list changed. */
-	void RefreshText();
-
 	/** Server: lock the nearest hostile within PunchReach as the punch target and face it. */
 	void LockPunchTarget();
 
@@ -43,14 +40,10 @@ private:
 	void Punch();
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
-	TObjectPtr<UTextRenderComponent> HealthText;
+	TObjectPtr<UShinobiOverheadTextComponent> HealthText;
 
 	FTimerHandle ResetTimer;
 
-	/** Last values written to HealthText, so SetText (which always marks render state dirty) only runs on a change. */
-	int32 DisplayedHealth = -1;
-	int32 DisplayedMaxHealth = -1;
-	FString DisplayedStatuses;
 	bool bDisplayedTelegraph = false;
 
 	/** Time since the last punch while Shinobi.DummyAttack is on. */

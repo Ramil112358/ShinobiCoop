@@ -182,7 +182,7 @@ UGE_BlackFlame::UGE_BlackFlame()
 
 UGE_Shock::UGE_Shock()
 {
-	SetDuration(1.5f);
+	SetDuration(Seconds);
 	GrantTag(ShinobiTags::State_Shocked);
 	UseSingleRefreshingStack();
 }
@@ -226,4 +226,16 @@ UGE_SubstitutionCooldown::UGE_SubstitutionCooldown()
 {
 	SetDuration(0.5f);
 	GrantTag(ShinobiTags::Cooldown_Substitution);
+}
+
+UGE_Downed::UGE_Downed()
+{
+	DurationPolicy = EGameplayEffectDurationType::Infinite;
+	GrantTag(ShinobiTags::State_Downed);
+}
+
+UGE_Dead::UGE_Dead()
+{
+	DurationPolicy = EGameplayEffectDurationType::Infinite;
+	GrantTag(ShinobiTags::State_Dead);
 }

@@ -1,15 +1,12 @@
 #include "Shinobi/ShinobiTrainingDummy.h"
 #include "AbilitySystemComponent.h"
-#include "Camera/PlayerCameraManager.h"
-#include "Components/TextRenderComponent.h"
-#include "Engine/GameInstance.h"
 #include "EngineUtils.h"
-#include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
 #include "TimerManager.h"
 #include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiTags.h"
+#include "Shinobi/UI/ShinobiOverheadTextComponent.h"
 
 namespace
 {
@@ -27,20 +24,10 @@ AShinobiTrainingDummy::AShinobiTrainingDummy(const FObjectInitializer& ObjectIni
 	Team = EShinobiTeam::Enemies;
 	AutoPossessAI = EAutoPossessAI::Disabled;
 
-	HealthText = CreateDefaultSubobject<UTextRenderComponent>(TEXT("HealthText"));
+	HealthText = CreateDefaultSubobject<UShinobiOverheadTextComponent>(TEXT("HealthText"));
 	HealthText->SetupAttachment(RootComponent);
-	HealthText->SetRelativeLocation(FVector(0.f, 0.f, 120.f));
-	HealthText->SetHorizontalAlignment(EHTA_Center);
-	HealthText->SetWorldSize(28.f);
-	HealthText->SetTextRenderColor(FColor::Red);
 
 	UseMannequinMesh();
-
-	// Attributes is constructed by AShinobiCharacterBase's constructor, which has already run at this
-	// point, so its defaults are readable here. Avoids showing the widget's default "Text" for a frame.
-	DisplayedHealth = FMath::RoundToInt(Attributes->GetHealth());
-	DisplayedMaxHealth = FMath::RoundToInt(Attributes->GetMaxHealth());
-	HealthText->SetText(FText::FromString(FString::Printf(TEXT("HP %d / %d"), DisplayedHealth, DisplayedMaxHealth)));
 }
 
 void AShinobiTrainingDummy::Tick(float DeltaSeconds)
@@ -66,54 +53,6 @@ void AShinobiTrainingDummy::Tick(float DeltaSeconds)
 		{
 			LockPunchTarget();
 		}
-	}
-
-	RefreshText();
-
-	// TextRender geometry lies flat facing its local +X axis, so it's mirrored/culled when viewed from
-	// behind. Face the local camera (yaw only) on machines that have one. GetFirstPlayerController()
-	// would return any PC in the world -- on a listen server that includes remote clients' PCs, which
-	// all have a camera manager but aren't local -- so use the game instance's local-player lookup
-	// instead, which is null on a dedicated server and in the test world.
-	const UGameInstance* GI = GetGameInstance();
-	const APlayerController* PC = GI ? GI->GetFirstLocalPlayerController(GetWorld()) : nullptr;
-	const APlayerCameraManager* CameraManager = PC ? PC->PlayerCameraManager : nullptr;
-	if (CameraManager)
-	{
-		const FVector CameraLocation = CameraManager->GetCameraLocation();
-		const FVector TextLocation = HealthText->GetComponentLocation();
-		HealthText->SetWorldRotation(FRotator(0.f, (CameraLocation - TextLocation).Rotation().Yaw, 0.f));
-	}
-}
-
-void AShinobiTrainingDummy::RefreshText()
-{
-	const int32 CurrentHealth = FMath::RoundToInt(Attributes->GetHealth());
-	const int32 CurrentMaxHealth = FMath::RoundToInt(Attributes->GetMaxHealth());
-	// ponytail: status text until M2b's cues show them on the body
-	FString Statuses;
-	if (AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Burning_Normal))
-	{
-		Statuses += TEXT(" [Burn]");
-	}
-	if (AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Burning_Black))
-	{
-		Statuses += TEXT(" [Black Flame]");
-	}
-	if (AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Shocked))
-	{
-		Statuses += TEXT(" [Shock]");
-	}
-	if (AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_ShockBonus))
-	{
-		Statuses += TEXT(" [+25%]");
-	}
-	if (CurrentHealth != DisplayedHealth || CurrentMaxHealth != DisplayedMaxHealth || Statuses != DisplayedStatuses)
-	{
-		DisplayedHealth = CurrentHealth;
-		DisplayedMaxHealth = CurrentMaxHealth;
-		DisplayedStatuses = Statuses;
-		HealthText->SetText(FText::FromString(FString::Printf(TEXT("HP %d / %d%s"), DisplayedHealth, DisplayedMaxHealth, *DisplayedStatuses)));
 	}
 }
 

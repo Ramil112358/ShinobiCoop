@@ -45,6 +45,11 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
+	/** Look, set per class in constructors (clients spawn the same class, so nothing extra replicates). */
+	FLinearColor GlowColor;
+	float GlowIntensity = 8.f;
+	bool bBurstOnImpact = true;
+
 private:
 	UFUNCTION()
 	void OnOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
@@ -55,6 +60,7 @@ private:
 	/** Server only. DirectTarget may be null (hit a wall or the floor). */
 	void Explode(AShinobiCharacterBase* DirectTarget, const FVector& Location);
 
+protected:
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<USphereComponent> Collision;
 
@@ -67,5 +73,16 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UProjectileMovementComponent> Movement;
 
+private:
 	bool bExploded = false;
+};
+
+/** Enemy kunai: a small grey blade, faster, no light or fire burst. Set DirectDamage only. */
+UCLASS()
+class SHINOBICOOP_API AShinobiKunai : public AShinobiProjectile
+{
+	GENERATED_BODY()
+
+public:
+	AShinobiKunai();
 };

@@ -26,6 +26,10 @@ void UShinobiDamageExec::Execute_Implementation(const FGameplayEffectCustomExecu
 	{
 		return;
 	}
+	if (Target->HasMatchingGameplayTag(ShinobiTags::State_Downed) || Target->HasMatchingGameplayTag(ShinobiTags::State_Dead))
+	{
+		return; // already out of the fight
+	}
 
 	// Only direct hits send events. They come from instant effects, whose spec is the applier's own copy, so a
 	// listener that removes effects from the target (e.g. chakra charge ending) can't invalidate it mid-execution.

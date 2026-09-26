@@ -44,6 +44,18 @@ namespace ShinobiCombat
 		return true;
 	}
 
+	bool ApplyStun(UAbilitySystemComponent* Source, const AShinobiCharacterBase* Target)
+	{
+		if (!Source || !Target || IsInvulnerable(Target))
+		{
+			return false;
+		}
+		const FGameplayEffectSpecHandle Spec = Source->MakeOutgoingSpec(UGE_Shock::StaticClass(), 1.f, Source->MakeEffectContext());
+		Spec.Data->SetDuration(UGE_Shock::Seconds * Target->GetStunMultiplier(), true);
+		Source->ApplyGameplayEffectSpecToTarget(*Spec.Data.Get(), Target->GetAbilitySystemComponent());
+		return true;
+	}
+
 	TArray<AShinobiCharacterBase*> FindHostilesInRadius(const AShinobiCharacterBase* Caster, const FVector& Center, float Radius)
 	{
 		TArray<AShinobiCharacterBase*> Result;
@@ -54,7 +66,7 @@ namespace ShinobiCombat
 		// ponytail: linear scan over all characters like FindHostilesInCone; switch to an overlap query if counts grow
 		for (TActorIterator<AShinobiCharacterBase> It(Caster->GetWorld()); It; ++It)
 		{
-			if (Caster->IsHostileTo(*It) && FVector::Dist(It->GetActorLocation(), Center) <= Radius)
+			if (Caster->IsHostileTo(*It) && It->IsAlive() && FVector::Dist(It->GetActorLocation(), Center) <= Radius)
 			{
 				Result.Add(*It);
 			}

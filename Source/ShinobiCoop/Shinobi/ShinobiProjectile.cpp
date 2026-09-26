@@ -16,6 +16,7 @@ AShinobiProjectile::AShinobiProjectile()
 	bReplicates = true;
 	SetReplicateMovement(true);
 	InitialLifeSpan = 3.f;
+	GlowColor = ShinobiVfx::Colors::Fire;
 
 	Collision = CreateDefaultSubobject<USphereComponent>(TEXT("Collision"));
 	Collision->InitSphereRadius(20.f);
@@ -62,7 +63,7 @@ void AShinobiProjectile::BeginPlay()
 	Super::BeginPlay();
 	if (!IsNetMode(NM_DedicatedServer))
 	{
-		Mesh->SetMaterial(0, ShinobiVfx::MakeGlow(this, ShinobiVfx::Colors::Fire, 8.f, 1.f));
+		Mesh->SetMaterial(0, ShinobiVfx::MakeGlow(this, GlowColor, GlowIntensity, 1.f));
 	}
 }
 
@@ -93,7 +94,10 @@ void AShinobiProjectile::Explode(AShinobiCharacterBase* DirectTarget, const FVec
 		return;
 	}
 	bExploded = true;
-	AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::Fire, Location);
+	if (bBurstOnImpact)
+	{
+		AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::Fire, Location);
+	}
 
 	const AShinobiCharacterBase* Caster = Cast<AShinobiCharacterBase>(GetInstigator());
 	if (UAbilitySystemComponent* Source = Caster ? Caster->GetAbilitySystemComponent() : nullptr)
@@ -111,4 +115,23 @@ void AShinobiProjectile::Explode(AShinobiCharacterBase* DirectTarget, const FVec
 		}
 	}
 	Destroy();
+}
+
+AShinobiKunai::AShinobiKunai()
+{
+	GlowColor = FLinearColor(0.35f, 0.37f, 0.4f);
+	GlowIntensity = 0.6f;
+	bBurstOnImpact = false;
+	Collision->SetSphereRadius(12.f);
+	Movement->InitialSpeed = 3000.f;
+	Movement->MaxSpeed = 3000.f;
+	Light->SetVisibility(false);
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> Cone(TEXT("/Engine/BasicShapes/Cone.Cone"));
+	if (Cone.Succeeded())
+	{
+		Mesh->SetStaticMesh(Cone.Object);
+	}
+	// The cone points up (+Z); lay it along the flight direction (+X) as a thin blade.
+	Mesh->SetRelativeRotation(FRotator(-90.f, 0.f, 0.f));
+	Mesh->SetRelativeScale3D(FVector(0.08f, 0.08f, 0.45f));
 }

@@ -26,6 +26,8 @@ namespace ShinobiTags
 	// Not "State.Shocked.Bonus": a child tag matches its parent, so it would count as a stun.
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_ShockBonus);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Staggered);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Downed);        // players at 0 HP, waiting for a revive
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Dead);          // enemies at 0 HP; players after bleeding out
 	// While a jutsu is active (wind-up and execution); drives the hand orb on every machine.
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Casting_Fireball);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Casting_Chidori);
@@ -39,6 +41,7 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_ChakraCharge);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Jutsu);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Substitution);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Revive);
 
 	// Jutsu cooldowns (granted by GE_JutsuCooldown)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_Fireball);

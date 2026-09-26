@@ -13,6 +13,8 @@ UShinobiGameplayAbility::UShinobiGameplayAbility()
 	// Shared blockers: a stunned or staggered character can't act. Subclasses add their own.
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Shocked);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Staggered);
+	ActivationBlockedTags.AddTag(ShinobiTags::State_Downed);
+	ActivationBlockedTags.AddTag(ShinobiTags::State_Dead);
 }
 
 AShinobiCharacterBase* UShinobiGameplayAbility::GetShinobiCharacter() const
@@ -62,7 +64,7 @@ TArray<AShinobiCharacterBase*> UShinobiGameplayAbility::FindHostilesInCone(float
 	for (TActorIterator<AShinobiCharacterBase> It(Self->GetWorld()); It; ++It)
 	{
 		AShinobiCharacterBase* Other = *It;
-		if (!Self->IsHostileTo(Other))
+		if (!Self->IsHostileTo(Other) || !Other->IsAlive())
 		{
 			continue;
 		}
