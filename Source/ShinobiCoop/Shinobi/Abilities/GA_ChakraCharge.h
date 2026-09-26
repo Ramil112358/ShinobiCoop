@@ -8,8 +8,8 @@ class UAnimMontage;
 
 /**
  * Hold to charge chakra (Naruto Storm style). Works at any chakra level, including full, so the pose and
- * aura always play; ends on release, dodge, or (M2) a stagger hit. Movement and jump are ignored while
- * State.ChakraCharging is present.
+ * aura always play; ends on release, dodge, a staggering hit, or its pose being interrupted. Movement and
+ * jump are ignored while State.ChakraCharging is present.
  */
 UCLASS()
 class SHINOBICOOP_API UGA_ChakraCharge : public UShinobiGameplayAbility
@@ -25,6 +25,13 @@ public:
 private:
 	UFUNCTION()
 	void OnInputReleased(float TimeHeld);
+
+	/** A staggering hit, or another montage taking over the pose: end the charge. */
+	UFUNCTION()
+	void OnChargeBroken();
+
+	UFUNCTION()
+	void OnStaggered(FGameplayEventData Payload);
 
 	FActiveGameplayEffectHandle ChargeHandle;
 

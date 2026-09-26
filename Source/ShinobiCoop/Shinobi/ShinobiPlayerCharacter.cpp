@@ -65,6 +65,17 @@ bool AShinobiPlayerCharacter::CanMove() const
 	return !AbilitySystem->HasAnyMatchingGameplayTags(Blockers);
 }
 
+void AShinobiPlayerCharacter::UnPossessed()
+{
+	// A lost controller (unpossess, disconnect) never sends the release for held inputs, and chakra charge never
+	// ends on its own, so end the hold-to-use abilities here. Runs on the server; the end replicates to the owner.
+	FGameplayTagContainer HeldAbilities;
+	HeldAbilities.AddTag(ShinobiTags::Ability_Sprint);
+	HeldAbilities.AddTag(ShinobiTags::Ability_ChakraCharge);
+	AbilitySystem->CancelAbilities(&HeldAbilities);
+	Super::UnPossessed();
+}
+
 void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);

@@ -26,6 +26,7 @@ public:
 
 protected:
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
+	virtual void UnPossessed() override;
 
 private:
 	void Move(const FInputActionValue& Value);

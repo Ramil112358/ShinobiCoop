@@ -2,6 +2,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "AIController.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/Abilities/GA_Sprint.h"
@@ -335,6 +336,55 @@ bool FShinobiChakraAuraTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Overlay stays applied after fade-out (Fade param hides it instead)"), Body->GetOverlayMaterial() == AuraMaterial);
 	TestEqual(TEXT("Fade param 0 after fade-out"), AuraMaterial->K2_GetScalarParameterValue(TEXT("Fade")), 0.f);
 	TestFalse(TEXT("Tick disabled after fade-out"), Aura->IsComponentTickEnabled());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChargeStaggerTest, "ShinobiCoop.Abilities.ChakraChargeEndsOnStaggerOrBrokenPose", ShinobiTestFlags)
+bool FShinobiChargeStaggerTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
+	ShinobiTest::Damage(P, 10.f);
+	TestTrue(TEXT("A 10-damage hit doesn't end the charge"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+	ShinobiTest::Damage(P, 25.f);
+	TestFalse(TEXT("A 25-damage hit ends the charge"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+	TestFalse(TEXT("Charging tag gone"), ShinobiTest::HasTag(P, ShinobiTags::State_ChakraCharging));
+	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
+
+	// Another montage taking over the slot (a future hit reaction) must end the charge too.
+	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
+	TestTrue(TEXT("Charging again"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+	UAnimMontage* Other = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Shinobi/Anims/AM_Dodge.AM_Dodge"));
+	UAnimInstance* Anim = P->GetMesh()->GetAnimInstance();
+	if (TestNotNull(TEXT("AM_Dodge loads"), Other) && TestNotNull(TEXT("Player has an anim instance"), Anim))
+	{
+		Anim->Montage_Play(Other);
+		W.Tick(0.1f); // blending-out events are queued and dispatched during the anim tick
+		TestFalse(TEXT("Charge ends when its pose is interrupted"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiUnpossessTest, "ShinobiCoop.Abilities.UnpossessEndsHeldAbilities", ShinobiTestFlags)
+bool FShinobiUnpossessTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AAIController* Controller = W.Spawn<AAIController>();
+
+	Controller->Possess(P);
+	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
+	TestTrue(TEXT("Charging while possessed"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+	Controller->UnPossess();
+	TestFalse(TEXT("Unpossess ends the charge"), ShinobiTest::IsActive(P, UGA_ChakraCharge::StaticClass()));
+
+	Controller->Possess(P);
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Sprint);
+	TestTrue(TEXT("Sprinting while possessed"), ShinobiTest::IsActive(P, UGA_Sprint::StaticClass()));
+	Controller->UnPossess();
+	TestFalse(TEXT("Unpossess ends the sprint"), ShinobiTest::IsActive(P, UGA_Sprint::StaticClass()));
 	return true;
 }
 
