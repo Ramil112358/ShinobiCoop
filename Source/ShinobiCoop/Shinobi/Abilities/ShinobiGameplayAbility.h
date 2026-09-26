@@ -47,4 +47,7 @@ protected:
 
 	/** Hostile characters within Range (2D) whose direction is within HalfAngleDegrees of the owner's forward. */
 	TArray<AShinobiCharacterBase*> FindHostilesInCone(float Range, float HalfAngleDegrees) const;
+
+	/** The closest (2D) of FindHostilesInCone, or null. */
+	AShinobiCharacterBase* FindNearestHostileInCone(float Range, float HalfAngleDegrees) const;
 };

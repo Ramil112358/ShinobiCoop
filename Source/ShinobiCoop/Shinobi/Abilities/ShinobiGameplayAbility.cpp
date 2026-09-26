@@ -81,3 +81,20 @@ TArray<AShinobiCharacterBase*> UShinobiGameplayAbility::FindHostilesInCone(float
 	}
 	return Result;
 }
+
+AShinobiCharacterBase* UShinobiGameplayAbility::FindNearestHostileInCone(float Range, float HalfAngleDegrees) const
+{
+	AShinobiCharacterBase* Nearest = nullptr;
+	float NearestDistance = TNumericLimits<float>::Max();
+	for (AShinobiCharacterBase* Candidate : FindHostilesInCone(Range, HalfAngleDegrees))
+	{
+		// FindHostilesInCone only returns candidates when the owner exists.
+		const float Distance = FVector::Dist2D(GetShinobiCharacter()->GetActorLocation(), Candidate->GetActorLocation());
+		if (Distance < NearestDistance)
+		{
+			NearestDistance = Distance;
+			Nearest = Candidate;
+		}
+	}
+	return Nearest;
+}

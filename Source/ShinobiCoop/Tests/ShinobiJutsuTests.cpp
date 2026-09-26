@@ -7,6 +7,7 @@
 #include "Shinobi/ShinobiProjectile.h"
 #include "Shinobi/Abilities/GA_Amaterasu.h"
 #include "Shinobi/Abilities/GA_ChakraCharge.h"
+#include "Shinobi/Abilities/GA_Chidori.h"
 #include "Shinobi/Abilities/GA_Dodge.h"
 #include "Shinobi/Abilities/GA_Fireball.h"
 #include "Shinobi/Abilities/GA_Melee.h"
@@ -177,6 +178,47 @@ bool FShinobiAmaterasuTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("15 damage per second"), ShinobiTest::Get(E, Health), 485.f);
 	TestEqual(TEXT("Enemy behind untouched"), ShinobiTest::Get(Behind, Health), 500.f);
 	TestEqual(TEXT("Enemy beyond range untouched"), ShinobiTest::Get(TooFar, Health), 500.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChidoriTest, "ShinobiCoop.Jutsu.ChidoriDashesToTargetAndShocks", ShinobiTestFlags)
+bool FShinobiChidoriTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>(); // aims along +X
+	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(800.f, 100.f, 0.f)); // ~7 degrees off the aim
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
+	TestEqual(TEXT("Cost 30"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 70.f);
+	W.Tick(1.0f); // 0.6 s wind-up + ~0.18 s dash (706 units at 4000 u/s)
+	TestFalse(TEXT("Chidori finished"), ShinobiTest::IsActive(P, UGA_Chidori::StaticClass()));
+	const float Gap = FVector::Dist2D(P->GetActorLocation(), E->GetActorLocation());
+	TestTrue(FString::Printf(TEXT("Dashed up to the target (gap %.0f)"), Gap), Gap < 200.f);
+	TestEqual(TEXT("120 damage"), ShinobiTest::Get(E, Health), 380.f);
+	TestTrue(TEXT("Target stunned"), ShinobiTest::HasTag(E, ShinobiTags::State_Shocked));
+	TestTrue(TEXT("Target carries the Shock bonus"), ShinobiTest::HasTag(E, ShinobiTags::State_ShockBonus));
+	TestTrue(TEXT("Cooldown started"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Chidori));
+
+	W.Tick(1.6f);
+	TestFalse(TEXT("Stun over after 1.5 s"), ShinobiTest::HasTag(E, ShinobiTags::State_Shocked));
+	ShinobiCombat::ApplyDamage(P->GetAbilitySystemComponent(), E, 100.f);
+	TestEqual(TEXT("Follow-up hit gets the +25% bonus"), ShinobiTest::Get(E, Health), 255.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChidoriNoTargetTest, "ShinobiCoop.Jutsu.ChidoriWithoutTargetDashesFullDistance", ShinobiTestFlags)
+bool FShinobiChidoriNoTargetTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* Side = W.Spawn<AShinobiCharacterBase>(FVector(0.f, 800.f, 0.f)); // 90 degrees off: no snap
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
+	W.Tick(1.2f); // 0.6 s wind-up + 0.3 s dash
+	const float X = P->GetActorLocation().X;
+	TestTrue(FString::Printf(TEXT("Dashed ~1200 straight ahead (X = %.0f)"), X), X > 1100.f && X < 1300.f);
+	TestEqual(TEXT("Enemy off to the side untouched"), ShinobiTest::Get(Side, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
 	return true;
 }
 

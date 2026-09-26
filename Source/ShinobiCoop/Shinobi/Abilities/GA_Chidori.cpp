@@ -1,0 +1,60 @@
+#include "Shinobi/Abilities/GA_Chidori.h"
+#include "Abilities/Tasks/AbilityTask_ApplyRootMotionConstantForce.h"
+#include "Shinobi/ShinobiCharacterBase.h"
+#include "Shinobi/ShinobiCombat.h"
+#include "Shinobi/ShinobiEffects.h"
+#include "Shinobi/ShinobiTags.h"
+
+UGA_Chidori::UGA_Chidori()
+{
+	InputID = EShinobiAbilityInputID::Jutsu2;
+	DisplayName = INVTEXT("Chidori");
+	Glyph = INVTEXT("雷"); // lightning
+	ChakraCost = 30.f;
+	Cooldown = 8.f;
+	WindUp = 0.6f;
+	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Chidori);
+}
+
+void UGA_Chidori::ExecuteJutsu()
+{
+	const AShinobiCharacterBase* Self = GetShinobiCharacter();
+	if (!Self)
+	{
+		EndJutsu();
+		return;
+	}
+	FaceAim(nullptr); // the camera may have turned during the wind-up
+	float Distance = DashDistance;
+	if (const AShinobiCharacterBase* Target = FindNearestHostileInCone(DashDistance, SnapHalfAngle))
+	{
+		FaceAim(Target);
+		Distance = FMath::Max(0.f, FVector::Dist2D(Self->GetActorLocation(), Target->GetActorLocation()) - StopShort);
+	}
+	if (Distance < 1.f)
+	{
+		OnDashFinished();
+		return;
+	}
+	UAbilityTask_ApplyRootMotionConstantForce* Dash = UAbilityTask_ApplyRootMotionConstantForce::ApplyRootMotionConstantForce(
+		this, TEXT("Chidori"), Self->GetActorForwardVector().GetSafeNormal2D(), DashSpeed, Distance / DashSpeed, false, nullptr,
+		ERootMotionFinishVelocityMode::ClampVelocity, FVector::ZeroVector, 200.f, true);
+	Dash->OnFinish.AddDynamic(this, &UGA_Chidori::OnDashFinished);
+	Dash->ReadyForActivation();
+}
+
+void UGA_Chidori::OnDashFinished()
+{
+	if (HasAuthority(&CurrentActivationInfo))
+	{
+		AShinobiCharacterBase* Victim = FindNearestHostileInCone(StrikeRange, 60.f);
+		if (Victim && ApplyDamage(Victim, Damage))
+		{
+			// Bonus after the hit, so it boosts the follow-up rather than this strike.
+			UAbilitySystemComponent* Source = GetAbilitySystemComponentFromActorInfo();
+			ShinobiCombat::ApplyStatus(Source, Victim, UGE_Shock::StaticClass());
+			ShinobiCombat::ApplyStatus(Source, Victim, UGE_ShockBonus::StaticClass());
+		}
+	}
+	EndJutsu();
+}
