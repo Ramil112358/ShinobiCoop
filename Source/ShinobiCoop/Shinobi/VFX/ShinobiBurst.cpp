@@ -7,6 +7,7 @@
 #include "Materials/MaterialInterface.h"
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
+#include "Shinobi/VFX/ShinobiSfx.h"
 #include "Shinobi/VFX/ShinobiVfx.h"
 
 AShinobiBurst::AShinobiBurst()
@@ -76,6 +77,8 @@ void AShinobiBurst::BeginPlay()
 		SetActorTickEnabled(false);
 		return;
 	}
+	static const EShinobiSfx Sounds[] = { EShinobiSfx::Explosion, EShinobiSfx::Explosion, EShinobiSfx::Zap, EShinobiSfx::Whirr, EShinobiSfx::Poof };
+	ShinobiSfx::Play(this, Sounds[static_cast<uint8>(Kind)], GetActorLocation(), Kind == EShinobiBurst::Fire ? 0.7f : 1.f);
 
 	// Mostly-rim shells (low Core) at modest intensity: a solid bright sphere blows out to a white wall under bloom.
 	FLinearColor Color = ShinobiVfx::Colors::Fire;

@@ -12,6 +12,7 @@ class UShinobiAttributeSet;
 class UShinobiGameplayAbility;
 class UShinobiCastFxComponent;
 class UShinobiChakraAuraComponent;
+class UShinobiFeedbackComponent;
 
 UENUM(BlueprintType)
 enum class EShinobiTeam : uint8
@@ -71,6 +72,10 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UShinobiCastFxComponent> CastFx;
+
+	/** Damage numbers, hit-stop, camera shake and sounds (cosmetic, every machine that renders). */
+	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
+	TObjectPtr<UShinobiFeedbackComponent> Feedback;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	EShinobiTeam Team = EShinobiTeam::Enemies;

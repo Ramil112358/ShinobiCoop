@@ -92,6 +92,9 @@ private:
 	/** World time until which each slot shows the red flash. */
 	TArray<double> SlotFlashUntil;
 
+	/** For the wave-start gong and the victory chime. */
+	uint8 LastPhase = 0;
+
 	TWeakObjectPtr<UAbilitySystemComponent> BoundASC;
 	FDelegateHandle FailedHandle;
 };

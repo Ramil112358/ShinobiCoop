@@ -58,6 +58,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Enemy")
 	float SpecialRange = 1500.f;
 
+	/** The mannequin's "Paint Tint" (panels), so each enemy type reads apart from the players at a glance. */
+	UPROPERTY(EditDefaultsOnly, Category = "Enemy")
+	FLinearColor BodyTint = FLinearColor(0.6f, 0.05f, 0.04f);
+
 	/** True while any ability runs (the AI holds still). */
 	bool IsBusy() const;
 

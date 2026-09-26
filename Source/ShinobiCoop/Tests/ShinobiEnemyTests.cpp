@@ -8,6 +8,9 @@
 #include "Shinobi/Abilities/GA_Melee.h"
 #include "Shinobi/Abilities/GA_Revive.h"
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
+#include "Shinobi/ShinobiTrainingDummy.h"
+#include "Shinobi/VFX/ShinobiFeedbackComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiEnemyMeleeTest, "ShinobiCoop.Enemies.RogueNinjaChasesAndHitsTwice", ShinobiTestFlags)
 bool FShinobiEnemyMeleeTest::RunTest(const FString& Parameters)
@@ -147,6 +150,29 @@ bool FShinobiWaveTableTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Solo: x1"), AShinobiArenaGameMode::GetHealthScale(1), 1.f);
 	TestEqual(TEXT("Duo: x1.5"), AShinobiArenaGameMode::GetHealthScale(2), 1.5f);
 	TestEqual(TEXT("Four players: x2.5"), AShinobiArenaGameMode::GetHealthScale(4), 2.5f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiHitFeedbackTest, "ShinobiCoop.Feel.DamageNumbersAndHitStop", ShinobiTestFlags)
+bool FShinobiHitFeedbackTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiTrainingDummy* Dummy = W.Spawn<AShinobiTrainingDummy>();
+	ShinobiTest::Hover(Dummy);
+	ShinobiTest::Damage(Dummy, 10.f);
+	TestEqual(TEXT("Initial settling: no number yet"), ShinobiTest::CountActors<AShinobiDamageNumber>(W), 0);
+
+	W.Tick(UShinobiFeedbackComponent::SettleSeconds + 0.1f);
+	ShinobiTest::Damage(Dummy, 10.f);
+	TestEqual(TEXT("Light hit: one number"), ShinobiTest::CountActors<AShinobiDamageNumber>(W), 1);
+	TestEqual(TEXT("Light hit: no hit-stop"), Dummy->GetMesh()->GlobalAnimRateScale, 1.f);
+	ShinobiTest::Damage(Dummy, 30.f);
+	TestEqual(TEXT("Heavy hit: second number"), ShinobiTest::CountActors<AShinobiDamageNumber>(W), 2);
+	TestEqual(TEXT("Heavy hit: animation frozen"), Dummy->GetMesh()->GlobalAnimRateScale, 0.f);
+	W.Tick(UShinobiFeedbackComponent::HitStopSeconds + 0.1f);
+	TestEqual(TEXT("Hit-stop over"), Dummy->GetMesh()->GlobalAnimRateScale, 1.f);
+	W.Tick(AShinobiDamageNumber::Lifetime);
+	TestEqual(TEXT("Numbers gone"), ShinobiTest::CountActors<AShinobiDamageNumber>(W), 0);
 	return true;
 }
 

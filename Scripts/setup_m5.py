@@ -178,10 +178,9 @@ def spawn_class(cls, location, yaw=0.0, pitch=0.0):
 
 
 def add_toon_volume(toon):
-    for actor in EAS.get_all_level_actors():
-        if isinstance(actor, unreal.PostProcessVolume) and actor.get_actor_label() == TOON_VOLUME_LABEL:
-            EAS.destroy_actor(actor)
-    volume = spawn_class(unreal.PostProcessVolume, (0, 0, 0))
+    # Reuse the volume from an earlier run: recreating it would churn world-partition external actor files.
+    existing = [a for a in EAS.get_all_level_actors() if isinstance(a, unreal.PostProcessVolume) and a.get_actor_label() == TOON_VOLUME_LABEL]
+    volume = existing[0] if existing else spawn_class(unreal.PostProcessVolume, (0, 0, 0))
     volume.set_actor_label(TOON_VOLUME_LABEL)
     volume.set_editor_property("unbound", True)
     settings = volume.get_editor_property("settings")

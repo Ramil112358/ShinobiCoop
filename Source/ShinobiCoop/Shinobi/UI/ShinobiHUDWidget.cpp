@@ -19,6 +19,7 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/GA_Revive.h"
+#include "Shinobi/VFX/ShinobiSfx.h"
 #include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/Abilities/ShinobiJutsuAbility.h"
@@ -217,6 +218,18 @@ void UShinobiHUDWidget::UpdateArena(const AShinobiPlayerCharacter* Player)
 	const int32 Countdown = State ? FMath::CeilToInt(State->GetPhaseTimeRemaining()) : 0;
 	FString Wave;
 	FString Banner;
+	if (State && static_cast<uint8>(State->Phase) != LastPhase)
+	{
+		LastPhase = static_cast<uint8>(State->Phase);
+		if (State->Phase == EShinobiArenaPhase::Fighting)
+		{
+			ShinobiSfx::Play2D(this, EShinobiSfx::Gong, 0.7f);
+		}
+		else if (State->Phase == EShinobiArenaPhase::Victory)
+		{
+			ShinobiSfx::Play2D(this, EShinobiSfx::Victory);
+		}
+	}
 	if (State)
 	{
 		switch (State->Phase)

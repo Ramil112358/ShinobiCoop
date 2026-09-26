@@ -1,6 +1,8 @@
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 #include "AbilitySystemComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiEffects.h"
@@ -34,6 +36,16 @@ void AShinobiEnemyCharacter::BeginPlay()
 	{
 		AbilitySystem->SetNumericAttributeBase(UShinobiAttributeSet::GetMaxHealthAttribute(), BaseHealth * HealthScale);
 		AbilitySystem->SetNumericAttributeBase(UShinobiAttributeSet::GetHealthAttribute(), BaseHealth * HealthScale);
+	}
+	if (!IsNetMode(NM_DedicatedServer))
+	{
+		for (int32 Slot = 0; Slot < GetMesh()->GetNumMaterials(); ++Slot)
+		{
+			if (UMaterialInstanceDynamic* Material = GetMesh()->CreateDynamicMaterialInstance(Slot))
+			{
+				Material->SetVectorParameterValue(TEXT("Paint Tint"), BodyTint);
+			}
+		}
 	}
 	Super::BeginPlay();
 }
@@ -82,6 +94,7 @@ AShinobiKunaiThrower::AShinobiKunaiThrower(const FObjectInitializer& ObjectIniti
 	PreferredRange = 800.f;
 	AttackInterval = 2.2f;
 	AttackAbility = UGA_EnemyKunai::StaticClass();
+	BodyTint = FLinearColor(0.35f, 0.08f, 0.55f);
 	StartupAbilities = { AttackAbility };
 	GetCharacterMovement()->MaxWalkSpeed = 400.f;
 	UseMannequinMesh(true);
@@ -95,6 +108,7 @@ AShinobiRogueJonin::AShinobiRogueJonin(const FObjectInitializer& ObjectInitializ
 	AttackRange = 200.f;
 	AttackInterval = 1.4f;
 	StunMultiplier = 0.33f;
+	BodyTint = FLinearColor(0.05f, 0.05f, 0.06f);
 	AttackAbility = UGA_EnemyMelee::StaticClass();
 	SpecialAbility = UGA_EnemyFireball::StaticClass();
 	StartupAbilities = { AttackAbility, SpecialAbility };
