@@ -68,7 +68,8 @@ bool AShinobiPlayerCharacter::CanMove() const
 void AShinobiPlayerCharacter::UnPossessed()
 {
 	// A lost controller (unpossess, disconnect) never sends the release for held inputs, and chakra charge never
-	// ends on its own, so end the hold-to-use abilities here. Runs on the server; the end replicates to the owner.
+	// ends on its own, so end the hold-to-use abilities here. Must run before Super: APawn::UnPossessed clears the Owner, after which the ClientCancelAbility RPC can't reach
+	// the owning client. Mostly server-side; on a client it can also run while the pawn is being destroyed (harmless).
 	FGameplayTagContainer HeldAbilities;
 	HeldAbilities.AddTag(ShinobiTags::Ability_Sprint);
 	HeldAbilities.AddTag(ShinobiTags::Ability_ChakraCharge);
