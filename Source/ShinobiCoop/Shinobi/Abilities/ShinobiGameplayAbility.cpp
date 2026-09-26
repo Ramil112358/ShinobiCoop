@@ -3,7 +3,6 @@
 #include "EngineUtils.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiCombat.h"
-#include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiTags.h"
 

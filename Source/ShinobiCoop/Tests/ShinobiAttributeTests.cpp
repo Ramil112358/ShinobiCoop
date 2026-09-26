@@ -3,6 +3,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Shinobi/ShinobiTrainingDummy.h"
 #include "HAL/IConsoleManager.h"
+#include "Shinobi/Abilities/GA_Dodge.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiAttributeDefaultsTest, "ShinobiCoop.Core.AttributeDefaults", ShinobiTestFlags)
@@ -175,6 +176,30 @@ bool FShinobiDummyAttackTest::RunTest(const FString& Parameters)
 	W.Tick(0.2f);
 	TestEqual(TEXT("Nearest player within reach punched for 25"), ShinobiTest::Get(Near, Health), 475.f);
 	TestEqual(TEXT("Player out of reach untouched"), ShinobiTest::Get(Far, Health), 500.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDummyPerfectDodgeTest, "ShinobiCoop.Core.DummyPunchPerfectDodgeSubstitutes", ShinobiTestFlags)
+bool FShinobiDummyPerfectDodgeTest::RunTest(const FString& Parameters)
+{
+	IConsoleVariable* DummyAttack = IConsoleManager::Get().FindConsoleVariable(TEXT("Shinobi.DummyAttack"));
+	if (!TestNotNull(TEXT("Shinobi.DummyAttack exists"), DummyAttack))
+	{
+		return false;
+	}
+	TGuardConsoleVariable<bool> DummyAttackGuard(DummyAttack, true, ECVF_SetByConsole);
+
+	FShinobiTestWorld W;
+	AShinobiTrainingDummy* Dummy = W.Spawn<AShinobiTrainingDummy>();
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>(FVector(200.f, 0.f, 0.f), FRotator(0.f, 180.f, 0.f)); // faces the dummy
+
+	W.Tick(1.9f); // the telegraph started at ~1.6 and locked P; the punch lands at ~2.0
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Dodge); // backstep away from the dummy, i-frames until ~2.1
+	W.Tick(0.3f);
+	TestEqual(TEXT("Perfect dodge: no damage"), ShinobiTest::Get(P, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
+	TestEqual(TEXT("Substitution spent a charge"), ShinobiTest::Get(P, UShinobiAttributeSet::GetSubstitutionChargesAttribute()), 2.f);
+	TestTrue(FString::Printf(TEXT("Teleported behind the dummy (X = %.0f)"), P->GetActorLocation().X), P->GetActorLocation().X < -100.f);
+	TestTrue(TEXT("The dummy faced its target"), FMath::Abs(FRotator::NormalizeAxis(Dummy->GetActorRotation().Yaw)) < 5.f);
 	return true;
 }
 

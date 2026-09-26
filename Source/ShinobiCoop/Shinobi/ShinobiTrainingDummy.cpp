@@ -62,6 +62,10 @@ void AShinobiTrainingDummy::Tick(float DeltaSeconds)
 	{
 		bDisplayedTelegraph = bTelegraph;
 		HealthText->SetTextRenderColor(bTelegraph ? FColor::Yellow : FColor::Red);
+		if (bTelegraph && HasAuthority())
+		{
+			LockPunchTarget();
+		}
 	}
 
 	RefreshText();
@@ -113,7 +117,7 @@ void AShinobiTrainingDummy::RefreshText()
 	}
 }
 
-void AShinobiTrainingDummy::Punch()
+void AShinobiTrainingDummy::LockPunchTarget()
 {
 	AShinobiCharacterBase* Nearest = nullptr;
 	float NearestDistance = PunchReach;
@@ -126,7 +130,24 @@ void AShinobiTrainingDummy::Punch()
 			Nearest = *It;
 		}
 	}
-	ShinobiCombat::ApplyDamage(AbilitySystem, Nearest, PunchDamage); // no-op when nobody is in reach
+	PunchTarget = Nearest;
+	if (Nearest)
+	{
+		SetActorRotation(FRotator(0.f, (Nearest->GetActorLocation() - GetActorLocation()).Rotation().Yaw, 0.f));
+	}
+}
+
+void AShinobiTrainingDummy::Punch()
+{
+	// Committed at the telegraph: a dodge that carries the target out of reach still "meets" the punch while
+	// invulnerable, so a well-timed dodge triggers Substitution instead of just escaping it.
+	const AShinobiCharacterBase* Target = PunchTarget.Get();
+	PunchTarget = nullptr;
+	if (Target && (FVector::Dist2D(Target->GetActorLocation(), GetActorLocation()) <= PunchReach
+		|| Target->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Invulnerable)))
+	{
+		ShinobiCombat::ApplyDamage(AbilitySystem, Target, PunchDamage);
+	}
 }
 
 void AShinobiTrainingDummy::HandleOutOfHealth()

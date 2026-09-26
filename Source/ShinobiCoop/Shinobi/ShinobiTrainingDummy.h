@@ -35,7 +35,11 @@ private:
 	/** Rewrites HealthText only when the rounded HP, max HP or status list changed. */
 	void RefreshText();
 
-	/** Server only: PunchDamage to the nearest hostile character within PunchReach. */
+	/** Server: lock the nearest hostile within PunchReach as the punch target and face it. */
+	void LockPunchTarget();
+
+	/** Server only: PunchDamage to the locked target if it's still within PunchReach, or invulnerable (a perfect
+	 * dodge, which triggers Substitution). */
 	void Punch();
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
@@ -51,4 +55,7 @@ private:
 
 	/** Time since the last punch while Shinobi.DummyAttack is on. */
 	float PunchClock = 0.f;
+
+	/** Server: the target locked when the telegraph starts (the punch is committed to it). */
+	TWeakObjectPtr<AShinobiCharacterBase> PunchTarget;
 };

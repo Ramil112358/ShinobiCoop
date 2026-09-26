@@ -3847,7 +3847,7 @@ powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\smoke_m1.ps1
 ```
 Expected:
-- `ALL 39 TESTS PASSED`;
+- `ALL 39 TESTS PASSED` (40 after the ally-skip test in 752a8ba, 41 after the final-review fix);
 - two `SMOKE PASS` lines, the second for a `ShinobiTrainingDummy_*` with `H=` at or below 440 and `Burn=1`.
 
 - [ ] **Step 8: Commit**
@@ -3858,6 +3858,102 @@ git commit -m "feat: dummy status text and attack cvar, ShinobiCast cheat, fireb
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
+
+#### Task 12 review fixes and final-review fixes (added after review)
+
+**Already committed (752a8ba), recorded here so the plan matches the code:**
+- **`TraceAim` skips allies.** It re-sweeps past non-hostile `AShinobiCharacterBase` hits, adding each to the ignore list, up to 8 skips. The smoke test showed that the partner, spawned ~84 units away, was eating the aim. Regression test: `FShinobiAimPastAllyTest` ("ShinobiCoop.Jutsu.AimSkipsAlliesInTheWay"). An ally at (300,0,0) stands between the caster and an enemy at 1500; Amaterasu must still activate and black-flame the enemy.
+- **`FShinobiDummyAttackTest` uses `TGuardConsoleVariable<bool>(DummyAttack, true, ECVF_SetByConsole)`** instead of `Set(…, ECVF_SetByCode)` plus `ON_SCOPE_EXIT`. SetByCode loses to a console-typed value, and the guard restores the old value. `Misc/ScopeExit.h` was dropped.
+- **`RunSmokeTest` pitches the client's camera to -8° from a separate `PitchTimer` at 1 s.** The dummy row sits on lower ground, so a level shot passes over it. Set right before the cast, the new pitch hadn't reached the server within the 0.4 s wind-up (only 1 of 3 runs passed); at 1 s it passed 5 of 5.
+- **Task 4:** `ShinobiProjectile.cpp` also includes `GameplayEffect.h` (`TSubclassOf` needs the complete type). `OnOverlap` explodes at `bFromSweep ? FVector(SweepResult.Location) : GetActorLocation()`, the point of first contact.
+- **Task 3:** the `UnPossessed` comment explains that the cancel must run before `Super`, because `APawn::UnPossessed` clears the Owner and the client RPC could then no longer reach the owning client.
+
+**Final-review fix: the dummy punch commits to a target.**
+- **The bug:** `Punch()` picked its target by distance at the moment of the punch. A dodge carries you 600 units in 0.25 s, out of the 250 reach within ~50 ms. So a correctly timed dodge made the punch miss instead of triggering Substitution, and manual row 10 could never pass.
+- **The fix:** when the telegraph starts, the server locks the nearest hostile within reach and turns the dummy to face it, so "behind the dummy" means behind it from your side. The punch then hits that target if it is still within reach or is invulnerable. An invulnerable target (a perfect dodge) triggers Substitution.
+
+Changes to `ShinobiTrainingDummy.h`: add a private member
+```cpp
+	/** Server: the target locked when the telegraph starts (the punch is committed to it). */
+	TWeakObjectPtr<AShinobiCharacterBase> PunchTarget;
+```
+and a private function `void LockPunchTarget();` with the doc comment `/** Server: lock the nearest hostile within PunchReach as the punch target and face it. */`. Update `Punch`'s doc comment to `/** Server only: PunchDamage to the locked target if it's still within PunchReach, or invulnerable (a perfect dodge, which triggers Substitution). */`.
+
+Changes to `ShinobiTrainingDummy.cpp`:
+- **In `Tick`:** inside the `if (bTelegraph != bDisplayedTelegraph)` block, after the colour change, add
+```cpp
+		if (bTelegraph && HasAuthority())
+		{
+			LockPunchTarget();
+		}
+```
+- **Replace `Punch` with these two functions:**
+```cpp
+void AShinobiTrainingDummy::LockPunchTarget()
+{
+	AShinobiCharacterBase* Nearest = nullptr;
+	float NearestDistance = PunchReach;
+	for (TActorIterator<AShinobiCharacterBase> It(GetWorld()); It; ++It)
+	{
+		const float Distance = FVector::Dist2D(It->GetActorLocation(), GetActorLocation());
+		if (IsHostileTo(*It) && Distance <= NearestDistance)
+		{
+			NearestDistance = Distance;
+			Nearest = *It;
+		}
+	}
+	PunchTarget = Nearest;
+	if (Nearest)
+	{
+		SetActorRotation(FRotator(0.f, (Nearest->GetActorLocation() - GetActorLocation()).Rotation().Yaw, 0.f));
+	}
+}
+
+void AShinobiTrainingDummy::Punch()
+{
+	// Committed at the telegraph: a dodge that carries the target out of reach still "meets" the punch while
+	// invulnerable, so a well-timed dodge triggers Substitution instead of just escaping it.
+	const AShinobiCharacterBase* Target = PunchTarget.Get();
+	PunchTarget = nullptr;
+	if (Target && (FVector::Dist2D(Target->GetActorLocation(), GetActorLocation()) <= PunchReach
+		|| Target->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Invulnerable)))
+	{
+		ShinobiCombat::ApplyDamage(AbilitySystem, Target, PunchDamage);
+	}
+}
+```
+
+Minor cleanups:
+- **`ShinobiPlayerController.h`:** remove "(nothing spends chakra until M2's jutsu)" from the `ShinobiDrainChakra` comment.
+- **`ShinobiGameplayAbility.cpp`:** remove the unused `#include "Shinobi/ShinobiEffects.h"`.
+
+Regression test in `ShinobiAttributeTests.cpp` (it needs `#include "Shinobi/Abilities/GA_Dodge.h"`):
+```cpp
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDummyPerfectDodgeTest, "ShinobiCoop.Core.DummyPunchPerfectDodgeSubstitutes", ShinobiTestFlags)
+bool FShinobiDummyPerfectDodgeTest::RunTest(const FString& Parameters)
+{
+	IConsoleVariable* DummyAttack = IConsoleManager::Get().FindConsoleVariable(TEXT("Shinobi.DummyAttack"));
+	if (!TestNotNull(TEXT("Shinobi.DummyAttack exists"), DummyAttack))
+	{
+		return false;
+	}
+	TGuardConsoleVariable<bool> DummyAttackGuard(DummyAttack, true, ECVF_SetByConsole);
+
+	FShinobiTestWorld W;
+	AShinobiTrainingDummy* Dummy = W.Spawn<AShinobiTrainingDummy>();
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>(FVector(200.f, 0.f, 0.f), FRotator(0.f, 180.f, 0.f)); // faces the dummy
+
+	W.Tick(1.9f); // the telegraph started at ~1.6 and locked P; the punch lands at ~2.0
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Dodge); // backstep away from the dummy, i-frames until ~2.1
+	W.Tick(0.3f);
+	TestEqual(TEXT("Perfect dodge: no damage"), ShinobiTest::Get(P, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
+	TestEqual(TEXT("Substitution spent a charge"), ShinobiTest::Get(P, UShinobiAttributeSet::GetSubstitutionChargesAttribute()), 2.f);
+	TestTrue(FString::Printf(TEXT("Teleported behind the dummy (X = %.0f)"), P->GetActorLocation().X), P->GetActorLocation().X < -100.f);
+	TestTrue(TEXT("The dummy faced its target"), FMath::Abs(FRotator::NormalizeAxis(Dummy->GetActorRotation().Yaw)) < 5.f);
+	return true;
+}
+```
+Expected: `ALL 41 TESTS PASSED`, and the smoke test still gives two SMOKE PASS lines.
 
 ---
 
@@ -3879,7 +3975,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 | 7 | Console `Shinobi.DummyAttack 1`, stand next to a dummy | Its text turns yellow, then you lose 25, every 2 s |
 | 8 | Still being punched: hold **C** | The charge ends on the punch |
 | 9 | Still being punched: press **1** just as the text turns yellow | The cast is interrupted, you get 10 chakra back, and slot 1 has no cooldown |
-| 10 | Still being punched: **Ctrl** just as the text turns yellow | No damage. You appear behind the dummy facing it, and one log pip empties (3 → 2). Pips refill at 1 per 15 s. With no pips left, the dodge still avoids damage but you don't teleport. |
+| 10 | Still being punched: the dummy turns toward you as its text turns yellow; press **Ctrl** in the second half of the yellow (~0.2 s before the hit) | No damage. You appear behind the dummy facing it, and one log pip empties (3 → 2). Pips refill at 1 per 15 s. With no pips left, the dodge still avoids damage but you don't teleport. |
 | 11 | Gamepad | RB + A/B/X/Y casts 1–4. Without RB, A jumps, B dodges and X punches. |
 | 12 | Second window | Sees the fireball, the dash, dummy HP and status text, and your teleport. Its own HUD shows its own cooldowns and pips. |
 | 13 | Client window `NetEmulation.PktLag 150`, then cast each jutsu | Works; no large snaps. A small correction at the start of the Chidori dash is a known risk; note it if seen. |
@@ -3968,7 +4064,7 @@ Still open and unchanged: dodge direction replication, i-frame RTT, melee yaw st
 - `FShinobiJutsuSlotState` fields are `CooldownRemaining`, `CooldownDuration` and `bAffordable` in both Task 5 and Task 11.
 - `EShinobiAbilityInputID::Jutsu1..4` is used by the jutsu constructors, the HUD (`JutsuSlotIndex`), the input config, `ShinobiCast` and the tests.
 - `UGE_Burn::DamagePerTick` and `UGE_BlackFlame::DamagePerTick` are used by the projectile, Amaterasu and the tests.
-- Tags are defined once in Task 1 and only used afterwards.
+- Tags are defined in Task 1, plus `Cooldown_Substitution` from the Task 9 review fixes.
 
-**Test count by task:** 18 → T1 20 → T2 24 → T3 26 → T4 27 → T5 30 → T6 31 → T7 34 → T8 36 → T9 38 (with review fixes) → T10 38 → T11 38 → T12 39.
+**Test count by task:** 18 → T1 20 → T2 24 → T3 26 → T4 27 → T5 30 → T6 31 → T7 34 → T8 36 → T9 38 (with review fixes) → T10 38 → T11 38 → T12 39 → 40 (ally-skip test) → 41 (final-review dummy fix).
 

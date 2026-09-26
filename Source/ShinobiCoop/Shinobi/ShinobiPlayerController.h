@@ -19,7 +19,7 @@ public:
 	UFUNCTION(Exec)
 	void ShinobiDamageSelf(float Amount);
 
-	/** Console: ShinobiDrainChakra 60 — server removes chakra from this player's pawn (nothing spends chakra until M2's jutsu). */
+	/** Console: ShinobiDrainChakra 60 — server removes chakra from this player's pawn. */
 	UFUNCTION(Exec)
 	void ShinobiDrainChakra(float Amount);
 
