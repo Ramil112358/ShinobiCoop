@@ -8,8 +8,11 @@
 class UInputAction;
 class UInputMappingContext;
 
-/** Priority IMC_Shinobi is added at. An M2+ jutsu-modifier context must be added above this. */
+/** Priority IMC_Shinobi is added at. */
 constexpr int32 ShinobiInputPriority = 1;
+
+/** IMC_ShinobiJutsu goes above IMC_Shinobi so, while RB is held, its face buttons win over jump/dodge/melee. */
+constexpr int32 ShinobiJutsuInputPriority = ShinobiInputPriority + 1;
 
 /** All input actions and the mapping context, constructed in code so no input assets are needed. */
 UCLASS()
@@ -38,6 +41,14 @@ public:
 
 	UPROPERTY()
 	TObjectPtr<UInputAction> Jump;
+
+	/** Gamepad RB: while held, the player adds JutsuContext. */
+	UPROPERTY()
+	TObjectPtr<UInputAction> JutsuModifier;
+
+	/** Gamepad A/B/X/Y -> Jutsu 1-4. Only active while RB is held. */
+	UPROPERTY()
+	TObjectPtr<UInputMappingContext> JutsuContext;
 
 	UPROPERTY()
 	TMap<EShinobiAbilityInputID, TObjectPtr<UInputAction>> AbilityActions;

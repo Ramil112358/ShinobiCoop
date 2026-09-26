@@ -36,7 +36,7 @@ void UGA_Substitution::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 	Self->TeleportTo(Behind, FaceAttacker); // stays put if something blocks the spot; the hit is negated either way
 	if (UShinobiMovementComponent* Movement = GetShinobiMovement())
 	{
-		Movement->ForceRotationCorrectionFor(0.5f); // the teleport's correction also turns the owning client
+		Movement->ForceRotationCorrectionFor(1.f); // the teleport's correction also turns the owning client (1 s covers a client hitch)
 	}
 
 	if (ShinobiCombat::ApplyStatus(GetAbilitySystemComponentFromActorInfo(), Attacker, UGE_Stagger::StaticClass()))

@@ -82,6 +82,23 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 	AddAbility(EShinobiAbilityInputID::Sprint, TEXT("IA_Sprint"), EKeys::LeftShift, EKeys::Gamepad_LeftThumbstick);
 	AddAbility(EShinobiAbilityInputID::ChakraCharge, TEXT("IA_ChakraCharge"), EKeys::C, EKeys::Gamepad_LeftShoulder);
 
+	// Jutsu 1-4: number keys here; the gamepad face buttons live in JutsuContext, which the player adds while RB is held.
+	Config->JutsuModifier = MakeAction(Config, TEXT("IA_JutsuModifier"), EInputActionValueType::Boolean);
+	Ctx->MapKey(Config->JutsuModifier, EKeys::Gamepad_RightShoulder);
+	UInputMappingContext* JutsuCtx = NewObject<UInputMappingContext>(Config, TEXT("IMC_ShinobiJutsu"));
+	Config->JutsuContext = JutsuCtx;
+	const auto AddJutsu = [Config, Ctx, JutsuCtx](EShinobiAbilityInputID ID, FName Name, const FKey& Key, const FKey& PadKey)
+	{
+		UInputAction* Action = MakeAction(Config, Name, EInputActionValueType::Boolean);
+		Ctx->MapKey(Action, Key);
+		JutsuCtx->MapKey(Action, PadKey);
+		Config->AbilityActions.Add(ID, Action);
+	};
+	AddJutsu(EShinobiAbilityInputID::Jutsu1, TEXT("IA_Jutsu1"), EKeys::One, EKeys::Gamepad_FaceButton_Bottom);
+	AddJutsu(EShinobiAbilityInputID::Jutsu2, TEXT("IA_Jutsu2"), EKeys::Two, EKeys::Gamepad_FaceButton_Right);
+	AddJutsu(EShinobiAbilityInputID::Jutsu3, TEXT("IA_Jutsu3"), EKeys::Three, EKeys::Gamepad_FaceButton_Left);
+	AddJutsu(EShinobiAbilityInputID::Jutsu4, TEXT("IA_Jutsu4"), EKeys::Four, EKeys::Gamepad_FaceButton_Top);
+
 	return Config;
 }
 

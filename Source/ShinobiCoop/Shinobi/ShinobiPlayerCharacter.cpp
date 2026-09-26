@@ -112,6 +112,8 @@ void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 		Input->BindAction(Pair.Value, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::AbilityInputPressed, Pair.Key);
 		Input->BindAction(Pair.Value, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::AbilityInputReleased, Pair.Key);
 	}
+	Input->BindAction(InputConfig.JutsuModifier, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::SetJutsuModifier, true);
+	Input->BindAction(InputConfig.JutsuModifier, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::SetJutsuModifier, false);
 }
 
 void AShinobiPlayerCharacter::Move(const FInputActionValue& Value)
@@ -150,4 +152,23 @@ void AShinobiPlayerCharacter::AbilityInputPressed(EShinobiAbilityInputID InputID
 void AShinobiPlayerCharacter::AbilityInputReleased(EShinobiAbilityInputID InputID)
 {
 	AbilitySystem->AbilityLocalInputReleased(static_cast<int32>(InputID));
+}
+
+void AShinobiPlayerCharacter::SetJutsuModifier(bool bHeld)
+{
+	const APlayerController* PC = Cast<APlayerController>(GetController());
+	UEnhancedInputLocalPlayerSubsystem* Subsystem = PC ? ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()) : nullptr;
+	if (!Subsystem)
+	{
+		return;
+	}
+	const UInputMappingContext* JutsuContext = UShinobiInputConfig::Get().JutsuContext;
+	if (bHeld)
+	{
+		Subsystem->AddMappingContext(JutsuContext, ShinobiJutsuInputPriority);
+	}
+	else
+	{
+		Subsystem->RemoveMappingContext(JutsuContext);
+	}
 }

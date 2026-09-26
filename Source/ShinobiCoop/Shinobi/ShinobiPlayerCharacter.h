@@ -35,6 +35,8 @@ private:
 	void JumpPressed();
 	void AbilityInputPressed(EShinobiAbilityInputID InputID);
 	void AbilityInputReleased(EShinobiAbilityInputID InputID);
+	/** RB held: adds IMC_ShinobiJutsu (A/B/X/Y cast jutsu); released: removes it. */
+	void SetJutsuModifier(bool bHeld);
 
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	TObjectPtr<USpringArmComponent> CameraBoom;

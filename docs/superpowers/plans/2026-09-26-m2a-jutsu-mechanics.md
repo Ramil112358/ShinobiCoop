@@ -2891,7 +2891,7 @@ bool UShinobiMovementComponent::ShouldCorrectRotation() const
 ```cpp
 	if (UShinobiMovementComponent* Movement = GetShinobiMovement())
 	{
-		Movement->ForceRotationCorrectionFor(0.5f); // the teleport's correction also turns the owning client
+		Movement->ForceRotationCorrectionFor(1.f); // the teleport's correction also turns the owning client (1 s covers a client hitch)
 	}
 ```
    - send the stagger event only when the stagger applied:
@@ -3915,6 +3915,9 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - **M2b explosion VFX needs a server cue.** A ball that explodes at spawn is destroyed before it ever replicates, so an explosion effect must be a Gameplay Cue sent from the server, not something the actor does on clients.
 - **Allies block the aim.** `TraceAim` ignores only the caster. An ally within ~72 units of the aim line, in front of the enemy, is the first hit, so Amaterasu fails (for free) and Fireball's aim point lands on the ally. If playtests complain, ignore non-hostile characters in the sweep.
 - **Wasted jutsu on a lost target.** Amaterasu locks its target at cast time. If that target becomes invulnerable, dies or is destroyed during the 0.5 s wind-up, the full cost and cooldown are spent for nothing. For M3: add an "alive" check to `ApplyStatus`/`IsHostileTo`, and consider a refund (the interrupt path) when the target is gone.
+- **Substitution teleport has no path or ground check.** `FindTeleportSpot` only resolves overlaps at the destination. An attacker with its back to a thin wall (under ~110 units) sends you through it; an attacker at a ledge drops you off it. For M3, sweep the capsule from the attacker to the point, clamp to the hit, and try the attacker's sides.
+- **The camera doesn't turn with Substitution.** Only the pawn faces the attacker, so the camera shows you from the front and "forward" walks away from the enemy. `ClientSetRotation(FaceAttacker)` would help the counter-attack; decide in playtesting.
+- **Substitution regen runs on a fixed clock from spawn** (ticks at 15, 30, 45 s...), so a spent charge returns after anywhere from 0 to 15 s. Tune in playtesting if it feels random.
 - **Damage context carries no ability.** `ShinobiCombat` builds the damage spec from the ASC's own effect context, with no ability and at level 1. If M2b hit cues need `GetAbility()` to pick a per-jutsu effect, add a source object.
 
 ## Self-review
