@@ -3885,6 +3885,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 | 13 | Client window `NetEmulation.PktLag 150`, then cast each jutsu | Works; no large snaps. A small correction at the start of the Chidori dash is a known risk; note it if seen. |
 | 14 | Console `Shinobi.DummyAttack 0` | Punching stops |
 | 15 | Client window: cast each jutsu ~10 times (wait out cooldowns) | Every cast fires. None of them spends chakra while nothing happens. |
+| 16 | Client window, standing still: quickly turn the camera onto a dummy off to the side, then press **1** (or **4**) immediately | The fireball flies (or the black flame lands) where you are now aiming, not where you were aiming before the turn |
 
 - [ ] **Step 3: Record the result.** Append a short "M2a manual check" note (date, pass/fail per row, fixes) to the bottom of this plan and commit it:
 ```powershell
@@ -3910,6 +3911,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - **M3 knockback on players.** Rasengan's knockback uses `LaunchCharacter` on the server. That's fine for AI targets. If enemies ever use it on players, see the M1 note on root-motion hit reactions.
 - **HUD cooldown shade.** It approximates the spec's radial sweep; M5 can swap in a radial material.
 - **Jutsu cooldown is not predicted.** The cooldown is committed from the wind-up timer, outside any prediction window, so the owning client only sees it once the server's copy replicates (about one-way latency late). A recast in that window is predicted, then rejected: a brief chakra dip that rolls back. Acceptable for now.
+- **The server's view of a remote client's aim can be ~1 s stale while the client stands still (measured in Task 12).** In the headless smoke test, a `SetControlRotation` pitch change took more than 0.5–1 s to reach the server's copy, because control rotation rides the movement RPC cadence, which is slow for a stationary pawn. The server's `GetPlayerViewPoint` / `ServerUpdateCamera` data may be similarly late. Fireball and Amaterasu aim on the server can then use an outdated direction. Check it in PIE (Task 13 row 16). If it shows up, raising the priority of client-sent target data (below) is the fix. That would be before M4 at the latest, and in M2b if row 16 fails.
 - **Client and server can disagree on `PrepareJutsu`.** This matters for Amaterasu, where the server's camera from `ServerUpdateCamera` can be ~80 ms stale. If the client fails but the server succeeds, the server pays and then the client's cancel ends it with no refund. The fix is a target-data exchange (client sends its target) or not replicating the client's failure end.
 - **Projectiles block each other.** Both use the WorldDynamic object type and block everything, so a fireball and M3's kunai meet head-on and both explode mid-air. Decide in M3: keep it as "fireball destroys kunai", or give projectiles their own channel and ignore it.
 - **M2b explosion VFX needs a server cue.** A ball that explodes at spawn is destroyed before it ever replicates, so an explosion effect must be a Gameplay Cue sent from the server, not something the actor does on clients.
