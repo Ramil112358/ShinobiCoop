@@ -57,6 +57,7 @@ Same as the M0/M1 plan's "Conventions", in short:
   - Pawns spawned in tests have no controller, so the aim helpers fall back to the actor's eyes, which look along the actor's facing.
   - A character spawned with `FRotator::ZeroRotator` faces +X.
   - Timers set before the test world's first `Tick` (e.g. a wind-up started by a `Tap` right after spawning) start counting one 0.05 s tick late, so a delay of D fires at about D + 0.05–0.1. Put timing checkpoints at least 0.1 s after the nominal time, never exactly one tick after it. (Found in Task 5.)
+  - Falling characters drop ~120 units by t = 0.5 s. Anything gravity-free that is launched later (a projectile) misses them, so use `ShinobiTest::Hover` on the characters. (Found in Task 5.)
 
 ## Decisions and deviations from the spec (all deliberate)
 
@@ -1402,7 +1403,7 @@ Fireball is the first subclass and the vehicle for the base-class tests.
 
 - [ ] **Step 1: Add test helpers to `Source/ShinobiCoop/Tests/ShinobiTestWorld.h`**
 
-Add `#include "EngineUtils.h"` to the includes. Inside `namespace ShinobiTest`, after `Release`:
+Add `#include "EngineUtils.h"` and `#include "GameFramework/CharacterMovementComponent.h"` to the includes. Inside `namespace ShinobiTest`, after `Release`:
 
 ```cpp
 	/** Press and release (jutsu fire on press). Not named Cast: that would hide UE's Cast<T> inside this namespace. */
@@ -1410,6 +1411,13 @@ Add `#include "EngineUtils.h"` to the includes. Inside `namespace ShinobiTest`, 
 	{
 		Press(Character, InputID);
 		Release(Character, InputID);
+	}
+
+	/** The test world has no floor, so characters fall. Flying mode with no input keeps one hovering in place, e.g. so a
+	 * gravity-free projectile thrown after a wind-up still meets it where it was aimed. */
+	inline void Hover(AShinobiCharacterBase* Character)
+	{
+		Character->GetCharacterMovement()->SetMovementMode(MOVE_Flying);
 	}
 
 	template <class T>
@@ -1444,6 +1452,9 @@ bool FShinobiFireballTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(600.f, 0.f, 0.f));
+	// No floor: both would fall while the gravity-free ball flies level and passes over the enemy.
+	ShinobiTest::Hover(P);
+	ShinobiTest::Hover(E);
 	UAbilitySystemComponent* ASC = P->GetAbilitySystemComponent();
 	const UGA_Fireball* Fireball = GetDefault<UGA_Fireball>();
 	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();

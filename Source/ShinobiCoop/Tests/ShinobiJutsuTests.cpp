@@ -48,6 +48,9 @@ bool FShinobiFireballTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(600.f, 0.f, 0.f));
+	// No floor: both would fall while the gravity-free ball flies level and passes over the enemy.
+	ShinobiTest::Hover(P);
+	ShinobiTest::Hover(E);
 	UAbilitySystemComponent* ASC = P->GetAbilitySystemComponent();
 	const UGA_Fireball* Fireball = GetDefault<UGA_Fireball>();
 	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();

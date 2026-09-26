@@ -7,6 +7,7 @@
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "AbilitySystemComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameplayEffect.h"
 #include "Misc/AutomationTest.h"
 #include "Shinobi/ShinobiCharacterBase.h"
@@ -120,6 +121,13 @@ namespace ShinobiTest
 	{
 		Press(Character, InputID);
 		Release(Character, InputID);
+	}
+
+	/** The test world has no floor, so characters fall. Flying mode with no input keeps one hovering in place, e.g. so a
+	 * gravity-free projectile thrown after a wind-up still meets it where it was aimed. */
+	inline void Hover(AShinobiCharacterBase* Character)
+	{
+		Character->GetCharacterMovement()->SetMovementMode(MOVE_Flying);
 	}
 
 	template <class T>
