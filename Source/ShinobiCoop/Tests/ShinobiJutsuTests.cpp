@@ -59,7 +59,8 @@ bool FShinobiFireballTest::RunTest(const FString& Parameters)
 	W.Tick(0.3f);
 	TestEqual(TEXT("Nothing thrown during the 0.4 s wind-up"), ShinobiTest::CountActors<AShinobiProjectile>(W), 0);
 
-	W.Tick(0.15f); // t = 0.45
+	// Timers set before the world's first tick start counting a tick late, so a 0.4 s wind-up fires at ~0.45-0.5.
+	W.Tick(0.2f); // t = 0.5
 	TestEqual(TEXT("Thrown after the wind-up"), ShinobiTest::CountActors<AShinobiProjectile>(W), 1);
 	TestTrue(TEXT("Cooldown starts after the wind-up"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Fireball));
 	TestFalse(TEXT("Ability ends once thrown"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
@@ -72,11 +73,11 @@ bool FShinobiFireballTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Blocked by the cooldown"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
 	TestEqual(TEXT("Nothing spent on a blocked cast"), ShinobiTest::Get(P, Chakra), ChakraAfterCast);
 
-	W.Tick(0.4f); // t = 0.85: the ball has reached the enemy
+	W.Tick(0.4f); // t = 0.9: the ball has reached the enemy
 	TestEqual(TEXT("Enemy hit for 60"), ShinobiTest::Get(E, UShinobiAttributeSet::GetHealthAttribute()), 440.f);
 	TestTrue(TEXT("Enemy burning"), ShinobiTest::HasTag(E, ShinobiTags::State_Burning_Normal));
 
-	W.Tick(3.7f); // t = 4.55; the cooldown started at ~0.4 and lasts 4 s
+	W.Tick(3.8f); // t = 4.7; the cooldown started at ~0.45-0.5 and lasts 4 s
 	TestFalse(TEXT("Cooldown over"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Fireball));
 	ShinobiTest::Set(P, Chakra, 19.f);
 	TestFalse(TEXT("HUD: unaffordable below the cost"), Fireball->GetSlotState(*ASC).bAffordable);

@@ -56,6 +56,7 @@ Same as the M0/M1 plan's "Conventions", in short:
   - Test actors have no floor, so they are always falling.
   - Pawns spawned in tests have no controller, so the aim helpers fall back to the actor's eyes, which look along the actor's facing.
   - A character spawned with `FRotator::ZeroRotator` faces +X.
+  - Timers set before the test world's first `Tick` (e.g. a wind-up started by a `Tap` right after spawning) start counting one 0.05 s tick late, so a delay of D fires at about D + 0.05–0.1. Put timing checkpoints at least 0.1 s after the nominal time, never exactly one tick after it. (Found in Task 5.)
 
 ## Decisions and deviations from the spec (all deliberate)
 
@@ -1454,7 +1455,8 @@ bool FShinobiFireballTest::RunTest(const FString& Parameters)
 	W.Tick(0.3f);
 	TestEqual(TEXT("Nothing thrown during the 0.4 s wind-up"), ShinobiTest::CountActors<AShinobiProjectile>(W), 0);
 
-	W.Tick(0.15f); // t = 0.45
+	// Timers set before the world's first tick start counting a tick late, so a 0.4 s wind-up fires at ~0.45-0.5.
+	W.Tick(0.2f); // t = 0.5
 	TestEqual(TEXT("Thrown after the wind-up"), ShinobiTest::CountActors<AShinobiProjectile>(W), 1);
 	TestTrue(TEXT("Cooldown starts after the wind-up"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Fireball));
 	TestFalse(TEXT("Ability ends once thrown"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
@@ -1467,11 +1469,11 @@ bool FShinobiFireballTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Blocked by the cooldown"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
 	TestEqual(TEXT("Nothing spent on a blocked cast"), ShinobiTest::Get(P, Chakra), ChakraAfterCast);
 
-	W.Tick(0.4f); // t = 0.85: the ball has reached the enemy
+	W.Tick(0.4f); // t = 0.9: the ball has reached the enemy
 	TestEqual(TEXT("Enemy hit for 60"), ShinobiTest::Get(E, UShinobiAttributeSet::GetHealthAttribute()), 440.f);
 	TestTrue(TEXT("Enemy burning"), ShinobiTest::HasTag(E, ShinobiTags::State_Burning_Normal));
 
-	W.Tick(3.7f); // t = 4.55; the cooldown started at ~0.4 and lasts 4 s
+	W.Tick(3.8f); // t = 4.7; the cooldown started at ~0.45-0.5 and lasts 4 s
 	TestFalse(TEXT("Cooldown over"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Fireball));
 	ShinobiTest::Set(P, Chakra, 19.f);
 	TestFalse(TEXT("HUD: unaffordable below the cost"), Fireball->GetSlotState(*ASC).bAffordable);
@@ -2028,11 +2030,11 @@ bool FShinobiAmaterasuTest::RunTest(const FString& Parameters)
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
 	TestTrue(TEXT("Casts on the enemy under the crosshair"), ShinobiTest::IsActive(P, UGA_Amaterasu::StaticClass()));
 	TestEqual(TEXT("Cost 50"), ShinobiTest::Get(P, Chakra), 50.f);
-	W.Tick(0.55f);
+	W.Tick(0.6f); // timers set before a tick start counting one tick late: the 0.5 s wind-up fires at ~0.55-0.6
 	TestTrue(TEXT("Black flame after the 0.5 s wind-up"), ShinobiTest::HasTag(E, ShinobiTags::State_Burning_Black));
 	TestFalse(TEXT("Not a normal burn"), ShinobiTest::HasTag(E, ShinobiTags::State_Burning_Normal));
 	TestTrue(TEXT("Cooldown started"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Amaterasu));
-	W.Tick(1.0f);
+	W.Tick(1.2f); // t = 1.8: exactly one tick (~1.6); the next is ~2.6
 	TestEqual(TEXT("15 damage per second"), ShinobiTest::Get(E, Health), 485.f);
 	TestEqual(TEXT("Enemy behind untouched"), ShinobiTest::Get(Behind, Health), 500.f);
 	TestEqual(TEXT("Enemy beyond range untouched"), ShinobiTest::Get(TooFar, Health), 500.f);
@@ -2401,7 +2403,7 @@ bool FShinobiRasenganTest::RunTest(const FString& Parameters)
 
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	TestEqual(TEXT("Cost 35"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 65.f);
-	W.Tick(0.85f); // 0.8 s wind-up; the burn's first tick is at 1 s
+	W.Tick(0.9f); // the 0.8 s wind-up fires at ~0.85-0.9 (pre-tick timers start one tick late); the burn's first tick is ~1.05
 	TestEqual(TEXT("Burning target: 150 + Firestorm 200"), ShinobiTest::Get(E, Health), 150.f);
 	TestEqual(TEXT("Firestorm reaches enemies within 500 of the target"), ShinobiTest::Get(Near, Health), 300.f);
 	TestEqual(TEXT("Firestorm stops at 500"), ShinobiTest::Get(Far, Health), 500.f);
@@ -2426,7 +2428,7 @@ bool FShinobiRasenganBlackFlameTest::RunTest(const FString& Parameters)
 
 	ShinobiTest::Tap(P1, EShinobiAbilityInputID::Jutsu3);
 	ShinobiTest::Tap(P2, EShinobiAbilityInputID::Jutsu3);
-	W.Tick(0.85f);
+	W.Tick(0.9f);
 	TestEqual(TEXT("Black flame also sets off Firestorm"), ShinobiTest::Get(BlackFlamed, Health), 150.f);
 	TestTrue(TEXT("Black flame survives Firestorm"), ShinobiTest::HasTag(BlackFlamed, ShinobiTags::State_Burning_Black));
 	TestEqual(TEXT("Not burning: just the 150 hit"), ShinobiTest::Get(NotBurning, Health), 350.f);
