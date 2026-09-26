@@ -49,3 +49,5 @@ Notes:
 | 11 | Killing the boss shows VICTORY. |
 | 12 | Tab / R3 locks the camera onto the enemy nearest the crosshair ("[ LOCKED ]"). Aimed jutsu follow it. It releases on the target's death, beyond 30 m, or on another press. |
 | 13 | Top-left shows teammates with HP and DOWNED/DEAD; top-centre shows the wave line. |
+
+**Result (2026-09-26):** the user ran the playtest; all 13 rows pass.
