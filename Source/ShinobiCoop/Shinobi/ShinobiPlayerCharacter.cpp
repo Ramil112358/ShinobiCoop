@@ -10,6 +10,7 @@
 #include "InputActionValue.h"
 #include "Shinobi/ShinobiInputConfig.h"
 #include "Shinobi/ShinobiTags.h"
+#include "Shinobi/Abilities/GA_Amaterasu.h"
 #include "Shinobi/Abilities/GA_ChakraCharge.h"
 #include "Shinobi/Abilities/GA_Dodge.h"
 #include "Shinobi/Abilities/GA_Fireball.h"
@@ -24,7 +25,7 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 	AbilitySystem->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
 	StartupAbilities = {
 		UGA_Melee::StaticClass(), UGA_Dodge::StaticClass(), UGA_Sprint::StaticClass(), UGA_ChakraCharge::StaticClass(),
-		UGA_Fireball::StaticClass(),
+		UGA_Fireball::StaticClass(), UGA_Amaterasu::StaticClass(),
 	};
 
 	bUseControllerRotationPitch = false;

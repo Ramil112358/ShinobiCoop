@@ -5,6 +5,7 @@
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiProjectile.h"
+#include "Shinobi/Abilities/GA_Amaterasu.h"
 #include "Shinobi/Abilities/GA_ChakraCharge.h"
 #include "Shinobi/Abilities/GA_Dodge.h"
 #include "Shinobi/Abilities/GA_Fireball.h"
@@ -143,6 +144,39 @@ bool FShinobiJutsuRulesTest::RunTest(const FString& Parameters)
 	W.Tick(0.6f);
 	TestEqual(TEXT("Nothing thrown"), ShinobiTest::CountActors<AShinobiProjectile>(W), 0);
 	TestFalse(TEXT("No cooldown"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Fireball));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiAmaterasuTest, "ShinobiCoop.Jutsu.AmaterasuBurnsCrosshairTargetOrFailsFree", ShinobiTestFlags)
+bool FShinobiAmaterasuTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>(); // aims along +X
+	AShinobiCharacterBase* Behind = W.Spawn<AShinobiCharacterBase>(FVector(-1000.f, 0.f, 0.f));
+	AShinobiCharacterBase* TooFar = W.Spawn<AShinobiCharacterBase>(FVector(3500.f, 0.f, 0.f));
+	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+	int32 Failures = 0;
+	P->GetAbilitySystemComponent()->AbilityFailedCallbacks.AddLambda([&Failures](const UGameplayAbility*, const FGameplayTagContainer&) { ++Failures; });
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
+	TestFalse(TEXT("No enemy under the crosshair within 3000: fails"), ShinobiTest::IsActive(P, UGA_Amaterasu::StaticClass()));
+	TestEqual(TEXT("Failed cast costs nothing"), ShinobiTest::Get(P, Chakra), 100.f);
+	TestEqual(TEXT("Failure reported (HUD flash)"), Failures, 1);
+	TestFalse(TEXT("No cooldown after a failed cast"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Amaterasu));
+
+	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(1500.f, 0.f, 0.f));
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
+	TestTrue(TEXT("Casts on the enemy under the crosshair"), ShinobiTest::IsActive(P, UGA_Amaterasu::StaticClass()));
+	TestEqual(TEXT("Cost 50"), ShinobiTest::Get(P, Chakra), 50.f);
+	W.Tick(0.6f); // timers set before a tick start counting one tick late: the 0.5 s wind-up fires at ~0.55-0.6
+	TestTrue(TEXT("Black flame after the 0.5 s wind-up"), ShinobiTest::HasTag(E, ShinobiTags::State_Burning_Black));
+	TestFalse(TEXT("Not a normal burn"), ShinobiTest::HasTag(E, ShinobiTags::State_Burning_Normal));
+	TestTrue(TEXT("Cooldown started"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Amaterasu));
+	W.Tick(1.2f); // t = 1.8: exactly one tick (~1.6); the next is ~2.6
+	TestEqual(TEXT("15 damage per second"), ShinobiTest::Get(E, Health), 485.f);
+	TestEqual(TEXT("Enemy behind untouched"), ShinobiTest::Get(Behind, Health), 500.f);
+	TestEqual(TEXT("Enemy beyond range untouched"), ShinobiTest::Get(TooFar, Health), 500.f);
 	return true;
 }
 
