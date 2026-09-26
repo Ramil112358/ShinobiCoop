@@ -221,3 +221,9 @@ UGE_SubstitutionRegen::UGE_SubstitutionRegen()
 	AddModifier(UShinobiAttributeSet::GetSubstitutionChargesAttribute(), 1.f);
 	bExecutePeriodicEffectOnApplication = false; // a fresh spawn already has full charges
 }
+
+UGE_SubstitutionCooldown::UGE_SubstitutionCooldown()
+{
+	SetDuration(0.5f);
+	GrantTag(ShinobiTags::Cooldown_Substitution);
+}

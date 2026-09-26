@@ -116,3 +116,13 @@ bool UShinobiMovementComponent::ClientUpdatePositionAfterServerUpdate()
 	bWantsToSprint = bRealWantsToSprint;
 	return bResult;
 }
+
+void UShinobiMovementComponent::ForceRotationCorrectionFor(float Seconds)
+{
+	ForceRotationCorrectionUntil = GetWorld()->GetTimeSeconds() + Seconds;
+}
+
+bool UShinobiMovementComponent::ShouldCorrectRotation() const
+{
+	return GetWorld() && GetWorld()->GetTimeSeconds() < ForceRotationCorrectionUntil;
+}

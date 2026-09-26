@@ -32,6 +32,7 @@ namespace ShinobiTags
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_Chidori, "Cooldown.Jutsu.Chidori");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_Rasengan, "Cooldown.Jutsu.Rasengan");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_Amaterasu, "Cooldown.Jutsu.Amaterasu");
+	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Substitution, "Cooldown.Substitution");
 
 	UE_DEFINE_GAMEPLAY_TAG(Fail_NoTarget, "Fail.NoTarget");
 }

@@ -40,6 +40,7 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_Chidori);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_Rasengan);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_Amaterasu);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Substitution);
 
 	// Activation failure reasons
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Fail_NoTarget);

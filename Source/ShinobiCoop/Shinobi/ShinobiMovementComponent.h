@@ -21,8 +21,17 @@ public:
 	virtual FNetworkPredictionData_Client* GetPredictionData_Client() const override;
 	virtual bool ClientUpdatePositionAfterServerUpdate() override;
 
+	/** Server: position corrections also carry rotation for the next Seconds. Corrections are location-only by
+	 * default, so a server-side teleport that turns the character (Substitution) would otherwise never turn the
+	 * owning client. */
+	void ForceRotationCorrectionFor(float Seconds);
+	virtual bool ShouldCorrectRotation() const override;
+
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	float SprintSpeed = 900.f;
 
 	uint8 bWantsToSprint : 1;
+
+private:
+	double ForceRotationCorrectionUntil = 0.0;
 };

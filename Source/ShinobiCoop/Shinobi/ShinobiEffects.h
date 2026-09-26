@@ -199,3 +199,13 @@ class SHINOBICOOP_API UGE_SubstitutionRegen : public UShinobiEffect
 public:
 	UGE_SubstitutionRegen();
 };
+
+/** One Substitution per dodge: 0.5 s of Cooldown.Substitution. The dodge's i-frames outlive the cancelled dodge, so
+ * without it a second hit in the same window would spend another charge and teleport again. */
+UCLASS()
+class SHINOBICOOP_API UGE_SubstitutionCooldown : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_SubstitutionCooldown();
+};

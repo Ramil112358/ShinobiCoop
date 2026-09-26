@@ -3,6 +3,7 @@
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiEffects.h"
+#include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiTags.h"
 
 UGA_Substitution::UGA_Substitution()
@@ -12,6 +13,7 @@ UGA_Substitution::UGA_Substitution()
 	// Otherwise the dodge's root-motion force keeps pushing the teleported character.
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Dodge);
 	CostGameplayEffectClass = UGE_SubstitutionCost::StaticClass();
+	CooldownGameplayEffectClass = UGE_SubstitutionCooldown::StaticClass();
 
 	FAbilityTriggerData Trigger;
 	Trigger.TriggerTag = ShinobiTags::Event_Substitution;
@@ -32,13 +34,19 @@ void UGA_Substitution::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 	const FVector Behind = Attacker->GetActorLocation() - Attacker->GetActorForwardVector().GetSafeNormal2D() * BehindDistance;
 	const FRotator FaceAttacker(0.f, (Attacker->GetActorLocation() - Behind).Rotation().Yaw, 0.f);
 	Self->TeleportTo(Behind, FaceAttacker); // stays put if something blocks the spot; the hit is negated either way
+	if (UShinobiMovementComponent* Movement = GetShinobiMovement())
+	{
+		Movement->ForceRotationCorrectionFor(0.5f); // the teleport's correction also turns the owning client
+	}
 
-	ShinobiCombat::ApplyStatus(GetAbilitySystemComponentFromActorInfo(), Attacker, UGE_Stagger::StaticClass());
-	FGameplayEventData Stagger;
-	Stagger.EventTag = ShinobiTags::Event_Hit_Stagger;
-	Stagger.Instigator = Self;
-	Stagger.Target = Attacker;
-	Attacker->GetAbilitySystemComponent()->HandleGameplayEvent(Stagger.EventTag, &Stagger); // interrupts their wind-up or charge too
+	if (ShinobiCombat::ApplyStatus(GetAbilitySystemComponentFromActorInfo(), Attacker, UGE_Stagger::StaticClass()))
+	{
+		FGameplayEventData Stagger;
+		Stagger.EventTag = ShinobiTags::Event_Hit_Stagger;
+		Stagger.Instigator = Self;
+		Stagger.Target = Attacker;
+		Attacker->GetAbilitySystemComponent()->HandleGameplayEvent(Stagger.EventTag, &Stagger); // interrupts their wind-up or charge too
+	}
 
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 }

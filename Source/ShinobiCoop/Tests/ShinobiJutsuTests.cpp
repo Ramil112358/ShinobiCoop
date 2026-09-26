@@ -322,4 +322,23 @@ bool FShinobiSubstitutionTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSubstitutionOnceTest, "ShinobiCoop.Jutsu.SubstitutionOncePerDodge", ShinobiTestFlags)
+bool FShinobiSubstitutionOnceTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* E1 = W.Spawn<AShinobiCharacterBase>(FVector(300.f, 0.f, 0.f), FRotator(0.f, 180.f, 0.f));
+	AShinobiCharacterBase* E2 = W.Spawn<AShinobiCharacterBase>(FVector(-300.f, 0.f, 0.f));
+	const FGameplayAttribute Charges = UShinobiAttributeSet::GetSubstitutionChargesAttribute();
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Dodge);
+	ShinobiCombat::ApplyDamage(E1->GetAbilitySystemComponent(), P, 50.f);
+	const FVector AfterFirst = P->GetActorLocation();
+	TestFalse(TEXT("Second hit in the same i-frames doesn't land"), ShinobiCombat::ApplyDamage(E2->GetAbilitySystemComponent(), P, 50.f));
+	TestEqual(TEXT("Still no damage"), ShinobiTest::Get(P, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
+	TestEqual(TEXT("Only one charge spent per dodge"), ShinobiTest::Get(P, Charges), 2.f);
+	TestTrue(TEXT("No second teleport"), P->GetActorLocation().Equals(AfterFirst));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

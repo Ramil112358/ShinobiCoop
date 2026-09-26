@@ -2836,6 +2836,98 @@ git commit -m "feat: perfect-dodge Substitution with charges and regen
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
+#### Task 9 review fixes (added after review)
+
+The review found three problems.
+- **Facing isn't replicated.** `TeleportTo`'s new facing never reaches the owning client: movement corrections carry location only (`ShouldCorrectRotation()` is false), and the correction restores the client's last good rotation. So the client stands behind the attacker with its back to it, and a backstep right after rubber-bands about 1200 units.
+- **Several charges per dodge.** The 0.2 s i-frames outlive the cancelled dodge, so two hits in the same window spend two charges and teleport twice.
+- **An invulnerable attacker is still interrupted.** The stagger event was sent even when `ApplyStatus` skipped an invulnerable attacker.
+
+Fixes:
+1. **Tag.** In `ShinobiTags.h`/`.cpp`, add `Cooldown_Substitution` = `"Cooldown.Substitution"` under the jutsu cooldowns.
+2. **Cooldown effect.** In `ShinobiEffects.h`/`.cpp`, add:
+```cpp
+/** One Substitution per dodge: 0.5 s of Cooldown.Substitution. The dodge's i-frames outlive the cancelled dodge, so
+ * without it a second hit in the same window would spend another charge and teleport again. */
+UCLASS()
+class SHINOBICOOP_API UGE_SubstitutionCooldown : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_SubstitutionCooldown();
+};
+```
+```cpp
+UGE_SubstitutionCooldown::UGE_SubstitutionCooldown()
+{
+	SetDuration(0.5f);
+	GrantTag(ShinobiTags::Cooldown_Substitution);
+}
+```
+3. **Rotation corrections.** In `ShinobiMovementComponent.h`, add these public members after `ClientUpdatePositionAfterServerUpdate`:
+```cpp
+	/** Server: position corrections also carry rotation for the next Seconds. Corrections are location-only by
+	 * default, so a server-side teleport that turns the character (Substitution) would otherwise never turn the
+	 * owning client. */
+	void ForceRotationCorrectionFor(float Seconds);
+	virtual bool ShouldCorrectRotation() const override;
+```
+   and a private member `double ForceRotationCorrectionUntil = 0.0;`. In `ShinobiMovementComponent.cpp`:
+```cpp
+void UShinobiMovementComponent::ForceRotationCorrectionFor(float Seconds)
+{
+	ForceRotationCorrectionUntil = GetWorld()->GetTimeSeconds() + Seconds;
+}
+
+bool UShinobiMovementComponent::ShouldCorrectRotation() const
+{
+	return GetWorld() && GetWorld()->GetTimeSeconds() < ForceRotationCorrectionUntil;
+}
+```
+4. **The ability.** In `GA_Substitution.cpp`:
+   - add `#include "Shinobi/ShinobiMovementComponent.h"`;
+   - in the constructor, after `CostGameplayEffectClass`, add `CooldownGameplayEffectClass = UGE_SubstitutionCooldown::StaticClass();`;
+   - after the `TeleportTo` line, add:
+```cpp
+	if (UShinobiMovementComponent* Movement = GetShinobiMovement())
+	{
+		Movement->ForceRotationCorrectionFor(0.5f); // the teleport's correction also turns the owning client
+	}
+```
+   - send the stagger event only when the stagger applied:
+```cpp
+	if (ShinobiCombat::ApplyStatus(GetAbilitySystemComponentFromActorInfo(), Attacker, UGE_Stagger::StaticClass()))
+	{
+		FGameplayEventData Stagger;
+		Stagger.EventTag = ShinobiTags::Event_Hit_Stagger;
+		Stagger.Instigator = Self;
+		Stagger.Target = Attacker;
+		Attacker->GetAbilitySystemComponent()->HandleGameplayEvent(Stagger.EventTag, &Stagger); // interrupts their wind-up or charge too
+	}
+```
+5. **Regression test.** Add this to `ShinobiJutsuTests.cpp`, after `FShinobiSubstitutionTest`. The rotation correction needs a network and can't be tested here; it's covered by Task 13 row 10.
+```cpp
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSubstitutionOnceTest, "ShinobiCoop.Jutsu.SubstitutionOncePerDodge", ShinobiTestFlags)
+bool FShinobiSubstitutionOnceTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* E1 = W.Spawn<AShinobiCharacterBase>(FVector(300.f, 0.f, 0.f), FRotator(0.f, 180.f, 0.f));
+	AShinobiCharacterBase* E2 = W.Spawn<AShinobiCharacterBase>(FVector(-300.f, 0.f, 0.f));
+	const FGameplayAttribute Charges = UShinobiAttributeSet::GetSubstitutionChargesAttribute();
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Dodge);
+	ShinobiCombat::ApplyDamage(E1->GetAbilitySystemComponent(), P, 50.f);
+	const FVector AfterFirst = P->GetActorLocation();
+	TestFalse(TEXT("Second hit in the same i-frames doesn't land"), ShinobiCombat::ApplyDamage(E2->GetAbilitySystemComponent(), P, 50.f));
+	TestEqual(TEXT("Still no damage"), ShinobiTest::Get(P, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
+	TestEqual(TEXT("Only one charge spent per dodge"), ShinobiTest::Get(P, Charges), 2.f);
+	TestTrue(TEXT("No second teleport"), P->GetActorLocation().Equals(AfterFirst));
+	return true;
+}
+```
+Expected after the fixes: `ALL 38 TESTS PASSED`.
+
 ---
 
 ### Task 10: Jutsu input (keys 1–4, gamepad RB + face buttons)
@@ -2975,7 +3067,7 @@ Add `#include "InputMappingContext.h"` if the compiler asks for the full type.
 
 - [ ] **Step 6: Build and run all tests**
 
-Expected: `ALL 37 TESTS PASSED`.
+Expected: `ALL 38 TESTS PASSED`.
 
 - [ ] **Step 7: Commit**
 
@@ -3393,7 +3485,7 @@ powershell -ExecutionPolicy Bypass -File Scripts\build.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\shot_chakra.ps1
 ```
-Expected: `ALL 37 TESTS PASSED`, and six screenshot paths including `ShinobiShot_5_Hud.png`.
+Expected: `ALL 38 TESTS PASSED`, and six screenshot paths including `ShinobiShot_5_Hud.png`.
 
 Open `Saved\Screenshots\WindowsEditor\ShinobiShot_5_Hud.png` with the Read tool and check:
 - the bars and three log pips are at the bottom left;
@@ -3755,7 +3847,7 @@ powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\smoke_m1.ps1
 ```
 Expected:
-- `ALL 38 TESTS PASSED`;
+- `ALL 39 TESTS PASSED`;
 - two `SMOKE PASS` lines, the second for a `ShinobiTrainingDummy_*` with `H=` at or below 440 and `Burn=1`.
 
 - [ ] **Step 8: Commit**
@@ -3870,5 +3962,5 @@ Still open and unchanged: dodge direction replication, i-frame RTT, melee yaw st
 - `UGE_Burn::DamagePerTick` and `UGE_BlackFlame::DamagePerTick` are used by the projectile, Amaterasu and the tests.
 - Tags are defined once in Task 1 and only used afterwards.
 
-**Test count by task:** 18 → T1 20 → T2 24 → T3 26 → T4 27 → T5 30 → T6 31 → T7 34 → T8 36 → T9 37 → T10 37 → T11 37 → T12 38.
+**Test count by task:** 18 → T1 20 → T2 24 → T3 26 → T4 27 → T5 30 → T6 31 → T7 34 → T8 36 → T9 38 (with review fixes) → T10 38 → T11 38 → T12 39.
 
