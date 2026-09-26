@@ -2,6 +2,7 @@
 #include "AbilitySystemComponent.h"
 #include "EngineUtils.h"
 #include "Shinobi/ShinobiCharacterBase.h"
+#include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiTags.h"
@@ -40,18 +41,7 @@ bool UShinobiGameplayAbility::ApplyDamage(AShinobiCharacterBase* Target, float A
 	{
 		return false;
 	}
-	UAbilitySystemComponent* Source = GetAbilitySystemComponentFromActorInfo();
-	if (!Source || !Target)
-	{
-		return false;
-	}
-	FGameplayEffectSpecHandle Spec = MakeOutgoingGameplayEffectSpec(UGE_Damage::StaticClass(), GetAbilityLevel());
-	Spec.Data->SetSetByCallerMagnitude(ShinobiTags::Data_Damage, Amount);
-	// For an instant effect, WasSuccessfullyApplied() is true once it executes (GetInstantExecutedHandle());
-	// it comes back false (default-constructed handle) if a GE component blocked application, e.g. GE_Damage's
-	// own IgnoreApplicationIfTargetHas(State.Invulnerable) requirement.
-	const FActiveGameplayEffectHandle Handle = Source->ApplyGameplayEffectSpecToTarget(*Spec.Data.Get(), Target->GetAbilitySystemComponent());
-	return Handle.WasSuccessfullyApplied();
+	return ShinobiCombat::ApplyDamage(GetAbilitySystemComponentFromActorInfo(), Target, Amount);
 }
 
 TArray<AShinobiCharacterBase*> UShinobiGameplayAbility::FindHostilesInCone(float Range, float HalfAngleDegrees) const

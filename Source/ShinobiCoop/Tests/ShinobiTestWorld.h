@@ -124,6 +124,26 @@ namespace ShinobiTest
 	{
 		return Character->GetAbilitySystemComponent()->HasMatchingGameplayTag(Tag);
 	}
+
+	/** Counts gameplay events with Tag delivered to Character's ability system and remembers the last
+	 * instigator. Declare it after the FShinobiTestWorld so it is destroyed first. */
+	struct FEventCounter
+	{
+		int32 Count = 0;
+		const AActor* LastInstigator = nullptr;
+
+		FEventCounter(AShinobiCharacterBase* Character, const FGameplayTag& Tag)
+		{
+			Character->GetAbilitySystemComponent()->GenericGameplayEventCallbacks.FindOrAdd(Tag).AddLambda([this](const FGameplayEventData* Payload)
+			{
+				++Count;
+				LastInstigator = Payload->Instigator.Get();
+			});
+		}
+
+		FEventCounter(const FEventCounter&) = delete;
+		FEventCounter& operator=(const FEventCounter&) = delete;
+	};
 }
 
 #endif // WITH_DEV_AUTOMATION_TESTS

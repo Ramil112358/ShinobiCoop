@@ -2,6 +2,7 @@
 #include "GameplayEffectComponents/TargetTagsGameplayEffectComponent.h"
 #include "GameplayEffectComponents/TargetTagRequirementsGameplayEffectComponent.h"
 #include "Shinobi/ShinobiAttributeSet.h"
+#include "Shinobi/ShinobiDamageExec.h"
 #include "Shinobi/ShinobiTags.h"
 
 void UShinobiEffect::AddModifier(const FGameplayAttribute& Attribute, float Magnitude)
@@ -66,11 +67,16 @@ void UShinobiEffect::InhibitWhileTargetHas(const FGameplayTag& Tag)
 	Requirements().OngoingTagRequirements.IgnoreTags.AddTag(Tag);
 }
 
+void UShinobiEffect::AddDamageExecution()
+{
+	FGameplayEffectExecutionDefinition& Execution = Executions.AddDefaulted_GetRef();
+	Execution.CalculationClass = UShinobiDamageExec::StaticClass();
+}
+
 UGE_Damage::UGE_Damage()
 {
 	DurationPolicy = EGameplayEffectDurationType::Instant;
-	AddSetByCallerModifier(UShinobiAttributeSet::GetIncomingDamageAttribute(), ShinobiTags::Data_Damage);
-	IgnoreApplicationIfTargetHas(ShinobiTags::State_Invulnerable);
+	AddDamageExecution();
 }
 
 UGE_ChakraGain::UGE_ChakraGain()

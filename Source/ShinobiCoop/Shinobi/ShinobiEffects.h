@@ -27,6 +27,8 @@ protected:
 	void IgnoreApplicationIfTargetHas(const FGameplayTag& Tag);
 	/** Effect stays applied but does nothing while the target has this tag. */
 	void InhibitWhileTargetHas(const FGameplayTag& Tag);
+	/** Deal damage through UShinobiDamageExec, which reads SetByCaller Data.Damage. */
+	void AddDamageExecution();
 
 private:
 	UTargetTagRequirementsGameplayEffectComponent& Requirements();
@@ -38,7 +40,7 @@ private:
 	TObjectPtr<UTargetTagRequirementsGameplayEffectComponent> RequirementsComponent;
 };
 
-/** Instant damage. Magnitude: SetByCaller Data.Damage. Ignored while the target is invulnerable. */
+/** Instant damage through UShinobiDamageExec (SetByCaller Data.Damage). Invulnerable targets take none; see the exec. */
 UCLASS()
 class SHINOBICOOP_API UGE_Damage : public UShinobiEffect
 {
