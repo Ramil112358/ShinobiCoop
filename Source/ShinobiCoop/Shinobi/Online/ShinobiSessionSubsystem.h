@@ -6,10 +6,18 @@
 #include "OnlineSessionSettings.h"
 #include "ShinobiSessionSubsystem.generated.h"
 
+/** A map Host Game can open. */
+struct FShinobiMap
+{
+	const TCHAR* DisplayName;
+	const TCHAR* Path;
+};
+
 /** One joinable game from Find Games. */
 struct FShinobiFoundGame
 {
 	FString HostName;
+	FString MapName;
 	int32 Players = 0;
 	int32 MaxPlayers = 0;
 	int32 PingMs = 0;
@@ -30,7 +38,11 @@ public:
 	/** Session setting every ShinobiCoop game carries: Steam app 480 is shared by every developer's test games. */
 	static const FName GameKey;
 	static const TCHAR* MenuMap;
-	static const TCHAR* ArenaMap;
+	/** Session setting carrying the map's display name, for Find Games. */
+	static const FName MapKey;
+
+	/** The maps Host Game offers; the first is the default. */
+	static const TArray<FShinobiMap>& GetMaps();
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
@@ -41,7 +53,8 @@ public:
 	/** A session operation is in flight (the menu disables its buttons). */
 	bool IsBusy() const { return bBusy; }
 
-	void HostGame();
+	/** Hosts on GetMaps()[MapIndex]. */
+	void HostGame(int32 MapIndex = 0);
 	void FindGames();
 	/** Index into GetFoundGames(). */
 	void JoinGame(int32 Index);
@@ -79,6 +92,7 @@ private:
 	TArray<FOnlineSessionSearchResult> Results;
 	TArray<FShinobiFoundGame> FoundGames;
 	TFunction<void()> AfterDestroy;
+	int32 HostMapIndex = 0;
 	FString Message;
 	bool bBusy = false;
 	/** Set on a disconnect: the engine loads GameDefaultMap, and the next map load goes on to the menu. */

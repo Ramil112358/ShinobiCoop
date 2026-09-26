@@ -13,7 +13,17 @@
 
 const FName UShinobiSessionSubsystem::GameKey(TEXT("SHINOBICOOP"));
 const TCHAR* UShinobiSessionSubsystem::MenuMap = TEXT("/Game/Shinobi/Maps/Lvl_MainMenu");
-const TCHAR* UShinobiSessionSubsystem::ArenaMap = TEXT("/Game/ThirdPerson/Lvl_ThirdPerson");
+const FName UShinobiSessionSubsystem::MapKey(TEXT("SHINOBIMAP"));
+
+const TArray<FShinobiMap>& UShinobiSessionSubsystem::GetMaps()
+{
+	static const TArray<FShinobiMap> Maps = {
+		{ TEXT("Training Grounds"), TEXT("/Game/Shinobi/Maps/Lvl_TrainingGrounds") },
+		{ TEXT("Test Level"), TEXT("/Game/ThirdPerson/Lvl_ThirdPerson") },
+		{ TEXT("Combat Level"), TEXT("/Game/Variant_Combat/Lvl_Combat") },
+	};
+	return Maps;
+}
 
 void UShinobiSessionSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -89,8 +99,9 @@ void UShinobiSessionSubsystem::WithoutSession(TFunction<void()> Then)
 	Then();
 }
 
-void UShinobiSessionSubsystem::HostGame()
+void UShinobiSessionSubsystem::HostGame(int32 MapIndex)
 {
+	HostMapIndex = GetMaps().IsValidIndex(MapIndex) ? MapIndex : 0;
 	const IOnlineSessionPtr Sessions = GetSessions();
 	if (!Sessions || bBusy)
 	{
@@ -110,6 +121,7 @@ void UShinobiSessionSubsystem::HostGame()
 		Settings.bAllowJoinViaPresence = true;
 		Settings.bAllowInvites = true;
 		Settings.Set(GameKey, true, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
+		Settings.Set(MapKey, FString(GetMaps()[HostMapIndex].DisplayName), EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
 		if (!GetSessions()->CreateSession(0, NAME_GameSession, Settings))
 		{
 			SetMessage(TEXT("Couldn't create the game"), false);
@@ -125,7 +137,7 @@ void UShinobiSessionSubsystem::OnCreated(FName SessionName, bool bOk)
 		return;
 	}
 	SetMessage(FString(), false);
-	UGameplayStatics::OpenLevel(GetWorld(), FName(ArenaMap), true, TEXT("listen"));
+	UGameplayStatics::OpenLevel(GetWorld(), FName(GetMaps()[HostMapIndex].Path), true, TEXT("listen"));
 }
 
 void UShinobiSessionSubsystem::FindGames()
@@ -162,7 +174,9 @@ void UShinobiSessionSubsystem::OnFound(bool bOk)
 				continue;
 			}
 			const int32 Max = Result.Session.SessionSettings.NumPublicConnections;
-			FoundGames.Add({ Result.Session.OwningUserName, Max - Result.Session.NumOpenPublicConnections, Max, Result.PingInMs });
+			FString MapName;
+			Result.Session.SessionSettings.Get(MapKey, MapName);
+			FoundGames.Add({ Result.Session.OwningUserName, MapName, Max - Result.Session.NumOpenPublicConnections, Max, Result.PingInMs });
 			Results.Add(Result);
 		}
 	}

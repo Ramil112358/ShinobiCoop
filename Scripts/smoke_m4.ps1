@@ -31,7 +31,7 @@ $hostProc = Start-Process $Editor -PassThru -ArgumentList "$Common -ShinobiAutoH
 $client = $null
 try {
     Wait-Log $HostLog "Online subsystem: Null" 240 "host fell back to LAN mode"
-    Wait-Log $HostLog "Bringing World /Game/ThirdPerson/Lvl_ThirdPerson.* up for play" 120 "host created the game and opened the arena"
+    Wait-Log $HostLog "Bringing World /Game/Shinobi/Maps/Lvl_TrainingGrounds.* up for play" 120 "host created the game and opened the Training Grounds"
     $client = Start-Process $Editor -PassThru -ArgumentList "$Common -ShinobiAutoJoin -abslog=`"$ClientLog`""
     Wait-Log $ClientLog "Welcomed by server" 240 "client found and joined the game from the menu"
     Wait-Log $HostLog "Join succeeded" 30 "host accepted the client"

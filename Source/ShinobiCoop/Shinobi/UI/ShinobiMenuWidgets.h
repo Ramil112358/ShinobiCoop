@@ -78,6 +78,10 @@ protected:
 
 private:
 	void OnJoinRow(int32 Index);
+	void OnMapRow(int32 Index);
+
+	/** Host Game was pressed: the list shows maps to host on instead of found games. */
+	bool bPickingMap = false;
 
 	UPROPERTY()
 	TObjectPtr<UVerticalBox> GameList;

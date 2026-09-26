@@ -146,12 +146,11 @@ void UShinobiMainMenuWidget::OnEntry(int32 Index)
 	switch (Index)
 	{
 	case 0:
-		if (Sessions)
-		{
-			Sessions->HostGame();
-		}
+		bPickingMap = !bPickingMap;
+		Refresh();
 		break;
 	case 1:
+		bPickingMap = false;
 		if (Sessions)
 		{
 			Sessions->FindGames();
@@ -172,12 +171,31 @@ void UShinobiMainMenuWidget::Refresh()
 	{
 		return;
 	}
+	if (bPickingMap)
+	{
+		const TArray<FShinobiMap>& Maps = UShinobiSessionSubsystem::GetMaps();
+		for (int32 Index = 0; Index < Maps.Num(); ++Index)
+		{
+			AddButton(GameList, FString::Printf(TEXT("Host on %s"), Maps[Index].DisplayName), Index,
+				FShinobiIndexClicked::CreateUObject(this, &UShinobiMainMenuWidget::OnMapRow))->SetIsEnabled(!Sessions->IsBusy());
+		}
+		return;
+	}
 	const TArray<FShinobiFoundGame>& Games = Sessions->GetFoundGames();
 	for (int32 Index = 0; Index < Games.Num(); ++Index)
 	{
 		const FShinobiFoundGame& Game = Games[Index];
-		const FString Label = FString::Printf(TEXT("Join %s  (%d/%d, %d ms)"), *Game.HostName, Game.Players, Game.MaxPlayers, Game.PingMs);
+		const FString Label = FString::Printf(TEXT("Join %s - %s  (%d/%d, %d ms)"), *Game.HostName,
+			Game.MapName.IsEmpty() ? TEXT("?") : *Game.MapName, Game.Players, Game.MaxPlayers, Game.PingMs);
 		AddButton(GameList, Label, Index, FShinobiIndexClicked::CreateUObject(this, &UShinobiMainMenuWidget::OnJoinRow))->SetIsEnabled(!Sessions->IsBusy());
+	}
+}
+
+void UShinobiMainMenuWidget::OnMapRow(int32 Index)
+{
+	if (UShinobiSessionSubsystem* Sessions = GetSessions())
+	{
+		Sessions->HostGame(Index);
 	}
 }
 
