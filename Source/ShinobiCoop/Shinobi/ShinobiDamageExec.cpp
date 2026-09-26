@@ -21,7 +21,7 @@ void UShinobiDamageExec::Execute_Implementation(const FGameplayEffectCustomExecu
 	UAbilitySystemComponent* Target = ExecutionParams.GetTargetAbilitySystemComponent();
 	const UAbilitySystemComponent* Source = ExecutionParams.GetSourceAbilitySystemComponent();
 	const FGameplayEffectSpec& Spec = ExecutionParams.GetOwningSpec();
-	const float Damage = Spec.GetSetByCallerMagnitude(ShinobiTags::Data_Damage, false, 0.f);
+	float Damage = Spec.GetSetByCallerMagnitude(ShinobiTags::Data_Damage, false, 0.f);
 	if (!Target || Damage <= 0.f)
 	{
 		return;
@@ -41,6 +41,11 @@ void UShinobiDamageExec::Execute_Implementation(const FGameplayEffectCustomExecu
 				SendEvent(Target, ShinobiTags::Event_Substitution, Attacker, Damage);
 			}
 			return;
+		}
+		if (Target->HasMatchingGameplayTag(ShinobiTags::State_ShockBonus))
+		{
+			Damage *= ShockBonusMultiplier;
+			Target->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_ShockBonus));
 		}
 		if (Damage >= StaggerThreshold)
 		{

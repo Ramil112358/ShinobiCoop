@@ -29,6 +29,10 @@ protected:
 	void InhibitWhileTargetHas(const FGameplayTag& Tag);
 	/** Deal damage through UShinobiDamageExec, which reads SetByCaller Data.Damage. */
 	void AddDamageExecution();
+	/** For timed effects (SetDuration): execute every PeriodSeconds, the first time one period after application. */
+	void SetPeriodic(float PeriodSeconds);
+	/** One copy per target from any source: re-applying refreshes the duration instead of stacking a second copy. */
+	void UseSingleRefreshingStack();
 
 private:
 	UTargetTagRequirementsGameplayEffectComponent& Requirements();
@@ -119,4 +123,51 @@ class SHINOBICOOP_API UGE_ChakraCharge : public UShinobiEffect
 	GENERATED_BODY()
 public:
 	UGE_ChakraCharge();
+};
+
+/** Burn: 10 damage per second for 4 s, through the damage exec. Re-applying refreshes the duration. */
+UCLASS()
+class SHINOBICOOP_API UGE_Burn : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	static constexpr float DamagePerTick = 10.f;
+	UGE_Burn();
+};
+
+/** Amaterasu's black flame: 15 damage per second for 10 s. Firestorm never removes it. */
+UCLASS()
+class SHINOBICOOP_API UGE_BlackFlame : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	static constexpr float DamagePerTick = 15.f;
+	UGE_BlackFlame();
+};
+
+/** Shock stun: 1.5 s of State.Shocked (no abilities, no movement). */
+UCLASS()
+class SHINOBICOOP_API UGE_Shock : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_Shock();
+};
+
+/** Shock bonus: the next direct hit within 10 s deals +25%; the damage exec consumes it. */
+UCLASS()
+class SHINOBICOOP_API UGE_ShockBonus : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_ShockBonus();
+};
+
+/** Stagger: 0.5 s of State.Staggered (no abilities, no movement). Substitution staggers the attacker. */
+UCLASS()
+class SHINOBICOOP_API UGE_Stagger : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_Stagger();
 };

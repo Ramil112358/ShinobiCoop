@@ -126,23 +126,38 @@ namespace ShinobiTest
 	}
 
 	/** Counts gameplay events with Tag delivered to Character's ability system and remembers the last
-	 * instigator. Declare it after the FShinobiTestWorld so it is destroyed first. */
+	 * instigator. Unbinds its lambda on destruction, so it no longer needs to be destroyed before the ASC. */
 	struct FEventCounter
 	{
 		int32 Count = 0;
 		const AActor* LastInstigator = nullptr;
 
 		FEventCounter(AShinobiCharacterBase* Character, const FGameplayTag& Tag)
+			: ASC(Character->GetAbilitySystemComponent())
+			, EventTag(Tag)
 		{
-			Character->GetAbilitySystemComponent()->GenericGameplayEventCallbacks.FindOrAdd(Tag).AddLambda([this](const FGameplayEventData* Payload)
+			Handle = ASC->GenericGameplayEventCallbacks.FindOrAdd(Tag).AddLambda([this](const FGameplayEventData* Payload)
 			{
 				++Count;
 				LastInstigator = Payload->Instigator.Get();
 			});
 		}
 
+		~FEventCounter()
+		{
+			if (UAbilitySystemComponent* ASCPtr = ASC.Get())
+			{
+				ASCPtr->GenericGameplayEventCallbacks.FindOrAdd(EventTag).Remove(Handle);
+			}
+		}
+
 		FEventCounter(const FEventCounter&) = delete;
 		FEventCounter& operator=(const FEventCounter&) = delete;
+
+	private:
+		TWeakObjectPtr<UAbilitySystemComponent> ASC;
+		FGameplayTag EventTag;
+		FDelegateHandle Handle;
 	};
 }
 

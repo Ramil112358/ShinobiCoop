@@ -21,13 +21,16 @@ public:
 
 	UShinobiChakraAuraComponent* GetChakraAura() const { return ChakraAura; }
 
+	/** False while charging chakra, shocked or staggered: move and jump input are ignored. */
+	bool CanMove() const;
+
 protected:
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
 private:
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
-	/** Ignores the jump input while State.ChakraCharging is present; movement is locked while charging. */
+	/** Ignores the jump input while CanMove() is false. */
 	void JumpPressed();
 	void AbilityInputPressed(EShinobiAbilityInputID InputID);
 	void AbilityInputReleased(EShinobiAbilityInputID InputID);

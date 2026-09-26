@@ -52,6 +52,19 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 	UseMannequinMesh();
 }
 
+bool AShinobiPlayerCharacter::CanMove() const
+{
+	static const FGameplayTagContainer Blockers = []
+	{
+		FGameplayTagContainer Tags;
+		Tags.AddTag(ShinobiTags::State_ChakraCharging);
+		Tags.AddTag(ShinobiTags::State_Shocked);
+		Tags.AddTag(ShinobiTags::State_Staggered);
+		return Tags;
+	}();
+	return !AbilitySystem->HasAnyMatchingGameplayTags(Blockers);
+}
+
 void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
@@ -79,7 +92,7 @@ void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 
 void AShinobiPlayerCharacter::Move(const FInputActionValue& Value)
 {
-	if (!Controller || AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_ChakraCharging))
+	if (!Controller || !CanMove())
 	{
 		return;
 	}
@@ -98,7 +111,7 @@ void AShinobiPlayerCharacter::Look(const FInputActionValue& Value)
 
 void AShinobiPlayerCharacter::JumpPressed()
 {
-	if (AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_ChakraCharging))
+	if (!CanMove())
 	{
 		return;
 	}

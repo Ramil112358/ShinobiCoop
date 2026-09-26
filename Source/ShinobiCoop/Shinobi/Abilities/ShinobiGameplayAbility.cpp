@@ -11,6 +11,9 @@ UShinobiGameplayAbility::UShinobiGameplayAbility()
 {
 	InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
 	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
+	// Shared blockers: a stunned or staggered character can't act. Subclasses add their own.
+	ActivationBlockedTags.AddTag(ShinobiTags::State_Shocked);
+	ActivationBlockedTags.AddTag(ShinobiTags::State_Staggered);
 }
 
 AShinobiCharacterBase* UShinobiGameplayAbility::GetShinobiCharacter() const

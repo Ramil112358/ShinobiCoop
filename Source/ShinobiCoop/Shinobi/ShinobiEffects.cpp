@@ -73,6 +73,24 @@ void UShinobiEffect::AddDamageExecution()
 	Execution.CalculationClass = UShinobiDamageExec::StaticClass();
 }
 
+void UShinobiEffect::SetPeriodic(float PeriodSeconds)
+{
+	Period = FScalableFloat(PeriodSeconds);
+	bExecutePeriodicEffectOnApplication = false;
+}
+
+void UShinobiEffect::UseSingleRefreshingStack()
+{
+	// Direct access to StackingType is deprecated since 5.7 and its setter is editor-only, so constructors still
+	// assign it directly, the same way UGameplayEffect's own constructor does.
+	PRAGMA_DISABLE_DEPRECATION_WARNINGS
+	StackingType = EGameplayEffectStackingType::AggregateByTarget;
+	PRAGMA_ENABLE_DEPRECATION_WARNINGS
+	StackLimitCount = 1;
+	StackDurationRefreshPolicy = EGameplayEffectStackingDurationPolicy::RefreshOnSuccessfulApplication;
+	StackPeriodResetPolicy = EGameplayEffectStackingPeriodPolicy::NeverReset;
+}
+
 UGE_Damage::UGE_Damage()
 {
 	DurationPolicy = EGameplayEffectDurationType::Instant;
@@ -142,4 +160,43 @@ UGE_ChakraCharge::UGE_ChakraCharge()
 	// Without this, bExecutePeriodicEffectOnApplication's default (true) grants a free +6.25 on every
 	// activation, so tapping the ability repeatedly beats holding it. Gains should only come from a full period.
 	bExecutePeriodicEffectOnApplication = false;
+}
+
+UGE_Burn::UGE_Burn()
+{
+	SetDuration(4.f);
+	SetPeriodic(1.f);
+	AddDamageExecution();
+	GrantTag(ShinobiTags::State_Burning_Normal);
+	UseSingleRefreshingStack();
+}
+
+UGE_BlackFlame::UGE_BlackFlame()
+{
+	SetDuration(10.f);
+	SetPeriodic(1.f);
+	AddDamageExecution();
+	GrantTag(ShinobiTags::State_Burning_Black);
+	UseSingleRefreshingStack();
+}
+
+UGE_Shock::UGE_Shock()
+{
+	SetDuration(1.5f);
+	GrantTag(ShinobiTags::State_Shocked);
+	UseSingleRefreshingStack();
+}
+
+UGE_ShockBonus::UGE_ShockBonus()
+{
+	SetDuration(10.f);
+	GrantTag(ShinobiTags::State_ShockBonus);
+	UseSingleRefreshingStack();
+}
+
+UGE_Stagger::UGE_Stagger()
+{
+	SetDuration(0.5f);
+	GrantTag(ShinobiTags::State_Staggered);
+	UseSingleRefreshingStack();
 }
