@@ -99,6 +99,8 @@ void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
 		{
 			Subsystem->AddMappingContext(InputConfig.Context, ShinobiInputPriority);
+			// A possession that ended while RB was held never got RB's release, so start without the jutsu context.
+			Subsystem->RemoveMappingContext(InputConfig.JutsuContext);
 		}
 	}
 

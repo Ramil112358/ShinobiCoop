@@ -1,5 +1,5 @@
 # Launches the game in a 1280x720 window with -ShinobiShot: the camera turns to face the character, holds
-# chakra charge, takes screenshots (idle, 3x charging, released) and quits. Prints the screenshot paths.
+# chakra charge, takes screenshots (idle, 3x charging, released), throws a Fireball for a HUD shot, and quits.
 # Opens a visible window for ~15-60 s; close the GUI editor first.
 $ErrorActionPreference = "Stop"
 $Editor = "C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe"

@@ -104,18 +104,18 @@ void AShinobiPlayerController::RunShotTest()
 		FTimerHandle Handle;
 		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
 	};
-	auto ChargeInput = [this](bool bPressed)
+	auto Input = [this](EShinobiAbilityInputID InputID, bool bPressed)
 	{
 		if (AShinobiCharacterBase* Shinobi = GetPawn<AShinobiCharacterBase>())
 		{
-			const int32 Input = static_cast<int32>(EShinobiAbilityInputID::ChakraCharge);
-			bPressed ? Shinobi->GetAbilitySystemComponent()->AbilityLocalInputPressed(Input)
-			         : Shinobi->GetAbilitySystemComponent()->AbilityLocalInputReleased(Input);
+			const int32 ID = static_cast<int32>(InputID);
+			bPressed ? Shinobi->GetAbilitySystemComponent()->AbilityLocalInputPressed(ID)
+			         : Shinobi->GetAbilitySystemComponent()->AbilityLocalInputReleased(ID);
 		}
 	};
-	auto Shot = [](const TCHAR* Name)
+	auto Shot = [](const TCHAR* Name, bool bShowUI)
 	{
-		FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Name), false, false);
+		FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Name), bShowUI, false);
 	};
 	At(4.f, [this]()
 	{
@@ -124,12 +124,16 @@ void AShinobiPlayerController::RunShotTest()
 			SetControlRotation(FRotator(-10.f, Shinobi->GetActorRotation().Yaw + 180.f, 0.f)); // camera in front, looking back
 		}
 	});
-	At(5.f, [Shot]() { Shot(TEXT("ShinobiShot_0_Idle")); });
-	At(5.5f, [ChargeInput]() { ChargeInput(true); });
-	At(6.f, [Shot]() { Shot(TEXT("ShinobiShot_1_Charge")); });
-	At(7.f, [Shot]() { Shot(TEXT("ShinobiShot_2_Charge")); });
-	At(8.f, [Shot]() { Shot(TEXT("ShinobiShot_3_Charge")); });
-	At(8.2f, [ChargeInput]() { ChargeInput(false); });
-	At(8.8f, [Shot]() { Shot(TEXT("ShinobiShot_4_Released")); });
-	At(9.5f, [this]() { ConsoleCommand(TEXT("quit")); });
+	At(5.f, [Shot]() { Shot(TEXT("ShinobiShot_0_Idle"), false); });
+	At(5.5f, [Input]() { Input(EShinobiAbilityInputID::ChakraCharge, true); });
+	At(6.f, [Shot]() { Shot(TEXT("ShinobiShot_1_Charge"), false); });
+	At(7.f, [Shot]() { Shot(TEXT("ShinobiShot_2_Charge"), false); });
+	At(8.f, [Shot]() { Shot(TEXT("ShinobiShot_3_Charge"), false); });
+	At(8.2f, [Input]() { Input(EShinobiAbilityInputID::ChakraCharge, false); });
+	At(8.8f, [Shot]() { Shot(TEXT("ShinobiShot_4_Released"), false); });
+	// HUD: throw a Fireball (slot 1 goes on cooldown), then retry at once so slot 1 flashes red.
+	At(9.f, [Input]() { Input(EShinobiAbilityInputID::Jutsu1, true); Input(EShinobiAbilityInputID::Jutsu1, false); });
+	At(9.6f, [Input]() { Input(EShinobiAbilityInputID::Jutsu1, true); Input(EShinobiAbilityInputID::Jutsu1, false); });
+	At(9.7f, [Shot]() { Shot(TEXT("ShinobiShot_5_Hud"), true); });
+	At(10.5f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
