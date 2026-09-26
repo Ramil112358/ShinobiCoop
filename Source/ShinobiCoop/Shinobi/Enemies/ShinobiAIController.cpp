@@ -1,6 +1,7 @@
 #include "Shinobi/Enemies/ShinobiAIController.h"
 #include "AbilitySystemComponent.h"
 #include "EngineUtils.h"
+#include "Navigation/PathFollowingComponent.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
@@ -25,6 +26,8 @@ void AShinobiAIController::Tick(float DeltaSeconds)
 	{
 		RetargetClock = RetargetInterval;
 		Target = FindNearestPlayer(*Self);
+		bSteerDirectly = false;
+		StopMovement(); // re-path toward the (possibly new) target below
 		if (Target.IsValid())
 		{
 			SetFocus(Target.Get());
@@ -38,6 +41,7 @@ void AShinobiAIController::Tick(float DeltaSeconds)
 	UAbilitySystemComponent* ASC = Self->GetAbilitySystemComponent();
 	if (!Victim || Self->IsBusy() || ASC->HasMatchingGameplayTag(ShinobiTags::State_Shocked) || ASC->HasMatchingGameplayTag(ShinobiTags::State_Staggered))
 	{
+		StopMovement();
 		return;
 	}
 
@@ -59,13 +63,27 @@ void AShinobiAIController::Tick(float DeltaSeconds)
 		return;
 	}
 
+	const float StopDistance = bRanged ? Self->PreferredRange : Self->AttackRange * 0.8f;
 	if (bRanged && Distance < Self->PreferredRange * 0.75f)
 	{
+		StopMovement();
 		Self->AddMovementInput(-ToTarget); // too close: back off while facing the target
 	}
-	else if (Distance > (bRanged ? Self->PreferredRange : Self->AttackRange * 0.8f))
+	else if (Distance > StopDistance)
 	{
-		Self->AddMovementInput(ToTarget);
+		if (!bSteerDirectly && GetMoveStatus() == EPathFollowingStatus::Idle)
+		{
+			// bCanStrafe: keep the focus on the target instead of turning to face the path.
+			bSteerDirectly = MoveToActor(Target.Get(), StopDistance * 0.9f, true, true, true) == EPathFollowingRequestResult::Failed;
+		}
+		if (bSteerDirectly)
+		{
+			Self->AddMovementInput(ToTarget);
+		}
+	}
+	else
+	{
+		StopMovement();
 	}
 }
 

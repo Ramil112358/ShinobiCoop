@@ -49,6 +49,10 @@ void AShinobiPlayerController::BeginPlay()
 	{
 		RunJutsuShotTest();
 	}
+	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiLookShot")))
+	{
+		RunLookShotTest();
+	}
 }
 
 void AShinobiPlayerController::SetupInputComponent()
@@ -207,6 +211,55 @@ void AShinobiPlayerController::RunShotTest()
 	At(9.6f, [Input]() { Input(EShinobiAbilityInputID::Jutsu1, true); Input(EShinobiAbilityInputID::Jutsu1, false); });
 	At(9.7f, [Shot]() { Shot(TEXT("ShinobiShot_5_Hud"), true); });
 	At(10.5f, [this]() { ConsoleCommand(TEXT("quit")); });
+}
+
+void AShinobiPlayerController::RunLookShotTest()
+{
+	auto At = [this](float Seconds, TFunction<void()> Fn)
+	{
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
+	};
+	auto Shot = [](const TCHAR* Name, bool bShowUI)
+	{
+		FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Name), bShowUI, false);
+	};
+	auto Look = [this](float Pitch, float YawOffset)
+	{
+		if (const APawn* Shinobi = GetPawn())
+		{
+			SetControlRotation(FRotator(Pitch, Shinobi->GetActorRotation().Yaw + YawOffset, 0.f));
+		}
+	};
+	auto FaceNearestEnemy = [this]()
+	{
+		const AShinobiCharacterBase* Self = GetPawn<AShinobiCharacterBase>();
+		const AShinobiCharacterBase* Nearest = nullptr;
+		for (TActorIterator<AShinobiCharacterBase> It(GetWorld()); Self && It; ++It)
+		{
+			if (Self->IsHostileTo(*It) && It->IsAlive() && (!Nearest || FVector::Dist(It->GetActorLocation(), Self->GetActorLocation()) < FVector::Dist(Nearest->GetActorLocation(), Self->GetActorLocation())))
+			{
+				Nearest = *It;
+			}
+		}
+		if (Nearest)
+		{
+			SetControlRotation(FRotator(-12.f, (Nearest->GetActorLocation() - Self->GetActorLocation()).Rotation().Yaw, 0.f));
+		}
+	};
+	At(4.f, [Look]() { Look(-8.f, 0.f); });
+	At(5.f, [Shot]() { Shot(TEXT("ShinobiLookShot_0_Forward"), true); });
+	At(5.5f, [Look]() { Look(-10.f, 180.f); });
+	At(6.5f, [Shot]() { Shot(TEXT("ShinobiLookShot_1_Character"), false); });
+	At(7.f, [Look]() { Look(-40.f, 90.f); });
+	At(8.f, [Shot]() { Shot(TEXT("ShinobiLookShot_2_Overview"), false); });
+	At(13.f, FaceNearestEnemy);
+	At(13.5f, [Shot]() { Shot(TEXT("ShinobiLookShot_3_WaveIncoming"), true); });
+	At(15.5f, FaceNearestEnemy);
+	At(15.6f, [this]() { ShinobiCast(1); });
+	At(16.3f, [Shot]() { Shot(TEXT("ShinobiLookShot_4_Fight"), true); });
+	At(17.5f, [Shot]() { Shot(TEXT("ShinobiLookShot_5_Fight"), true); });
+	At(18.5f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
 
 void AShinobiPlayerController::RunJutsuShotTest()

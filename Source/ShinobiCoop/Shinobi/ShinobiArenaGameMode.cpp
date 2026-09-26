@@ -2,6 +2,7 @@
 #include "AbilitySystemComponent.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
+#include "Engine/TargetPoint.h"
 #include "GameFramework/PlayerStart.h"
 #include "HAL/IConsoleManager.h"
 #include "ShinobiCoop.h"
@@ -32,6 +33,8 @@ namespace
 		{ 0, 0, true },
 	};
 }
+
+const FName AShinobiArenaGameMode::SpawnPointTag(TEXT("ShinobiEnemySpawn"));
 
 AShinobiArenaGameMode::AShinobiArenaGameMode()
 {
@@ -71,6 +74,13 @@ void AShinobiArenaGameMode::BeginPlay()
 	else
 	{
 		UE_LOG(LogShinobiCoop, Warning, TEXT("AShinobiArenaGameMode: no PlayerStart, enemies spawn around the origin"));
+	}
+	for (TActorIterator<ATargetPoint> Point(GetWorld()); Point; ++Point)
+	{
+		if (Point->ActorHasTag(SpawnPointTag))
+		{
+			SpawnPoints.Add(Point->GetActorLocation());
+		}
 	}
 	GetArenaState()->NumWaves = GetNumWaves();
 	StartBreak();
@@ -253,8 +263,17 @@ bool AShinobiArenaGameMode::AnyPlayerAlive(bool& bOutAnyPlayer) const
 
 FVector AShinobiArenaGameMode::GetRingPoint(int32 Slot, int32 NumSlots) const
 {
-	const float Angle = UE_TWO_PI * Slot / FMath::Max(1, NumSlots) + FMath::FRandRange(-0.15f, 0.15f);
-	const FVector Point = ArenaCenter + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * SpawnRadius;
+	FVector Point;
+	if (SpawnPoints.Num() > 0)
+	{
+		// Round-robin over the level's spawn points, scattered so a group doesn't stack up.
+		Point = SpawnPoints[Slot % SpawnPoints.Num()] + FVector(FMath::FRandRange(-300.f, 300.f), FMath::FRandRange(-300.f, 300.f), 0.f);
+	}
+	else
+	{
+		const float Angle = UE_TWO_PI * Slot / FMath::Max(1, NumSlots) + FMath::FRandRange(-0.15f, 0.15f);
+		Point = ArenaCenter + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * SpawnRadius;
+	}
 	// Drop onto whatever floor is there; without one, keep the PlayerStart's height.
 	FHitResult Hit;
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(ShinobiSpawn));

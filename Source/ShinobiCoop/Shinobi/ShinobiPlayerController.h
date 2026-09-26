@@ -60,6 +60,10 @@ private:
 	 * Used by `Scripts/shot_chakra.ps1 -Jutsu`. */
 	void RunJutsuShotTest();
 
+	/** With -ShinobiLookShot (arena mode): screenshots of the map, the character and the first wave closing in, fighting
+	 * the nearest enemy, then quits. Used by `Scripts/shot_chakra.ps1 -Look`. */
+	void RunLookShotTest();
+
 	UPROPERTY()
 	TObjectPtr<UShinobiHUDWidget> Hud;
 

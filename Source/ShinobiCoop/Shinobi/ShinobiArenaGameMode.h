@@ -17,7 +17,8 @@ struct FShinobiWave
 };
 
 /**
- * The M3 arena: a 10 s break, then waves of enemies spawned on a ring around the PlayerStart, with a break (and a
+ * The M3 arena: a 10 s break, then waves of enemies spawned at the level's ShinobiEnemySpawn target points (or on a
+ * ring around the PlayerStart), with a break (and a
  * full restore) between them; the last wave is the boss, which calls 2 Rogue Ninjas once below half health. If every
  * player is downed or dead, a 5 s banner, then the wave restarts. Beating the boss is victory. Dead players respawn
  * at the next wave start. Enemy HP scales with the player count.
@@ -36,6 +37,8 @@ public:
 	static constexpr float WipeSeconds = 5.f;
 	static constexpr float SpawnRadius = 1200.f;
 	static constexpr int32 BossSummonCount = 2;
+	/** Actor tag of the target points enemies spawn around. */
+	static const FName SpawnPointTag;
 
 	static int32 GetNumWaves();
 	/** Wave is 1-based. */
@@ -69,6 +72,7 @@ private:
 	void OnBossHealthChanged(const struct FOnAttributeChangeData& Data);
 
 	FVector ArenaCenter = FVector::ZeroVector;
+	TArray<FVector> SpawnPoints;
 	TArray<TWeakObjectPtr<AShinobiEnemyCharacter>> Enemies;
 	TWeakObjectPtr<AShinobiRogueJonin> Boss;
 	bool bBossSummoned = false;
