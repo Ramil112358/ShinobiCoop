@@ -2261,12 +2261,18 @@ In `Source/ShinobiCoop/Shinobi/Abilities/ShinobiGameplayAbility.cpp`, at the end
 ```cpp
 AShinobiCharacterBase* UShinobiGameplayAbility::FindNearestHostileInCone(float Range, float HalfAngleDegrees) const
 {
+	const TArray<AShinobiCharacterBase*> Candidates = FindHostilesInCone(Range, HalfAngleDegrees);
 	AShinobiCharacterBase* Nearest = nullptr;
-	float NearestDistance = TNumericLimits<float>::Max();
-	for (AShinobiCharacterBase* Candidate : FindHostilesInCone(Range, HalfAngleDegrees))
+	if (Candidates.Num() == 0)
 	{
-		// FindHostilesInCone only returns candidates when the owner exists.
-		const float Distance = FVector::Dist2D(GetShinobiCharacter()->GetActorLocation(), Candidate->GetActorLocation());
+		return Nearest;
+	}
+	// FindHostilesInCone only returns candidates when the owner exists.
+	const FVector Origin = GetShinobiCharacter()->GetActorLocation();
+	float NearestDistance = TNumericLimits<float>::Max();
+	for (AShinobiCharacterBase* Candidate : Candidates)
+	{
+		const float Distance = FVector::Dist2D(Origin, Candidate->GetActorLocation());
 		if (Distance < NearestDistance)
 		{
 			NearestDistance = Distance;

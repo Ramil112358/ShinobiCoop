@@ -11,6 +11,7 @@
 #include "Shinobi/Abilities/GA_Dodge.h"
 #include "Shinobi/Abilities/GA_Fireball.h"
 #include "Shinobi/Abilities/GA_Melee.h"
+#include "Shinobi/Abilities/GA_Rasengan.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiProjectileTest, "ShinobiCoop.Jutsu.ProjectileHitsFirstHostileAndSplashes", ShinobiTestFlags)
 bool FShinobiProjectileTest::RunTest(const FString& Parameters)
@@ -236,6 +237,51 @@ bool FShinobiChidoriNoTargetTest::RunTest(const FString& Parameters)
 	const float X = P->GetActorLocation().X;
 	TestTrue(FString::Printf(TEXT("Dashed ~1200 straight ahead (X = %.0f)"), X), X > 1100.f && X < 1300.f);
 	TestEqual(TEXT("Enemy off to the side untouched"), ShinobiTest::Get(Side, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiRasenganTest, "ShinobiCoop.Jutsu.RasenganFirestormOnBurningTarget", ShinobiTestFlags)
+bool FShinobiRasenganTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(150.f, 0.f, 0.f));
+	AShinobiCharacterBase* Near = W.Spawn<AShinobiCharacterBase>(FVector(400.f, 250.f, 0.f)); // 354 from E: in the Firestorm, out of reach
+	AShinobiCharacterBase* Far = W.Spawn<AShinobiCharacterBase>(FVector(150.f, 700.f, 0.f));  // 700 from E
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+	ShinobiCombat::ApplyStatus(P->GetAbilitySystemComponent(), E, UGE_Burn::StaticClass(), UGE_Burn::DamagePerTick);
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
+	TestEqual(TEXT("Cost 35"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 65.f);
+	W.Tick(0.9f); // the 0.8 s wind-up fires at ~0.85-0.9 (pre-tick timers start one tick late); the burn's first tick is ~1.05
+	TestEqual(TEXT("Burning target: 150 + Firestorm 200"), ShinobiTest::Get(E, Health), 150.f);
+	TestEqual(TEXT("Firestorm reaches enemies within 500 of the target"), ShinobiTest::Get(Near, Health), 300.f);
+	TestEqual(TEXT("Firestorm stops at 500"), ShinobiTest::Get(Far, Health), 500.f);
+	TestFalse(TEXT("Firestorm consumes the normal burn"), ShinobiTest::HasTag(E, ShinobiTags::State_Burning_Normal));
+	TestTrue(TEXT("Cooldown started"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Rasengan));
+	W.Tick(0.1f); // LaunchCharacter's velocity applies on the next movement tick
+	TestTrue(FString::Printf(TEXT("Knocked back (vx %.0f)"), E->GetVelocity().X), E->GetVelocity().X > 100.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiRasenganBlackFlameTest, "ShinobiCoop.Jutsu.RasenganKeepsBlackFlameAndNeedsBurn", ShinobiTestFlags)
+bool FShinobiRasenganBlackFlameTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	// Two casters far apart, so each fights alone and both cast at once (separate cooldowns).
+	AShinobiPlayerCharacter* P1 = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* BlackFlamed = W.Spawn<AShinobiCharacterBase>(FVector(150.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* P2 = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, 3000.f, 0.f));
+	AShinobiCharacterBase* NotBurning = W.Spawn<AShinobiCharacterBase>(FVector(150.f, 3000.f, 0.f));
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+	ShinobiCombat::ApplyStatus(P1->GetAbilitySystemComponent(), BlackFlamed, UGE_BlackFlame::StaticClass(), UGE_BlackFlame::DamagePerTick);
+
+	ShinobiTest::Tap(P1, EShinobiAbilityInputID::Jutsu3);
+	ShinobiTest::Tap(P2, EShinobiAbilityInputID::Jutsu3);
+	W.Tick(0.9f);
+	TestEqual(TEXT("Black flame also sets off Firestorm"), ShinobiTest::Get(BlackFlamed, Health), 150.f);
+	TestTrue(TEXT("Black flame survives Firestorm"), ShinobiTest::HasTag(BlackFlamed, ShinobiTags::State_Burning_Black));
+	TestEqual(TEXT("Not burning: just the 150 hit"), ShinobiTest::Get(NotBurning, Health), 350.f);
 	return true;
 }
 
