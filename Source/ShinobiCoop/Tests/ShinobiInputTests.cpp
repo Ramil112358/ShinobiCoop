@@ -73,7 +73,7 @@ bool FShinobiInputMappingsTest::RunTest(const FString& Parameters)
 	{
 		// Jutsu: a number key in IMC_Shinobi, a face button in IMC_ShinobiJutsu (active only while RB is held).
 		// Everything else: keyboard + gamepad in IMC_Shinobi.
-		const bool bJutsu = Pair.Key >= EShinobiAbilityInputID::Jutsu1;
+		const bool bJutsu = Pair.Key >= EShinobiAbilityInputID::Jutsu1 && Pair.Key <= EShinobiAbilityInputID::Jutsu4;
 		JutsuActions += bJutsu ? 1 : 0;
 		const int32 ID = static_cast<int32>(Pair.Key);
 		TestEqual(*FString::Printf(TEXT("Ability input %d: keys in IMC_Shinobi"), ID), CountFor(Mappings, Pair.Value), bJutsu ? 1 : 2);
@@ -85,6 +85,8 @@ bool FShinobiInputMappingsTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("Key 4 casts jutsu 4"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Jutsu4], EKeys::Four));
 	TestNotNull(TEXT("RB + A casts jutsu 1"), FindMapping(JutsuMappings, Config->AbilityActions[EShinobiAbilityInputID::Jutsu1], EKeys::Gamepad_FaceButton_Bottom));
 	TestNotNull(TEXT("RB + Y casts jutsu 4"), FindMapping(JutsuMappings, Config->AbilityActions[EShinobiAbilityInputID::Jutsu4], EKeys::Gamepad_FaceButton_Top));
+	TestNotNull(TEXT("E revives"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Revive], EKeys::E));
+	TestNotNull(TEXT("Y (without RB) revives"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Revive], EKeys::Gamepad_FaceButton_Top));
 
 	const FEnhancedActionKeyMapping* LeftStick = FindMapping(Mappings, Config->Move, EKeys::Gamepad_Left2D);
 	if (TestNotNull(TEXT("Left stick mapping exists"), LeftStick))

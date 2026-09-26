@@ -18,12 +18,23 @@ class SHINOBICOOP_API AShinobiPlayerCharacter : public AShinobiCharacterBase
 public:
 	AShinobiPlayerCharacter(const FObjectInitializer& ObjectInitializer);
 
-	/** False while charging chakra, shocked or staggered: move and jump input are ignored. */
+	/** False while charging chakra, shocked, staggered, reviving, downed or dead: move and jump input are ignored. */
 	bool CanMove() const;
 
+	static constexpr float ReviveHealthFraction = 0.3f;
+
+	/** Server: back up from downed at ReviveHealthFraction of max HP (GA_Revive; the game mode at a wave's end). */
+	void Revive();
+
+	/** Seconds left before a downed player bleeds out (0 when not downed). Needs the downed effect: owner/server only. */
+	float GetBleedOutRemaining() const;
+
 protected:
+	virtual void BeginPlay() override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 	virtual void UnPossessed() override;
+	/** At 0 HP a player goes down (GE_Downed) instead of dying. */
+	virtual void HandleOutOfHealth() override;
 
 private:
 	void Move(const FInputActionValue& Value);
@@ -34,6 +45,8 @@ private:
 	void AbilityInputReleased(EShinobiAbilityInputID InputID);
 	/** RB held: adds IMC_ShinobiJutsu (A/B/X/Y cast jutsu); released: removes it. */
 	void SetJutsuModifier(bool bHeld);
+	/** Every machine: hold the downed pose. Server: the effect ran out with HP still 0, so bled out: dead. */
+	void OnDownedTagChanged(const FGameplayTag Tag, int32 Count);
 
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	TObjectPtr<USpringArmComponent> CameraBoom;

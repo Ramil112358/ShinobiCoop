@@ -230,7 +230,7 @@ UGE_SubstitutionCooldown::UGE_SubstitutionCooldown()
 
 UGE_Downed::UGE_Downed()
 {
-	DurationPolicy = EGameplayEffectDurationType::Infinite;
+	SetDuration(BleedOutSeconds);
 	GrantTag(ShinobiTags::State_Downed);
 }
 

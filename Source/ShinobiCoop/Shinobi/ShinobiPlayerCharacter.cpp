@@ -1,5 +1,6 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "AbilitySystemComponent.h"
+#include "Animation/AnimMontage.h"
 #include "Camera/CameraComponent.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -17,8 +18,10 @@
 #include "Shinobi/Abilities/GA_Fireball.h"
 #include "Shinobi/Abilities/GA_Melee.h"
 #include "Shinobi/Abilities/GA_Rasengan.h"
+#include "Shinobi/Abilities/GA_Revive.h"
 #include "Shinobi/Abilities/GA_Sprint.h"
 #include "Shinobi/Abilities/GA_Substitution.h"
+#include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiEffects.h"
 
 AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& ObjectInitializer)
@@ -29,7 +32,7 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 	StartupAbilities = {
 		UGA_Melee::StaticClass(), UGA_Dodge::StaticClass(), UGA_Sprint::StaticClass(), UGA_ChakraCharge::StaticClass(),
 		UGA_Fireball::StaticClass(), UGA_Chidori::StaticClass(), UGA_Rasengan::StaticClass(), UGA_Amaterasu::StaticClass(),
-		UGA_Substitution::StaticClass(),
+		UGA_Substitution::StaticClass(), UGA_Revive::StaticClass(),
 	};
 	StartupEffects.Add(UGE_SubstitutionRegen::StaticClass());
 
@@ -68,9 +71,69 @@ bool AShinobiPlayerCharacter::CanMove() const
 		Tags.AddTag(ShinobiTags::State_ChakraCharging);
 		Tags.AddTag(ShinobiTags::State_Shocked);
 		Tags.AddTag(ShinobiTags::State_Staggered);
+		Tags.AddTag(ShinobiTags::State_Reviving);
+		Tags.AddTag(ShinobiTags::State_Downed);
+		Tags.AddTag(ShinobiTags::State_Dead);
 		return Tags;
 	}();
 	return !AbilitySystem->HasAnyMatchingGameplayTags(Blockers);
+}
+
+void AShinobiPlayerCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+	AbilitySystem->RegisterGameplayTagEvent(ShinobiTags::State_Downed).AddUObject(this, &AShinobiPlayerCharacter::OnDownedTagChanged);
+}
+
+void AShinobiPlayerCharacter::HandleOutOfHealth()
+{
+	Super::HandleOutOfHealth();
+	if (!IsAlive())
+	{
+		return;
+	}
+	AbilitySystem->CancelAllAbilities();
+	AbilitySystem->ApplyGameplayEffectToSelf(GetDefault<UGE_Downed>(), 1.f, AbilitySystem->MakeEffectContext());
+}
+
+void AShinobiPlayerCharacter::Revive()
+{
+	if (!AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Downed))
+	{
+		return;
+	}
+	// Health first: the downed tag's removal checks it to tell a revive from a bleed-out.
+	AbilitySystem->SetNumericAttributeBase(UShinobiAttributeSet::GetHealthAttribute(), Attributes->GetMaxHealth() * ReviveHealthFraction);
+	AbilitySystem->RemoveActiveGameplayEffectBySourceEffect(UGE_Downed::StaticClass(), nullptr);
+}
+
+float AShinobiPlayerCharacter::GetBleedOutRemaining() const
+{
+	const FGameplayEffectQuery Query = FGameplayEffectQuery::MakeQuery_MatchAnyOwningTags(FGameplayTagContainer(ShinobiTags::State_Downed));
+	const TArray<float> Remaining = AbilitySystem->GetActiveEffectsTimeRemaining(Query);
+	return Remaining.Num() > 0 ? Remaining[0] : 0.f;
+}
+
+void AShinobiPlayerCharacter::OnDownedTagChanged(const FGameplayTag Tag, int32 Count)
+{
+	static const TSoftObjectPtr<UAnimMontage> DownedMontage(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Downed.AM_Downed")));
+	UAnimMontage* Anim = DownedMontage.LoadSynchronous();
+	if (Count > 0)
+	{
+		if (Anim)
+		{
+			PlayAnimMontage(Anim); // AM_Downed doesn't auto blend out: it holds the last (lying) frame
+		}
+		return;
+	}
+	if (Anim)
+	{
+		StopAnimMontage(Anim);
+	}
+	if (HasAuthority() && Attributes->GetHealth() <= 0.f && !AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Dead))
+	{
+		AbilitySystem->ApplyGameplayEffectToSelf(GetDefault<UGE_Dead>(), 1.f, AbilitySystem->MakeEffectContext());
+	}
 }
 
 void AShinobiPlayerCharacter::UnPossessed()

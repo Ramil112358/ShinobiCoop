@@ -21,6 +21,7 @@ namespace ShinobiTags
 	UE_DEFINE_GAMEPLAY_TAG(State_ShockBonus, "State.ShockBonus");
 	UE_DEFINE_GAMEPLAY_TAG(State_Staggered, "State.Staggered");
 	UE_DEFINE_GAMEPLAY_TAG(State_Downed, "State.Downed");
+	UE_DEFINE_GAMEPLAY_TAG(State_Reviving, "State.Reviving");
 	UE_DEFINE_GAMEPLAY_TAG(State_Dead, "State.Dead");
 	UE_DEFINE_GAMEPLAY_TAG(State_Casting_Fireball, "State.Casting.Fireball");
 	UE_DEFINE_GAMEPLAY_TAG(State_Casting_Chidori, "State.Casting.Chidori");

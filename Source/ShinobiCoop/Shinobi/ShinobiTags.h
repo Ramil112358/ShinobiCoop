@@ -27,6 +27,7 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_ShockBonus);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Staggered);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Downed);        // players at 0 HP, waiting for a revive
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Reviving);      // holding a revive on a downed ally
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Dead);          // enemies at 0 HP; players after bleeding out
 	// While a jutsu is active (wind-up and execution); drives the hand orb on every machine.
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Casting_Fireball);

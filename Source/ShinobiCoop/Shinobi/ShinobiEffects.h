@@ -211,13 +211,14 @@ public:
 	UGE_SubstitutionCooldown();
 };
 
-/** Downed (players at 0 HP): State.Downed until revived or bled out. Removed by the revive or the game mode. */
+/** Downed (players at 0 HP): State.Downed until revived (which removes it) or it expires: bled out, dead. */
 UCLASS()
 class SHINOBICOOP_API UGE_Downed : public UShinobiEffect
 {
 	GENERATED_BODY()
 public:
 	UGE_Downed();
+	static constexpr float BleedOutSeconds = 30.f;
 };
 
 /** Dead: State.Dead (enemies at 0 HP; players after bleeding out, until the next wave respawns them). */

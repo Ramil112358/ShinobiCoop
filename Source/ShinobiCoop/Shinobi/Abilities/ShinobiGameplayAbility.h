@@ -19,7 +19,8 @@ enum class EShinobiAbilityInputID : uint8
 	Jutsu1,
 	Jutsu2,
 	Jutsu3,
-	Jutsu4
+	Jutsu4,
+	Revive
 };
 
 /** Base for all Shinobi abilities: instanced per actor, predicted on the owning client. */
