@@ -14,6 +14,11 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/World.h"
+#include "GameFramework/PlayerState.h"
+#include "Shinobi/ShinobiGameState.h"
+#include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/ShinobiTags.h"
+#include "Shinobi/Abilities/GA_Revive.h"
 #include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/Abilities/ShinobiJutsuAbility.h"
@@ -62,6 +67,11 @@ TSharedRef<SWidget> UShinobiHUDWidget::RebuildWidget()
 		StaminaBar = AddBar(Bars, TEXT("StaminaBar"), StaminaColor, 10.f);
 		BuildSubstitutionPips(Bars);
 		BuildJutsuSlots(Root);
+
+		WaveText = AddCanvasText(Root, TEXT("WaveText"), FAnchors(0.5f, 0.f), FVector2D(0.5f, 0.f), FVector2D(0.f, 24.f), 22, ETextJustify::Center);
+		TeamText = AddCanvasText(Root, TEXT("TeamText"), FAnchors(0.f, 0.f), FVector2D(0.f, 0.f), FVector2D(40.f, 24.f), 14, ETextJustify::Left);
+		BannerText = AddCanvasText(Root, TEXT("BannerText"), FAnchors(0.5f, 0.35f), FVector2D(0.5f, 0.5f), FVector2D::ZeroVector, 40, ETextJustify::Center);
+		HintText = AddCanvasText(Root, TEXT("HintText"), FAnchors(0.5f, 0.6f), FVector2D(0.5f, 0.5f), FVector2D::ZeroVector, 18, ETextJustify::Center);
 	}
 	return Super::RebuildWidget();
 }
@@ -145,6 +155,22 @@ void UShinobiHUDWidget::BuildJutsuSlots(UCanvasPanel* Root)
 	SlotFlashUntil.Init(0.0, NumJutsuSlots);
 }
 
+UTextBlock* UShinobiHUDWidget::AddCanvasText(UCanvasPanel* Root, FName Name, const FAnchors& Anchors, const FVector2D& Alignment, const FVector2D& Position, int32 FontSize, ETextJustify::Type Justify)
+{
+	UTextBlock* Text = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), Name);
+	FSlateFontInfo Font = Text->GetFont();
+	Font.Size = FontSize;
+	Font.OutlineSettings.OutlineSize = 2; // readable over bright bursts and the sky
+	Text->SetFont(Font);
+	Text->SetJustification(Justify);
+	UCanvasPanelSlot* TextSlot = Root->AddChildToCanvas(Text);
+	TextSlot->SetAnchors(Anchors);
+	TextSlot->SetAlignment(Alignment);
+	TextSlot->SetPosition(Position);
+	TextSlot->SetAutoSize(true);
+	return Text;
+}
+
 UTextBlock* UShinobiHUDWidget::AddLabel(UOverlay* Layers, int32 FontSize, EHorizontalAlignment HorizontalAlign, EVerticalAlignment VerticalAlign, const FLinearColor& Tint)
 {
 	UTextBlock* Label = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
@@ -182,6 +208,85 @@ void UShinobiHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 		SubstitutionPips[Index]->SetBrushColor(Index < Charges ? PipOnColor : PipOffColor);
 	}
 	UpdateJutsuSlots(*ASC);
+	UpdateArena(Cast<AShinobiPlayerCharacter>(Pawn));
+}
+
+void UShinobiHUDWidget::UpdateArena(const AShinobiPlayerCharacter* Player)
+{
+	const AShinobiGameState* State = GetWorld() ? GetWorld()->GetGameState<AShinobiGameState>() : nullptr;
+	const int32 Countdown = State ? FMath::CeilToInt(State->GetPhaseTimeRemaining()) : 0;
+	FString Wave;
+	FString Banner;
+	if (State)
+	{
+		switch (State->Phase)
+		{
+		case EShinobiArenaPhase::Break:
+			Wave = State->Wave == State->NumWaves ? FString::Printf(TEXT("Final wave in %d"), Countdown)
+				: FString::Printf(TEXT("Wave %d / %d in %d"), State->Wave, State->NumWaves, Countdown);
+			break;
+		case EShinobiArenaPhase::Fighting:
+			Wave = FString::Printf(TEXT("Wave %d / %d   Enemies left: %d"), State->Wave, State->NumWaves, State->EnemiesRemaining);
+			break;
+		case EShinobiArenaPhase::Wiped:
+			Wave = FString::Printf(TEXT("Wave %d / %d"), State->Wave, State->NumWaves);
+			Banner = FString::Printf(TEXT("WIPED OUT\nWave restarting in %d"), Countdown);
+			break;
+		case EShinobiArenaPhase::Victory:
+			Banner = TEXT("VICTORY");
+			break;
+		default:
+			break;
+		}
+	}
+
+	// Teammates: every other player in the session.
+	FString Team;
+	if (State)
+	{
+		for (const APlayerState* Mate : State->PlayerArray)
+		{
+			const AShinobiCharacterBase* Body = Mate ? Cast<AShinobiCharacterBase>(Mate->GetPawn()) : nullptr;
+			if (!Body || Body == Player)
+			{
+				continue;
+			}
+			const UAbilitySystemComponent* MateASC = Body->GetAbilitySystemComponent();
+			const TCHAR* Status = MateASC->HasMatchingGameplayTag(ShinobiTags::State_Dead) ? TEXT("  DEAD")
+				: MateASC->HasMatchingGameplayTag(ShinobiTags::State_Downed) ? TEXT("  DOWNED") : TEXT("");
+			Team += FString::Printf(TEXT("%s  %d / %d%s\n"), *Mate->GetPlayerName(), FMath::RoundToInt(Body->GetAttributes()->GetHealth()),
+				FMath::RoundToInt(Body->GetAttributes()->GetMaxHealth()), Status);
+		}
+	}
+
+	FString Hint;
+	if (Player)
+	{
+		const UAbilitySystemComponent* ASC = Player->GetAbilitySystemComponent();
+		if (Banner.IsEmpty() && ASC->HasMatchingGameplayTag(ShinobiTags::State_Dead))
+		{
+			Banner = TEXT("DEAD\nBack at the next wave");
+		}
+		else if (Banner.IsEmpty() && ASC->HasMatchingGameplayTag(ShinobiTags::State_Downed))
+		{
+			Banner = FString::Printf(TEXT("DOWNED\nBleeding out in %d - a teammate can revive you"), FMath::CeilToInt(Player->GetBleedOutRemaining()));
+		}
+		if (const FGameplayAbilitySpec* Revive = ASC->FindAbilitySpecFromClass(UGA_Revive::StaticClass()))
+		{
+			if (const UGA_Revive* Instance = Cast<UGA_Revive>(Revive->GetPrimaryInstance()); Instance && Instance->IsActive())
+			{
+				Hint = FString::Printf(TEXT("Reviving... %d%%"), FMath::RoundToInt(Instance->GetProgress() * 100.f));
+			}
+		}
+		if (Hint.IsEmpty() && Player->GetLockTarget())
+		{
+			Hint = TEXT("[ LOCKED ]");
+		}
+	}
+	WaveText->SetText(FText::FromString(Wave));
+	TeamText->SetText(FText::FromString(Team));
+	BannerText->SetText(FText::FromString(Banner));
+	HintText->SetText(FText::FromString(Hint));
 }
 
 void UShinobiHUDWidget::UpdateJutsuSlots(const UAbilitySystemComponent& ASC)

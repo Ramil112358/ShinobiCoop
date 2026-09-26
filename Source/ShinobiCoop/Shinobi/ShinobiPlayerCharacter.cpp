@@ -5,6 +5,7 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
+#include "EngineUtils.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -136,6 +137,51 @@ void AShinobiPlayerCharacter::OnDownedTagChanged(const FGameplayTag Tag, int32 C
 	}
 }
 
+void AShinobiPlayerCharacter::ToggleLockOn()
+{
+	if (LockTarget.IsValid() || !Controller)
+	{
+		LockTarget = nullptr;
+		return;
+	}
+	FVector ViewLocation;
+	FRotator ViewRotation;
+	Controller->GetPlayerViewPoint(ViewLocation, ViewRotation);
+	const float MinCos = FMath::Cos(FMath::DegreesToRadians(LockOnHalfAngle));
+	float BestCos = MinCos;
+	for (TActorIterator<AShinobiCharacterBase> It(GetWorld()); It; ++It)
+	{
+		const float Cos = FVector::DotProduct(ViewRotation.Vector(), (It->GetActorLocation() - ViewLocation).GetSafeNormal());
+		if (IsHostileTo(*It) && It->IsAlive() && Cos >= BestCos && FVector::Dist(It->GetActorLocation(), GetActorLocation()) <= LockOnRange)
+		{
+			BestCos = Cos;
+			LockTarget = *It;
+		}
+	}
+}
+
+void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	const AShinobiCharacterBase* Target = LockTarget.Get();
+	if (!Target)
+	{
+		return;
+	}
+	if (!Controller || !Target->IsAlive() || FVector::Dist(Target->GetActorLocation(), GetActorLocation()) > LockOnRange)
+	{
+		LockTarget = nullptr;
+		return;
+	}
+	// Aim the camera (so every aimed jutsu) at the target's chest; the server aims from the replicated camera.
+	FVector ViewLocation;
+	FRotator ViewRotation;
+	Controller->GetPlayerViewPoint(ViewLocation, ViewRotation);
+	FRotator Desired = (Target->GetActorLocation() + FVector(0.f, 0.f, 30.f) - ViewLocation).Rotation();
+	Desired.Pitch = FMath::Clamp(FRotator::NormalizeAxis(Desired.Pitch), -40.f, 20.f);
+	Controller->SetControlRotation(FMath::RInterpTo(Controller->GetControlRotation(), Desired, DeltaSeconds, 10.f));
+}
+
 void AShinobiPlayerCharacter::UnPossessed()
 {
 	// A lost controller (unpossess, disconnect) never sends the release for held inputs, and chakra charge never
@@ -174,6 +220,7 @@ void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 		Input->BindAction(Pair.Value, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::AbilityInputPressed, Pair.Key);
 		Input->BindAction(Pair.Value, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::AbilityInputReleased, Pair.Key);
 	}
+	Input->BindAction(InputConfig.LockOn, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::ToggleLockOn);
 	Input->BindAction(InputConfig.JutsuModifier, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::SetJutsuModifier, true);
 	Input->BindAction(InputConfig.JutsuModifier, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::SetJutsuModifier, false);
 }
@@ -192,6 +239,10 @@ void AShinobiPlayerCharacter::Move(const FInputActionValue& Value)
 
 void AShinobiPlayerCharacter::Look(const FInputActionValue& Value)
 {
+	if (LockTarget.IsValid())
+	{
+		return; // the lock steers the camera
+	}
 	const FVector2D Axis = Value.Get<FVector2D>();
 	AddControllerYawInput(Axis.X);
 	AddControllerPitchInput(Axis.Y);

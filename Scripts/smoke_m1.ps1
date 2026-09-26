@@ -24,7 +24,7 @@ if ((Test-Path -LiteralPath $ServerLog) -or (Test-Path -LiteralPath $ClientLog))
 }
 $Common = "-game -nullrhi -nosound -unattended -nosplash -ShinobiSmoke"
 
-$server = Start-Process $Editor -PassThru -ArgumentList "`"$Project`" /Game/ThirdPerson/Lvl_ThirdPerson?listen $Common -abslog=`"$ServerLog`""
+$server = Start-Process $Editor -PassThru -ArgumentList "`"$Project`" /Game/ThirdPerson/Lvl_ThirdPerson?listen?game=/Script/ShinobiCoop.ShinobiGameMode $Common -abslog=`"$ServerLog`""
 $null = $server.Handle # PS 5.1 only reports ExitCode if the handle was opened while the process ran
 $client = $null
 try {

@@ -46,6 +46,10 @@ public:
 	UPROPERTY()
 	TObjectPtr<UInputAction> JutsuModifier;
 
+	/** Tab / R3: lock the camera onto the enemy nearest the crosshair (again to release). */
+	UPROPERTY()
+	TObjectPtr<UInputAction> LockOn;
+
 	/** Gamepad A/B/X/Y -> Jutsu 1-4. Only active while RB is held. */
 	UPROPERTY()
 	TObjectPtr<UInputMappingContext> JutsuContext;

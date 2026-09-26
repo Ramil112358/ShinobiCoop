@@ -29,6 +29,17 @@ public:
 	/** Seconds left before a downed player bleeds out (0 when not downed). Needs the downed effect: owner/server only. */
 	float GetBleedOutRemaining() const;
 
+	static constexpr float LockOnRange = 3000.f;
+	static constexpr float LockOnHalfAngle = 35.f;
+
+	/** Local player: the enemy the camera is locked onto, if any. */
+	AShinobiCharacterBase* GetLockTarget() const { return LockTarget.Get(); }
+
+	/** Local player: lock onto the living enemy nearest the crosshair (within LockOnHalfAngle and LockOnRange), or release. */
+	void ToggleLockOn();
+
+	virtual void Tick(float DeltaSeconds) override;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
@@ -45,6 +56,8 @@ private:
 	void AbilityInputReleased(EShinobiAbilityInputID InputID);
 	/** RB held: adds IMC_ShinobiJutsu (A/B/X/Y cast jutsu); released: removes it. */
 	void SetJutsuModifier(bool bHeld);
+	TWeakObjectPtr<AShinobiCharacterBase> LockTarget;
+
 	/** Every machine: hold the downed pose. Server: the effect ran out with HP still 0, so bled out: dead. */
 	void OnDownedTagChanged(const FGameplayTag Tag, int32 Count);
 

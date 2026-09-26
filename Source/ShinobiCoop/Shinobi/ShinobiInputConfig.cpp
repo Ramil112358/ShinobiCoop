@@ -83,6 +83,10 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 	AddAbility(EShinobiAbilityInputID::ChakraCharge, TEXT("IA_ChakraCharge"), EKeys::C, EKeys::Gamepad_LeftShoulder);
 	AddAbility(EShinobiAbilityInputID::Revive, TEXT("IA_Revive"), EKeys::E, EKeys::Gamepad_FaceButton_Top); // RB + Y is jutsu 4 (JutsuContext wins)
 
+	Config->LockOn = MakeAction(Config, TEXT("IA_LockOn"), EInputActionValueType::Boolean);
+	Ctx->MapKey(Config->LockOn, EKeys::Tab);
+	Ctx->MapKey(Config->LockOn, EKeys::Gamepad_RightThumbstick);
+
 	// Jutsu 1-4: number keys here; the gamepad face buttons live in JutsuContext, which the player adds while RB is held.
 	Config->JutsuModifier = MakeAction(Config, TEXT("IA_JutsuModifier"), EInputActionValueType::Boolean);
 	Ctx->MapKey(Config->JutsuModifier, EKeys::Gamepad_RightShoulder);

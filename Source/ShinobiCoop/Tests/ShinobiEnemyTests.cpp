@@ -2,6 +2,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "Shinobi/ShinobiArenaGameMode.h"
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/Abilities/GA_Melee.h"
@@ -128,6 +129,24 @@ bool FShinobiReviveTest::RunTest(const FString& Parameters)
 
 	ShinobiTest::Press(Down, EShinobiAbilityInputID::Revive);
 	TestFalse(TEXT("Nobody to revive: no-op"), ShinobiTest::HasTag(Down, ShinobiTags::State_Reviving));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiWaveTableTest, "ShinobiCoop.Arena.WavesAndHealthScaling", ShinobiTestFlags)
+bool FShinobiWaveTableTest::RunTest(const FString& Parameters)
+{
+	TestEqual(TEXT("Four waves"), AShinobiArenaGameMode::GetNumWaves(), 4);
+	const FShinobiWave W1 = AShinobiArenaGameMode::GetWave(1);
+	const FShinobiWave W2 = AShinobiArenaGameMode::GetWave(2);
+	const FShinobiWave W3 = AShinobiArenaGameMode::GetWave(3);
+	const FShinobiWave W4 = AShinobiArenaGameMode::GetWave(4);
+	TestTrue(TEXT("Wave 1: 4 Rogue Ninjas"), W1.RogueNinjas == 4 && W1.KunaiThrowers == 0 && !W1.bBoss);
+	TestTrue(TEXT("Wave 2: 4 RN + 3 KT"), W2.RogueNinjas == 4 && W2.KunaiThrowers == 3 && !W2.bBoss);
+	TestTrue(TEXT("Wave 3: 6 RN + 4 KT"), W3.RogueNinjas == 6 && W3.KunaiThrowers == 4 && !W3.bBoss);
+	TestTrue(TEXT("Wave 4: the boss alone"), W4.RogueNinjas == 0 && W4.KunaiThrowers == 0 && W4.bBoss);
+	TestEqual(TEXT("Solo: x1"), AShinobiArenaGameMode::GetHealthScale(1), 1.f);
+	TestEqual(TEXT("Duo: x1.5"), AShinobiArenaGameMode::GetHealthScale(2), 1.5f);
+	TestEqual(TEXT("Four players: x2.5"), AShinobiArenaGameMode::GetHealthScale(4), 2.5f);
 	return true;
 }
 

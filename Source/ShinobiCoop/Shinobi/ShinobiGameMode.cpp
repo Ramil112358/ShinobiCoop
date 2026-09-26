@@ -2,6 +2,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/PlayerStart.h"
 #include "ShinobiCoop.h"
+#include "Shinobi/ShinobiGameState.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiPlayerController.h"
 #include "Shinobi/ShinobiTrainingDummy.h"
@@ -10,6 +11,7 @@ AShinobiGameMode::AShinobiGameMode()
 {
 	DefaultPawnClass = AShinobiPlayerCharacter::StaticClass();
 	PlayerControllerClass = AShinobiPlayerController::StaticClass();
+	GameStateClass = AShinobiGameState::StaticClass(); // Phase None: the HUD shows no wave info
 }
 
 void AShinobiGameMode::BeginPlay()

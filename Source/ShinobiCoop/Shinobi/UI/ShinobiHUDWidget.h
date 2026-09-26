@@ -15,7 +15,10 @@ class UTextBlock;
 class UVerticalBox;
 struct FGameplayTagContainer;
 
-/** Health / chakra / stamina bars, Substitution pips and the four jutsu slots. Built in code; polled each tick. */
+/**
+ * Health / chakra / stamina bars, Substitution pips and the four jutsu slots; the arena's wave line, teammates,
+ * banners (downed, dead, wipe, victory), revive progress and lock-on. Built in code; polled each tick.
+ */
 UCLASS()
 class SHINOBICOOP_API UShinobiHUDWidget : public UUserWidget
 {
@@ -35,10 +38,28 @@ private:
 	void BuildJutsuSlots(UCanvasPanel* Root);
 	UTextBlock* AddLabel(UOverlay* Layers, int32 FontSize, EHorizontalAlignment HorizontalAlign, EVerticalAlignment VerticalAlign, const FLinearColor& Tint);
 	void UpdateJutsuSlots(const UAbilitySystemComponent& ASC);
+	UTextBlock* AddCanvasText(UCanvasPanel* Root, FName Name, const FAnchors& Anchors, const FVector2D& Alignment, const FVector2D& Position, int32 FontSize, ETextJustify::Type Justify);
+	void UpdateArena(const class AShinobiPlayerCharacter* Player);
 
 	/** Binds the red "can't cast" flash to the current pawn's ability system; rebinds when the pawn changes. */
 	void BindFailureFlash(UAbilitySystemComponent* ASC);
 	void OnAbilityFailed(const UGameplayAbility* Ability, const FGameplayTagContainer& Reasons);
+
+	/** Top-centre: wave, phase countdown, enemies left. */
+	UPROPERTY()
+	TObjectPtr<UTextBlock> WaveText;
+
+	/** Top-left: teammates' names and health. */
+	UPROPERTY()
+	TObjectPtr<UTextBlock> TeamText;
+
+	/** Centre: downed / dead / wipe / victory. */
+	UPROPERTY()
+	TObjectPtr<UTextBlock> BannerText;
+
+	/** Below the centre: revive progress, lock-on. */
+	UPROPERTY()
+	TObjectPtr<UTextBlock> HintText;
 
 	UPROPERTY()
 	TObjectPtr<UProgressBar> HealthBar;
