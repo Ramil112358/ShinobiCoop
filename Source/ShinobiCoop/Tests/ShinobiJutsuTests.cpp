@@ -207,6 +207,23 @@ bool FShinobiChidoriTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChidoriTurnTest, "ShinobiCoop.Jutsu.ChidoriStrikesAlongDashWhenTurned", ShinobiTestFlags)
+bool FShinobiChidoriTurnTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(800.f, 0.f, 0.f));
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
+	W.Tick(0.75f); // mid-dash: the wind-up fires at ~0.65-0.7 and the ~0.18 s dash runs past 0.8
+	TestTrue(TEXT("Still dashing"), ShinobiTest::IsActive(P, UGA_Chidori::StaticClass()));
+	// Stand-in for held strafe input turning the character (orient-to-movement) during the dash.
+	P->SetActorRotation(FRotator(0.f, 90.f, 0.f));
+	W.Tick(0.3f);
+	TestEqual(TEXT("Strike still lands along the dash"), ShinobiTest::Get(E, UShinobiAttributeSet::GetHealthAttribute()), 380.f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChidoriNoTargetTest, "ShinobiCoop.Jutsu.ChidoriWithoutTargetDashesFullDistance", ShinobiTestFlags)
 bool FShinobiChidoriNoTargetTest::RunTest(const FString& Parameters)
 {

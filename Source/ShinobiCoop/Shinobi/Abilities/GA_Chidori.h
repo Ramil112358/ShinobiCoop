@@ -6,8 +6,8 @@
 
 /**
  * Slot 2: a lightning dash of up to 1200 that steers to the nearest enemy within 15 degrees of the aim (straight
- * ahead otherwise), then strikes: 120 damage, a 1.5 s stun and the Shock bonus. The dash is a predicted
- * root-motion force, like the dodge.
+ * ahead otherwise), then strikes: 120 damage, a 1.5 s stun and the Shock bonus. The dash is a root-motion force
+ * like the dodge's, but started from the wind-up timer on each side independently (see the plan's dash-sync note).
  */
 UCLASS()
 class SHINOBICOOP_API UGA_Chidori : public UShinobiJutsuAbility
@@ -43,4 +43,7 @@ protected:
 private:
 	UFUNCTION()
 	void OnDashFinished();
+
+	/** Facing when the dash started; the strike uses it, since held move input turns the character mid-dash. */
+	float DashYaw = 0.f;
 };

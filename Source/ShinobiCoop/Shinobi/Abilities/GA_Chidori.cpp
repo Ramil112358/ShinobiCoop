@@ -31,6 +31,7 @@ void UGA_Chidori::ExecuteJutsu()
 		FaceAim(Target);
 		Distance = FMath::Max(0.f, FVector::Dist2D(Self->GetActorLocation(), Target->GetActorLocation()) - StopShort);
 	}
+	DashYaw = Self->GetActorRotation().Yaw;
 	if (Distance < 1.f)
 	{
 		OnDashFinished();
@@ -45,6 +46,12 @@ void UGA_Chidori::ExecuteJutsu()
 
 void UGA_Chidori::OnDashFinished()
 {
+	// Strike along the dash, not the current facing: movement input held during the dash turns the character
+	// (bOrientRotationToMovement), which would swing the strike cone off the target.
+	if (AActor* Self = GetAvatarActorFromActorInfo())
+	{
+		Self->SetActorRotation(FRotator(0.f, DashYaw, 0.f));
+	}
 	if (HasAuthority(&CurrentActivationInfo))
 	{
 		AShinobiCharacterBase* Victim = FindNearestHostileInCone(StrikeRange, 60.f);

@@ -2210,6 +2210,23 @@ bool FShinobiChidoriTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChidoriTurnTest, "ShinobiCoop.Jutsu.ChidoriStrikesAlongDashWhenTurned", ShinobiTestFlags)
+bool FShinobiChidoriTurnTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(800.f, 0.f, 0.f));
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
+	W.Tick(0.75f); // mid-dash: the wind-up fires at ~0.65-0.7 and the ~0.18 s dash runs past 0.8
+	TestTrue(TEXT("Still dashing"), ShinobiTest::IsActive(P, UGA_Chidori::StaticClass()));
+	// Stand-in for held strafe input turning the character (orient-to-movement) during the dash.
+	P->SetActorRotation(FRotator(0.f, 90.f, 0.f));
+	W.Tick(0.3f);
+	TestEqual(TEXT("Strike still lands along the dash"), ShinobiTest::Get(E, UShinobiAttributeSet::GetHealthAttribute()), 380.f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChidoriNoTargetTest, "ShinobiCoop.Jutsu.ChidoriWithoutTargetDashesFullDistance", ShinobiTestFlags)
 bool FShinobiChidoriNoTargetTest::RunTest(const FString& Parameters)
 {
@@ -2271,8 +2288,8 @@ AShinobiCharacterBase* UShinobiGameplayAbility::FindNearestHostileInCone(float R
 
 /**
  * Slot 2: a lightning dash of up to 1200 that steers to the nearest enemy within 15 degrees of the aim (straight
- * ahead otherwise), then strikes: 120 damage, a 1.5 s stun and the Shock bonus. The dash is a predicted
- * root-motion force, like the dodge.
+ * ahead otherwise), then strikes: 120 damage, a 1.5 s stun and the Shock bonus. The dash is a root-motion force
+ * like the dodge's, but started from the wind-up timer on each side independently (see the plan's dash-sync note).
  */
 UCLASS()
 class SHINOBICOOP_API UGA_Chidori : public UShinobiJutsuAbility
@@ -2308,6 +2325,9 @@ protected:
 private:
 	UFUNCTION()
 	void OnDashFinished();
+
+	/** Facing when the dash started; the strike uses it, since held move input turns the character mid-dash. */
+	float DashYaw = 0.f;
 };
 ```
 
@@ -2347,6 +2367,7 @@ void UGA_Chidori::ExecuteJutsu()
 		FaceAim(Target);
 		Distance = FMath::Max(0.f, FVector::Dist2D(Self->GetActorLocation(), Target->GetActorLocation()) - StopShort);
 	}
+	DashYaw = Self->GetActorRotation().Yaw;
 	if (Distance < 1.f)
 	{
 		OnDashFinished();
@@ -2361,6 +2382,12 @@ void UGA_Chidori::ExecuteJutsu()
 
 void UGA_Chidori::OnDashFinished()
 {
+	// Strike along the dash, not the current facing: movement input held during the dash turns the character
+	// (bOrientRotationToMovement), which would swing the strike cone off the target.
+	if (AActor* Self = GetAvatarActorFromActorInfo())
+	{
+		Self->SetActorRotation(FRotator(0.f, DashYaw, 0.f));
+	}
 	if (HasAuthority(&CurrentActivationInfo))
 	{
 		AShinobiCharacterBase* Victim = FindNearestHostileInCone(StrikeRange, 60.f);
@@ -2386,7 +2413,7 @@ In `Source/ShinobiCoop/Shinobi/ShinobiPlayerCharacter.cpp`, add `#include "Shino
 
 - [ ] **Step 7: Build and run all tests**
 
-Expected: `ALL 33 TESTS PASSED`.
+Expected: `ALL 34 TESTS PASSED`.
 
 - [ ] **Step 8: Commit**
 
@@ -2578,7 +2605,7 @@ In `Source/ShinobiCoop/Shinobi/ShinobiPlayerCharacter.cpp`, add `#include "Shino
 
 - [ ] **Step 6: Build and run all tests**
 
-Expected: `ALL 35 TESTS PASSED`.
+Expected: `ALL 36 TESTS PASSED`.
 
 - [ ] **Step 7: Commit**
 
@@ -2788,7 +2815,7 @@ In `Source/ShinobiCoop/Shinobi/ShinobiPlayerCharacter.cpp`, add `#include "Shino
 
 - [ ] **Step 7: Build and run all tests**
 
-Expected: `ALL 36 TESTS PASSED`.
+Expected: `ALL 37 TESTS PASSED`.
 
 Task 1's `InvulnerableNegatesAndRequestsSubstitution` now runs a real Substitution on its first hit (P teleports behind E and E is staggered). It must still pass unchanged:
 - every assertion there is about damage and event counts;
@@ -2942,7 +2969,7 @@ Add `#include "InputMappingContext.h"` if the compiler asks for the full type.
 
 - [ ] **Step 6: Build and run all tests**
 
-Expected: `ALL 36 TESTS PASSED`.
+Expected: `ALL 37 TESTS PASSED`.
 
 - [ ] **Step 7: Commit**
 
@@ -3360,7 +3387,7 @@ powershell -ExecutionPolicy Bypass -File Scripts\build.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\shot_chakra.ps1
 ```
-Expected: `ALL 36 TESTS PASSED`, and six screenshot paths including `ShinobiShot_5_Hud.png`.
+Expected: `ALL 37 TESTS PASSED`, and six screenshot paths including `ShinobiShot_5_Hud.png`.
 
 Open `Saved\Screenshots\WindowsEditor\ShinobiShot_5_Hud.png` with the Read tool and check:
 - the bars and three log pips are at the bottom left;
@@ -3722,7 +3749,7 @@ powershell -ExecutionPolicy Bypass -File Scripts\run_tests.ps1
 powershell -ExecutionPolicy Bypass -File Scripts\smoke_m1.ps1
 ```
 Expected:
-- `ALL 37 TESTS PASSED`;
+- `ALL 38 TESTS PASSED`;
 - two `SMOKE PASS` lines, the second for a `ShinobiTrainingDummy_*` with `H=` at or below 440 and `Burn=1`.
 
 - [ ] **Step 8: Commit**
@@ -3775,7 +3802,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ## Carry-forward notes for M2b+
 
-- **Chidori dash sync.** The dash starts after a wind-up timer that runs separately on client and server. With lag, the server's dash begins about RTT/2 later in move time, so corrections are possible at its start. If PktLag tests show them, sync the start with `UAbilityTask_NetworkSyncPoint` (`OnlyServerWait`) before the dash.
+- **Chidori dash sync.** The dash starts after a wind-up timer that runs separately on client and server. With lag, the server's dash begins about RTT/2 later in move time, so corrections are possible at its start. If PktLag tests show them, sync the start with `UAbilityTask_NetworkSyncPoint` (`OnlyServerWait`) before the dash. Also, each side picks its own direction and length: with no target from its own camera (the server's is up to ~80 ms stale), and with a target from its own positions. At PktLag 150, a camera turning fast just before the wind-up ends can make the two dashes diverge by hundreds of units, and the server then snaps the client. The proper fix is the same client-sent target data as for `PrepareJutsu`, with the direction and distance validated by the server. Snap and strike are also 2D only, so a hostile on a ledge high above within 15° pulls a horizontal dash.
 - **Fireball launch point.** It is a fixed chest-height point 60 in front of the caster. Use the hand socket once M2b's cast animations exist.
 - **Amaterasu target under lag.** The target is picked separately by the client (predicted) and the server (authoritative, using the client's camera from `ServerUpdateCamera`). Under lag they can disagree; the server wins. If that feels bad, send the client's target as target data.
 - **Status text is temporary.** The dummies' status text and the grey Fireball ball are placeholders. M2b replaces them with Gameplay Cues (Burn/Black Flame shells, Shock crackle, the Firestorm burst, Substitution log + smoke, Rasengan sphere, Chidori hand and trail).
@@ -3836,5 +3863,5 @@ Still open and unchanged: dodge direction replication, i-frame RTT, melee yaw st
 - `UGE_Burn::DamagePerTick` and `UGE_BlackFlame::DamagePerTick` are used by the projectile, Amaterasu and the tests.
 - Tags are defined once in Task 1 and only used afterwards.
 
-**Test count by task:** 18 → T1 20 → T2 24 → T3 26 → T4 27 → T5 30 → T6 31 → T7 33 → T8 35 → T9 36 → T10 36 → T11 36 → T12 37.
+**Test count by task:** 18 → T1 20 → T2 24 → T3 26 → T4 27 → T5 30 → T6 31 → T7 34 → T8 36 → T9 37 → T10 37 → T11 37 → T12 38.
 
