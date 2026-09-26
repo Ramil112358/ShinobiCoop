@@ -4068,3 +4068,9 @@ Still open and unchanged: dodge direction replication, i-frame RTT, melee yaw st
 
 **Test count by task:** 18 → T1 20 → T2 24 → T3 26 → T4 27 → T5 30 → T6 31 → T7 34 → T8 36 → T9 38 (with review fixes) → T10 38 → T11 38 → T12 39 → 40 (ally-skip test) → 41 (final-review dummy fix).
 
+
+---
+
+## M2a manual check (2026-09-26)
+
+The user ran the 16-row Task 13 checklist in 2-player listen-server PIE on `Lvl_ThirdPerson`. **All rows pass.** No fixes were needed.
