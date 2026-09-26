@@ -183,6 +183,20 @@ bool FShinobiAmaterasuTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiAimPastAllyTest, "ShinobiCoop.Jutsu.AimSkipsAlliesInTheWay", ShinobiTestFlags)
+bool FShinobiAimPastAllyTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	W.Spawn<AShinobiPlayerCharacter>(FVector(300.f, 0.f, 0.f)); // a teammate standing on the aim line
+	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(1500.f, 0.f, 0.f));
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
+	TestTrue(TEXT("Amaterasu finds the enemy behind the teammate"), ShinobiTest::IsActive(P, UGA_Amaterasu::StaticClass()));
+	W.Tick(0.6f);
+	TestTrue(TEXT("Enemy behind the teammate gets the black flame"), ShinobiTest::HasTag(E, ShinobiTags::State_Burning_Black));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChidoriTest, "ShinobiCoop.Jutsu.ChidoriDashesToTargetAndShocks", ShinobiTestFlags)
 bool FShinobiChidoriTest::RunTest(const FString& Parameters)
 {

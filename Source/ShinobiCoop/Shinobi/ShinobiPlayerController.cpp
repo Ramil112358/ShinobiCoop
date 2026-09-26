@@ -99,12 +99,21 @@ void AShinobiPlayerController::ShinobiDumpStats()
 void AShinobiPlayerController::RunSmokeTest()
 {
 	// ponytail: fixed delays assume a local connection; raise them if the smoke test flakes on a slow machine
-	// The dummy row sits on lower ground than the PlayerStart, below the boom camera's level-aim height at that
-	// range; pitch down enough that the crosshair (used by ShinobiCast's Fireball) lands on the dummy instead of
-	// sailing over its head. Yaw is left alone -- the spawn rotation already faces the dummies.
-	SetControlRotation(FRotator(-8.f, GetControlRotation().Yaw, 0.f));
 	FTimerHandle DamageTimer;
 	GetWorldTimerManager().SetTimer(DamageTimer, FTimerDelegate::CreateUObject(this, &AShinobiPlayerController::ShinobiDamageSelf, 50.f), 5.f, false);
+	// The dummy row sits on lower ground than the PlayerStart, below the boom camera's level-aim height at that
+	// range; pitch down enough that the crosshair (used by ShinobiCast's Fireball) lands on the dummy instead of
+	// sailing over its head. Yaw is left alone -- the spawn rotation already faces the dummies. Set after any
+	// restart-time ClientSetRotation (not at BeginPlay, which an in-flight one could still clobber), but measured to
+	// need a few seconds of margin before the cast: this control rotation only reaches the server's copy of this
+	// pawn through the character movement component's own replication, whose cadence for a pawn with no movement
+	// input is not tight enough to land inside the Fireball's 0.4 s wind-up if set right before ShinobiCast -- that
+	// arrangement passed 1 of 3 local runs.
+	FTimerHandle PitchTimer;
+	GetWorldTimerManager().SetTimer(PitchTimer, FTimerDelegate::CreateWeakLambda(this, [this]()
+	{
+		SetControlRotation(FRotator(-8.f, GetControlRotation().Yaw, 0.f));
+	}), 1.f, false);
 	FTimerHandle CastTimer;
 	GetWorldTimerManager().SetTimer(CastTimer, FTimerDelegate::CreateUObject(this, &AShinobiPlayerController::ShinobiCast, 1), 5.5f, false);
 	FTimerHandle DumpTimer;

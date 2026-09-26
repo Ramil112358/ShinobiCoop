@@ -3,7 +3,6 @@
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Shinobi/ShinobiTrainingDummy.h"
 #include "HAL/IConsoleManager.h"
-#include "Misc/ScopeExit.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiAttributeDefaultsTest, "ShinobiCoop.Core.AttributeDefaults", ShinobiTestFlags)
@@ -161,8 +160,9 @@ bool FShinobiDummyAttackTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
-	DummyAttack->Set(true, ECVF_SetByCode);
-	ON_SCOPE_EXIT { DummyAttack->Set(false, ECVF_SetByCode); };
+	// ECVF_SetByConsole so this wins over (and cleanly restores) a value someone typed into the console this session --
+	// ECVF_SetByCode would lose that fight and leave the cvar on Shinobi.DummyAttack 1 dummies attacking after the test.
+	TGuardConsoleVariable<bool> DummyAttackGuard(DummyAttack, true, ECVF_SetByConsole);
 
 	FShinobiTestWorld W;
 	W.Spawn<AShinobiTrainingDummy>();
