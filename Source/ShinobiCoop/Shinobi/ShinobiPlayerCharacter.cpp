@@ -12,6 +12,7 @@
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/GA_ChakraCharge.h"
 #include "Shinobi/Abilities/GA_Dodge.h"
+#include "Shinobi/Abilities/GA_Fireball.h"
 #include "Shinobi/Abilities/GA_Melee.h"
 #include "Shinobi/Abilities/GA_Sprint.h"
 #include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
@@ -21,7 +22,10 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 {
 	Team = EShinobiTeam::Players;
 	AbilitySystem->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
-	StartupAbilities = { UGA_Melee::StaticClass(), UGA_Dodge::StaticClass(), UGA_Sprint::StaticClass(), UGA_ChakraCharge::StaticClass() };
+	StartupAbilities = {
+		UGA_Melee::StaticClass(), UGA_Dodge::StaticClass(), UGA_Sprint::StaticClass(), UGA_ChakraCharge::StaticClass(),
+		UGA_Fireball::StaticClass(),
+	};
 
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
@@ -68,8 +72,9 @@ bool AShinobiPlayerCharacter::CanMove() const
 void AShinobiPlayerCharacter::UnPossessed()
 {
 	// A lost controller (unpossess, disconnect) never sends the release for held inputs, and chakra charge never
-	// ends on its own, so end the hold-to-use abilities here. Must run before Super: APawn::UnPossessed clears the Owner, after which the ClientCancelAbility RPC can't reach
-	// the owning client. Mostly server-side; on a client it can also run while the pawn is being destroyed (harmless).
+	// ends on its own, so end the hold-to-use abilities here. Must run before Super: APawn::UnPossessed clears
+	// the Owner, after which the ClientCancelAbility RPC can't reach the owning client. Mostly server-side; on a
+	// client it can also run while the pawn is being destroyed (harmless).
 	FGameplayTagContainer HeldAbilities;
 	HeldAbilities.AddTag(ShinobiTags::Ability_Sprint);
 	HeldAbilities.AddTag(ShinobiTags::Ability_ChakraCharge);

@@ -200,3 +200,11 @@ UGE_Stagger::UGE_Stagger()
 	GrantTag(ShinobiTags::State_Staggered);
 	UseSingleRefreshingStack();
 }
+
+UGE_JutsuCooldown::UGE_JutsuCooldown()
+{
+	DurationPolicy = EGameplayEffectDurationType::HasDuration;
+	FSetByCallerFloat SetByCaller;
+	SetByCaller.DataTag = ShinobiTags::Data_Cooldown;
+	DurationMagnitude = FGameplayEffectModifierMagnitude(SetByCaller);
+}

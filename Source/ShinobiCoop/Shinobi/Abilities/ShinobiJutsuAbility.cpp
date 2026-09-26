@@ -1,0 +1,180 @@
+#include "Shinobi/Abilities/ShinobiJutsuAbility.h"
+#include "AbilitySystemComponent.h"
+#include "AbilitySystemGlobals.h"
+#include "Abilities/Tasks/AbilityTask_WaitDelay.h"
+#include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
+#include "Engine/World.h"
+#include "GameFramework/Controller.h"
+#include "GameFramework/Pawn.h"
+#include "Shinobi/ShinobiAttributeSet.h"
+#include "Shinobi/ShinobiEffects.h"
+#include "Shinobi/ShinobiTags.h"
+
+UShinobiJutsuAbility::UShinobiJutsuAbility()
+{
+	SetAssetTags(FGameplayTagContainer(ShinobiTags::Ability_Jutsu));
+	ActivationBlockedTags.AddTag(ShinobiTags::State_Dodging);
+	ActivationBlockedTags.AddTag(ShinobiTags::State_ChakraCharging);
+	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);
+	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Melee); // a jutsu can finish a combo
+	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_Jutsu);
+	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_Melee);
+	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);
+	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_ChakraCharge);
+}
+
+void UShinobiJutsuAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
+{
+	if (!PrepareJutsu())
+	{
+		if (UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get())
+		{
+			ASC->NotifyAbilityFailed(Handle, this, FGameplayTagContainer(ShinobiTags::Fail_NoTarget));
+		}
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+	// Cost now, cooldown only when the wind-up completes: an interrupted jutsu refunds half and can be recast at once.
+	if (!CommitAbilityCost(Handle, ActorInfo, ActivationInfo))
+	{
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+	FaceAim(nullptr);
+
+	// Event.Hit.Stagger is only sent on the server, so only the server's copy gets interrupted; its cancel
+	// replicates to the owning client.
+	InterruptTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, ShinobiTags::Event_Hit_Stagger, nullptr, true);
+	InterruptTask->EventReceived.AddDynamic(this, &UShinobiJutsuAbility::OnInterruptedByHit);
+	InterruptTask->ReadyForActivation();
+
+	UAbilityTask_WaitDelay* Seals = UAbilityTask_WaitDelay::WaitDelay(this, WindUp);
+	Seals->OnFinish.AddDynamic(this, &UShinobiJutsuAbility::OnWindUpFinished);
+	Seals->ReadyForActivation();
+}
+
+void UShinobiJutsuAbility::OnWindUpFinished()
+{
+	if (InterruptTask)
+	{
+		InterruptTask->EndTask();
+		InterruptTask = nullptr;
+	}
+	CommitAbilityCooldown(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true);
+	ExecuteJutsu();
+}
+
+void UShinobiJutsuAbility::OnInterruptedByHit(FGameplayEventData Payload)
+{
+	FGameplayEffectSpecHandle Refund = MakeOutgoingGameplayEffectSpec(UGE_ChakraGain::StaticClass(), GetAbilityLevel());
+	Refund.Data->SetSetByCallerMagnitude(ShinobiTags::Data_ChakraGain, ChakraCost * InterruptRefundFraction);
+	ApplyGameplayEffectSpecToOwner(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, Refund);
+	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
+}
+
+void UShinobiJutsuAbility::EndJutsu()
+{
+	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+}
+
+bool UShinobiJutsuAbility::CheckCost(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, FGameplayTagContainer* OptionalRelevantTags) const
+{
+	const UAbilitySystemComponent* ASC = ActorInfo ? ActorInfo->AbilitySystemComponent.Get() : nullptr;
+	if (ASC && ASC->GetNumericAttribute(UShinobiAttributeSet::GetChakraAttribute()) >= ChakraCost)
+	{
+		return true;
+	}
+	const FGameplayTag& CostTag = UAbilitySystemGlobals::Get().ActivateFailCostTag;
+	if (OptionalRelevantTags && CostTag.IsValid())
+	{
+		OptionalRelevantTags->AddTag(CostTag);
+	}
+	return false;
+}
+
+void UShinobiJutsuAbility::ApplyCost(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo) const
+{
+	FGameplayEffectSpecHandle Spec = MakeOutgoingGameplayEffectSpec(Handle, ActorInfo, ActivationInfo, UGE_ChakraGain::StaticClass(), GetAbilityLevel(Handle, ActorInfo));
+	Spec.Data->SetSetByCallerMagnitude(ShinobiTags::Data_ChakraGain, -ChakraCost);
+	ApplyGameplayEffectSpecToOwner(Handle, ActorInfo, ActivationInfo, Spec);
+}
+
+void UShinobiJutsuAbility::ApplyCooldown(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo) const
+{
+	FGameplayEffectSpecHandle Spec = MakeOutgoingGameplayEffectSpec(Handle, ActorInfo, ActivationInfo, UGE_JutsuCooldown::StaticClass(), GetAbilityLevel(Handle, ActorInfo));
+	Spec.Data->DynamicGrantedTags.AppendTags(CooldownTags);
+	Spec.Data->SetSetByCallerMagnitude(ShinobiTags::Data_Cooldown, Cooldown);
+	ApplyGameplayEffectSpecToOwner(Handle, ActorInfo, ActivationInfo, Spec);
+}
+
+FShinobiJutsuSlotState UShinobiJutsuAbility::GetSlotState(const UAbilitySystemComponent& ASC) const
+{
+	FShinobiJutsuSlotState State;
+	const FGameplayEffectQuery Query = FGameplayEffectQuery::MakeQuery_MatchAnyOwningTags(CooldownTags);
+	for (const TPair<float, float>& RemainingAndDuration : ASC.GetActiveEffectsTimeRemainingAndDuration(Query))
+	{
+		if (RemainingAndDuration.Key > State.CooldownRemaining)
+		{
+			State.CooldownRemaining = RemainingAndDuration.Key;
+			State.CooldownDuration = RemainingAndDuration.Value;
+		}
+	}
+	State.bAffordable = ASC.GetNumericAttribute(UShinobiAttributeSet::GetChakraAttribute()) >= ChakraCost;
+	return State;
+}
+
+void UShinobiJutsuAbility::GetAimViewPoint(FVector& OutLocation, FRotator& OutRotation) const
+{
+	OutLocation = FVector::ZeroVector;
+	OutRotation = FRotator::ZeroRotator;
+	const APawn* Pawn = Cast<APawn>(GetAvatarActorFromActorInfo());
+	if (!Pawn)
+	{
+		return;
+	}
+	if (const AController* Controller = Pawn->GetController())
+	{
+		Controller->GetPlayerViewPoint(OutLocation, OutRotation);
+	}
+	else
+	{
+		Pawn->GetActorEyesViewPoint(OutLocation, OutRotation);
+	}
+}
+
+bool UShinobiJutsuAbility::TraceAim(float Range, float Radius, FHitResult& OutHit) const
+{
+	const AActor* Self = GetAvatarActorFromActorInfo();
+	if (!Self)
+	{
+		return false;
+	}
+	FVector Start;
+	FRotator Rotation;
+	GetAimViewPoint(Start, Rotation);
+	const FVector End = Start + Rotation.Vector() * (Range + FVector::Dist(Start, Self->GetActorLocation()));
+	const FCollisionQueryParams Params(SCENE_QUERY_STAT(ShinobiAim), false, Self);
+	return Self->GetWorld()->SweepSingleByChannel(OutHit, Start, End, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeSphere(Radius), Params);
+}
+
+void UShinobiJutsuAbility::FaceAim(const AActor* Target) const
+{
+	AActor* Self = GetAvatarActorFromActorInfo();
+	if (!Self)
+	{
+		return;
+	}
+	float Yaw = 0.f;
+	if (Target)
+	{
+		Yaw = (Target->GetActorLocation() - Self->GetActorLocation()).Rotation().Yaw;
+	}
+	else
+	{
+		FVector ViewLocation;
+		FRotator ViewRotation;
+		GetAimViewPoint(ViewLocation, ViewRotation);
+		Yaw = ViewRotation.Yaw;
+	}
+	Self->SetActorRotation(FRotator(0.f, Yaw, 0.f));
+}

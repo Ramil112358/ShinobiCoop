@@ -16,6 +16,7 @@ UGA_Dodge::UGA_Dodge()
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_ChakraCharge);
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Melee);
+	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Jutsu);
 	CostGameplayEffectClass = UGE_DodgeCost::StaticClass();
 	Montage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Dodge.AM_Dodge")));
 }

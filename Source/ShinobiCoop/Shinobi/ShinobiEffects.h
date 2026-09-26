@@ -171,3 +171,13 @@ class SHINOBICOOP_API UGE_Stagger : public UShinobiEffect
 public:
 	UGE_Stagger();
 };
+
+/** Jutsu cooldown. Duration: SetByCaller Data.Cooldown. The jutsu's Cooldown.Jutsu.* tag is added to each spec as a
+ * dynamic granted tag (UShinobiJutsuAbility::ApplyCooldown), so one class serves all four jutsu. */
+UCLASS()
+class SHINOBICOOP_API UGE_JutsuCooldown : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_JutsuCooldown();
+};

@@ -5,6 +5,10 @@
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiProjectile.h"
+#include "Shinobi/Abilities/GA_ChakraCharge.h"
+#include "Shinobi/Abilities/GA_Dodge.h"
+#include "Shinobi/Abilities/GA_Fireball.h"
+#include "Shinobi/Abilities/GA_Melee.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiProjectileTest, "ShinobiCoop.Jutsu.ProjectileHitsFirstHostileAndSplashes", ShinobiTestFlags)
 bool FShinobiProjectileTest::RunTest(const FString& Parameters)
@@ -35,6 +39,106 @@ bool FShinobiProjectileTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Splash: 40"), ShinobiTest::Get(Nearby, Health), 460.f);
 	TestFalse(TEXT("Splash doesn't burn"), ShinobiTest::HasTag(Nearby, ShinobiTags::State_Burning_Normal));
 	TestEqual(TEXT("Outside the splash radius"), ShinobiTest::Get(Far, Health), 500.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiFireballTest, "ShinobiCoop.Jutsu.FireballCostWindUpCooldown", ShinobiTestFlags)
+bool FShinobiFireballTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(600.f, 0.f, 0.f));
+	UAbilitySystemComponent* ASC = P->GetAbilitySystemComponent();
+	const UGA_Fireball* Fireball = GetDefault<UGA_Fireball>();
+	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	TestTrue(TEXT("Fireball active"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
+	TestEqual(TEXT("Cost 20 paid up front"), ShinobiTest::Get(P, Chakra), 80.f);
+	TestFalse(TEXT("No cooldown during the wind-up"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Fireball));
+	W.Tick(0.3f);
+	TestEqual(TEXT("Nothing thrown during the 0.4 s wind-up"), ShinobiTest::CountActors<AShinobiProjectile>(W), 0);
+
+	W.Tick(0.15f); // t = 0.45
+	TestEqual(TEXT("Thrown after the wind-up"), ShinobiTest::CountActors<AShinobiProjectile>(W), 1);
+	TestTrue(TEXT("Cooldown starts after the wind-up"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Fireball));
+	TestFalse(TEXT("Ability ends once thrown"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
+	const FShinobiJutsuSlotState Slot = Fireball->GetSlotState(*ASC);
+	TestTrue(FString::Printf(TEXT("HUD sees the cooldown (%.2f s of %.2f s left)"), Slot.CooldownRemaining, Slot.CooldownDuration),
+		Slot.CooldownRemaining > 3.5f && Slot.CooldownRemaining <= 4.f && FMath::IsNearlyEqual(Slot.CooldownDuration, 4.f));
+
+	const float ChakraAfterCast = ShinobiTest::Get(P, Chakra);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	TestFalse(TEXT("Blocked by the cooldown"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
+	TestEqual(TEXT("Nothing spent on a blocked cast"), ShinobiTest::Get(P, Chakra), ChakraAfterCast);
+
+	W.Tick(0.4f); // t = 0.85: the ball has reached the enemy
+	TestEqual(TEXT("Enemy hit for 60"), ShinobiTest::Get(E, UShinobiAttributeSet::GetHealthAttribute()), 440.f);
+	TestTrue(TEXT("Enemy burning"), ShinobiTest::HasTag(E, ShinobiTags::State_Burning_Normal));
+
+	W.Tick(3.7f); // t = 4.55; the cooldown started at ~0.4 and lasts 4 s
+	TestFalse(TEXT("Cooldown over"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Fireball));
+	ShinobiTest::Set(P, Chakra, 19.f);
+	TestFalse(TEXT("HUD: unaffordable below the cost"), Fireball->GetSlotState(*ASC).bAffordable);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	TestFalse(TEXT("Blocked below 20 chakra"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
+	TestEqual(TEXT("Nothing spent when unaffordable"), ShinobiTest::Get(P, Chakra), 19.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiInterruptTest, "ShinobiCoop.Jutsu.StaggerInterruptsWindUpWithHalfRefund", ShinobiTestFlags)
+bool FShinobiInterruptTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	W.Spawn<AShinobiCharacterBase>(FVector(600.f, 0.f, 0.f));
+	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	TestEqual(TEXT("Cost paid"), ShinobiTest::Get(P, Chakra), 80.f);
+	W.Tick(0.1f);
+	ShinobiTest::Damage(P, 10.f);
+	TestTrue(TEXT("A 10-damage hit doesn't interrupt"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
+	ShinobiTest::Damage(P, 25.f);
+	TestFalse(TEXT("A 25-damage hit interrupts the wind-up"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
+	const float Refunded = ShinobiTest::Get(P, Chakra);
+	TestTrue(FString::Printf(TEXT("Half the cost refunded (got %.2f)"), Refunded), Refunded >= 90.f && Refunded <= 90.6f);
+	TestFalse(TEXT("No cooldown after an interrupt"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Fireball));
+	W.Tick(0.5f);
+	TestEqual(TEXT("Nothing thrown"), ShinobiTest::CountActors<AShinobiProjectile>(W), 0);
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	TestTrue(TEXT("Can recast right away"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiJutsuRulesTest, "ShinobiCoop.Jutsu.BlockedWhileChargingCancelledByDodge", ShinobiTestFlags)
+bool FShinobiJutsuRulesTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::ChakraCharge);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	TestFalse(TEXT("No jutsu while charging"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
+	TestEqual(TEXT("Nothing spent"), ShinobiTest::Get(P, Chakra), 100.f);
+	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
+
+	// A jutsu can finish a melee combo.
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Melee);
+	TestTrue(TEXT("Melee swinging"), ShinobiTest::IsActive(P, UGA_Melee::StaticClass()));
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	TestTrue(TEXT("Jutsu starts mid-combo"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
+	TestFalse(TEXT("Jutsu cancels the combo"), ShinobiTest::IsActive(P, UGA_Melee::StaticClass()));
+
+	// Dodging out of a wind-up cancels it: no refund, no cooldown, nothing thrown.
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Dodge);
+	TestTrue(TEXT("Dodge starts during the wind-up"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
+	TestFalse(TEXT("Dodge cancels the jutsu"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
+	W.Tick(0.6f);
+	TestEqual(TEXT("Nothing thrown"), ShinobiTest::CountActors<AShinobiProjectile>(W), 0);
+	TestFalse(TEXT("No cooldown"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Fireball));
 	return true;
 }
 

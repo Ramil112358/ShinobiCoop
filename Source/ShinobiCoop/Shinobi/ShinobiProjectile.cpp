@@ -52,7 +52,9 @@ void AShinobiProjectile::OnOverlap(UPrimitiveComponent* OverlappedComponent, AAc
 	AShinobiCharacterBase* Target = Cast<AShinobiCharacterBase>(OtherActor);
 	if (HasAuthority() && Caster && Caster->IsHostileTo(Target))
 	{
-		Explode(Target, GetActorLocation());
+		// A sweep overlap reports the point of first contact; GetActorLocation() is the end of the move, up to
+		// 125 units past it.
+		Explode(Target, bFromSweep ? FVector(SweepResult.Location) : GetActorLocation());
 	}
 }
 

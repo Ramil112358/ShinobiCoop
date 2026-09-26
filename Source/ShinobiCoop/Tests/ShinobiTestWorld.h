@@ -3,6 +3,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "CoreMinimal.h"
+#include "EngineUtils.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "AbilitySystemComponent.h"
@@ -112,6 +113,24 @@ namespace ShinobiTest
 	inline void Release(AShinobiCharacterBase* Character, EShinobiAbilityInputID InputID)
 	{
 		Character->GetAbilitySystemComponent()->AbilityLocalInputReleased(static_cast<int32>(InputID));
+	}
+
+	/** Press and release (jutsu fire on press). Not named Cast: that would hide UE's Cast<T> inside this namespace. */
+	inline void Tap(AShinobiCharacterBase* Character, EShinobiAbilityInputID InputID)
+	{
+		Press(Character, InputID);
+		Release(Character, InputID);
+	}
+
+	template <class T>
+	int32 CountActors(const FShinobiTestWorld& W)
+	{
+		int32 Count = 0;
+		for (TActorIterator<T> It(W.World); It; ++It)
+		{
+			++Count;
+		}
+		return Count;
 	}
 
 	inline bool IsActive(AShinobiCharacterBase* Character, TSubclassOf<UGameplayAbility> AbilityClass)

@@ -15,7 +15,11 @@ enum class EShinobiAbilityInputID : uint8
 	Melee,
 	Dodge,
 	Sprint,
-	ChakraCharge
+	ChakraCharge,
+	Jutsu1,
+	Jutsu2,
+	Jutsu3,
+	Jutsu4
 };
 
 /** Base for all Shinobi abilities: instanced per actor, predicted on the owning client. */
