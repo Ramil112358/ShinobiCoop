@@ -18,6 +18,7 @@ UGA_Fireball::UGA_Fireball()
 
 void UGA_Fireball::ExecuteJutsu()
 {
+	FaceAim(nullptr); // the camera may have turned during the wind-up
 	AShinobiCharacterBase* Self = GetShinobiCharacter();
 	if (Self && HasAuthority(&CurrentActivationInfo))
 	{
@@ -30,13 +31,15 @@ void UGA_Fireball::ExecuteJutsu()
 		// ponytail: fixed chest-height launch point in front of the caster; a hand socket arrives with M2b's animations
 		const FVector Muzzle = Self->GetActorLocation() + Self->GetActorForwardVector() * 60.f + FVector(0.f, 0.f, 40.f);
 		const FTransform Launch((AimPoint - Muzzle).Rotation(), Muzzle);
-		AShinobiProjectile* Ball = Self->GetWorld()->SpawnActorDeferred<AShinobiProjectile>(AShinobiProjectile::StaticClass(), Launch, Self, Self, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
-		Ball->DirectDamage = DirectDamage;
-		Ball->SplashDamage = SplashDamage;
-		Ball->SplashRadius = SplashRadius;
-		Ball->StatusEffect = UGE_Burn::StaticClass();
-		Ball->StatusDamagePerTick = UGE_Burn::DamagePerTick;
-		Ball->FinishSpawning(Launch);
+		if (AShinobiProjectile* Ball = Self->GetWorld()->SpawnActorDeferred<AShinobiProjectile>(AShinobiProjectile::StaticClass(), Launch, Self, Self, ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
+		{
+			Ball->DirectDamage = DirectDamage;
+			Ball->SplashDamage = SplashDamage;
+			Ball->SplashRadius = SplashRadius;
+			Ball->StatusEffect = UGE_Burn::StaticClass();
+			Ball->StatusDamagePerTick = UGE_Burn::DamagePerTick;
+			Ball->FinishSpawning(Launch);
+		}
 	}
 	EndJutsu();
 }

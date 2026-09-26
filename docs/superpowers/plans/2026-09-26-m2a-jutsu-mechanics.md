@@ -56,7 +56,7 @@ Same as the M0/M1 plan's "Conventions", in short:
   - Test actors have no floor, so they are always falling.
   - Pawns spawned in tests have no controller, so the aim helpers fall back to the actor's eyes, which look along the actor's facing.
   - A character spawned with `FRotator::ZeroRotator` faces +X.
-  - Timers set before the test world's first `Tick` (e.g. a wind-up started by a `Tap` right after spawning) start counting one 0.05 s tick late, so a delay of D fires at about D + 0.05–0.1. Put timing checkpoints at least 0.1 s after the nominal time, never exactly one tick after it. (Found in Task 5.)
+  - Timers started from test code between `W.Tick` calls (e.g. a wind-up started by a `Tap`) start counting one 0.05 s tick late, so a delay of D fires at about D + 0.05–0.1. Put timing checkpoints at least 0.1 s after the nominal time, never exactly one tick after it. (Found in Task 5.)
   - Falling characters drop ~120 units by t = 0.5 s. Anything gravity-free that is launched later (a projectile) misses them, so use `ShinobiTest::Hover` on the characters. (Found in Task 5.)
 
 ## Decisions and deviations from the spec (all deliberate)
@@ -1466,7 +1466,7 @@ bool FShinobiFireballTest::RunTest(const FString& Parameters)
 	W.Tick(0.3f);
 	TestEqual(TEXT("Nothing thrown during the 0.4 s wind-up"), ShinobiTest::CountActors<AShinobiProjectile>(W), 0);
 
-	// Timers set before the world's first tick start counting a tick late, so a 0.4 s wind-up fires at ~0.45-0.5.
+	// Timers started from test code between ticks start counting a tick late, so a 0.4 s wind-up fires at ~0.45-0.5.
 	W.Tick(0.2f); // t = 0.5
 	TestEqual(TEXT("Thrown after the wind-up"), ShinobiTest::CountActors<AShinobiProjectile>(W), 1);
 	TestTrue(TEXT("Cooldown starts after the wind-up"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Fireball));
@@ -1779,7 +1779,10 @@ void UShinobiJutsuAbility::OnInterruptedByHit(FGameplayEventData Payload)
 
 void UShinobiJutsuAbility::EndJutsu()
 {
-	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+	// Only the server replicates a normal end. The owning client's wind-up starts ~one-way latency earlier, so a
+	// client-sent ServerEndAbility can arrive before the server's own wind-up timer fires and kill its copy before it
+	// executes (chakra spent, nothing thrown). Cancels (dodge, interrupt) still replicate from either side.
+	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, HasAuthority(&CurrentActivationInfo), false);
 }
 
 bool UShinobiJutsuAbility::CheckCost(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, FGameplayTagContainer* OptionalRelevantTags) const
@@ -1857,7 +1860,11 @@ bool UShinobiJutsuAbility::TraceAim(float Range, float Radius, FHitResult& OutHi
 	FVector Start;
 	FRotator Rotation;
 	GetAimViewPoint(Start, Rotation);
-	const FVector End = Start + Rotation.Vector() * (Range + FVector::Dist(Start, Self->GetActorLocation()));
+	const FVector Direction = Rotation.Vector();
+	// Start level with the caster, not at the camera 450 units behind: anyone standing between them (a partner, or an
+	// enemy behind you) would otherwise become the aim point or target.
+	Start += Direction * FMath::Max(0.f, FVector::DotProduct(Self->GetActorLocation() - Start, Direction));
+	const FVector End = Start + Direction * Range;
 	const FCollisionQueryParams Params(SCENE_QUERY_STAT(ShinobiAim), false, Self);
 	return Self->GetWorld()->SweepSingleByChannel(OutHit, Start, End, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeSphere(Radius), Params);
 }
@@ -1945,6 +1952,7 @@ UGA_Fireball::UGA_Fireball()
 
 void UGA_Fireball::ExecuteJutsu()
 {
+	FaceAim(nullptr); // the camera may have turned during the wind-up
 	AShinobiCharacterBase* Self = GetShinobiCharacter();
 	if (Self && HasAuthority(&CurrentActivationInfo))
 	{
@@ -1957,13 +1965,15 @@ void UGA_Fireball::ExecuteJutsu()
 		// ponytail: fixed chest-height launch point in front of the caster; a hand socket arrives with M2b's animations
 		const FVector Muzzle = Self->GetActorLocation() + Self->GetActorForwardVector() * 60.f + FVector(0.f, 0.f, 40.f);
 		const FTransform Launch((AimPoint - Muzzle).Rotation(), Muzzle);
-		AShinobiProjectile* Ball = Self->GetWorld()->SpawnActorDeferred<AShinobiProjectile>(AShinobiProjectile::StaticClass(), Launch, Self, Self, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
-		Ball->DirectDamage = DirectDamage;
-		Ball->SplashDamage = SplashDamage;
-		Ball->SplashRadius = SplashRadius;
-		Ball->StatusEffect = UGE_Burn::StaticClass();
-		Ball->StatusDamagePerTick = UGE_Burn::DamagePerTick;
-		Ball->FinishSpawning(Launch);
+		if (AShinobiProjectile* Ball = Self->GetWorld()->SpawnActorDeferred<AShinobiProjectile>(AShinobiProjectile::StaticClass(), Launch, Self, Self, ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
+		{
+			Ball->DirectDamage = DirectDamage;
+			Ball->SplashDamage = SplashDamage;
+			Ball->SplashRadius = SplashRadius;
+			Ball->StatusEffect = UGE_Burn::StaticClass();
+			Ball->StatusDamagePerTick = UGE_Burn::DamagePerTick;
+			Ball->FinishSpawning(Launch);
+		}
 	}
 	EndJutsu();
 }
@@ -3749,6 +3759,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 | 12 | Second window | Sees the fireball, the dash, dummy HP and status text, and your teleport. Its own HUD shows its own cooldowns and pips. |
 | 13 | Client window `NetEmulation.PktLag 150`, then cast each jutsu | Works; no large snaps. A small correction at the start of the Chidori dash is a known risk; note it if seen. |
 | 14 | Console `Shinobi.DummyAttack 0` | Punching stops |
+| 15 | Client window: cast each jutsu ~10 times (wait out cooldowns) | Every cast fires. None of them spends chakra while nothing happens. |
 
 - [ ] **Step 3: Record the result.** Append a short "M2a manual check" note (date, pass/fail per row, fixes) to the bottom of this plan and commit it:
 ```powershell
@@ -3772,6 +3783,11 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - **M3 boss stun.** Boss stun (spec: 0.5 s, multiplier 0.33) needs `GE_Shock`'s duration to become SetByCaller, scaled by the target's stun multiplier.
 - **M3 knockback on players.** Rasengan's knockback uses `LaunchCharacter` on the server. That's fine for AI targets. If enemies ever use it on players, see the M1 note on root-motion hit reactions.
 - **HUD cooldown shade.** It approximates the spec's radial sweep; M5 can swap in a radial material.
+- **Jutsu cooldown is not predicted.** The cooldown is committed from the wind-up timer, outside any prediction window, so the owning client only sees it once the server's copy replicates (about one-way latency late). A recast in that window is predicted, then rejected: a brief chakra dip that rolls back. Acceptable for now.
+- **Client and server can disagree on `PrepareJutsu`.** This matters for Amaterasu, where the server's camera from `ServerUpdateCamera` can be ~80 ms stale. If the client fails but the server succeeds, the server pays and then the client's cancel ends it with no refund. The fix is a target-data exchange (client sends its target) or not replicating the client's failure end.
+- **Projectiles block each other.** Both use the WorldDynamic object type and block everything, so a fireball and M3's kunai meet head-on and both explode mid-air. Decide in M3: keep it as "fireball destroys kunai", or give projectiles their own channel and ignore it.
+- **M2b explosion VFX needs a server cue.** A ball that explodes at spawn is destroyed before it ever replicates, so an explosion effect must be a Gameplay Cue sent from the server, not something the actor does on clients.
+- **Damage context carries no ability.** `ShinobiCombat` builds the damage spec from the ASC's own effect context, with no ability and at level 1. If M2b hit cues need `GetAbility()` to pick a per-jutsu effect, add a source object.
 
 ## Self-review
 

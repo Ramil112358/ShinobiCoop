@@ -62,7 +62,7 @@ bool FShinobiFireballTest::RunTest(const FString& Parameters)
 	W.Tick(0.3f);
 	TestEqual(TEXT("Nothing thrown during the 0.4 s wind-up"), ShinobiTest::CountActors<AShinobiProjectile>(W), 0);
 
-	// Timers set before the world's first tick start counting a tick late, so a 0.4 s wind-up fires at ~0.45-0.5.
+	// Timers started from test code between ticks start counting a tick late, so a 0.4 s wind-up fires at ~0.45-0.5.
 	W.Tick(0.2f); // t = 0.5
 	TestEqual(TEXT("Thrown after the wind-up"), ShinobiTest::CountActors<AShinobiProjectile>(W), 1);
 	TestTrue(TEXT("Cooldown starts after the wind-up"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Fireball));

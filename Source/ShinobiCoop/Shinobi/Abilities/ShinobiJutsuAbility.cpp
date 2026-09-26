@@ -74,7 +74,10 @@ void UShinobiJutsuAbility::OnInterruptedByHit(FGameplayEventData Payload)
 
 void UShinobiJutsuAbility::EndJutsu()
 {
-	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+	// Only the server replicates a normal end. The owning client's wind-up starts ~one-way latency earlier, so a
+	// client-sent ServerEndAbility can arrive before the server's own wind-up timer fires and kill its copy before it
+	// executes (chakra spent, nothing thrown). Cancels (dodge, interrupt) still replicate from either side.
+	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, HasAuthority(&CurrentActivationInfo), false);
 }
 
 bool UShinobiJutsuAbility::CheckCost(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, FGameplayTagContainer* OptionalRelevantTags) const
@@ -152,7 +155,11 @@ bool UShinobiJutsuAbility::TraceAim(float Range, float Radius, FHitResult& OutHi
 	FVector Start;
 	FRotator Rotation;
 	GetAimViewPoint(Start, Rotation);
-	const FVector End = Start + Rotation.Vector() * (Range + FVector::Dist(Start, Self->GetActorLocation()));
+	const FVector Direction = Rotation.Vector();
+	// Start level with the caster, not at the camera 450 units behind: anyone standing between them (a partner, or an
+	// enemy behind you) would otherwise become the aim point or target.
+	Start += Direction * FMath::Max(0.f, FVector::DotProduct(Self->GetActorLocation() - Start, Direction));
+	const FVector End = Start + Direction * Range;
 	const FCollisionQueryParams Params(SCENE_QUERY_STAT(ShinobiAim), false, Self);
 	return Self->GetWorld()->SweepSingleByChannel(OutHit, Start, End, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeSphere(Radius), Params);
 }
