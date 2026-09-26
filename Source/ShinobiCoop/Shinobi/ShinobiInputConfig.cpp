@@ -87,6 +87,10 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 	Ctx->MapKey(Config->LockOn, EKeys::Tab);
 	Ctx->MapKey(Config->LockOn, EKeys::Gamepad_RightThumbstick);
 
+	Config->Pause = MakeAction(Config, TEXT("IA_Pause"), EInputActionValueType::Boolean);
+	Ctx->MapKey(Config->Pause, EKeys::Escape);
+	Ctx->MapKey(Config->Pause, EKeys::Gamepad_Special_Right);
+
 	// Jutsu 1-4: number keys here; the gamepad face buttons live in JutsuContext, which the player adds while RB is held.
 	Config->JutsuModifier = MakeAction(Config, TEXT("IA_JutsuModifier"), EInputActionValueType::Boolean);
 	Ctx->MapKey(Config->JutsuModifier, EKeys::Gamepad_RightShoulder);

@@ -50,6 +50,10 @@ public:
 	UPROPERTY()
 	TObjectPtr<UInputAction> LockOn;
 
+	/** Esc / Start: pause menu (bound by AShinobiPlayerController, so it works while downed or dead). */
+	UPROPERTY()
+	TObjectPtr<UInputAction> Pause;
+
 	/** Gamepad A/B/X/Y -> Jutsu 1-4. Only active while RB is held. */
 	UPROPERTY()
 	TObjectPtr<UInputMappingContext> JutsuContext;

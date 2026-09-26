@@ -6,6 +6,7 @@
 
 class UGameplayEffect;
 class UShinobiHUDWidget;
+class UShinobiPauseMenuWidget;
 struct FGameplayTag;
 
 /** Creates the HUD for local players; hosts developer console commands and the smoke-test hook. */
@@ -31,8 +32,12 @@ public:
 	UFUNCTION(Exec)
 	void ShinobiDumpStats();
 
+	/** Local: open or close the pause menu (Esc / Start). */
+	void TogglePauseMenu();
+
 protected:
 	virtual void BeginPlay() override;
+	virtual void SetupInputComponent() override;
 
 private:
 	UFUNCTION(Server, Reliable)
@@ -57,4 +62,7 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UShinobiHUDWidget> Hud;
+
+	UPROPERTY()
+	TObjectPtr<UShinobiPauseMenuWidget> PauseMenu;
 };

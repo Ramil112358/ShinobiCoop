@@ -22,7 +22,9 @@ public class ShinobiCoop : ModuleRules
 			"SlateCore",
 			"GameplayAbilities",
 			"GameplayTags",
-			"GameplayTasks"
+			"GameplayTasks",
+			"OnlineSubsystem",
+			"OnlineSubsystemUtils"
 		});
 
 		PublicIncludePaths.AddRange(new string[] {

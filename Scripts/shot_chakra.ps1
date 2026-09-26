@@ -14,7 +14,7 @@ $Flag = if ($Jutsu) { "ShinobiJutsuShot" } else { "ShinobiShot" }
 $Pattern = if ($Jutsu) { "ShinobiJutsuShot_*.png" } else { "ShinobiShot_*.png" }
 
 Get-ChildItem $ShotRoot -Recurse -Filter $Pattern -ErrorAction SilentlyContinue | Remove-Item
-$game = Start-Process $Editor -PassThru -ArgumentList "`"$Project`" /Game/ThirdPerson/Lvl_ThirdPerson?game=/Script/ShinobiCoop.ShinobiGameMode -game -windowed -ResX=1280 -ResY=720 -nosound -unattended -nosplash -$Flag -log=$Flag.log"
+$game = Start-Process $Editor -PassThru -ArgumentList "`"$Project`" /Game/ThirdPerson/Lvl_ThirdPerson?game=/Script/ShinobiCoop.ShinobiGameMode -game -nosteam -windowed -ResX=1280 -ResY=720 -nosound -unattended -nosplash -$Flag -log=$Flag.log"
 $null = $game.Handle
 if (-not $game.WaitForExit(300000)) { Stop-Process $game -Force; throw "Game did not quit within 300s" }
 

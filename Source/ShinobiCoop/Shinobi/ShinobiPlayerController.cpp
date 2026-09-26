@@ -12,7 +12,10 @@
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
+#include "Shinobi/ShinobiInputConfig.h"
 #include "Shinobi/UI/ShinobiHUDWidget.h"
+#include "Shinobi/UI/ShinobiMenuWidgets.h"
+#include "EnhancedInputComponent.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
 
 void AShinobiPlayerController::BeginPlay()
@@ -22,6 +25,9 @@ void AShinobiPlayerController::BeginPlay()
 	{
 		return;
 	}
+	// The main menu left the viewport in UI-only mode with a cursor (input mode outlives the travel).
+	SetInputMode(FInputModeGameOnly());
+	SetShowMouseCursor(false);
 	if (FApp::CanEverRender())
 	{
 		// CreateWidget returns null if this controller has no Player attached yet.
@@ -43,6 +49,38 @@ void AShinobiPlayerController::BeginPlay()
 	{
 		RunJutsuShotTest();
 	}
+}
+
+void AShinobiPlayerController::SetupInputComponent()
+{
+	Super::SetupInputComponent();
+	if (UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(InputComponent))
+	{
+		Input->BindAction(UShinobiInputConfig::Get().Pause, ETriggerEvent::Started, this, &AShinobiPlayerController::TogglePauseMenu);
+	}
+}
+
+void AShinobiPlayerController::TogglePauseMenu()
+{
+	if (PauseMenu)
+	{
+		PauseMenu->RemoveFromParent();
+		PauseMenu = nullptr;
+		SetInputMode(FInputModeGameOnly());
+		SetShowMouseCursor(false);
+		return;
+	}
+	PauseMenu = CreateWidget<UShinobiPauseMenuWidget>(this, UShinobiPauseMenuWidget::StaticClass());
+	if (!PauseMenu)
+	{
+		return;
+	}
+	PauseMenu->AddToViewport(10);
+	// Game and UI: the Pause key still reaches the game to close the menu; the world keeps running (online).
+	FInputModeGameAndUI Mode; // the menu focuses its first button itself
+	Mode.SetHideCursorDuringCapture(false);
+	SetInputMode(Mode);
+	SetShowMouseCursor(true);
 }
 
 void AShinobiPlayerController::ShinobiDamageSelf(float Amount)

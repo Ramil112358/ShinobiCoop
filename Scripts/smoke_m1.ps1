@@ -22,7 +22,8 @@ Remove-Item -LiteralPath $ServerLog, $ClientLog -ErrorAction SilentlyContinue
 if ((Test-Path -LiteralPath $ServerLog) -or (Test-Path -LiteralPath $ClientLog)) {
     throw "Smoke log still locked by another process; close leftover UnrealEditor instances"
 }
-$Common = "-game -nullrhi -nosound -unattended -nosplash -ShinobiSmoke"
+# -nosteam: Null online subsystem and the plain IP net driver, so the client can connect to 127.0.0.1.
+$Common = "-game -nullrhi -nosound -unattended -nosplash -nosteam -ShinobiSmoke"
 
 $server = Start-Process $Editor -PassThru -ArgumentList "`"$Project`" /Game/ThirdPerson/Lvl_ThirdPerson?listen?game=/Script/ShinobiCoop.ShinobiGameMode $Common -abslog=`"$ServerLog`""
 $null = $server.Handle # PS 5.1 only reports ExitCode if the handle was opened while the process ran
