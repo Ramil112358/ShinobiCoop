@@ -23,7 +23,11 @@ public:
 	UFUNCTION(Exec)
 	void ShinobiDrainChakra(float Amount);
 
-	/** Console: ShinobiDumpStats — logs every character's attributes as this machine sees them. */
+	/** Console: ShinobiCast 1..4 -- taps that jutsu's input, same as pressing its key. */
+	UFUNCTION(Exec)
+	void ShinobiCast(int32 JutsuSlot);
+
+	/** Console: ShinobiDumpStats -- logs every character's attributes (and whether it's burning) as this machine sees them. */
 	UFUNCTION(Exec)
 	void ShinobiDumpStats();
 
@@ -40,7 +44,7 @@ private:
 	/** Server only: applies an instant SetByCaller effect to this controller's own pawn. */
 	void ApplyToOwnPawn(TSubclassOf<UGameplayEffect> EffectClass, const FGameplayTag& DataTag, float Magnitude);
 
-	/** With -ShinobiSmoke on a client: damage self, dump stats, quit. Used by Scripts/smoke_m1.ps1. */
+	/** With -ShinobiSmoke on a client: damage self, throw a Fireball at the dummy ahead, dump stats, quit. Used by Scripts/smoke_m1.ps1. */
 	void RunSmokeTest();
 
 	/** With -ShinobiShot: turn the camera to face the pawn, hold chakra charge (screenshots), release, then throw a

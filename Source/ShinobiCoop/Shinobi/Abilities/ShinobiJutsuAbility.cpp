@@ -7,6 +7,7 @@
 #include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
 #include "Shinobi/ShinobiAttributeSet.h"
+#include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
 
@@ -147,7 +148,7 @@ void UShinobiJutsuAbility::GetAimViewPoint(FVector& OutLocation, FRotator& OutRo
 
 bool UShinobiJutsuAbility::TraceAim(float Range, float Radius, FHitResult& OutHit) const
 {
-	const AActor* Self = GetAvatarActorFromActorInfo();
+	const AShinobiCharacterBase* Self = Cast<AShinobiCharacterBase>(GetAvatarActorFromActorInfo());
 	if (!Self)
 	{
 		return false;
@@ -160,8 +161,27 @@ bool UShinobiJutsuAbility::TraceAim(float Range, float Radius, FHitResult& OutHi
 	// enemy behind you) would otherwise become the aim point or target.
 	Start += Direction * FMath::Max(0.f, FVector::DotProduct(Self->GetActorLocation() - Start, Direction));
 	const FVector End = Start + Direction * Range;
-	const FCollisionQueryParams Params(SCENE_QUERY_STAT(ShinobiAim), false, Self);
-	return Self->GetWorld()->SweepSingleByChannel(OutHit, Start, End, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeSphere(Radius), Params);
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(ShinobiAim), false, Self);
+
+	// A co-op partner can end up right next to the caster (e.g. sharing a spawn point) and would otherwise block this
+	// sweep like a wall. Skip non-hostile characters and keep sweeping the remaining distance instead of aiming at a
+	// teammate; give up after a handful of skips rather than looping forever against a degenerate stack of actors.
+	FVector SegmentStart = Start;
+	for (int32 Skips = 0; Skips < 8; ++Skips)
+	{
+		if (!Self->GetWorld()->SweepSingleByChannel(OutHit, SegmentStart, End, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeSphere(Radius), Params))
+		{
+			return false;
+		}
+		const AShinobiCharacterBase* HitCharacter = Cast<AShinobiCharacterBase>(OutHit.GetActor());
+		if (!HitCharacter || Self->IsHostileTo(HitCharacter))
+		{
+			return true;
+		}
+		Params.AddIgnoredActor(HitCharacter);
+		SegmentStart = OutHit.Location;
+	}
+	return false;
 }
 
 void UShinobiJutsuAbility::FaceAim(const AActor* Target) const

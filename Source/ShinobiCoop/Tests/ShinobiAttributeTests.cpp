@@ -2,6 +2,9 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Shinobi/ShinobiTrainingDummy.h"
+#include "HAL/IConsoleManager.h"
+#include "Misc/ScopeExit.h"
+#include "Shinobi/ShinobiPlayerCharacter.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiAttributeDefaultsTest, "ShinobiCoop.Core.AttributeDefaults", ShinobiTestFlags)
 bool FShinobiAttributeDefaultsTest::RunTest(const FString& Parameters)
@@ -147,6 +150,31 @@ bool FShinobiDummyResetTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Dummy defeated again"), ShinobiTest::Get(Dummy, UShinobiAttributeSet::GetHealthAttribute()), 0.f);
 	W.Tick(2.f);
 	TestEqual(TEXT("Dummy reset to full again"), ShinobiTest::Get(Dummy, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDummyAttackTest, "ShinobiCoop.Core.DummyAttackCheatPunchesNearestPlayer", ShinobiTestFlags)
+bool FShinobiDummyAttackTest::RunTest(const FString& Parameters)
+{
+	IConsoleVariable* DummyAttack = IConsoleManager::Get().FindConsoleVariable(TEXT("Shinobi.DummyAttack"));
+	if (!TestNotNull(TEXT("Shinobi.DummyAttack exists"), DummyAttack))
+	{
+		return false;
+	}
+	DummyAttack->Set(true, ECVF_SetByCode);
+	ON_SCOPE_EXIT { DummyAttack->Set(false, ECVF_SetByCode); };
+
+	FShinobiTestWorld W;
+	W.Spawn<AShinobiTrainingDummy>();
+	AShinobiPlayerCharacter* Near = W.Spawn<AShinobiPlayerCharacter>(FVector(200.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Far = W.Spawn<AShinobiPlayerCharacter>(FVector(600.f, 0.f, 0.f));
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+
+	W.Tick(1.9f);
+	TestEqual(TEXT("No punch before 2 s"), ShinobiTest::Get(Near, Health), 500.f);
+	W.Tick(0.2f);
+	TestEqual(TEXT("Nearest player within reach punched for 25"), ShinobiTest::Get(Near, Health), 475.f);
+	TestEqual(TEXT("Player out of reach untouched"), ShinobiTest::Get(Far, Health), 500.f);
 	return true;
 }
 

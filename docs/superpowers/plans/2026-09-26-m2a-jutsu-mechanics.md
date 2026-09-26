@@ -3919,6 +3919,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - **The camera doesn't turn with Substitution.** Only the pawn faces the attacker, so the camera shows you from the front and "forward" walks away from the enemy. `ClientSetRotation(FaceAttacker)` would help the counter-attack; decide in playtesting.
 - **Substitution regen runs on a fixed clock from spawn** (ticks at 15, 30, 45 s...), so a spent charge returns after anywhere from 0 to 15 s. Tune in playtesting if it feels random.
 - **Pressing RB and a face button in the same frame** jumps, dodges or punches: the jutsu context only applies from the next frame, and the held key is then ignored until pressed again. It's a ~16 ms window. If playtests hit it, switch to chord triggers.
+- **No flash when the server rejects a client's cast.** `ClientActivateAbilityFailed` doesn't call `NotifyAbilityFailed`. Because the cooldown isn't predicted (see above), a recast in the round-trip window predicts success and is then rolled back silently. Fix alongside the cooldown prediction, or broadcast a failure from a `ClientActivateAbilityFailed` hook.
 - **HUD key labels are keyboard-only** ("1"–"4"). Gamepad players get no RB + A/B/X/Y hint. For M4/M5 menus, show the pad glyph when the last input was a gamepad.
 - **Damage context carries no ability.** `ShinobiCombat` builds the damage spec from the ASC's own effect context, with no ability and at level 1. If M2b hit cues need `GetAbility()` to pick a per-jutsu effect, add a source object.
 

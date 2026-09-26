@@ -60,6 +60,18 @@ void AShinobiPlayerController::ServerDrainChakra_Implementation(float Amount)
 	ApplyToOwnPawn(UGE_ChakraGain::StaticClass(), ShinobiTags::Data_ChakraGain, -Amount);
 }
 
+void AShinobiPlayerController::ShinobiCast(int32 JutsuSlot)
+{
+	AShinobiCharacterBase* Shinobi = GetPawn<AShinobiCharacterBase>();
+	if (!Shinobi || JutsuSlot < 1 || JutsuSlot > 4)
+	{
+		return;
+	}
+	const int32 Input = static_cast<int32>(EShinobiAbilityInputID::Jutsu1) + JutsuSlot - 1;
+	Shinobi->GetAbilitySystemComponent()->AbilityLocalInputPressed(Input);
+	Shinobi->GetAbilitySystemComponent()->AbilityLocalInputReleased(Input);
+}
+
 void AShinobiPlayerController::ApplyToOwnPawn(TSubclassOf<UGameplayEffect> EffectClass, const FGameplayTag& DataTag, float Magnitude)
 {
 	AShinobiCharacterBase* Shinobi = GetPawn<AShinobiCharacterBase>();
@@ -78,16 +90,23 @@ void AShinobiPlayerController::ShinobiDumpStats()
 	for (TActorIterator<AShinobiCharacterBase> It(GetWorld()); It; ++It)
 	{
 		const UShinobiAttributeSet* Stats = It->GetAttributes();
-		UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiStats %s local=%d H=%.1f C=%.1f S=%.1f"),
-			*It->GetName(), It->IsLocallyControlled() ? 1 : 0, Stats->GetHealth(), Stats->GetChakra(), Stats->GetStamina());
+		UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiStats %s local=%d H=%.1f C=%.1f S=%.1f Burn=%d"),
+			*It->GetName(), It->IsLocallyControlled() ? 1 : 0, Stats->GetHealth(), Stats->GetChakra(), Stats->GetStamina(),
+			It->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Burning) ? 1 : 0);
 	}
 }
 
 void AShinobiPlayerController::RunSmokeTest()
 {
 	// ponytail: fixed delays assume a local connection; raise them if the smoke test flakes on a slow machine
+	// The dummy row sits on lower ground than the PlayerStart, below the boom camera's level-aim height at that
+	// range; pitch down enough that the crosshair (used by ShinobiCast's Fireball) lands on the dummy instead of
+	// sailing over its head. Yaw is left alone -- the spawn rotation already faces the dummies.
+	SetControlRotation(FRotator(-8.f, GetControlRotation().Yaw, 0.f));
 	FTimerHandle DamageTimer;
 	GetWorldTimerManager().SetTimer(DamageTimer, FTimerDelegate::CreateUObject(this, &AShinobiPlayerController::ShinobiDamageSelf, 50.f), 5.f, false);
+	FTimerHandle CastTimer;
+	GetWorldTimerManager().SetTimer(CastTimer, FTimerDelegate::CreateUObject(this, &AShinobiPlayerController::ShinobiCast, 1), 5.5f, false);
 	FTimerHandle DumpTimer;
 	GetWorldTimerManager().SetTimer(DumpTimer, FTimerDelegate::CreateWeakLambda(this, [this]()
 	{

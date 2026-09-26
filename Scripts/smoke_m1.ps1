@@ -1,5 +1,5 @@
-# Starts a listen server and a client as separate -game processes (no rendering), has the client
-# damage itself through a server RPC, and asserts the client sees the replicated Health.
+# Starts a listen server and a client as separate -game processes (no rendering). The client damages itself through a
+# server RPC and throws a Fireball at the dummy ahead; asserts the client sees both through replication.
 $ErrorActionPreference = "Stop"
 $UE = "C:\Program Files\Epic Games\UE_5.8"
 $Editor = "$UE\Engine\Binaries\Win64\UnrealEditor.exe"
@@ -44,9 +44,14 @@ finally {
 }
 
 $hit = Select-String -LiteralPath $ClientLog -Pattern "ShinobiStats .* local=1 H=450\.0"
-if ($hit) {
+# The Fireball (cast at 5.5 s) hit the middle dummy: 60 direct plus burn ticks, and it's still burning at 9 s.
+$burned = Select-String -LiteralPath $ClientLog -Pattern "ShinobiStats ShinobiTrainingDummy\S* local=0 H=(\d+)\.\d .*Burn=1" |
+    Where-Object { [double]$_.Matches[0].Groups[1].Value -le 440 }
+if ($hit -and $burned) {
     Write-Host "SMOKE PASS: $($hit.Line)"
+    Write-Host "SMOKE PASS: $($burned[0].Line)"
 } else {
     Select-String -LiteralPath $ClientLog -Pattern "ShinobiStats|Error" | Select-Object -Last 20 | ForEach-Object { Write-Host $_.Line }
-    throw "SMOKE FAIL: client never saw its replicated Health drop to 450"
+    if (-not $hit) { throw "SMOKE FAIL: client never saw its replicated Health drop to 450" }
+    throw "SMOKE FAIL: client never saw a fireballed (H <= 440), burning dummy"
 }
