@@ -34,8 +34,24 @@ void UShinobiOverheadTextComponent::TickComponent(float DeltaTime, ELevelTick Ti
 	}
 }
 
+void UShinobiOverheadTextComponent::SetNameMode(const FString& InName)
+{
+	if (bNameMode && InName == Name)
+	{
+		return;
+	}
+	bNameMode = true;
+	Name = InName;
+	SetTextRenderColor(FColor(170, 230, 255));
+	SetText(FText::FromString(Name));
+}
+
 void UShinobiOverheadTextComponent::Refresh()
 {
+	if (bNameMode)
+	{
+		return;
+	}
 	const AShinobiCharacterBase* Shinobi = Cast<AShinobiCharacterBase>(GetOwner());
 	const UShinobiAttributeSet* Stats = Shinobi ? Shinobi->GetAttributes() : nullptr;
 	const UAbilitySystemComponent* ASC = Shinobi ? Shinobi->GetAbilitySystemComponent() : nullptr;

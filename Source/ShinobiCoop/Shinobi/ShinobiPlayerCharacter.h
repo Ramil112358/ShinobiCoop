@@ -6,6 +6,7 @@
 #include "ShinobiPlayerCharacter.generated.h"
 
 class UCameraComponent;
+class UShinobiOverheadTextComponent;
 class USpringArmComponent;
 struct FInputActionValue;
 
@@ -40,6 +41,15 @@ public:
 
 	virtual void Tick(float DeltaSeconds) override;
 
+	/** The hero mesh when the hero is in use (Shinobi.Hero 1 and its assets exist), else GetMesh(). */
+	virtual USkeletalMeshComponent* GetBodyMesh() const override { return HeroMesh ? HeroMesh.Get() : GetMesh(); }
+
+	/** Null when the player is the plain visible Manny (the fallback). */
+	USkeletalMeshComponent* GetHeroMesh() const { return HeroMesh; }
+	UShinobiOverheadTextComponent* GetNameTag() const { return NameTag; }
+
+	static constexpr const TCHAR* HeroMeshPath = TEXT("/Game/Shinobi/Hero/SK_Hero.SK_Hero");
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
@@ -60,6 +70,19 @@ private:
 
 	/** Every machine: hold the downed pose. Server: the effect ran out with HP still 0, so bled out: dead. */
 	void OnDownedTagChanged(const FGameplayTag Tag, int32 Count);
+
+	/** Uses the hero if Shinobi.Hero is on and its mesh and retargeter exist: the Manny mesh becomes the hidden
+	 * animation driver and HeroMesh copies its pose. Otherwise removes HeroMesh (plain visible Manny). Before
+	 * Super::BeginPlay, so components' BeginPlay (aura, cast orb) already see the right GetBodyMesh(). */
+	void ApplyHero();
+
+	/** The visible hero body, pose-driven from GetMesh() by UShinobiRetargetAnimInstance. */
+	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
+	TObjectPtr<USkeletalMeshComponent> HeroMesh;
+
+	/** Teammates' names above their heads; hidden on your own character. */
+	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
+	TObjectPtr<UShinobiOverheadTextComponent> NameTag;
 
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	TObjectPtr<USpringArmComponent> CameraBoom;

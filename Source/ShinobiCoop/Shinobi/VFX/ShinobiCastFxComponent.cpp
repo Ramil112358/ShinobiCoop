@@ -7,6 +7,7 @@
 #include "Engine/StaticMesh.h"
 #include "GameFramework/Character.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/VFX/ShinobiVfx.h"
 
@@ -55,8 +56,8 @@ void UShinobiCastFxComponent::BeginPlay()
 		return;
 	}
 
-	const ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
-	USkeletalMeshComponent* Body = OwnerCharacter ? OwnerCharacter->GetMesh() : nullptr;
+	const AShinobiCharacterBase* OwnerCharacter = Cast<AShinobiCharacterBase>(GetOwner());
+	USkeletalMeshComponent* Body = OwnerCharacter ? OwnerCharacter->GetBodyMesh() : nullptr;
 	Orb = NewObject<UStaticMeshComponent>(GetOwner(), MakeUniqueObjectName(GetOwner(), UStaticMeshComponent::StaticClass(), TEXT("CastOrb")));
 	Orb->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere")));
 	Orb->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -66,7 +67,7 @@ void UShinobiCastFxComponent::BeginPlay()
 	Orb->SetVisibility(false);
 	if (Body)
 	{
-		Orb->SetupAttachment(Body, TEXT("hand_r")); // a bone name works as a socket
+		Orb->SetupAttachment(Body, OwnerCharacter->GetRightHandBone()); // a bone name works as a socket
 	}
 	else
 	{

@@ -83,8 +83,15 @@ void AShinobiCharacterBase::OnDeadTagChanged(const FGameplayTag Tag, int32 Count
 	}
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	GetCharacterMovement()->DisableMovement();
-	GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
-	GetMesh()->SetSimulatePhysics(true);
+	GetBodyMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
+	GetBodyMesh()->SetSimulatePhysics(true);
+}
+
+FName AShinobiCharacterBase::GetRightHandBone() const
+{
+	static const FName MannyHand(TEXT("hand_r"));
+	static const FName MixamoHand(TEXT("RightHand"));
+	return GetBodyMesh()->GetBoneIndex(MannyHand) != INDEX_NONE ? MannyHand : MixamoHand;
 }
 
 void AShinobiCharacterBase::UseMannequinMesh(bool bQuinn)

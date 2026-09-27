@@ -6,6 +6,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/VFX/ShinobiVfx.h"
 
@@ -54,8 +55,8 @@ void UShinobiChakraAuraComponent::BeginPlay()
 		return; // purely cosmetic: nothing to render on a dedicated server, and no gameplay depends on it
 	}
 
-	const ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
-	BodyMesh = OwnerCharacter ? OwnerCharacter->GetMesh() : nullptr;
+	const AShinobiCharacterBase* OwnerCharacter = Cast<AShinobiCharacterBase>(GetOwner());
+	BodyMesh = OwnerCharacter ? OwnerCharacter->GetBodyMesh() : nullptr;
 
 	AuraMaterial = ShinobiVfx::MakeGlow(this, ShinobiVfx::Colors::Chakra, 2.5f, 0.f, BodyInflate);
 	if (AuraMaterial)

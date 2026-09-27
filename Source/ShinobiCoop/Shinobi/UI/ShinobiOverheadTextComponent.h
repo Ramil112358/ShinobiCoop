@@ -19,10 +19,15 @@ public:
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
+	/** Show this name instead of health and statuses (player name tags). */
+	void SetNameMode(const FString& InName);
+
 private:
 	void Refresh();
 
 	int32 DisplayedHealth = -1;
 	int32 DisplayedMaxHealth = -1;
 	FString DisplayedStatuses;
+	bool bNameMode = false;
+	FString Name;
 };

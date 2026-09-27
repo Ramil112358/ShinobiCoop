@@ -24,7 +24,8 @@ public class ShinobiCoop : ModuleRules
 			"GameplayTags",
 			"GameplayTasks",
 			"OnlineSubsystem",
-			"OnlineSubsystemUtils"
+			"OnlineSubsystemUtils",
+			"IKRig"
 		});
 
 		PublicIncludePaths.AddRange(new string[] {

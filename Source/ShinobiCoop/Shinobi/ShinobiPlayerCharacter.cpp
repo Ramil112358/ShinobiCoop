@@ -24,6 +24,19 @@
 #include "Shinobi/Abilities/GA_Substitution.h"
 #include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiEffects.h"
+#include "Shinobi/Hero/ShinobiRetargetAnimInstance.h"
+#include "Shinobi/UI/ShinobiOverheadTextComponent.h"
+#include "GameFramework/PlayerState.h"
+#include "HAL/IConsoleManager.h"
+#include "Retargeter/IKRetargeter.h"
+
+namespace
+{
+	TAutoConsoleVariable<bool> CVarHero(
+		TEXT("Shinobi.Hero"),
+		true,
+		TEXT("Players use the hero character (sub-project #2) when its assets exist; 0 = the plain Manny. Read when a player spawns."));
+}
 
 AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -62,6 +75,31 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 
 
 	UseMannequinMesh();
+
+	HeroMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("HeroMesh"));
+	HeroMesh->SetupAttachment(GetMesh());
+	HeroMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	NameTag = CreateDefaultSubobject<UShinobiOverheadTextComponent>(TEXT("NameTag"));
+	NameTag->SetupAttachment(RootComponent);
+}
+
+void AShinobiPlayerCharacter::ApplyHero()
+{
+	USkeletalMesh* Hero = CVarHero.GetValueOnGameThread() ? LoadObject<USkeletalMesh>(nullptr, HeroMeshPath) : nullptr;
+	const UIKRetargeter* Retargeter = Hero ? LoadObject<UIKRetargeter>(nullptr, UShinobiRetargetAnimInstance::RetargeterPath) : nullptr;
+	if (!Hero || !Retargeter)
+	{
+		HeroMesh->DestroyComponent();
+		HeroMesh = nullptr;
+		return;
+	}
+	HeroMesh->SetSkeletalMeshAsset(Hero);
+	HeroMesh->SetAnimInstanceClass(UShinobiRetargetAnimInstance::StaticClass());
+	// The Manny keeps running every gameplay animation, unseen; the hero copies its pose.
+	GetMesh()->SetVisibility(false);
+	GetMesh()->SetCastShadow(false);
+	GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 }
 
 bool AShinobiPlayerCharacter::CanMove() const
@@ -82,6 +120,7 @@ bool AShinobiPlayerCharacter::CanMove() const
 
 void AShinobiPlayerCharacter::BeginPlay()
 {
+	ApplyHero();
 	Super::BeginPlay();
 	AbilitySystem->RegisterGameplayTagEvent(ShinobiTags::State_Downed).AddUObject(this, &AShinobiPlayerCharacter::OnDownedTagChanged);
 }
@@ -163,6 +202,12 @@ void AShinobiPlayerCharacter::ToggleLockOn()
 void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	// Possession and the player state can arrive after BeginPlay, so keep the tag current here.
+	NameTag->SetVisibility(!IsLocallyControlled());
+	if (const APlayerState* State = GetPlayerState())
+	{
+		NameTag->SetNameMode(State->GetPlayerName());
+	}
 	const AShinobiCharacterBase* Target = LockTarget.Get();
 	if (!Target)
 	{

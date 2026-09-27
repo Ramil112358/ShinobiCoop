@@ -41,6 +41,13 @@ public:
 	EShinobiTeam GetTeam() const { return Team; }
 	bool IsHostileTo(const AShinobiCharacterBase* Other) const { return Other && Other != this && Other->Team != Team; }
 
+	/** The mesh you see: the hero for players (AShinobiPlayerCharacter), else GetMesh(). Never null. Auras, the cast
+	 * orb and the death ragdoll act on it; animation always runs on GetMesh(). */
+	virtual USkeletalMeshComponent* GetBodyMesh() const { return GetMesh(); }
+
+	/** The body mesh's right-hand bone: "hand_r" on Manny, "RightHand" on a Mixamo-rigged hero. */
+	FName GetRightHandBone() const;
+
 	/** False once downed or dead: out of the fight, so not a target. */
 	bool IsAlive() const;
 

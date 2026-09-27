@@ -317,7 +317,7 @@ bool FShinobiChakraAuraTest::RunTest(const FString& Parameters)
 	// The overlay is applied once at BeginPlay and left in place (never toggled) to avoid re-triggering
 	// PSO precache / proxy recreation on every charge start; visibility is driven purely by the Fade
 	// material parameter (0 = the additive overlay contributes nothing).
-	USkeletalMeshComponent* Body = P->GetMesh();
+	USkeletalMeshComponent* Body = P->GetBodyMesh(); // the visible mesh: the hero when in use
 	TestTrue(TEXT("Overlay applied from spawn"), Body->GetOverlayMaterial() == AuraMaterial);
 	TestEqual(TEXT("Fade param 0 at spawn"), AuraMaterial->K2_GetScalarParameterValue(TEXT("Fade")), 0.f);
 
