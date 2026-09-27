@@ -32,3 +32,4 @@ __pycache__/
 /SourceArt/Character/Reference/
 /SourceArt/Character/Mesh/*
 !/SourceArt/Character/Mesh/hero_rigged.fbx
+!/SourceArt/Character/Mesh/hero_rigged.png

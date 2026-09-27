@@ -65,6 +65,8 @@ void UShinobiCastFxComponent::BeginPlay()
 	OrbMaterial = ShinobiVfx::MakeGlow(this, ShinobiVfx::Colors::Fire, OrbIntensity, 1.f);
 	Orb->SetMaterial(0, OrbMaterial);
 	Orb->SetVisibility(false);
+	// World-space size: a hand bone can carry a scale of its own (a Mixamo rig exported from Blender has 100x bones).
+	Orb->SetUsingAbsoluteScale(true);
 	if (Body)
 	{
 		Orb->SetupAttachment(Body, OwnerCharacter->GetRightHandBone()); // a bone name works as a socket
