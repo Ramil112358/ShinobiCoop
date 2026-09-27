@@ -125,3 +125,8 @@ Stand-in: `/Game/Shinobi/Mixamo/Power_Up_30fps` (a Mixamo-rigged mesh already in
 - **In parallel:** Task 3 (runtime plumbing against the stand-in).
 - **2026-09-27, C2:** the user made `front_cloak.png` (open, knee-length Akatsuki-style cloak). Image-to-3D ran on Hyper3D Rodin Gen-2.5 Medium through the user's authenticated `hyper3d` MCP, not Meshy (Claude can't sign in to the user's Meshy account). Settings: Raw mesh, 50k polygons, GLB.
 - **C2 result:** `Mesh/raw_1.glb` (PBR texture); `raw_1_shaded.glb` (baked lighting) is kept as a spare. `prep_mesh.py` produced one part, no specks, 50,000 triangles, 180.0 cm. The previews look clean: separate fingers, a leg gap, glasses intact. Next is C3 (the user's Mixamo step).
+- **2026-09-27, C3 + C4:** the user rigged `hero_prep.fbx` on Mixamo (Standard Skeleton, original pose): `hero_rigged.fbx`. `setup_hero.py` imported it: SK_Hero, its physics asset, M_Hero plus T_Hero_Diffuse, and all 7 body chains mapped. Fixes found along the way:
+  - Mixamo packs textures without a file extension, which Interchange can't read. `extract_textures.py` writes `hero_rigged.png`.
+  - Material slot structs had to be rebuilt; editing the returned copies did nothing.
+  - The cast orb uses absolute scale because the rig's hand bone is scaled 100x.
+- **C4 checks:** screenshots show idle (facing correctly, textured), chakra aura on the hero, the Chidori and Rasengan orbs in the right hand, and the Training Grounds fight. 56 tests and both smoke tests pass. Waiting on the user's playtest (rows above).
