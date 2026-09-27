@@ -204,3 +204,12 @@
   7. the frame rate feels smooth;
   8. the arenas still work from the map picker.
 - [ ] Merge to main, tag `open-world`.
+
+## Progress notes
+
+- **W1 (1e1f40b, 508b434):** layout plus the heightmap and weightmap generator; the landscape helper and map.
+  - Gotchas: UE maps image row 0 to minimum Y. The landscape edit-layer merge must be forced in the commandlet (`-AllowCommandletRendering`, `run_python.ps1 -Render`). Git Bash mangles `/Game/...` arguments (use `MSYS_NO_PATHCONV=1`).
+  - The river is one constant-level water plane in a floodplain valley.
+- **W2 (9558180):** CC0 Quaternius nature, village and props through itch's keyless free-download flow. The village kit is European, so the Japanese architecture is generated in Blender (`make_gap_pieces.py`, original designs). Trees get trunk-only UCX collision. Nanite is on everything.
+- **W3 (75ee613):** offline placements (`make_placements.py`) instead of PCG (deviation: deterministic and unit-tested), in chunked `AShinobiScatterActor` HISMs, about 49k instances. The nature pack's imported materials lost their colour textures, so the shared `M_LibraryTextured` (masked, two-sided) is applied by slot name. The tour harness covers 10 points.
+  - Polish backlog for W5: stone boss ruins, village ground dressing (paths, gardens), gate doors, water colour, an HLOD build.
