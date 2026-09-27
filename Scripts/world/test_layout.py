@@ -15,7 +15,7 @@ import make_heightmap as hm  # noqa: E402
 
 def world_to_pixel(lay, x, y):
     cell = lay.size_m / (hm.PIXELS - 1)
-    return int(round((lay.size_m / 2 - y) / cell)), int(round((x + lay.size_m / 2) / cell))
+    return int(round((y + lay.size_m / 2) / cell)), int(round((x + lay.size_m / 2) / cell))  # row 0 = minimum Y
 
 
 def test_layout_loads():
@@ -48,7 +48,7 @@ def test_terrain():
     vx, vy, vr = lay.areas["village"]
     r0, c0 = world_to_pixel(lay, vx - vr * 0.7, vy + vr * 0.7)
     r1, c1 = world_to_pixel(lay, vx + vr * 0.7, vy - vr * 0.7)
-    plateau = h[r0:r1, c0:c1]
+    plateau = h[min(r0, r1):max(r0, r1), min(c0, c1):max(c0, c1)]
     assert plateau.max() - plateau.min() < 0.5, f"village plateau varies {plateau.max() - plateau.min():.2f} m"
     # River bed lower than the ground 30 m to either side, at several points along it.
     for (x, y) in lay.river[1:-1]:

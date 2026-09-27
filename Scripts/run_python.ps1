@@ -1,7 +1,9 @@
 # Runs an Unreal Python script through the editor's Python commandlet.
 param(
     [Parameter(Mandatory)][string]$Script,
-    [int]$TimeoutSec = 540
+    [int]$TimeoutSec = 540,
+    # Let the commandlet render (GPU work such as the landscape edit-layer merge in Scripts/world/build_world.py).
+    [switch]$Render
 )
 $ErrorActionPreference = "Stop"
 $UE = "C:\Program Files\Epic Games\UE_5.8"
@@ -18,7 +20,7 @@ $StdErr = "$Log.stderr.txt"
 # UE expects -Key="value with spaces"; passing one pre-quoted argument string (instead of a
 # PowerShell array) makes sure the embedded quotes reach UnrealEditor-Cmd.exe intact, since
 # PowerShell 5.1 mangles quoting when native-process args are passed as an array.
-$ArgLine = "`"$Project`" -run=pythonscript -script=`"$ScriptPath`" -unattended -nopause -nosplash -notraceserver -abslog=`"$Log`""
+$ArgLine = "`"$Project`" -run=pythonscript -script=`"$ScriptPath`" -unattended -nopause -nosplash -notraceserver -abslog=`"$Log`"$(if ($Render) { ' -AllowCommandletRendering' })"
 
 $p = Start-Process -FilePath "$UE\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" -ArgumentList $ArgLine -NoNewWindow -PassThru -RedirectStandardOutput $StdOut -RedirectStandardError $StdErr
 $null = $p.Handle # PS 5.1 needs the handle touched before ExitCode is readable after the process exits

@@ -2,7 +2,7 @@
 
   python Scripts/world/make_heightmap.py <out_dir>
 
-Writes (1009 x 1009 px, ~1 m per pixel, +X east = image right, +Y north = image up):
+Writes (1009 x 1009 px, ~1 m per pixel, +X = image right, +Y = image down: row 0 is the landscape's minimum Y):
   height.png          16-bit, UE landscape encoding: value = 32768 + metres * 128 (landscape Z scale 100)
   weight_grass/dirt/rock/bank.png   8-bit layer weights, summing to 255 per pixel
   terrain.json        {"size_m", "pixels", "height_scale_z": 100.0, "min_m", "max_m"}
@@ -31,7 +31,7 @@ MOUNTAIN_START_M = 450.0
 def grid(size_m):
     half = size_m / 2
     coords = np.linspace(-half, half, PIXELS)
-    x, y = np.meshgrid(coords, coords[::-1])  # row 0 = north edge
+    x, y = np.meshgrid(coords, coords)  # row 0 = minimum Y (south): UE maps image row 0 to the landscape's minimum Y
     return x, y
 
 
