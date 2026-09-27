@@ -126,6 +126,7 @@
 - Create: `Source/ShinobiCoop/Shinobi/World/ShinobiCamp.h/.cpp`
 - Create: `Source/ShinobiCoop/Shinobi/World/ShinobiWorldGameMode.h/.cpp`
 - Modify: `ShinobiArenaGameMode.*` (use the encounter)
+- Modify: `Enemies/ShinobiEnemyCharacter.cpp` (a `UNavigationInvokerComponent`, generation radius 3000 uu / removal 3500 uu, so World Partition's runtime navmesh builds only near active enemies)
 - Modify: `ShinobiGameState.h/.cpp` (`EShinobiArenaPhase::OpenWorld`, `CampsCleared`, `NumCamps`)
 - Modify: `UI/ShinobiHUDWidget.*` (camps line)
 - Test: `Source/ShinobiCoop/Tests/ShinobiWorldTests.cpp`
@@ -175,7 +176,7 @@
   - `TArray<FText> Barks`;
   - `FText PickBark(int32 Seed) const`;
   - a local `ShowBark()` (overhead text, 3 s).
-  It walks between route points by navmesh with 2–6 s idles, and it isn't an `AShinobiCharacterBase`, so it's never a combat target.
+  It walks between route points by navmesh with 2–6 s idles, and it isn't an `AShinobiCharacterBase`, so it's never a combat target. It has a `UNavigationInvokerComponent` (2000 / 2500 uu).
 - Interaction:
   - a downed ally within `UGA_Revive::Reach` wins;
   - else the nearest villager within 250 uu in front (60° cone) → a client-local `ShowBark()`.
