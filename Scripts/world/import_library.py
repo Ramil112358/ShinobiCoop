@@ -8,8 +8,9 @@ Sources (see docs/world/asset-credits.md):
 
 Consistency pass: Nanite on every mesh (no hand-made LODs needed); collision by category (trees: trunk UCX, rocks:
 18-DOP, props: box, architecture: complex-as-simple, small foliage: none); the generated pieces' palette materials
-(named Plaster, WoodDark, ...) become shared MI_Palette_* instances of M_ShinobiSolid. The Quaternius kits keep their
-own (already consistent) textured materials. Writes Scripts/world/library_catalog.json, the only thing the world build
+(named Plaster, WoodDark, ...) become shared MI_Palette_* instances of M_ShinobiSolid; the Quaternius nature meshes get
+MI_Lib_* instances of one shared M_LibraryTextured (texture x tint, alpha-masked, two-sided) chosen by slot name, since
+their own imported materials lose the colour textures (FBX) or render inconsistently (glTF). Props keep theirs. Writes Scripts/world/library_catalog.json, the only thing the world build
 and scatter read. Missing packs are skipped with a warning; the world falls back to placeholders.
 """
 import json
@@ -68,6 +69,72 @@ def palette_materials():
     return out
 
 
+NATURE_KINDS = {"ucx", "none", "kdop"}
+TEXTURE_ALIASES = {"Leaves_Pine": "Leaf_Pine_C"}
+
+
+def textured_parent():
+    """M_LibraryTextured: Tex (texture param) x Tint -> base colour; Tex alpha -> opacity mask; masked, two-sided."""
+    path = f"{LIB}/Materials/M_LibraryTextured"
+    if unreal.EditorAssetLibrary.does_asset_exist(path):
+        return unreal.load_asset(path)
+    m = TOOLS.create_asset("M_LibraryTextured", f"{LIB}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    m.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MASKED)
+    m.set_editor_property("two_sided", True)
+    tex = MEL.create_material_expression(m, unreal.MaterialExpressionTextureSampleParameter2D, -700, 0)
+    tex.set_editor_property("parameter_name", "Tex")
+    tint = MEL.create_material_expression(m, unreal.MaterialExpressionVectorParameter, -700, 300)
+    tint.set_editor_property("parameter_name", "Tint")
+    tint.set_editor_property("default_value", unreal.LinearColor(1, 1, 1, 1))
+    mul = MEL.create_material_expression(m, unreal.MaterialExpressionMultiply, -400, 100)
+    MEL.connect_material_expressions(tex, "RGB", mul, "A")
+    MEL.connect_material_expressions(tint, "", mul, "B")
+    rough = MEL.create_material_expression(m, unreal.MaterialExpressionConstant, -400, 300)
+    rough.set_editor_property("r", 0.85)
+    shading = MEL.create_material_expression(m, unreal.MaterialExpressionSubstrateShadingModels, -150, 0)
+    MEL.connect_material_expressions(mul, "", shading, "BaseColor")
+    MEL.connect_material_expressions(rough, "", shading, "Roughness")
+    MEL.connect_material_property(shading, "", unreal.MaterialProperty.MP_FRONT_MATERIAL)
+    MEL.connect_material_property(tex, "A", unreal.MaterialProperty.MP_OPACITY_MASK)
+    MEL.set_base_material_usage(m, unreal.MaterialUsage.MATUSAGE_NANITE, True)
+    MEL.set_base_material_usage(m, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES, True)
+    errors = MEL.recompile_material(m)
+    if errors:
+        raise RuntimeError(f"M_LibraryTextured failed to compile: {errors}")
+    unreal.EditorAssetLibrary.save_loaded_asset(m)
+    return m
+
+
+def library_material(slot, cache):
+    """MI_Lib_<slot> with the slot's colour texture from the nature pack, or None if no texture matches."""
+    if slot in cache:
+        return cache[slot]
+    base = TEXTURE_ALIASES.get(slot, slot)
+    png = next((os.path.join(NATURE, f"{name}.png") for name in (f"{base}_C", base, f"{base}_Diffuse")
+                if os.path.exists(os.path.join(NATURE, f"{name}.png"))), None)
+    if png is None:
+        cache[slot] = None
+        return None
+    folder = f"{LIB}/Materials"
+    task = unreal.AssetImportTask()
+    task.filename = png
+    task.destination_path = f"{folder}/Textures"
+    task.destination_name = f"T_Lib_{slot}"
+    task.automated = True
+    task.save = True
+    task.replace_existing = True
+    TOOLS.import_asset_tasks([task])
+    texture = unreal.load_asset(f"{folder}/Textures/T_Lib_{slot}")
+    path = f"{folder}/MI_Lib_{slot}"
+    mi = unreal.load_asset(path) if unreal.EditorAssetLibrary.does_asset_exist(path) else TOOLS.create_asset(
+        f"MI_Lib_{slot}", folder, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    MEL.set_material_instance_parent(mi, textured_parent())
+    MEL.set_material_instance_texture_parameter_value(mi, "Tex", texture)
+    unreal.EditorAssetLibrary.save_loaded_asset(mi)
+    cache[slot] = mi
+    return mi
+
+
 def import_file(path, dest):
     task = unreal.AssetImportTask()
     task.filename = path
@@ -95,11 +162,19 @@ def set_collision(mesh, kind):
             body.set_editor_property("collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_SIMPLE_AS_COMPLEX)
 
 
-def consistency(mesh, kind, palette):
+def consistency(mesh, kind, palette, lib_cache):
     nanite = mesh.get_editor_property("nanite_settings")
     nanite.set_editor_property("enabled", True)
     mesh.set_editor_property("nanite_settings", nanite)
     set_collision(mesh, kind)
+    if kind in NATURE_KINDS:  # Quaternius nature: slot name -> MI_Lib_<slot> of the shared textured material
+        for index, slot in enumerate(mesh.get_editor_property("static_materials")):
+            key = re.sub(r"(_\d+)+$", "", str(slot.get_editor_property("material_slot_name")))
+            mi = library_material(key, lib_cache)
+            if mi:
+                mesh.set_material(index, mi)
+            else:
+                unreal.log_warning(f"[import_library] {mesh.get_name()}: no texture for slot {key}")
     if kind == "complex":  # generated pieces: palette slot names -> shared instances
         for index, slot in enumerate(mesh.get_editor_property("static_materials")):
             key = str(slot.get_editor_property("material_slot_name")).split(".")[0]
@@ -111,6 +186,7 @@ def consistency(mesh, kind, palette):
 
 def main():
     palette = palette_materials()
+    lib_cache = {}
     catalog = {}
     for category, (folder, pattern, kind) in SOURCES.items():
         if not os.path.isdir(folder):
@@ -125,7 +201,7 @@ def main():
                 unreal.log_warning(f"[import_library] {name}: no static mesh imported")
                 continue
             for mesh in meshes:
-                consistency(mesh, kind, palette)
+                consistency(mesh, kind, palette, lib_cache)
             base = os.path.splitext(name)[0]
             bounds = meshes[0].get_bounding_box()
             height_m = (bounds.max.z - bounds.min.z) / 100.0

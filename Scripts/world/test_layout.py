@@ -11,6 +11,7 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import layout  # noqa: E402
 import make_heightmap as hm  # noqa: E402
+import make_placements as mp  # noqa: E402
 
 
 def world_to_pixel(lay, x, y):
@@ -64,6 +65,30 @@ def test_terrain():
         assert dirt[world_to_pixel(lay, px, py)] == 255, "path centre fully dirt"
         height = np.asarray(Image.open(os.path.join(out, "height.png")))
         assert height.dtype == np.uint16 and height.shape == (hm.PIXELS, hm.PIXELS)
+
+
+def test_placements():
+    lay = layout.load()
+    data = mp.build(lay)
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "library_catalog.json"), encoding="utf-8") as f:
+        catalog = json.load(f)
+    known = {f"{category}/{name}" for category, entries in catalog.items() for name in entries}
+    keys = {b["mesh"] for b in data["buildings"] + data["walls"]} | {data["bridge"]["mesh"]}
+    keys |= {d["mesh"] for camp in data["camps"] for d in camp["dressing"]} | {d["mesh"] for d in data["boss"]["dressing"]}
+    keys |= {key for chunk in data["scatter"].values() for key in chunk}
+    assert keys <= known, f"meshes missing from the catalog: {sorted(keys - known)}"
+    assert len(data["camps"]) == 5 and data["boss"] and len(data["walls"]) > 40
+    # Path-clear check: no tree, bush or rock within 3 m of a path centre line; none inside a building footprint.
+    blocking = [(x / 100, y / 100) for chunk in data["scatter"].values() for key, entry in chunk.items()
+                if not key.startswith("Grass/") for x, y, *_ in entry["items"]]
+    bx = np.array([p[0] for p in blocking])
+    by = np.array([p[1] for p in blocking])
+    for path in lay.paths:
+        near = hm.distance_to_polyline(bx, by, path)
+        assert (near > 3.0).all(), f"{int((near <= 3.0).sum())} blockers on a path"
+    for b in lay.buildings:
+        if b["type"] != "gate":
+            assert (np.hypot(bx - b["x"], by - b["y"]) > mp.FOOTPRINT_M[b["type"]]).all(), f"scatter inside {b['type']}"
 
 
 if __name__ == "__main__":

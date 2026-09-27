@@ -1,6 +1,9 @@
 #include "Shinobi/ShinobiPlayerController.h"
 #include "AbilitySystemComponent.h"
 #include "EngineUtils.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerStart.h"
 #include "Misc/App.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Paths.h"
@@ -52,6 +55,10 @@ void AShinobiPlayerController::BeginPlay()
 	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiLookShot")))
 	{
 		RunLookShotTest();
+	}
+	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiWorldTour")))
+	{
+		RunWorldTourTest();
 	}
 }
 
@@ -260,6 +267,68 @@ void AShinobiPlayerController::RunLookShotTest()
 	At(16.3f, [Shot]() { Shot(TEXT("ShinobiLookShot_4_Fight"), true); });
 	At(17.5f, [Shot]() { Shot(TEXT("ShinobiLookShot_5_Fight"), true); });
 	At(18.5f, [this]() { ConsoleCommand(TEXT("quit")); });
+}
+
+void AShinobiPlayerController::RunWorldTourTest()
+{
+	struct FTourPoint
+	{
+		FString Name;
+		FVector Location;
+	};
+	TArray<FTourPoint> Points;
+	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
+	{
+		Points.Add({ TEXT("Village"), It->GetActorLocation() });
+		break;
+	}
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		if (It->ActorHasTag(TEXT("Tour")) || It->ActorHasTag(TEXT("ShinobiCampSite")))
+		{
+			FString Name = It->GetName();
+			for (const FName& Tag : It->Tags)
+			{
+				const FString TagText = Tag.ToString();
+				if (TagText.StartsWith(TEXT("Camp:")) || TagText.StartsWith(TEXT("Tour:")))
+				{
+					Name = TagText.RightChop(5);
+				}
+				else if (TagText == TEXT("Boss"))
+				{
+					Name = TEXT("Boss");
+				}
+			}
+			Points.Add({ Name, It->GetActorLocation() });
+		}
+	}
+	UE_LOG(LogShinobiCoop, Log, TEXT("World tour: %d points"), Points.Num());
+	constexpr float FirstAt = 4.f, Step = 4.f;
+	for (int32 Index = 0; Index < Points.Num(); ++Index)
+	{
+		const FTourPoint Point = Points[Index];
+		FTimerHandle Move, Shot;
+		GetWorldTimerManager().SetTimer(Move, FTimerDelegate::CreateWeakLambda(this, [this, Point]()
+		{
+			if (ACharacter* Body = GetPawn<ACharacter>())
+			{
+				Body->GetCharacterMovement()->SetMovementMode(MOVE_Flying);
+				Body->GetCharacterMovement()->StopMovementImmediately();
+				// The spring arm sits ~4.5 m behind the pawn: stand off 16 m, 9 m up, looking at the point.
+				const FVector Eye = Point.Location + FVector(-1300.f, -900.f, 900.f);
+				Body->SetActorLocation(Eye, false, nullptr, ETeleportType::TeleportPhysics);
+				SetControlRotation((Point.Location - Eye).Rotation());
+			}
+		}), FirstAt + Index * Step, false);
+		const FString File = FString::Printf(TEXT("ShinobiWorldTour_%02d_%s"), Index, *Point.Name);
+		GetWorldTimerManager().SetTimer(Shot, FTimerDelegate::CreateWeakLambda(this, [File]()
+		{
+			FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / File), false, false);
+		}), FirstAt + Index * Step + Step - 0.5f, false);
+	}
+	FTimerHandle Quit;
+	GetWorldTimerManager().SetTimer(Quit, FTimerDelegate::CreateWeakLambda(this, [this]() { ConsoleCommand(TEXT("quit")); }),
+		FirstAt + Points.Num() * Step + 1.f, false);
 }
 
 void AShinobiPlayerController::RunJutsuShotTest()

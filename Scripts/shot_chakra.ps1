@@ -6,15 +6,16 @@
 # Opens a visible window for ~15-60 s; close the GUI editor first.
 #   -Look:    -ShinobiLookShot: the arena (-Map, default Training Grounds) in wave mode: the view ahead, the character,
 #             an overview, the first wave closing in and a fight.
-param([switch]$Jutsu, [switch]$Look, [string]$Map = "/Game/Shinobi/Maps/Lvl_TrainingGrounds")
+#   -Tour:    -ShinobiWorldTour: flies to every tour point of the open world (village, gate, bridge, camps, boss).
+param([switch]$Jutsu, [switch]$Look, [switch]$Tour, [string]$Map = "/Game/Shinobi/Maps/Lvl_TrainingGrounds")
 $ErrorActionPreference = "Stop"
 $Editor = "C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe"
 $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $Project = Join-Path $Root "ShinobiCoop.uproject"
 $ShotRoot = Join-Path $Root "Saved\Screenshots"
-$Flag = if ($Look) { "ShinobiLookShot" } elseif ($Jutsu) { "ShinobiJutsuShot" } else { "ShinobiShot" }
+$Flag = if ($Tour) { "ShinobiWorldTour" } elseif ($Look) { "ShinobiLookShot" } elseif ($Jutsu) { "ShinobiJutsuShot" } else { "ShinobiShot" }
 $Pattern = "$($Flag)_*.png"
-$Level = if ($Look) { $Map } else { "/Game/ThirdPerson/Lvl_ThirdPerson?game=/Script/ShinobiCoop.ShinobiGameMode" }
+$Level = if ($Tour) { "/Game/Shinobi/Maps/Lvl_HiddenLeafValley" } elseif ($Look) { $Map } else { "/Game/ThirdPerson/Lvl_ThirdPerson?game=/Script/ShinobiCoop.ShinobiGameMode" }
 
 Get-ChildItem $ShotRoot -Recurse -Filter $Pattern -ErrorAction SilentlyContinue | Remove-Item
 $game = Start-Process $Editor -PassThru -ArgumentList "`"$Project`" $Level -game -nosteam -windowed -ResX=1280 -ResY=720 -nosound -unattended -nosplash -$Flag -log=$Flag.log"

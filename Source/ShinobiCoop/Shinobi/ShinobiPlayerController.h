@@ -64,6 +64,11 @@ private:
 	 * the nearest enemy, then quits. Used by `Scripts/shot_chakra.ps1 -Look`. */
 	void RunLookShotTest();
 
+	/** With -ShinobiWorldTour: flies the (hovering) pawn to each tour point of the open world (the PlayerStart, actors
+	 * tagged Tour, camp and boss markers tagged ShinobiCampSite), waits for streaming and screenshots it, then quits.
+	 * Used by `Scripts/shot_chakra.ps1 -Tour`. */
+	void RunWorldTourTest();
+
 	UPROPERTY()
 	TObjectPtr<UShinobiHUDWidget> Hud;
 
