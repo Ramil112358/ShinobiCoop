@@ -26,3 +26,9 @@ __pycache__/
 /.cursor/
 /.gemini/
 /SourceArt/Mixamo/Power_Up_60fps.fbx
+
+# Sub-project #2: personal photos and intermediate generations stay local (spec 2026-09-27 section 2)
+/SourceArt/Character/Photos/
+/SourceArt/Character/Reference/
+/SourceArt/Character/Mesh/*
+!/SourceArt/Character/Mesh/hero_rigged.fbx
