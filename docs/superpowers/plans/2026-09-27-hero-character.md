@@ -130,3 +130,5 @@ Stand-in: `/Game/Shinobi/Mixamo/Power_Up_30fps` (a Mixamo-rigged mesh already in
   - Material slot structs had to be rebuilt; editing the returned copies did nothing.
   - The cast orb uses absolute scale because the rig's hand bone is scaled 100x.
 - **C4 checks:** screenshots show idle (facing correctly, textured), chakra aura on the hero, the Chidori and Rasengan orbs in the right hand, and the Training Grounds fight. 56 tests and both smoke tests pass. Waiting on the user's playtest (rows above).
+
+**Result (2026-09-27):** the user ran the playtest; all rows pass ("all good").
