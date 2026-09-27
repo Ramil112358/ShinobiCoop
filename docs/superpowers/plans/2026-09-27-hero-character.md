@@ -123,3 +123,5 @@ Stand-in: `/Game/Shinobi/Mixamo/Power_Up_30fps` (a Mixamo-rigged mesh already in
   - The cloak is requested open and knee-length, with a clear leg gap, so image-to-3D and Mixamo don't fuse the legs.
 - **IP note:** the Leaf headband symbol and the Akatsuki cloak design are Naruto's. Both must be replaced before any public release.
 - **In parallel:** Task 3 (runtime plumbing against the stand-in).
+- **2026-09-27, C2:** the user made `front_cloak.png` (open, knee-length Akatsuki-style cloak). Image-to-3D ran on Hyper3D Rodin Gen-2.5 Medium through the user's authenticated `hyper3d` MCP, not Meshy (Claude can't sign in to the user's Meshy account). Settings: Raw mesh, 50k polygons, GLB.
+- **C2 result:** `Mesh/raw_1.glb` (PBR texture); `raw_1_shaded.glb` (baked lighting) is kept as a spare. `prep_mesh.py` produced one part, no specks, 50,000 triangles, 180.0 cm. The previews look clean: separate fingers, a leg gap, glasses intact. Next is C3 (the user's Mixamo step).
