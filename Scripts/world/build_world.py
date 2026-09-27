@@ -173,7 +173,7 @@ def stage_terrain(lay):
         wall.static_mesh_component.set_collision_profile_name("InvisibleWall")
 
     world_settings = world.get_world_settings()
-    world_settings.set_editor_property("default_game_mode", unreal.load_class(None, "/Script/ShinobiCoop.ShinobiArenaGameMode"))
+    world_settings.set_editor_property("default_game_mode", unreal.load_class(None, "/Script/ShinobiCoop.ShinobiWorldGameMode"))
     world_settings.set_editor_property("kill_z", -5000.0)
     if not unreal.EditorLoadingAndSavingUtils.save_map(world, MAP):
         raise RuntimeError(f"failed to save {MAP}")
@@ -256,11 +256,12 @@ def stage_dress(lay):
         for i, it in enumerate(camp["dressing"]):
             place(mesh_of, it, f"{camp['id']}_{it['mesh'].split('/')[-1]}_{i:02d}")
         marker(camp["x"], camp["y"], camp["z"], camp["id"], f"Camp:{camp['id']}", f"Difficulty:{camp['difficulty']}",
+               f"Radius:{camp['r'] + 1500:.0f}",
                "Waves:" + ";".join(f"{w['ninjas']},{w['throwers']}" for w in camp["waves"]))
     boss = data["boss"]
     for i, it in enumerate(boss["dressing"]):
         place(mesh_of, it, f"BossRuin_{i:02d}")
-    marker(boss["x"], boss["y"], boss["z"], "boss", "Boss")
+    marker(boss["x"], boss["y"], boss["z"], "boss", "Boss", f"Radius:{boss['r'] + 1500:.0f}")
 
     instances = 0
     for chunk, species in data["scatter"].items():
@@ -275,6 +276,7 @@ def stage_dress(lay):
             actor.add_instances(mesh_of(key), transforms, entry["cull"])
         instances += actor.get_instance_count()
 
+    world.get_world_settings().set_editor_property("default_game_mode", unreal.load_class(None, "/Script/ShinobiCoop.ShinobiWorldGameMode"))
     if not unreal.EditorLoadingAndSavingUtils.save_map(world, MAP):
         raise RuntimeError(f"failed to save {MAP}")
     unreal.EditorLoadingAndSavingUtils.save_dirty_packages(True, True)

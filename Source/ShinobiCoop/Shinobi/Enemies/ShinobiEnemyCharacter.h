@@ -71,6 +71,10 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UShinobiOverheadTextComponent> HealthText;
+
+	/** The runtime navmesh is only built around invokers (big open world); enemies carry one. */
+	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
+	TObjectPtr<class UNavigationInvokerComponent> NavInvoker;
 };
 
 /** Melee grunt: 200 HP, 2-hit combo of 25. */

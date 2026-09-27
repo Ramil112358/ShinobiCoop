@@ -246,7 +246,10 @@ void UShinobiHUDWidget::UpdateArena(const AShinobiPlayerCharacter* Player)
 			Banner = FString::Printf(TEXT("WIPED OUT\nWave restarting in %d"), Countdown);
 			break;
 		case EShinobiArenaPhase::Victory:
-			Banner = TEXT("VICTORY");
+			Banner = State->NumCamps > 0 ? TEXT("VALLEY CLEARED") : TEXT("VICTORY");
+			break;
+		case EShinobiArenaPhase::OpenWorld:
+			Wave = FString::Printf(TEXT("Camps cleared %d / %d"), State->CampsCleared, State->NumCamps);
 			break;
 		default:
 			break;

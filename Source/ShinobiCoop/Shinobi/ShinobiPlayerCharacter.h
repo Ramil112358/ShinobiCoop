@@ -56,6 +56,8 @@ protected:
 	virtual void UnPossessed() override;
 	/** At 0 HP a player goes down (GE_Downed) instead of dying. */
 	virtual void HandleOutOfHealth() override;
+	/** Below the world's kill-Z: back to a player start instead of being destroyed. */
+	virtual void FellOutOfWorld(const UDamageType& DamageType) override;
 
 private:
 	void Move(const FInputActionValue& Value);

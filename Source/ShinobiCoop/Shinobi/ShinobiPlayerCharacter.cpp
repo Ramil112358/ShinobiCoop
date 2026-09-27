@@ -6,6 +6,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
 #include "EngineUtils.h"
+#include "GameFramework/PlayerStart.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -123,6 +124,21 @@ void AShinobiPlayerCharacter::BeginPlay()
 	ApplyHero();
 	Super::BeginPlay();
 	AbilitySystem->RegisterGameplayTagEvent(ShinobiTags::State_Downed).AddUObject(this, &AShinobiPlayerCharacter::OnDownedTagChanged);
+}
+
+void AShinobiPlayerCharacter::FellOutOfWorld(const UDamageType& DamageType)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
+	{
+		GetCharacterMovement()->StopMovementImmediately();
+		TeleportTo(It->GetActorLocation(), It->GetActorRotation());
+		return;
+	}
+	Super::FellOutOfWorld(DamageType);
 }
 
 void AShinobiPlayerCharacter::HandleOutOfHealth()

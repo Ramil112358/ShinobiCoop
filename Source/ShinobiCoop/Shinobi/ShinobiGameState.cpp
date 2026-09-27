@@ -9,6 +9,8 @@ void AShinobiGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(AShinobiGameState, Phase);
 	DOREPLIFETIME(AShinobiGameState, EnemiesRemaining);
 	DOREPLIFETIME(AShinobiGameState, PhaseEndTime);
+	DOREPLIFETIME(AShinobiGameState, CampsCleared);
+	DOREPLIFETIME(AShinobiGameState, NumCamps);
 }
 
 float AShinobiGameState::GetPhaseTimeRemaining() const

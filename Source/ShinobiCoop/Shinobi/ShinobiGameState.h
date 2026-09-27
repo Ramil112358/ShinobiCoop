@@ -14,7 +14,9 @@ enum class EShinobiArenaPhase : uint8
 	Fighting,
 	/** Everyone went down: banner, then the wave restarts. */
 	Wiped,
-	Victory
+	Victory,
+	/** The open world (AShinobiWorldGameMode): free roaming, camps cleared n of NumCamps. */
+	OpenWorld
 };
 
 /** Arena progress for every machine's HUD, set by AShinobiArenaGameMode on the server. */
@@ -45,4 +47,11 @@ public:
 	/** Server world time the phase ends (compare with GetServerWorldTimeSeconds); 0 = open-ended. */
 	UPROPERTY(Replicated)
 	float PhaseEndTime = 0.f;
+
+	/** Open world: camps cleared so far and in total (the boss camp not counted). */
+	UPROPERTY(Replicated)
+	int32 CampsCleared = 0;
+
+	UPROPERTY(Replicated)
+	int32 NumCamps = 0;
 };

@@ -1,6 +1,7 @@
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 #include "AbilitySystemComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "NavigationInvokerComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -28,6 +29,8 @@ AShinobiEnemyCharacter::AShinobiEnemyCharacter(const FObjectInitializer& ObjectI
 
 	HealthText = CreateDefaultSubobject<UShinobiOverheadTextComponent>(TEXT("HealthText"));
 	HealthText->SetupAttachment(RootComponent);
+	NavInvoker = CreateDefaultSubobject<UNavigationInvokerComponent>(TEXT("NavInvoker"));
+	NavInvoker->SetGenerationRadii(5000.f, 6000.f);
 }
 
 void AShinobiEnemyCharacter::BeginPlay()

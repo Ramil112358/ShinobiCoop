@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "Shinobi/ShinobiGameState.h"
+#include "Shinobi/World/ShinobiEncounter.h"
 #include "ShinobiArenaGameMode.generated.h"
 
 class AShinobiEnemyCharacter;
@@ -73,7 +74,7 @@ private:
 
 	FVector ArenaCenter = FVector::ZeroVector;
 	TArray<FVector> SpawnPoints;
-	TArray<TWeakObjectPtr<AShinobiEnemyCharacter>> Enemies;
+	FShinobiEncounter Encounter;
 	TWeakObjectPtr<AShinobiRogueJonin> Boss;
 	bool bBossSummoned = false;
 };

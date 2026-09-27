@@ -56,7 +56,7 @@ FShinobiWave AShinobiArenaGameMode::GetWave(int32 Wave)
 
 float AShinobiArenaGameMode::GetHealthScale(int32 NumPlayers)
 {
-	return 1.f + 0.5f * FMath::Max(0, NumPlayers - 1);
+	return FShinobiEncounter::GetHealthScale(NumPlayers);
 }
 
 AShinobiGameState* AShinobiArenaGameMode::GetArenaState() const
@@ -83,6 +83,7 @@ void AShinobiArenaGameMode::BeginPlay()
 		}
 	}
 	GetArenaState()->NumWaves = GetNumWaves();
+	Encounter.OnEnemyDied = [this](AShinobiEnemyCharacter* Enemy) { OnEnemyDied(Enemy); };
 	StartBreak();
 }
 
@@ -115,10 +116,10 @@ void AShinobiArenaGameMode::Tick(float DeltaSeconds)
 			break;
 		}
 		// An enemy destroyed without dying (fell out of the world) never reports in: count it out here.
-		if (Enemies.RemoveAll([](const TWeakObjectPtr<AShinobiEnemyCharacter>& Enemy) { return !Enemy.IsValid(); }) > 0)
+		if (Encounter.Prune() > 0)
 		{
-			State->EnemiesRemaining = Enemies.Num();
-			if (GetWave(State->Wave).bBoss ? !Boss.IsValid() : Enemies.Num() == 0)
+			State->EnemiesRemaining = Encounter.Remaining();
+			if (GetWave(State->Wave).bBoss ? !Boss.IsValid() : State->EnemiesRemaining == 0)
 			{
 				GetWave(State->Wave).bBoss ? Win() : StartBreak();
 			}
@@ -178,14 +179,7 @@ void AShinobiArenaGameMode::StartWave()
 
 void AShinobiArenaGameMode::Wipe()
 {
-	for (const TWeakObjectPtr<AShinobiEnemyCharacter>& Enemy : Enemies)
-	{
-		if (Enemy.IsValid())
-		{
-			Enemy->Destroy();
-		}
-	}
-	Enemies.Empty();
+	Encounter.DespawnAll();
 	GetArenaState()->EnemiesRemaining = 0;
 	SetPhase(EShinobiArenaPhase::Wiped, WipeSeconds);
 	UE_LOG(LogShinobiCoop, Log, TEXT("Arena: wiped on wave %d"), GetArenaState()->Wave);
@@ -200,14 +194,7 @@ void AShinobiArenaGameMode::Win()
 
 void AShinobiArenaGameMode::KillAllEnemies()
 {
-	// Copy: each death edits Enemies (OnEnemyDied).
-	for (const TWeakObjectPtr<AShinobiEnemyCharacter>& Enemy : TArray<TWeakObjectPtr<AShinobiEnemyCharacter>>(Enemies))
-	{
-		if (Enemy.IsValid() && Enemy->IsAlive())
-		{
-			Enemy->GetAbilitySystemComponent()->SetNumericAttributeBase(UShinobiAttributeSet::GetHealthAttribute(), 0.f);
-		}
-	}
+	Encounter.KillAll();
 }
 
 void AShinobiArenaGameMode::RefillPlayers()
@@ -274,35 +261,21 @@ FVector AShinobiArenaGameMode::GetRingPoint(int32 Slot, int32 NumSlots) const
 		const float Angle = UE_TWO_PI * Slot / FMath::Max(1, NumSlots) + FMath::FRandRange(-0.15f, 0.15f);
 		Point = ArenaCenter + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * SpawnRadius;
 	}
-	// Drop onto whatever floor is there; without one, keep the PlayerStart's height.
-	FHitResult Hit;
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(ShinobiSpawn));
-	if (GetWorld()->LineTraceSingleByChannel(Hit, Point + FVector(0.f, 0.f, 1000.f), Point - FVector(0.f, 0.f, 3000.f), ECC_Visibility, Params))
-	{
-		return Hit.ImpactPoint + FVector(0.f, 0.f, 100.f);
-	}
-	return Point;
+	return FShinobiEncounter::DropToFloor(GetWorld(), Point); // without a floor, keep the PlayerStart's height
 }
 
 AShinobiEnemyCharacter* AShinobiArenaGameMode::SpawnEnemy(TSubclassOf<AShinobiEnemyCharacter> EnemyClass, const FVector& Location)
 {
-	const FTransform Spawn(FRotator(0.f, (ArenaCenter - Location).Rotation().Yaw, 0.f), Location);
-	AShinobiEnemyCharacter* Enemy = GetWorld()->SpawnActorDeferred<AShinobiEnemyCharacter>(EnemyClass, Spawn, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
-	if (!Enemy)
+	AShinobiEnemyCharacter* Enemy = Encounter.Spawn(this, EnemyClass, Location, ArenaCenter, GetNumPlayers());
+	if (Enemy)
 	{
-		return nullptr;
+		++GetArenaState()->EnemiesRemaining;
 	}
-	Enemy->HealthScale = GetHealthScale(GetNumPlayers());
-	Enemy->FinishSpawning(Spawn);
-	Enemy->OnDied.AddUObject(this, &AShinobiArenaGameMode::OnEnemyDied);
-	Enemies.Add(Enemy);
-	++GetArenaState()->EnemiesRemaining;
 	return Enemy;
 }
 
 void AShinobiArenaGameMode::OnEnemyDied(AShinobiEnemyCharacter* Enemy)
 {
-	Enemies.Remove(Enemy);
 	AShinobiGameState* State = GetArenaState();
 	State->EnemiesRemaining = FMath::Max(0, State->EnemiesRemaining - 1);
 	if (State->Phase != EShinobiArenaPhase::Fighting)
