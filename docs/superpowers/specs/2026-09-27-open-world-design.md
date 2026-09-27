@@ -32,7 +32,7 @@ It must look good and consistent: stylised, cel-shaded, Naruto-inspired without 
 | Boss ridge | North, up a rocky slope | A ruined stone fortress and the Rogue Jonin arena. |
 | Edge | Border | Mountains and cliffs, plus an invisible wall. A kill-Z plane teleports fallen players to the village. |
 
-**Layout file.** One data file, `Content/Shinobi/World/WorldLayout.json` (a plain JSON source kept under `Scripts/world/`), is the single source for the world build and for exclusion zones:
+**Layout file.** One data file, `Scripts/world/world_layout.json` (plain JSON, read by the build scripts; the camp and villager data it produces is baked into the placed actors), is the single source for the world build and for exclusion zones:
 - area centres and radii;
 - path splines (point lists);
 - the river spline;
