@@ -1,0 +1,466 @@
+{
+ "Arch": {
+  "bridge": {
+   "height_m": 7.14,
+   "mesh": "/Game/Shinobi/World/Library/Arch/bridge/StaticMeshes/bridge.bridge"
+  },
+  "gate": {
+   "height_m": 10.6,
+   "mesh": "/Game/Shinobi/World/Library/Arch/gate/StaticMeshes/gate.gate"
+  },
+  "house_large": {
+   "height_m": 10.32,
+   "mesh": "/Game/Shinobi/World/Library/Arch/house_large/StaticMeshes/house_large.house_large"
+  },
+  "house_medium": {
+   "height_m": 7.02,
+   "mesh": "/Game/Shinobi/World/Library/Arch/house_medium/StaticMeshes/house_medium.house_medium"
+  },
+  "house_round": {
+   "height_m": 6.95,
+   "mesh": "/Game/Shinobi/World/Library/Arch/house_round/StaticMeshes/house_round.house_round"
+  },
+  "house_small": {
+   "height_m": 6.6,
+   "mesh": "/Game/Shinobi/World/Library/Arch/house_small/StaticMeshes/house_small.house_small"
+  },
+  "lantern": {
+   "height_m": 3.2,
+   "mesh": "/Game/Shinobi/World/Library/Arch/lantern/StaticMeshes/lantern.lantern"
+  },
+  "shrine": {
+   "height_m": 7.11,
+   "mesh": "/Game/Shinobi/World/Library/Arch/shrine/StaticMeshes/shrine.shrine"
+  },
+  "stall": {
+   "height_m": 2.9,
+   "mesh": "/Game/Shinobi/World/Library/Arch/stall/StaticMeshes/stall.stall"
+  },
+  "stone_lantern": {
+   "height_m": 2.3,
+   "mesh": "/Game/Shinobi/World/Library/Arch/stone_lantern/StaticMeshes/stone_lantern.stone_lantern"
+  },
+  "torii": {
+   "height_m": 5.95,
+   "mesh": "/Game/Shinobi/World/Library/Arch/torii/StaticMeshes/torii.torii"
+  },
+  "training_post": {
+   "height_m": 1.8,
+   "mesh": "/Game/Shinobi/World/Library/Arch/training_post/StaticMeshes/training_post.training_post"
+  },
+  "wall_segment": {
+   "height_m": 4.28,
+   "mesh": "/Game/Shinobi/World/Library/Arch/wall_segment/StaticMeshes/wall_segment.wall_segment"
+  },
+  "well": {
+   "height_m": 3.1,
+   "mesh": "/Game/Shinobi/World/Library/Arch/well/StaticMeshes/well.well"
+  }
+ },
+ "Bush": {
+  "Bush_Common": {
+   "height_m": 1.58,
+   "mesh": "/Game/Shinobi/World/Library/Bush/Bush_Common/StaticMeshes/Bush_Common.Bush_Common"
+  },
+  "Bush_Common_Flowers": {
+   "height_m": 1.58,
+   "mesh": "/Game/Shinobi/World/Library/Bush/Bush_Common_Flowers/StaticMeshes/Bush_Common_Flowers.Bush_Common_Flowers"
+  }
+ },
+ "Camp": {
+  "campfire": {
+   "height_m": 0.81,
+   "mesh": "/Game/Shinobi/World/Library/Camp/campfire/StaticMeshes/campfire.campfire"
+  },
+  "palisade": {
+   "height_m": 3.75,
+   "mesh": "/Game/Shinobi/World/Library/Camp/palisade/StaticMeshes/palisade.palisade"
+  },
+  "tent": {
+   "height_m": 2.4,
+   "mesh": "/Game/Shinobi/World/Library/Camp/tent/StaticMeshes/tent.tent"
+  }
+ },
+ "Grass": {
+  "Clover_1": {
+   "height_m": 1.14,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Clover_1/StaticMeshes/Clover_1.Clover_1"
+  },
+  "Clover_2": {
+   "height_m": 1.26,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Clover_2/StaticMeshes/Clover_2.Clover_2"
+  },
+  "Fern_1": {
+   "height_m": 0.84,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Fern_1/StaticMeshes/Fern_1.Fern_1"
+  },
+  "Flower_3_Group": {
+   "height_m": 2.05,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Flower_3_Group/StaticMeshes/Flower_3_Group.Flower_3_Group"
+  },
+  "Flower_3_Single": {
+   "height_m": 2.07,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Flower_3_Single/StaticMeshes/Flower_3_Single.Flower_3_Single"
+  },
+  "Flower_4_Group": {
+   "height_m": 2.49,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Flower_4_Group/StaticMeshes/Flower_4_Group.Flower_4_Group"
+  },
+  "Flower_4_Single": {
+   "height_m": 2.42,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Flower_4_Single/StaticMeshes/Flower_4_Single.Flower_4_Single"
+  },
+  "Grass_Common_Short": {
+   "height_m": 1.33,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Grass_Common_Short/StaticMeshes/Grass_Common_Short.Grass_Common_Short"
+  },
+  "Grass_Common_Tall": {
+   "height_m": 1.87,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Grass_Common_Tall/StaticMeshes/Grass_Common_Tall.Grass_Common_Tall"
+  },
+  "Grass_Wispy_Short": {
+   "height_m": 1.07,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Grass_Wispy_Short/StaticMeshes/Grass_Wispy_Short.Grass_Wispy_Short"
+  },
+  "Grass_Wispy_Tall": {
+   "height_m": 1.67,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Grass_Wispy_Tall/StaticMeshes/Grass_Wispy_Tall.Grass_Wispy_Tall"
+  },
+  "Mushroom_Common": {
+   "height_m": 0.46,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Mushroom_Common/StaticMeshes/Mushroom_Common.Mushroom_Common"
+  },
+  "Mushroom_Laetiporus": {
+   "height_m": 0.77,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Mushroom_Laetiporus/StaticMeshes/Mushroom_Laetiporus.Mushroom_Laetiporus"
+  },
+  "Petal_1": {
+   "height_m": 0.24,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Petal_1/StaticMeshes/Petal_1.Petal_1"
+  },
+  "Petal_2": {
+   "height_m": 0.24,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Petal_2/StaticMeshes/Petal_2.Petal_2"
+  },
+  "Petal_3": {
+   "height_m": 0.19,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Petal_3/StaticMeshes/Petal_3.Petal_3"
+  },
+  "Petal_4": {
+   "height_m": 0.25,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Petal_4/StaticMeshes/Petal_4.Petal_4"
+  },
+  "Petal_5": {
+   "height_m": 0.29,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Petal_5/StaticMeshes/Petal_5.Petal_5"
+  },
+  "Plant_1": {
+   "height_m": 1.01,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Plant_1/StaticMeshes/Plant_1.Plant_1"
+  },
+  "Plant_1_Big": {
+   "height_m": 2.35,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Plant_1_Big/StaticMeshes/Plant_1_Big.Plant_1_Big"
+  },
+  "Plant_7": {
+   "height_m": 0.25,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Plant_7/StaticMeshes/Plant_7.Plant_7"
+  },
+  "Plant_7_Big": {
+   "height_m": 0.25,
+   "mesh": "/Game/Shinobi/World/Library/Grass/Plant_7_Big/StaticMeshes/Plant_7_Big.Plant_7_Big"
+  }
+ },
+ "Pebble": {
+  "Pebble_Round_1": {
+   "height_m": 0.1,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/Pebble_Round_1/StaticMeshes/Pebble_Round_1.Pebble_Round_1"
+  },
+  "Pebble_Round_2": {
+   "height_m": 0.09,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/Pebble_Round_2/StaticMeshes/Pebble_Round_2.Pebble_Round_2"
+  },
+  "Pebble_Round_3": {
+   "height_m": 0.1,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/Pebble_Round_3/StaticMeshes/Pebble_Round_3.Pebble_Round_3"
+  },
+  "Pebble_Round_4": {
+   "height_m": 0.1,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/Pebble_Round_4/StaticMeshes/Pebble_Round_4.Pebble_Round_4"
+  },
+  "Pebble_Round_5": {
+   "height_m": 0.1,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/Pebble_Round_5/StaticMeshes/Pebble_Round_5.Pebble_Round_5"
+  },
+  "Pebble_Square_1": {
+   "height_m": 0.13,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/Pebble_Square_1/StaticMeshes/Pebble_Square_1.Pebble_Square_1"
+  },
+  "Pebble_Square_2": {
+   "height_m": 0.14,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/Pebble_Square_2/StaticMeshes/Pebble_Square_2.Pebble_Square_2"
+  },
+  "Pebble_Square_3": {
+   "height_m": 0.16,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/Pebble_Square_3/StaticMeshes/Pebble_Square_3.Pebble_Square_3"
+  },
+  "Pebble_Square_4": {
+   "height_m": 0.17,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/Pebble_Square_4/StaticMeshes/Pebble_Square_4.Pebble_Square_4"
+  },
+  "Pebble_Square_5": {
+   "height_m": 0.15,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/Pebble_Square_5/StaticMeshes/Pebble_Square_5.Pebble_Square_5"
+  },
+  "Pebble_Square_6": {
+   "height_m": 0.14,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/Pebble_Square_6/StaticMeshes/Pebble_Square_6.Pebble_Square_6"
+  },
+  "RockPath_Round_Small_1": {
+   "height_m": 0.11,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/RockPath_Round_Small_1/StaticMeshes/RockPath_Round_Small_1.RockPath_Round_Small_1"
+  },
+  "RockPath_Round_Small_2": {
+   "height_m": 0.1,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/RockPath_Round_Small_2/StaticMeshes/RockPath_Round_Small_2.RockPath_Round_Small_2"
+  },
+  "RockPath_Round_Small_3": {
+   "height_m": 0.11,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/RockPath_Round_Small_3/StaticMeshes/RockPath_Round_Small_3.RockPath_Round_Small_3"
+  },
+  "RockPath_Round_Thin": {
+   "height_m": 0.11,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/RockPath_Round_Thin/StaticMeshes/RockPath_Round_Thin.RockPath_Round_Thin"
+  },
+  "RockPath_Round_Wide": {
+   "height_m": 0.11,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/RockPath_Round_Wide/StaticMeshes/RockPath_Round_Wide.RockPath_Round_Wide"
+  },
+  "RockPath_Square_Small_1": {
+   "height_m": 0.15,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/RockPath_Square_Small_1/StaticMeshes/RockPath_Square_Small_1.RockPath_Square_Small_1"
+  },
+  "RockPath_Square_Small_2": {
+   "height_m": 0.15,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/RockPath_Square_Small_2/StaticMeshes/RockPath_Square_Small_2.RockPath_Square_Small_2"
+  },
+  "RockPath_Square_Small_3": {
+   "height_m": 0.17,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/RockPath_Square_Small_3/StaticMeshes/RockPath_Square_Small_3.RockPath_Square_Small_3"
+  },
+  "RockPath_Square_Thin": {
+   "height_m": 0.18,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/RockPath_Square_Thin/StaticMeshes/RockPath_Square_Thin.RockPath_Square_Thin"
+  },
+  "RockPath_Square_Wide": {
+   "height_m": 0.18,
+   "mesh": "/Game/Shinobi/World/Library/Pebble/RockPath_Square_Wide/StaticMeshes/RockPath_Square_Wide.RockPath_Square_Wide"
+  }
+ },
+ "Prop": {
+  "Anvil": {
+   "height_m": 0.56,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Anvil/StaticMeshes/Anvil.Anvil"
+  },
+  "Anvil_Log": {
+   "height_m": 1.07,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Anvil_Log/StaticMeshes/Anvil_Log.Anvil_Log"
+  },
+  "Bag": {
+   "height_m": 0.8,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Bag/StaticMeshes/Bag.Bag"
+  },
+  "Banner_1": {
+   "height_m": 2.39,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Banner_1/StaticMeshes/Banner_1.Banner_1"
+  },
+  "Banner_2": {
+   "height_m": 2.08,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Banner_2/StaticMeshes/Banner_2.Banner_2"
+  },
+  "Barrel": {
+   "height_m": 0.9,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Barrel/StaticMeshes/Barrel.Barrel"
+  },
+  "Barrel_Apples": {
+   "height_m": 0.9,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Barrel_Apples/StaticMeshes/Barrel_Apples.Barrel_Apples"
+  },
+  "Bench": {
+   "height_m": 0.53,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Bench/StaticMeshes/Bench.Bench"
+  },
+  "Bucket_Wooden_1": {
+   "height_m": 0.29,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Bucket_Wooden_1/StaticMeshes/Bucket_Wooden_1.Bucket_Wooden_1"
+  },
+  "Cauldron": {
+   "height_m": 0.82,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Cauldron/StaticMeshes/Cauldron.Cauldron"
+  },
+  "Crate_Metal": {
+   "height_m": 0.87,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Crate_Metal/StaticMeshes/Crate_Metal.Crate_Metal"
+  },
+  "Crate_Wooden": {
+   "height_m": 0.93,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Crate_Wooden/StaticMeshes/Crate_Wooden.Crate_Wooden"
+  },
+  "Dummy": {
+   "height_m": 1.86,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Dummy/StaticMeshes/Dummy.Dummy"
+  },
+  "FarmCrate_Apple": {
+   "height_m": 0.24,
+   "mesh": "/Game/Shinobi/World/Library/Prop/FarmCrate_Apple/StaticMeshes/FarmCrate_Apple.FarmCrate_Apple"
+  },
+  "FarmCrate_Carrot": {
+   "height_m": 0.41,
+   "mesh": "/Game/Shinobi/World/Library/Prop/FarmCrate_Carrot/StaticMeshes/FarmCrate_Carrot.FarmCrate_Carrot"
+  },
+  "FarmCrate_Empty": {
+   "height_m": 0.24,
+   "mesh": "/Game/Shinobi/World/Library/Prop/FarmCrate_Empty/StaticMeshes/FarmCrate_Empty.FarmCrate_Empty"
+  },
+  "Lantern_Wall": {
+   "height_m": 1.34,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Lantern_Wall/StaticMeshes/Lantern_Wall.Lantern_Wall"
+  },
+  "Pot_1": {
+   "height_m": 0.22,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Pot_1/StaticMeshes/Pot_1.Pot_1"
+  },
+  "Rope_1": {
+   "height_m": 0.1,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Rope_1/StaticMeshes/Rope_1.Rope_1"
+  },
+  "Shield_Wooden": {
+   "height_m": 0.62,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Shield_Wooden/StaticMeshes/Shield_Wooden.Shield_Wooden"
+  },
+  "Stall_Cart_Empty": {
+   "height_m": 2.63,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Stall_Cart_Empty/StaticMeshes/Stall_Cart_Empty.Stall_Cart_Empty"
+  },
+  "Stool": {
+   "height_m": 0.59,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Stool/StaticMeshes/Stool.Stool"
+  },
+  "Table_Large": {
+   "height_m": 0.81,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Table_Large/StaticMeshes/Table_Large.Table_Large"
+  },
+  "Torch_Metal": {
+   "height_m": 0.65,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Torch_Metal/StaticMeshes/Torch_Metal.Torch_Metal"
+  },
+  "Vase_2": {
+   "height_m": 0.52,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Vase_2/StaticMeshes/Vase_2.Vase_2"
+  },
+  "WeaponStand": {
+   "height_m": 1.11,
+   "mesh": "/Game/Shinobi/World/Library/Prop/WeaponStand/StaticMeshes/WeaponStand.WeaponStand"
+  },
+  "Workbench": {
+   "height_m": 0.89,
+   "mesh": "/Game/Shinobi/World/Library/Prop/Workbench/StaticMeshes/Workbench.Workbench"
+  }
+ },
+ "Rock": {
+  "Rock_Medium_1": {
+   "height_m": 2.26,
+   "mesh": "/Game/Shinobi/World/Library/Rock/Rock_Medium_1/StaticMeshes/Rock_Medium_1.Rock_Medium_1"
+  },
+  "Rock_Medium_2": {
+   "height_m": 1.9,
+   "mesh": "/Game/Shinobi/World/Library/Rock/Rock_Medium_2/StaticMeshes/Rock_Medium_2.Rock_Medium_2"
+  },
+  "Rock_Medium_3": {
+   "height_m": 2.32,
+   "mesh": "/Game/Shinobi/World/Library/Rock/Rock_Medium_3/StaticMeshes/Rock_Medium_3.Rock_Medium_3"
+  }
+ },
+ "Tree": {
+  "CommonTree_1": {
+   "height_m": 7.26,
+   "mesh": "/Game/Shinobi/World/Library/Tree/CommonTree_1.CommonTree_1"
+  },
+  "CommonTree_2": {
+   "height_m": 7.64,
+   "mesh": "/Game/Shinobi/World/Library/Tree/CommonTree_2.CommonTree_2"
+  },
+  "CommonTree_3": {
+   "height_m": 9.43,
+   "mesh": "/Game/Shinobi/World/Library/Tree/CommonTree_3.CommonTree_3"
+  },
+  "CommonTree_4": {
+   "height_m": 9.44,
+   "mesh": "/Game/Shinobi/World/Library/Tree/CommonTree_4.CommonTree_4"
+  },
+  "CommonTree_5": {
+   "height_m": 7.01,
+   "mesh": "/Game/Shinobi/World/Library/Tree/CommonTree_5.CommonTree_5"
+  },
+  "DeadTree_1": {
+   "height_m": 9.5,
+   "mesh": "/Game/Shinobi/World/Library/Tree/DeadTree_1.DeadTree_1"
+  },
+  "DeadTree_2": {
+   "height_m": 11.49,
+   "mesh": "/Game/Shinobi/World/Library/Tree/DeadTree_2.DeadTree_2"
+  },
+  "DeadTree_3": {
+   "height_m": 13.28,
+   "mesh": "/Game/Shinobi/World/Library/Tree/DeadTree_3.DeadTree_3"
+  },
+  "DeadTree_4": {
+   "height_m": 12.77,
+   "mesh": "/Game/Shinobi/World/Library/Tree/DeadTree_4.DeadTree_4"
+  },
+  "DeadTree_5": {
+   "height_m": 16.44,
+   "mesh": "/Game/Shinobi/World/Library/Tree/DeadTree_5.DeadTree_5"
+  },
+  "Pine_1": {
+   "height_m": 7.32,
+   "mesh": "/Game/Shinobi/World/Library/Tree/Pine_1.Pine_1"
+  },
+  "Pine_2": {
+   "height_m": 7.38,
+   "mesh": "/Game/Shinobi/World/Library/Tree/Pine_2.Pine_2"
+  },
+  "Pine_3": {
+   "height_m": 7.39,
+   "mesh": "/Game/Shinobi/World/Library/Tree/Pine_3.Pine_3"
+  },
+  "Pine_4": {
+   "height_m": 10.24,
+   "mesh": "/Game/Shinobi/World/Library/Tree/Pine_4.Pine_4"
+  },
+  "Pine_5": {
+   "height_m": 8.72,
+   "mesh": "/Game/Shinobi/World/Library/Tree/Pine_5.Pine_5"
+  },
+  "TwistedTree_1": {
+   "height_m": 16.73,
+   "mesh": "/Game/Shinobi/World/Library/Tree/TwistedTree_1.TwistedTree_1"
+  },
+  "TwistedTree_2": {
+   "height_m": 18.95,
+   "mesh": "/Game/Shinobi/World/Library/Tree/TwistedTree_2.TwistedTree_2"
+  },
+  "TwistedTree_3": {
+   "height_m": 16.07,
+   "mesh": "/Game/Shinobi/World/Library/Tree/TwistedTree_3.TwistedTree_3"
+  },
+  "TwistedTree_4": {
+   "height_m": 18.74,
+   "mesh": "/Game/Shinobi/World/Library/Tree/TwistedTree_4.TwistedTree_4"
+  },
+  "TwistedTree_5": {
+   "height_m": 15.66,
+   "mesh": "/Game/Shinobi/World/Library/Tree/TwistedTree_5.TwistedTree_5"
+  }
+ }
+}
