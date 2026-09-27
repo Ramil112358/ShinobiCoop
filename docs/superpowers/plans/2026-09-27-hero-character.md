@@ -112,3 +112,14 @@ Stand-in: `/Game/Shinobi/Mixamo/Power_Up_30fps` (a Mixamo-rigged mesh already in
   2. partner sees the hero animate;
   3. name tags on teammates only;
   4. `Shinobi.Hero 0` gives Manny back.
+
+## Progress notes
+
+- **2026-09-27, C1:** Higgsfield produced 3 front candidates (`front_1..3.png`, local only). They cost 6 credits: the `get_cost` preflight of 2 was per image, not per batch, and the batch returned 3 images, not 4. The balance is now 0.
+- **Pick:** candidate 1 (round glasses, black curly hair), but in an Akatsuki-style cloak.
+- **Deviation from the spec:**
+  - The user makes the cloak edit (free Gemini) and runs the 3D step on a free web tool (Meshy / Tripo) themselves.
+  - Inputs: `Reference/front_cloak.png`, then `Mesh/raw_1.glb`.
+  - The cloak is requested open and knee-length, with a clear leg gap, so image-to-3D and Mixamo don't fuse the legs.
+- **IP note:** the Leaf headband symbol and the Akatsuki cloak design are Naruto's. Both must be replaced before any public release.
+- **In parallel:** Task 3 (runtime plumbing against the stand-in).
