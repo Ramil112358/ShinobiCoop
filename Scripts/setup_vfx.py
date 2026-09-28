@@ -1,4 +1,4 @@
-"""Chakra charge aura material. Idempotent: rebuilds M_ChakraBodyAura from scratch each run.
+"""Jutsu VFX materials. Idempotent: rebuilds M_ChakraBodyAura, M_Flame, M_FlameDark and M_Streak from scratch each run.
 
 Close the GUI editor before running: an editor that has this material loaded would silently
 overwrite the regenerated asset on its next Save All.
@@ -54,13 +54,13 @@ def remove_if_exists(path):
         unreal.log(f"[setup_vfx] removed: {path}")
 
 
-def fresh_material(name, two_sided):
+def fresh_material(name, two_sided, blend=unreal.BlendMode.BLEND_ADDITIVE):
     path = f"{VFX_DIR}/{name}"
     remove_if_exists(path)
     material = TOOLS.create_asset(name, VFX_DIR, unreal.Material, unreal.MaterialFactoryNew())
     if material is None:
         raise RuntimeError(f"failed to create {path}")
-    material.set_editor_property("blend_mode", unreal.BlendMode.BLEND_ADDITIVE)
+    material.set_editor_property("blend_mode", blend)
     # After DOF: composited after the toon post-process (M_ToonPost, Scene Color After DOF), whose lighting remap
     # would otherwise flatten every glow into the surface behind it (M5 bug: jutsu invisible).
     material.set_editor_property("translucency_pass", unreal.MaterialTranslucencyPass.MTP_AFTER_DOF)
@@ -90,10 +90,12 @@ def require_skeletal_mesh_usage(material):
     unreal.log(f"[setup_vfx] usage flag confirmed: {material.get_name()} MATUSAGE_SkeletalMesh")
 
 
-def finish(material, emissive):
-    """Substrate: emissive -> Unlit BSDF -> Front Material."""
+def finish(material, emissive, transmittance=None):
+    """Substrate: emissive (and, for translucent materials, transmittance) -> Unlit BSDF -> Front Material."""
     unlit = node(material, unreal.MaterialExpressionSubstrateUnlitBSDF, 400, 0)
     link(emissive, unlit, "EmissiveColor")
+    if transmittance is not None:
+        link(transmittance, unlit, "TransmittanceColor")
     if not MEL.connect_material_property(unlit, "", unreal.MaterialProperty.MP_FRONT_MATERIAL):
         raise RuntimeError(f"failed to connect Front Material on {material.get_name()}")
     errors = MEL.recompile_material(material)
@@ -172,6 +174,97 @@ def build_body_aura():
     finish(m, emissive)
 
 
+def build_flame(name, dark):
+    """Flame tongues for jutsu (M_Flame: additive fire and lightning; M_FlameDark: Amaterasu's black flames).
+
+    Rising world-space noise, eroded by Erode, so the surface breaks into flickering tongues. Stronger where the
+    surface faces the camera and ragged at the silhouette, so a stretched sphere or cone reads as a flame, not a
+    ball. Additive can't show black, so the dark variant is translucent: its body is a near-black core and only the
+    rim carries Color; the tongue mask becomes coverage (Substrate: transmittance = 1 - coverage).
+    Params: Color, Intensity, Erode, Speed, Fade.
+    """
+    blend = unreal.BlendMode.BLEND_TRANSLUCENT if dark else unreal.BlendMode.BLEND_ADDITIVE
+    m = fresh_material(name, two_sided=True, blend=blend)
+    color = node(m, unreal.MaterialExpressionVectorParameter, -1400, -400,
+                 parameter_name="Color", default_value=unreal.LinearColor(1.0, 0.22, 0.02, 1.0))
+    intensity = node(m, unreal.MaterialExpressionScalarParameter, -1400, -250, parameter_name="Intensity", default_value=3.0)
+    erode = node(m, unreal.MaterialExpressionScalarParameter, -1400, -100, parameter_name="Erode", default_value=0.35)
+    speed = node(m, unreal.MaterialExpressionScalarParameter, -1400, 450, parameter_name="Speed", default_value=120.0)
+    fade = node(m, unreal.MaterialExpressionScalarParameter, -1400, 50, parameter_name="Fade", default_value=1.0)
+
+    # Rising noise: world position shifted down over time (the pattern climbs), sampled at ~1 cell per 40 units.
+    world_pos = node(m, unreal.MaterialExpressionWorldPosition, -1400, 250)
+    time = node(m, unreal.MaterialExpressionTime, -1400, 350)
+    rise = node(m, unreal.MaterialExpressionMultiply, -1200, 400)
+    link(time, rise, "A")
+    link(speed, rise, "B")
+    xy_zero = node(m, unreal.MaterialExpressionConstant2Vector, -1200, 500, r=0.0, g=0.0)
+    offset = node(m, unreal.MaterialExpressionAppendVector, -1050, 450)
+    link(xy_zero, offset, "A")
+    link(rise, offset, "B")
+    moved = node(m, unreal.MaterialExpressionSubtract, -900, 300)
+    link(world_pos, moved, "A")
+    link(offset, moved, "B")
+    scaled = node(m, unreal.MaterialExpressionMultiply, -750, 300, const_b=0.025)
+    link(moved, scaled, "A")
+    noise = node(m, unreal.MaterialExpressionNoise, -600, 300, scale=1.0, levels=3, output_min=0.0, output_max=1.0)
+    link(scaled, noise, "World Position")
+
+    # Facing: 1 where the surface faces the camera, 0 at the silhouette (1 - Fresnel).
+    fresnel = node(m, unreal.MaterialExpressionFresnel, -900, -250, exponent=2.0, base_reflect_fraction=0.0)
+    facing = node(m, unreal.MaterialExpressionOneMinus, -750, -250)
+    link(fresnel, facing, "")
+    # Tongue mask = clamp((noise * facing - Erode) * 4, 0, 1)
+    shaped = node(m, unreal.MaterialExpressionMultiply, -450, 0)
+    link(noise, shaped, "A")
+    link(facing, shaped, "B")
+    eroded = node(m, unreal.MaterialExpressionSubtract, -300, 0)
+    link(shaped, eroded, "A")
+    link(erode, eroded, "B")
+    sharp = node(m, unreal.MaterialExpressionMultiply, -150, 0, const_b=4.0)
+    link(eroded, sharp, "A")
+    floor = node(m, unreal.MaterialExpressionMax, 0, 0, const_b=0.0)
+    link(sharp, floor, "A")
+    mask = node(m, unreal.MaterialExpressionMin, 100, 0, const_b=1.0)
+    link(floor, mask, "A")
+    faded = node(m, unreal.MaterialExpressionMultiply, 200, 0)
+    link(mask, faded, "A")
+    link(fade, faded, "B")
+
+    glow = node(m, unreal.MaterialExpressionMultiply, -450, -400)
+    link(color, glow, "A")
+    link(intensity, glow, "B")
+    if not dark:
+        emissive = node(m, unreal.MaterialExpressionMultiply, 300, -200)
+        link(glow, emissive, "A")
+        link(faded, emissive, "B")
+        finish(m, emissive)
+        return
+    # Dark: near-black body, Color only toward the rim; the mask is coverage.
+    core = node(m, unreal.MaterialExpressionConstant3Vector, -450, -550, constant=unreal.LinearColor(0.01, 0.0, 0.015, 1.0))
+    body = node(m, unreal.MaterialExpressionLinearInterpolate, -150, -400)
+    link(glow, body, "A")
+    link(core, body, "B")
+    link(facing, body, "Alpha")
+    emissive = node(m, unreal.MaterialExpressionMultiply, 300, -200)
+    link(body, emissive, "A")
+    link(faded, emissive, "B")
+    transmittance = node(m, unreal.MaterialExpressionOneMinus, 300, 100)
+    link(faded, transmittance, "")
+    finish(m, emissive, transmittance)
+
+
+def build_streak():
+    """M_Streak: flat unlit Color (the blood under Amaterasu's eyes). Opaque. Param: Color."""
+    m = fresh_material("M_Streak", two_sided=True, blend=unreal.BlendMode.BLEND_OPAQUE)
+    color = node(m, unreal.MaterialExpressionVectorParameter, -400, 0,
+                 parameter_name="Color", default_value=unreal.LinearColor(0.35, 0.0, 0.0, 1.0))
+    finish(m, color)
+
+
 remove_if_exists(f"{VFX_DIR}/M_ChakraAura")
 remove_if_exists(f"{VFX_DIR}/M_ChakraRing")
 build_body_aura()
+build_flame("M_Flame", dark=False)
+build_flame("M_FlameDark", dark=True)
+build_streak()

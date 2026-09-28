@@ -8,6 +8,8 @@
 #include "Shinobi/VFX/ShinobiBurst.h"
 #include "Shinobi/VFX/ShinobiCastFxComponent.h"
 #include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
+#include "Shinobi/VFX/ShinobiVfx.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Shinobi/Abilities/GA_Amaterasu.h"
 #include "Shinobi/Abilities/GA_ChakraCharge.h"
 #include "Shinobi/Abilities/GA_Chidori.h"
@@ -594,6 +596,25 @@ bool FShinobiChargedHitsTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("Uncharged breath"), Breath->GetScale(), 1.f);
 		}
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiFlameMaterialsTest, "ShinobiCoop.Jutsu.FlameMaterialsLoadWithParameters", ShinobiTestFlags)
+bool FShinobiFlameMaterialsTest::RunTest(const FString& Parameters)
+{
+	UObject* Outer = GetTransientPackage();
+	for (const bool bDark : { false, true })
+	{
+		const UMaterialInstanceDynamic* Flame = ShinobiVfx::MakeFlame(Outer, ShinobiVfx::Colors::Fire, 3.f, bDark);
+		TestNotNull(bDark ? TEXT("Dark flame material") : TEXT("Flame material"), Flame);
+		float Erode = -1.f;
+		float Fade = -1.f;
+		TestTrue(TEXT("Has Erode"), Flame && Flame->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Erode")), Erode));
+		TestTrue(TEXT("Has Fade (bursts fade it out)"), Flame && Flame->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Fade")), Fade));
+	}
+	const UMaterialInstanceDynamic* Streak = ShinobiVfx::MakeStreak(Outer, ShinobiVfx::Colors::Blood);
+	FLinearColor Color;
+	TestTrue(TEXT("Streak material takes a Color"), Streak && Streak->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("Color")), Color));
 	return true;
 }
 

@@ -109,7 +109,9 @@ void AShinobiBurst::BeginPlay()
 	case EShinobiBurst::BlackFlameIgnite: Color = ShinobiVfx::Colors::BlackFlame; Duration = 0.5f; MaxScale = 2.5f; Intensity = 3.f; LightIntensity = 15000.f; Core = 0.5f; break;
 	}
 	MaxScale *= Scale;
-	SphereMaterial = ShinobiVfx::MakeGlow(this, Color, Intensity, Core);
+	SphereMaterial = Kind == EShinobiBurst::FireBreath || Kind == EShinobiBurst::BlackFlameIgnite
+		? ShinobiVfx::MakeFlame(this, Color, Intensity, Kind == EShinobiBurst::BlackFlameIgnite)
+		: ShinobiVfx::MakeGlow(this, Color, Intensity, Core);
 	Sphere->SetMaterial(0, SphereMaterial);
 	if (Kind == EShinobiBurst::FireBreath)
 	{
