@@ -349,6 +349,13 @@ def variant_name(mesh):
     return re.sub(r"_(LOD0|\dk)$", "", re.sub(r"_LOD0$", "", mesh.get_name()))
 
 
+WIND_HLSL = r"""
+float gust = 0.6 + 0.4 * sin(Time * 0.35 + WP.x * 0.002);
+float sway = sin(Time * 1.3 + WP.x * 0.01 + WP.y * 0.013) * gust;
+return float3(sway, sway * 0.6, 0) * 4.0 * saturate(LP.z / 40.0) * Strength;
+"""
+
+
 def foliage_parent(defaults):
     """M_PBRFoliage: masked, two-sided. BaseColorTexture RGB -> colour; AlphaTexture R -> opacity mask (Poly Haven ships
     foliage alpha as its own map; the glTF colour JPG has none); NormalTexture; MetallicRoughnessTexture G -> roughness.
@@ -386,6 +393,26 @@ def foliage_parent(defaults):
     MEL.connect_material_expressions(nodes["NormalTexture"], "RGB", slab, "Normal")
     MEL.connect_material_property(slab, "", unreal.MaterialProperty.MP_FRONT_MATERIAL)
     MEL.connect_material_property(nodes["AlphaTexture"], "R", unreal.MaterialProperty.MP_OPACITY_MASK)
+    # Wind: gentle sway, gusting slowly across the valley; the height above the pivot scales it (full at 40 cm), so
+    # blade tips and leaves move and grass bases stay put. WindStrength 0 switches it off per instance.
+    wind = MEL.create_material_expression(m, unreal.MaterialExpressionCustom, -300, 1200)
+    wind.set_editor_property("code", WIND_HLSL)
+    wind.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT3)
+    wind.set_editor_property("description", "Wind")
+    inputs = []
+    for name in ("Time", "WP", "LP", "Strength"):
+        entry = unreal.CustomInput()
+        entry.set_editor_property("input_name", name)
+        inputs.append(entry)
+    wind.set_editor_property("inputs", inputs)
+    strength = MEL.create_material_expression(m, unreal.MaterialExpressionScalarParameter, -700, 1500)
+    strength.set_editor_property("parameter_name", "WindStrength")
+    strength.set_editor_property("default_value", 1.0)
+    for cls, pin in ((unreal.MaterialExpressionTime, "Time"), (unreal.MaterialExpressionWorldPosition, "WP"),
+                     (unreal.MaterialExpressionLocalPosition, "LP")):
+        MEL.connect_material_expressions(MEL.create_material_expression(m, cls, -700, 1200), "", wind, pin)
+    MEL.connect_material_expressions(strength, "", wind, "Strength")
+    MEL.connect_material_property(wind, "", unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET)
     MEL.set_base_material_usage(m, unreal.MaterialUsage.MATUSAGE_NANITE, True)
     MEL.set_base_material_usage(m, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES, True)
     errors = MEL.recompile_material(m)
@@ -443,6 +470,9 @@ def realistic_model(asset_id, category):
     for mesh in realistic_meshes(asset_id, category):
         nanite = mesh.get_editor_property("nanite_settings")
         nanite.set_editor_property("enabled", True)
+        if category in ("Tree", "Shrub", "Grass"):
+            # Leaf cards keep their area as Nanite simplifies at distance (else distant trees thin out to bare trunks).
+            nanite.set_editor_property("shape_preservation", unreal.NaniteShapePreservation.PRESERVE_AREA)
         mesh.set_editor_property("nanite_settings", nanite)
         unreal.ShinobiWorldBuilderLibrary.recenter_pivot(mesh)  # variants keep their source-scene offsets
         fix_foliage_materials(mesh, asset_id)

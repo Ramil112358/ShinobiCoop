@@ -11,6 +11,7 @@
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
+#include "Shinobi/ShinobiLook.h"
 #include "Shinobi/UI/ShinobiOverheadTextComponent.h"
 
 namespace
@@ -84,6 +85,7 @@ void AShinobiVillager::BeginPlay()
 			}
 		}
 	}
+	ShinobiLook::EnableOutline(GetMesh(), ShinobiLook::StencilFriendly);
 	TalkCount = Variant;
 	IdleTime = 1.f + (Variant % 4);
 }

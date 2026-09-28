@@ -25,6 +25,7 @@ import unreal
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import layout as layout_mod  # noqa: E402
+import look  # noqa: E402
 
 PROJECT = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
 TERRAIN_DIR = os.path.join(PROJECT, "SourceArt", "World", "Terrain")
@@ -255,6 +256,10 @@ def apply_mood(sun, fog):
     component.set_editor_property("fog_height_falloff", 0.12)
     component.set_editor_property("start_distance", 2500.0)
     component.set_editor_property("fog_inscattering_luminance", unreal.LinearColor(0.55, 0.45, 0.35, 1.0))
+    # Volumetric fog: light shafts through the canopy.
+    component.set_editor_property("enable_volumetric_fog", True)
+    component.set_editor_property("volumetric_fog_extinction_scale", 0.4)
+    light.set_editor_property("volumetric_scattering_intensity", 1.5)
 
 
 def stage_terrain(lay):
@@ -479,8 +484,14 @@ def stage_mood(lay):
     sun = next(a for a in actors if isinstance(a, unreal.DirectionalLight))
     fog = next(a for a in actors if isinstance(a, unreal.ExponentialHeightFog))
     apply_mood(sun, fog)
-    for volume in [a for a in actors if a.get_actor_label() == TOON_VOLUME_LABEL]:
-        EAS.destroy_actor(volume)  # realistic pass: no screen-wide cartoon post (the character outline replaces it, R5)
+    for volume in [a for a in actors if a.get_actor_label() in (TOON_VOLUME_LABEL, look.VOLUME_LABEL)]:
+        EAS.destroy_actor(volume)  # realistic pass: no screen-wide cartoon post; the character outline replaces it
+    if not unreal.EditorAssetLibrary.does_asset_exist(look.MATERIAL):
+        look.outline_material()
+    post = EAS.spawn_actor_from_class(unreal.PostProcessVolume, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
+    post.set_actor_label(look.VOLUME_LABEL)
+    post.set_editor_property("tags", [unreal.Name(MOOD_TAG)])
+    look.apply_post(post)
     meta = terrain_maps()
     ambient(world, sounds["Amb_Forest"], (0, 0, 0), 0.35, label="Amb_Forest")
     for i, (x, y) in enumerate(lay.river):

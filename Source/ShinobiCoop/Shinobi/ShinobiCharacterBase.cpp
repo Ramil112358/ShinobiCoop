@@ -9,6 +9,7 @@
 #include "ShinobiCoop.h"
 #include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiEffects.h"
+#include "Shinobi/ShinobiLook.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
@@ -44,6 +45,12 @@ UAbilitySystemComponent* AShinobiCharacterBase::GetAbilitySystemComponent() cons
 void AShinobiCharacterBase::BeginPlay()
 {
 	Super::BeginPlay();
+	// Outline the visible body (the hero, when a hidden Manny drives it); the driver itself stays out of custom depth.
+	ShinobiLook::EnableOutline(GetBodyMesh(), Team == EShinobiTeam::Enemies ? ShinobiLook::StencilEnemy : ShinobiLook::StencilFriendly);
+	if (GetBodyMesh() != GetMesh())
+	{
+		GetMesh()->SetRenderCustomDepth(false);
+	}
 	AbilitySystem->InitAbilityActorInfo(this, this);
 	AbilitySystem->RegisterGameplayTagEvent(ShinobiTags::State_Dead).AddUObject(this, &AShinobiCharacterBase::OnDeadTagChanged);
 	if (HasAuthority())
