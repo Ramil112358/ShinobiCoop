@@ -8,6 +8,9 @@
 #include "Shinobi/World/ShinobiCamp.h"
 #include "Shinobi/World/ShinobiEncounter.h"
 #include "Shinobi/World/ShinobiWorldGameMode.h"
+#include "Shinobi/World/ShinobiVillager.h"
+#include "Shinobi/ShinobiCombat.h"
+#include "Shinobi/Abilities/GA_Revive.h"
 
 namespace
 {
@@ -135,6 +138,55 @@ bool FShinobiCampMarkerTest::RunTest(const FString& Parameters)
 	Camp->FinishSpawning(FTransform::Identity);
 	BossCamp->FinishSpawning(FTransform::Identity);
 	NotACamp->FinishSpawning(FTransform::Identity);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiInteractTest, "ShinobiCoop.World.InteractPrefersRevive", ShinobiTestFlags)
+bool FShinobiInteractTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Helper = SpawnPlayer(W, FVector::ZeroVector);
+	AShinobiPlayerCharacter* Downed = SpawnPlayer(W, FVector(150.f, 0.f, 0.f));
+	AShinobiVillager* Villager = W.Spawn<AShinobiVillager>(FVector(0.f, 150.f, 0.f));
+	TestTrue(TEXT("Villager in talk range"), UGA_Revive::FindVillagerNear(*Helper) == Villager);
+	ShinobiTest::Damage(Downed, 10000.f);
+	ShinobiTest::Press(Helper, EShinobiAbilityInputID::Revive);
+	TestTrue(TEXT("A downed ally beats a villager: reviving"), ShinobiTest::HasTag(Helper, ShinobiTags::State_Reviving));
+	ShinobiTest::Release(Helper, EShinobiAbilityInputID::Revive);
+	Villager->SetActorLocation(FVector(0.f, 1000.f, 0.f));
+	TestNull(TEXT("Villager out of range"), UGA_Revive::FindVillagerNear(*Helper));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBarkTest, "ShinobiCoop.World.VillagerBarkDeterministic", ShinobiTestFlags)
+bool FShinobiBarkTest::RunTest(const FString& Parameters)
+{
+	TSet<FString> Seen;
+	for (int32 Seed = 0; Seed < AShinobiVillager::NumBarks() * 2; ++Seed)
+	{
+		TestTrue(TEXT("Same seed, same line"), AShinobiVillager::PickBark(Seed).EqualTo(AShinobiVillager::PickBark(Seed)));
+		Seen.Add(AShinobiVillager::PickBark(Seed).ToString());
+	}
+	TestEqual(TEXT("Every line reachable"), Seen.Num(), AShinobiVillager::NumBarks());
+	FShinobiTestWorld W;
+	AShinobiVillager* Villager = W.Spawn<AShinobiVillager>();
+	TestFalse(TEXT("Talking returns a line"), Villager->Talk().IsEmpty());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiVillagerTargetTest, "ShinobiCoop.World.VillagerNotTargetable", ShinobiTestFlags)
+bool FShinobiVillagerTargetTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>();
+	AShinobiPlayerCharacter* Player = SpawnPlayer(W, FVector(200.f, 0.f, 0.f));
+	W.Spawn<AShinobiVillager>(FVector(0.f, 200.f, 0.f));
+	const TArray<AShinobiCharacterBase*> Targets = ShinobiCombat::FindHostilesInRadius(Ninja, Ninja->GetActorLocation(), 1000.f);
+	TestTrue(TEXT("Only the player is a target"), Targets.Num() == 1 && Targets[0] == Player);
+	ATargetPoint* Marker = W.Spawn<ATargetPoint>();
+	Marker->Tags = { TEXT("ShinobiVillager"), TEXT("Route:100,200,300|400,500,600") };
+	TArray<FVector> Route;
+	TestTrue(TEXT("Villager marker read"), AShinobiWorldGameMode::ReadVillagerMarker(*Marker, Route) && Route.Num() == 2 && Route[1] == FVector(400, 500, 600));
 	return true;
 }
 

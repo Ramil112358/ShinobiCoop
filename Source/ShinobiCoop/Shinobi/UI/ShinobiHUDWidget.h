@@ -40,6 +40,9 @@ private:
 	void UpdateJutsuSlots(const UAbilitySystemComponent& ASC);
 	UTextBlock* AddCanvasText(UCanvasPanel* Root, FName Name, const FAnchors& Anchors, const FVector2D& Alignment, const FVector2D& Position, int32 FontSize, ETextJustify::Type Justify);
 	void UpdateArena(const class AShinobiPlayerCharacter* Player);
+	/** Open world: the compass strip (cardinal points, village, camps, boss) around the camera's yaw. */
+	void UpdateCompass();
+	UTextBlock* CompassLabel(int32 Index);
 
 	/** Binds the red "can't cast" flash to the current pawn's ability system; rebinds when the pawn changes. */
 	void BindFailureFlash(UAbilitySystemComponent* ASC);
@@ -48,6 +51,16 @@ private:
 	/** Top-centre: wave, phase countdown, enemies left. */
 	UPROPERTY()
 	TObjectPtr<UTextBlock> WaveText;
+
+	UPROPERTY()
+	TObjectPtr<UCanvasPanel> RootCanvas;
+
+	UPROPERTY()
+	TObjectPtr<UBorder> CompassBar;
+
+	/** Pooled compass labels, positioned every tick; unused ones are hidden. */
+	UPROPERTY()
+	TArray<TObjectPtr<UTextBlock>> CompassLabels;
 
 	/** Top-left: teammates' names and health. */
 	UPROPERTY()

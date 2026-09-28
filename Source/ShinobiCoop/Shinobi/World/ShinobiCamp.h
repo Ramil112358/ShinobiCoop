@@ -62,7 +62,7 @@ public:
 	/** Server: fires once, when the camp is cleared. */
 	FSimpleMulticastDelegate OnCleared;
 
-	UPROPERTY(EditAnywhere, Category = "Camp")
+	UPROPERTY(Replicated, EditAnywhere, Category = "Camp")
 	FName CampId;
 
 	/** Trigger radius (cm) around the camp centre. */
@@ -75,7 +75,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Camp")
 	TArray<FShinobiCampWave> Waves;
 
-	UPROPERTY(EditAnywhere, Category = "Camp")
+	UPROPERTY(Replicated, EditAnywhere, Category = "Camp")
 	bool bBoss = false;
 
 private:

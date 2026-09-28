@@ -50,6 +50,8 @@ void AShinobiCamp::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AShinobiCamp, State);
+	DOREPLIFETIME_CONDITION(AShinobiCamp, CampId, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AShinobiCamp, bBoss, COND_InitialOnly);
 }
 
 void AShinobiCamp::BeginPlay()

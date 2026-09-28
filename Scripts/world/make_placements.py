@@ -77,7 +77,7 @@ def build(lay=None):
     t = Terrain(lay)
     rng = np.random.default_rng(SEED)
     vx, vy, vr = lay.areas["village"]
-    out = {"buildings": [], "walls": [], "camps": [], "boss": {}, "bridge": {}, "props": [], "scatter": {}}
+    out = {"buildings": [], "walls": [], "camps": [], "boss": {}, "bridge": {}, "props": [], "scatter": {}, "villagers": []}
     blockers = []  # (x, y, radius) no scatter inside
 
     # Village buildings (the gate moves to where the wall ring crosses the north street).
@@ -152,6 +152,10 @@ def build(lay=None):
     plain = max(float(t.height(bridge_x - 20, bridge_y)), float(t.height(bridge_x + 20, bridge_y)))
     out["bridge"] = item("Arch/bridge", bridge_x, bridge_y, plain - 0.25, bridge_yaw)
     blockers.append((bridge_x, bridge_y, 20))
+
+    # Villager routes (points on the ground; the villager walks between them).
+    for route in lay.villagers:
+        out["villagers"].append([{"x": uu(x), "y": uu(y), "z": uu(t.height(x, y))} for x, y in route])
 
     scatter(t, rng, blockers, out)
     return out

@@ -8,6 +8,8 @@
 #include "Shinobi/ShinobiPlayerController.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/World/ShinobiCamp.h"
+#include "Shinobi/World/ShinobiVillager.h"
+#include "GameFramework/PlayerStart.h"
 
 AShinobiWorldGameMode::AShinobiWorldGameMode()
 {
@@ -69,6 +71,32 @@ bool AShinobiWorldGameMode::ReadMarker(const AActor& Marker, AShinobiCamp& Camp)
 	return Camp.bBoss || Camp.Waves.Num() > 0;
 }
 
+bool AShinobiWorldGameMode::ReadVillagerMarker(const AActor& Marker, TArray<FVector>& OutRoute)
+{
+	if (!Marker.ActorHasTag(TEXT("ShinobiVillager")))
+	{
+		return false;
+	}
+	for (const FName& Tag : Marker.Tags)
+	{
+		FString Key, Value;
+		if (Tag.ToString().Split(TEXT(":"), &Key, &Value) && Key == TEXT("Route"))
+		{
+			TArray<FString> Points;
+			Value.ParseIntoArray(Points, TEXT("|"));
+			for (const FString& Point : Points)
+			{
+				TArray<FString> Parts;
+				if (Point.ParseIntoArray(Parts, TEXT(",")) == 3)
+				{
+					OutRoute.Add(FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2])));
+				}
+			}
+		}
+	}
+	return OutRoute.Num() > 0;
+}
+
 void AShinobiWorldGameMode::BeginPlay()
 {
 	Super::BeginPlay();
@@ -93,6 +121,27 @@ void AShinobiWorldGameMode::BeginPlay()
 		State->NumCamps += Camp->bBoss ? 0 : 1;
 	}
 	UE_LOG(LogShinobiCoop, Log, TEXT("World: %d camps (+ boss: %s)"), State->NumCamps, Camps.Num() > State->NumCamps ? TEXT("yes") : TEXT("no"));
+
+	if (TActorIterator<APlayerStart> Start(GetWorld()); Start)
+	{
+		State->VillageLocation = Start->GetActorLocation();
+	}
+	int32 Villagers = 0;
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		TArray<FVector> Route;
+		if (!ReadVillagerMarker(**It, Route))
+		{
+			continue;
+		}
+		const FTransform Where(FRotator::ZeroRotator, Route[0] + FVector(0.f, 0.f, 100.f));
+		AShinobiVillager* Villager = GetWorld()->SpawnActorDeferred<AShinobiVillager>(AShinobiVillager::StaticClass(), Where, nullptr, nullptr,
+			ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
+		Villager->Route = MoveTemp(Route);
+		Villager->Variant = Villagers++;
+		Villager->FinishSpawning(Where);
+	}
+	UE_LOG(LogShinobiCoop, Log, TEXT("World: %d villagers"), Villagers);
 }
 
 void AShinobiWorldGameMode::OnCampCleared(AShinobiCamp* Camp)

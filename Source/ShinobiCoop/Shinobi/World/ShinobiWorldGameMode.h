@@ -31,6 +31,9 @@ public:
 	/** Parses a marker's tags into camp settings; false if the actor isn't a camp marker. Public for tests. */
 	static bool ReadMarker(const AActor& Marker, AShinobiCamp& Camp);
 
+	/** Parses a villager marker (tagged ShinobiVillager, Route:x,y,z|x,y,z|...); false if it isn't one. */
+	static bool ReadVillagerMarker(const AActor& Marker, TArray<FVector>& OutRoute);
+
 protected:
 	virtual void BeginPlay() override;
 

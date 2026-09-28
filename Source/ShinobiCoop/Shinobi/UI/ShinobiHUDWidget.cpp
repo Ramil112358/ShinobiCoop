@@ -20,6 +20,9 @@
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/GA_Revive.h"
 #include "Shinobi/VFX/ShinobiSfx.h"
+#include "Shinobi/World/ShinobiCamp.h"
+#include "Camera/PlayerCameraManager.h"
+#include "EngineUtils.h"
 #include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/Abilities/ShinobiJutsuAbility.h"
@@ -40,6 +43,7 @@ namespace
 	constexpr float SlotSize = 76.f;
 	constexpr double FlashSeconds = 0.3;
 	constexpr int32 NumPips = 3; // MaxSubstitutionCharges
+	constexpr float CompassHalfWidth = 220.f;
 
 	int32 JutsuSlotIndex(EShinobiAbilityInputID InputID)
 	{
@@ -70,6 +74,15 @@ TSharedRef<SWidget> UShinobiHUDWidget::RebuildWidget()
 		BuildJutsuSlots(Root);
 
 		WaveText = AddCanvasText(Root, TEXT("WaveText"), FAnchors(0.5f, 0.f), FVector2D(0.5f, 0.f), FVector2D(0.f, 24.f), 22, ETextJustify::Center);
+		RootCanvas = Root;
+		CompassBar = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("CompassBar"));
+		CompassBar->SetBrushColor(FLinearColor(0.f, 0.f, 0.f, 0.35f));
+		UCanvasPanelSlot* BarSlot = Root->AddChildToCanvas(CompassBar);
+		BarSlot->SetAnchors(FAnchors(0.5f, 0.f));
+		BarSlot->SetAlignment(FVector2D(0.5f, 0.f));
+		BarSlot->SetPosition(FVector2D(0.f, 58.f));
+		BarSlot->SetSize(FVector2D(CompassHalfWidth * 2.f + 40.f, 26.f));
+		CompassBar->SetVisibility(ESlateVisibility::Collapsed);
 		TeamText = AddCanvasText(Root, TEXT("TeamText"), FAnchors(0.f, 0.f), FVector2D(0.f, 0.f), FVector2D(40.f, 24.f), 14, ETextJustify::Left);
 		BannerText = AddCanvasText(Root, TEXT("BannerText"), FAnchors(0.5f, 0.35f), FVector2D(0.5f, 0.5f), FVector2D::ZeroVector, 40, ETextJustify::Center);
 		HintText = AddCanvasText(Root, TEXT("HintText"), FAnchors(0.5f, 0.6f), FVector2D(0.5f, 0.5f), FVector2D::ZeroVector, 18, ETextJustify::Center);
@@ -210,6 +223,67 @@ void UShinobiHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	}
 	UpdateJutsuSlots(*ASC);
 	UpdateArena(Cast<AShinobiPlayerCharacter>(Pawn));
+	UpdateCompass();
+}
+
+UTextBlock* UShinobiHUDWidget::CompassLabel(int32 Index)
+{
+	while (CompassLabels.Num() <= Index)
+	{
+		UTextBlock* Label = AddCanvasText(RootCanvas, NAME_None, FAnchors(0.5f, 0.f), FVector2D(0.5f, 0.f), FVector2D::ZeroVector, 12, ETextJustify::Center);
+		CompassLabels.Add(Label);
+	}
+	return CompassLabels[Index];
+}
+
+void UShinobiHUDWidget::UpdateCompass()
+{
+	const AShinobiGameState* State = GetWorld() ? GetWorld()->GetGameState<AShinobiGameState>() : nullptr;
+	const APlayerController* PC = GetOwningPlayer();
+	const bool bShow = State && State->NumCamps > 0 && PC && PC->PlayerCameraManager && RootCanvas;
+	if (CompassBar)
+	{
+		CompassBar->SetVisibility(bShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	}
+	int32 Used = 0;
+	if (bShow)
+	{
+		const FVector Eye = PC->PlayerCameraManager->GetCameraLocation();
+		const float CameraYaw = PC->PlayerCameraManager->GetCameraRotation().Yaw;
+		auto Mark = [&](float Yaw, const FString& Text, const FLinearColor& Colour)
+		{
+			const float Delta = FRotator::NormalizeAxis(Yaw - CameraYaw);
+			if (FMath::Abs(Delta) > 90.f)
+			{
+				return;
+			}
+			UTextBlock* Label = CompassLabel(Used++);
+			Label->SetText(FText::FromString(Text));
+			Label->SetColorAndOpacity(FSlateColor(Colour));
+			Label->SetVisibility(ESlateVisibility::HitTestInvisible);
+			Cast<UCanvasPanelSlot>(Label->Slot)->SetPosition(FVector2D(Delta / 90.f * CompassHalfWidth, 62.f));
+		};
+		auto MarkAt = [&](const FVector& Where, const FString& Name, const FLinearColor& Colour)
+		{
+			Mark((Where - Eye).Rotation().Yaw, FString::Printf(TEXT("%s %dm"), *Name, FMath::RoundToInt(FVector::Dist2D(Where, Eye) / 100.f)), Colour);
+		};
+		// The layout's +Y is north.
+		Mark(90.f, TEXT("N"), FLinearColor::White);
+		Mark(0.f, TEXT("E"), FLinearColor(0.8f, 0.8f, 0.8f));
+		Mark(-90.f, TEXT("S"), FLinearColor(0.8f, 0.8f, 0.8f));
+		Mark(180.f, TEXT("W"), FLinearColor(0.8f, 0.8f, 0.8f));
+		MarkAt(State->VillageLocation, TEXT("Village"), FLinearColor(0.95f, 0.9f, 0.7f));
+		for (TActorIterator<AShinobiCamp> It(GetWorld()); It; ++It)
+		{
+			const bool bCleared = It->GetState() == EShinobiCampState::Cleared;
+			const FLinearColor Colour = bCleared ? FLinearColor(0.5f, 0.5f, 0.5f) : (It->bBoss ? FLinearColor(0.75f, 0.3f, 1.f) : FLinearColor(1.f, 0.3f, 0.2f));
+			MarkAt(It->GetActorLocation(), It->bBoss ? TEXT("Boss") : TEXT("Camp"), Colour);
+		}
+	}
+	for (int32 Index = Used; Index < CompassLabels.Num(); ++Index)
+	{
+		CompassLabels[Index]->SetVisibility(ESlateVisibility::Collapsed);
+	}
 }
 
 void UShinobiHUDWidget::UpdateArena(const AShinobiPlayerCharacter* Player)

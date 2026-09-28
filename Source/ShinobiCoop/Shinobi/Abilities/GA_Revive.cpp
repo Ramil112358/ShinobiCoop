@@ -6,6 +6,7 @@
 #include "EngineUtils.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiTags.h"
+#include "Shinobi/World/ShinobiVillager.h"
 
 UGA_Revive::UGA_Revive()
 {
@@ -19,7 +20,17 @@ UGA_Revive::UGA_Revive()
 void UGA_Revive::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
 	Patient = FindDownedAlly();
-	if (!Patient.IsValid() || !CommitAbility(Handle, ActorInfo, ActivationInfo))
+	if (!Patient.IsValid())
+	{
+		const AActor* Self = GetAvatarActorFromActorInfo();
+		if (AShinobiVillager* Villager = Self ? FindVillagerNear(*Self) : nullptr; Villager && IsLocallyControlled())
+		{
+			Villager->Talk();
+		}
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+	if (!CommitAbility(Handle, ActorInfo, ActivationInfo))
 	{
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
@@ -42,6 +53,22 @@ void UGA_Revive::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const 
 float UGA_Revive::GetProgress() const
 {
 	return IsActive() ? FMath::Clamp(static_cast<float>(GetWorld()->GetTimeSeconds() - StartTime) / Seconds, 0.f, 1.f) : 0.f;
+}
+
+AShinobiVillager* UGA_Revive::FindVillagerNear(const AActor& Talker)
+{
+	AShinobiVillager* Nearest = nullptr;
+	float Best = TalkReach;
+	for (TActorIterator<AShinobiVillager> It(Talker.GetWorld()); It; ++It)
+	{
+		const float Distance = FVector::Dist(It->GetActorLocation(), Talker.GetActorLocation());
+		if (Distance <= Best)
+		{
+			Best = Distance;
+			Nearest = *It;
+		}
+	}
+	return Nearest;
 }
 
 AShinobiPlayerCharacter* UGA_Revive::FindDownedAlly() const

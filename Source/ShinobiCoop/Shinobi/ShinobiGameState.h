@@ -54,4 +54,8 @@ public:
 
 	UPROPERTY(Replicated)
 	int32 NumCamps = 0;
+
+	/** Open world: where the village is, for the compass. */
+	UPROPERTY(Replicated)
+	FVector VillageLocation = FVector::ZeroVector;
 };

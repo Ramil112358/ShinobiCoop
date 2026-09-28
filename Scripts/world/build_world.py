@@ -262,6 +262,12 @@ def stage_dress(lay):
     for i, it in enumerate(boss["dressing"]):
         place(mesh_of, it, f"BossRuin_{i:02d}")
     marker(boss["x"], boss["y"], boss["z"], "boss", "Boss", f"Radius:{boss['r'] + 1500:.0f}")
+    for i, route in enumerate(data["villagers"]):
+        first = route[0]
+        point = EAS.spawn_actor_from_class(unreal.TargetPoint, unreal.Vector(first["x"], first["y"], first["z"] + 50), unreal.Rotator(0, 0, 0))
+        point.set_actor_label(f"Villager_{i}")
+        tag(point, "ShinobiVillager", "Route:" + "|".join(f"{p['x']:.0f},{p['y']:.0f},{p['z']:.0f}" for p in route))
+        point.set_editor_property("is_spatially_loaded", False)
 
     instances = 0
     for chunk, species in data["scatter"].items():
