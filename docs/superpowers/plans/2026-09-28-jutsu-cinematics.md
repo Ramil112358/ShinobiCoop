@@ -450,7 +450,7 @@ TestFalse(IsBurning()); TestEqual(NumVisibleTongues(), 0); TestFalse(E->GetBlack
   - Re-run until each shot reads as the spec describes. Cap this at 4 rounds, then report what's left to the user.
 
 - [ ] **Step 3: Full suite and smoke test.**
-  - Run `powershell -File Scripts/run_tests.ps1`. Expected: all pass (the 42 earlier tests plus the new ones).
+  - Run `powershell -File Scripts/run_tests.ps1`. Expected: all pass, the earlier tests and the new ones.
   - Run `powershell -File Scripts/smoke_m1.ps1`. Expected: PASS, as today.
 
 - [ ] **Step 4: Update the docs.**
