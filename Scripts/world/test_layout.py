@@ -180,6 +180,35 @@ def test_bank_dressing():
     assert any(k.startswith("PH_Grass/") for k in keys) and any(k.startswith("PH_Rock/") for k in keys), keys
 
 
+def test_cliff_ring():
+    lay = layout.load()
+    cliffs = mp.build(lay)["cliffs"]
+    x = np.array([c["x"] for c in cliffs]) / 100
+    y = np.array([c["y"] for c in cliffs]) / 100
+    angles = np.sort(np.degrees(np.arctan2(y, x)))
+    gaps = np.diff(np.concatenate([angles, [angles[0] + 360]]))
+    river = hm.distance_to_polyline(x, y, lay.river)
+    blocked = gaps > 5
+    # The only gaps allowed are where the river leaves the valley (its gorge through the edge mountains).
+    for i in np.nonzero(blocked)[0]:
+        mid = np.radians(angles[i] + gaps[i] / 2)
+        gx, gy = 465 * np.cos(mid), 465 * np.sin(mid)
+        assert hm.distance_to_polyline(np.array([gx]), np.array([gy]), lay.river)[0] < 60, f"{gaps[i]:.1f} deg gap at {angles[i]:.0f} deg"
+    assert (river > 30).all(), "cliff in the river gorge"
+    near_path = np.min([hm.distance_to_polyline(x, y, p) for p in lay.paths], axis=0)
+    assert (near_path > 20).all(), "cliff on a path"
+
+
+def test_no_stylised_assets():
+    data = mp.build(layout.load())
+    keys = {key for chunk in data["scatter"].values() for key in chunk}
+    keys |= {d["mesh"] for camp in data["camps"] for d in camp["dressing"]} | {d["mesh"] for d in data["boss"]["dressing"]}
+    keys |= {c["mesh"] for c in data["cliffs"]}
+    stylised = sorted(k for k in keys if k.split("/")[0] not in ("PH_Tree", "PH_Log", "PH_Shrub", "PH_Grass", "PH_Rock",
+                                                                 "PH_Cliff", "PH_Prop", "Mega_Tree", "Arch", "Camp"))
+    assert not stylised, f"stylised assets left: {stylised}"
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

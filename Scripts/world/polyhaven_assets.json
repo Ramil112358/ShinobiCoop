@@ -167,7 +167,19 @@
   "stone_fire_pit": {
    "category": "Prop",
    "res": "2k"
-  }
+  },
+  "island_tree_01": {"category": "Tree", "res": "2k"},
+  "island_tree_02": {"category": "Tree", "res": "2k"},
+  "island_tree_03": {"category": "Tree", "res": "2k"},
+  "tree_small_02": {"category": "Tree", "res": "2k"},
+  "wine_barrel_01": {"category": "Prop", "res": "2k"},
+  "barrel_03": {"category": "Prop", "res": "2k"},
+  "wicker_basket_01": {"category": "Prop", "res": "2k"},
+  "wicker_basket_02": {"category": "Prop", "res": "2k"},
+  "wooden_axe": {"category": "Prop", "res": "2k"},
+  "ceramic_pot": {"category": "Prop", "res": "2k"},
+  "chinese_stool": {"category": "Prop", "res": "2k"},
+  "jug_01": {"category": "Prop", "res": "2k"}
  },
  "textures": {
   "aerial_grass_rock": {

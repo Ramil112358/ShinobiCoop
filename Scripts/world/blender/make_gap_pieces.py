@@ -120,6 +120,15 @@ def export(name):
     joined = bpy.context.active_object
     joined.name = name
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    # Realistic pass (#3b): 2 cm bevels catch the light on edges; box-projected UVs in metres (1 UV = 1 m) so the
+    # Poly Haven PBR materials tile at their real size.
+    bevel = joined.modifiers.new("Bevel", "BEVEL")
+    bevel.width, bevel.segments, bevel.limit_method = 0.02, 1, "ANGLE"
+    bpy.ops.object.modifier_apply(modifier=bevel.name)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.uv.cube_project(cube_size=1.0, scale_to_bounds=False, correct_aspect=True)
+    bpy.ops.object.mode_set(mode="OBJECT")
     path = os.path.join(OUT, f"{name}.glb")
     bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_apply=True)
     print(f"[gap_pieces] {name}: {len(joined.data.polygons)} faces -> {path}")

@@ -31,17 +31,37 @@ BUILDING_MESH = {"house_small": ["Arch/house_small"], "house_medium": ["Arch/hou
                  "house_large": ["Arch/house_large"], "stall": ["Arch/stall"], "lantern": ["Arch/lantern"],
                  "gate": ["Arch/gate"], "shrine": ["Arch/shrine"], "torii": ["Arch/torii"], "well": ["Arch/well"],
                  "training_post": ["Arch/training_post"]}
-TREES = {"common": [f"Tree/CommonTree_{i}" for i in range(1, 6)], "pine": [f"Tree/Pine_{i}" for i in range(1, 6)],
-         "maple": [f"Tree/TwistedTree_{i}" for i in range(1, 6)], "dead": [f"Tree/DeadTree_{i}" for i in range(1, 6)]}
-TREE_SCALE = {"common": (0.9, 1.3), "pine": (1.0, 1.5), "maple": (0.55, 0.8), "dead": (0.6, 0.85)}
-# River banks: the water meets the land where the terrain's dry clamp starts (make_heightmap), 3 m past the bed.
-RIVER_EDGE_M = hm.RIVER_HALF_WIDTH_M + 3.0
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "library_catalog.json"), encoding="utf-8") as _f:
+    CATALOG = json.load(_f)
+
+
+def catalog_keys(category, *prefixes):
+    """Catalog keys "<category>/<name>" whose name starts with any prefix (Poly Haven variants: _a, _b, ...)."""
+    keys = sorted(f"{category}/{n}" for n in CATALOG.get(category, {}) if n.startswith(prefixes))
+    assert keys, f"no {category} assets for {prefixes} (run import_library.py)"
+    return keys
+
+
+# Megaplants (Fab) take over the broadleaf slots once they are in the catalog; Poly Haven broadleaf trees until then.
+BROADLEAF = catalog_keys("Mega_Tree", "") if CATALOG.get("Mega_Tree") else catalog_keys("PH_Tree", "island_tree", "tree_small")
+TREES = {"pine": catalog_keys("PH_Tree", "pine_tree_01"), "fir": catalog_keys("PH_Tree", "fir_tree_01"),
+         "sapling": catalog_keys("PH_Tree", "fir_sapling_medium"), "broadleaf": BROADLEAF,
+         "dead": catalog_keys("PH_Log", "dead_tree_trunk_02", "tree_stump")}
+# Poly Haven's broadleaf trees are small (2.6-5 m): grown to 5-13 m. Megaplants come at real size.
+TREE_SCALE = {"pine": (0.8, 1.15), "fir": (0.8, 1.2), "sapling": (0.7, 1.1), "dead": (0.8, 1.2),
+              "broadleaf": (0.8, 1.2) if CATALOG.get("Mega_Tree") else (1.8, 2.6)}
+LOGS = catalog_keys("PH_Log", "dead_tree_trunk", "tree_stump")
+CLIFFS = {"PH_Cliff/coastal_cliff_02": (3.0, 4.5), "PH_Cliff/coastal_cliff_04": (3.0, 4.5),
+          "PH_Cliff/rock_face_01": (6.0, 9.0), "PH_Cliff/rock_face_02": (7.0, 10.0)}
+# River banks: the water meets the land where the terrain's dry clamp starts (make_heightmap), 3 m past the bed;
+# bank dressing starts 1 m further out, clear of the one-pixel step (bilinear heights there dip under the water).
+RIVER_EDGE_M = hm.RIVER_HALF_WIDTH_M + 4.0
 REEDS = ["PH_Grass/grass_medium_01_tall_a", "PH_Grass/grass_medium_01_tall_b", "PH_Grass/grass_medium_02_e"]
 PEBBLES = ["PH_Rock/rock_07", "PH_Rock/stone_01", "PH_Rock/rock_09", "PH_Rock/rock_moss_set_02_rock08"]
-BUSHES = ["Bush/Bush_Common", "Bush/Bush_Common_Flowers"]
-ROCKS = ["Rock/Rock_Medium_1", "Rock/Rock_Medium_2", "Rock/Rock_Medium_3"]
-CAMP_PROPS = ["Prop/Barrel", "Prop/Crate_Wooden", "Prop/FarmCrate_Empty", "Prop/Bag", "Prop/WeaponStand", "Prop/Bench",
-              "Prop/Stool", "Prop/Cauldron", "Prop/Rope_1"]
+BUSHES = catalog_keys("PH_Shrub", "shrub_01", "shrub_02", "shrub_03")
+ROCKS = catalog_keys("PH_Rock", "boulder_01", "namaqualand_boulder", "rock_moss_set_01")
+# Whole props only (some glTFs split into parts: lids, bungs, bases).
+CAMP_PROPS = [f"PH_Prop/{n}" for n in ("wine_barrel_01", "barrel_03", "wicker_basket_01", "wooden_axe", "ceramic_pot", "chinese_stool", "jug_01")]
 
 
 class Terrain:
@@ -106,7 +126,7 @@ def build(lay=None):
     for camp in lay.camps:
         cz = float(t.height(camp.x, camp.y))
         towards_village = math.atan2(vy - camp.y, vx - camp.x)
-        dressing = [item("Camp/campfire", camp.x, camp.y, cz - 0.05)]
+        dressing = [item("PH_Prop/stone_fire_pit", camp.x, camp.y, cz - 0.05, 0, 1.6)]
         tents = 2 + camp.difficulty // 2
         for i in range(tents):
             a = towards_village + math.pi * (0.45 + 1.1 * i / max(1, tents - 1))
@@ -122,10 +142,6 @@ def build(lay=None):
             a = towards_village + math.radians(50) + (2 * math.pi - math.radians(100)) * (i + 0.5) / segments
             x, y = camp.x + (camp.r + 1) * math.cos(a), camp.y + (camp.r + 1) * math.sin(a)
             dressing.append(item("Camp/palisade", x, y, t.height(x, y) - 0.3, math.degrees(a)))
-        for s in (-1, 1):
-            a = towards_village + s * math.radians(40)
-            x, y = camp.x + (camp.r + 1) * math.cos(a), camp.y + (camp.r + 1) * math.sin(a)
-            dressing.append(item("Prop/Torch_Metal", x, y, t.height(x, y), 0, 1.4))
         out["camps"].append({"id": camp.id, "x": uu(camp.x), "y": uu(camp.y), "z": uu(cz), "r": uu(camp.r),
                              "difficulty": camp.difficulty, "waves": camp.waves, "dressing": dressing})
         blockers.append((camp.x, camp.y, camp.r + 8))
@@ -205,7 +221,8 @@ def scatter(t, rng, blockers, out):
         return f[rows, cols]
 
     # Trees
-    x, y = jittered(t, rng, 6.5)
+    # Trees: realistic trees are big (pines 15-20 m), so a little sparser than the stylised set was.
+    x, y = jittered(t, rng, 8.0)
     keep = free_of(blockers, x, y) & (field(t.d_path, x, y) > 6) & (field(t.d_river, x, y) > 12) & (field(slope, x, y) < 32)
     keep &= rng.random(x.shape) < field(forest, x, y) * 0.8
     x, y = x[keep], y[keep]
@@ -218,14 +235,37 @@ def scatter(t, rng, blockers, out):
         near_village = field(d_village, xi, yi) < vr + 60
         if near_boss and roll < 0.5:
             kind = "dead"
-        elif hi or abs(xi) > 440 or abs(yi) > 440:
-            kind = "pine" if roll < 0.75 else "common"
-        elif (near_river or near_village) and roll < 0.45:
-            kind = "maple"
+        elif hi or abs(xi) > 440 or abs(yi) > 440:  # ridges and the mountain foot: conifers
+            kind = "sapling" if roll < 0.15 else ("pine" if roll < 0.6 else "fir")
+        elif (near_river or near_village) and roll < 0.55:
+            kind = "broadleaf"
         else:
-            kind = "common" if roll < 0.62 else ("pine" if roll < 0.85 else "maple")
-        key = TREES[kind][int(rng.integers(5))]
+            kind = "broadleaf" if roll < 0.5 else ("sapling" if roll < 0.6 else ("pine" if roll < 0.8 else "fir"))
+        key = TREES[kind][int(rng.integers(len(TREES[kind])))]
         add(key, xi, yi, zi - 0.2, rng.uniform(0, 360), rng.uniform(*TREE_SCALE[kind]))
+
+    # Fallen trunks and stumps on the forest floor.
+    x, y = jittered(t, rng, 14.0)
+    keep = free_of(blockers, x, y) & (field(t.d_path, x, y) > 4) & (field(t.d_river, x, y) > 12)
+    keep &= rng.random(x.shape) < field(forest, x, y) * 0.25
+    for xi, yi in zip(x[keep], y[keep]):
+        add(LOGS[int(rng.integers(len(LOGS)))], xi, yi, t.height(xi, yi) - 0.1, rng.uniform(0, 360), rng.uniform(0.8, 1.3), cull=20000.0)
+
+    # Cliffs along the mountain edge, faces turned to the valley (they also hide the invisible edge walls).
+    out["cliffs"] = []
+    for side in range(4):
+        for s in np.arange(-470, 471, 26.0):
+            px, py = [(458, s), (-458, s), (s, 458), (s, -458)][side]
+            px, py = px + rng.uniform(-4, 4), py + rng.uniform(-4, 4)
+            if hm.distance_to_polyline(np.array([px]), np.array([py]), lay.river)[0] < 32:
+                continue  # the river's gorge stays open
+            if min(hm.distance_to_polyline(np.array([px]), np.array([py]), p)[0] for p in lay.paths) < 22:
+                continue
+            key = list(CLIFFS)[int(rng.integers(len(CLIFFS)))]
+            yaw = math.degrees(math.atan2(-py, -px)) + rng.uniform(-25, 25)
+            z, scale = float(t.height(px, py)) - 2.0, rng.uniform(*CLIFFS[key])
+            add(key, px, py, z, yaw, scale)
+            out["cliffs"].append(item(key, px, py, z, yaw, scale))
 
     # Bushes: forest floor and around the village wall.
     x, y = jittered(t, rng, 5.0)
@@ -233,7 +273,7 @@ def scatter(t, rng, blockers, out):
     density = np.maximum(field(forest, x, y) * 0.28, (np.abs(field(d_village, x, y) - (WALL_RADIUS_M + 9)) < 4) * 0.5)
     keep &= rng.random(x.shape) < density
     for xi, yi in zip(x[keep], y[keep]):
-        add(BUSHES[int(rng.integers(2))], xi, yi, t.height(xi, yi) - 0.1, rng.uniform(0, 360), rng.uniform(0.8, 1.4), cull=20000.0)
+        add(BUSHES[int(rng.integers(len(BUSHES)))], xi, yi, t.height(xi, yi) - 0.1, rng.uniform(0, 360), rng.uniform(0.8, 1.4), cull=20000.0)
 
     # Rocks: sparse everywhere, more on slopes and the mountain foot.
     x, y = jittered(t, rng, 12.0)
@@ -241,7 +281,7 @@ def scatter(t, rng, blockers, out):
     density = 0.08 + 0.35 * hm.smoothstep(18, 35, field(slope, x, y)) + 0.3 * (field(edge, x, y) > 440)
     keep &= (rng.random(x.shape) < density) & (np.abs(x) < 478) & (np.abs(y) < 478)
     for xi, yi in zip(x[keep], y[keep]):
-        add(ROCKS[int(rng.integers(3))], xi, yi, t.height(xi, yi) - 0.4, rng.uniform(0, 360), rng.uniform(0.6, 1.8), cull=20000.0)
+        add(ROCKS[int(rng.integers(len(ROCKS)))], xi, yi, t.height(xi, yi) - 0.3, rng.uniform(0, 360), rng.uniform(0.5, 1.3), cull=20000.0)
 
     # The grass carpet is landscape grass (build_world.py GRASS_TYPES), generated on the GPU near each viewer.
 

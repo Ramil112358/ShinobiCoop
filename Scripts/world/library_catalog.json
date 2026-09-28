@@ -29,7 +29,7 @@
    "mesh": "/Game/Shinobi/World/Library/Arch/lantern/StaticMeshes/lantern.lantern"
   },
   "ruin_pillar": {
-   "height_m": 6.18,
+   "height_m": 6.17,
    "mesh": "/Game/Shinobi/World/Library/Arch/ruin_pillar/StaticMeshes/ruin_pillar.ruin_pillar"
   },
   "ruin_wall": {
@@ -41,7 +41,7 @@
    "mesh": "/Game/Shinobi/World/Library/Arch/shrine/StaticMeshes/shrine.shrine"
   },
   "stall": {
-   "height_m": 2.9,
+   "height_m": 2.89,
    "mesh": "/Game/Shinobi/World/Library/Arch/stall/StaticMeshes/stall.stall"
   },
   "stone_lantern": {
@@ -57,11 +57,11 @@
    "mesh": "/Game/Shinobi/World/Library/Arch/training_post/StaticMeshes/training_post.training_post"
   },
   "wall_segment": {
-   "height_m": 4.28,
+   "height_m": 4.26,
    "mesh": "/Game/Shinobi/World/Library/Arch/wall_segment/StaticMeshes/wall_segment.wall_segment"
   },
   "well": {
-   "height_m": 3.1,
+   "height_m": 3.09,
    "mesh": "/Game/Shinobi/World/Library/Arch/well/StaticMeshes/well.well"
   }
  },
@@ -77,7 +77,7 @@
  },
  "Camp": {
   "campfire": {
-   "height_m": 0.81,
+   "height_m": 0.77,
    "mesh": "/Game/Shinobi/World/Library/Camp/campfire/StaticMeshes/campfire.campfire"
   },
   "palisade": {
@@ -441,10 +441,70 @@
   }
  },
  "PH_Prop": {
+  "barrel_03": {
+   "collision": "box",
+   "height_m": 0.93,
+   "mesh": "/Game/Shinobi/World/Library/PH_Prop/barrel_03/barrel_03_2k/StaticMeshes/barrel_03_2k.barrel_03_2k"
+  },
+  "ceramic_pot": {
+   "collision": "box",
+   "height_m": 0.37,
+   "mesh": "/Game/Shinobi/World/Library/PH_Prop/ceramic_pot/ceramic_pot_2k/StaticMeshes/ceramic_pot_2k.ceramic_pot_2k"
+  },
+  "chinese_stool": {
+   "collision": "box",
+   "height_m": 0.63,
+   "mesh": "/Game/Shinobi/World/Library/PH_Prop/chinese_stool/chinese_stool_2k/StaticMeshes/chinese_stool_2k.chinese_stool_2k"
+  },
+  "jug_01": {
+   "collision": "box",
+   "height_m": 0.21,
+   "mesh": "/Game/Shinobi/World/Library/PH_Prop/jug_01/jug_01_2k/StaticMeshes/jug_01_2k.jug_01_2k"
+  },
   "stone_fire_pit": {
    "collision": "box",
    "height_m": 0.39,
    "mesh": "/Game/Shinobi/World/Library/PH_Prop/stone_fire_pit/stone_fire_pit_2k/StaticMeshes/stone_fire_pit_2k.stone_fire_pit_2k"
+  },
+  "wicker_basket_01": {
+   "collision": "box",
+   "height_m": 0.12,
+   "mesh": "/Game/Shinobi/World/Library/PH_Prop/wicker_basket_01/wicker_basket_01_2k/StaticMeshes/wicker_basket_01_2k.wicker_basket_01_2k"
+  },
+  "wicker_basket_02_base": {
+   "collision": "box",
+   "height_m": 0.2,
+   "mesh": "/Game/Shinobi/World/Library/PH_Prop/wicker_basket_02/wicker_basket_02_2k/StaticMeshes/wicker_basket_02_base.wicker_basket_02_base"
+  },
+  "wicker_basket_02_lid": {
+   "collision": "box",
+   "height_m": 0.2,
+   "mesh": "/Game/Shinobi/World/Library/PH_Prop/wicker_basket_02/wicker_basket_02_2k/StaticMeshes/wicker_basket_02_lid.wicker_basket_02_lid"
+  },
+  "wine_barrel_01": {
+   "collision": "box",
+   "height_m": 0.87,
+   "mesh": "/Game/Shinobi/World/Library/PH_Prop/wine_barrel_01/wine_barrel_01_2k/StaticMeshes/wine_barrel_01.wine_barrel_01"
+  },
+  "wine_barrel_01_Lid": {
+   "collision": "box",
+   "height_m": 0.02,
+   "mesh": "/Game/Shinobi/World/Library/PH_Prop/wine_barrel_01/wine_barrel_01_2k/StaticMeshes/wine_barrel_01_Lid.wine_barrel_01_Lid"
+  },
+  "wine_barrel_01_base": {
+   "collision": "box",
+   "height_m": 0.02,
+   "mesh": "/Game/Shinobi/World/Library/PH_Prop/wine_barrel_01/wine_barrel_01_2k/StaticMeshes/wine_barrel_01_base.wine_barrel_01_base"
+  },
+  "wine_barrel_01_bung": {
+   "collision": "box",
+   "height_m": 0.05,
+   "mesh": "/Game/Shinobi/World/Library/PH_Prop/wine_barrel_01/wine_barrel_01_2k/StaticMeshes/wine_barrel_01_bung.wine_barrel_01_bung"
+  },
+  "wooden_axe": {
+   "collision": "box",
+   "height_m": 0.63,
+   "mesh": "/Game/Shinobi/World/Library/PH_Prop/wooden_axe/wooden_axe_2k/StaticMeshes/wooden_axe_2k.wooden_axe_2k"
   }
  },
  "PH_Rock": {
@@ -956,6 +1016,24 @@
    "mesh": "/Game/Shinobi/World/Library/PH_Tree/fir_tree_01/fir_tree_01_2k/StaticMeshes/fir_tree_01_c_LOD0.fir_tree_01_c_LOD0",
    "trunk_radius_cm": 57.6
   },
+  "island_tree_01": {
+   "collision": "trunk",
+   "height_m": 5.03,
+   "mesh": "/Game/Shinobi/World/Library/PH_Tree/island_tree_01/island_tree_01_2k/StaticMeshes/island_tree_01_2k.island_tree_01_2k",
+   "trunk_radius_cm": 38.2
+  },
+  "island_tree_02": {
+   "collision": "trunk",
+   "height_m": 3.41,
+   "mesh": "/Game/Shinobi/World/Library/PH_Tree/island_tree_02/island_tree_02_2k/StaticMeshes/island_tree_02_2k.island_tree_02_2k",
+   "trunk_radius_cm": 30.5
+  },
+  "island_tree_03": {
+   "collision": "trunk",
+   "height_m": 2.62,
+   "mesh": "/Game/Shinobi/World/Library/PH_Tree/island_tree_03/island_tree_03_2k/StaticMeshes/island_tree_03_2k.island_tree_03_2k",
+   "trunk_radius_cm": 75.1
+  },
   "pine_sapling_small_a": {
    "collision": "trunk",
    "height_m": 1.3,
@@ -991,6 +1069,12 @@
    "height_m": 17.54,
    "mesh": "/Game/Shinobi/World/Library/PH_Tree/pine_tree_01/pine_tree_01_2k/StaticMeshes/pine_tree_01_c_LOD0.pine_tree_01_c_LOD0",
    "trunk_radius_cm": 57.2
+  },
+  "tree_small_02": {
+   "collision": "trunk",
+   "height_m": 4.56,
+   "mesh": "/Game/Shinobi/World/Library/PH_Tree/tree_small_02/tree_small_02_2k/StaticMeshes/tree_small_02_2k.tree_small_02_2k",
+   "trunk_radius_cm": 10.0
   }
  },
  "Pebble": {

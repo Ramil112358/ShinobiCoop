@@ -35,6 +35,11 @@ PALETTE = {
     "Red": (0.62, 0.08, 0.05), "Paper": (0.96, 0.92, 0.82), "Cloth": (0.72, 0.63, 0.47),
     "ClothRed": (0.62, 0.11, 0.08), "Black": (0.05, 0.05, 0.05), "Rope": (0.66, 0.56, 0.36),
 }
+# Realistic pass (#3b): palette keys of the generated pieces -> Poly Haven texture sets (MI_PBR_<id>). Red, Paper,
+# Black and ClothRed stay flat colours (lacquer, paper screens).
+PBR_PALETTE = {"Plaster": "white_plaster_rough_01", "Stone": "japanese_stone_wall", "RoofTile": "grey_roof_tiles",
+               "RoofTileRed": "clay_roof_tiles", "WoodDark": "wood_planks_grey", "WoodLight": "oak_wood_planks",
+               "Cloth": "reed_roof_03", "Rope": "reed_roof_03"}
 # category -> (source folder, file regex, collision kind)
 SOURCES = {
     "Tree": (os.path.join(ART, "Trees"), r"\.fbx$", "ucx"),
@@ -59,6 +64,12 @@ def palette_materials():
         unreal.EditorAssetLibrary.make_directory(folder)
     out = {}
     for key, colour in PALETTE.items():
+        pbr = unreal.load_asset(f"{folder}/MI_PBR_{PBR_PALETTE[key]}") if key in PBR_PALETTE else None
+        if pbr:  # realistic pass: the palette key becomes a Poly Haven PBR material, 2 m per texture tile
+            MEL.set_material_instance_scalar_parameter_value(pbr, "Tiling", 0.5)
+            unreal.EditorAssetLibrary.save_loaded_asset(pbr)
+            out[key] = pbr
+            continue
         path = f"{folder}/MI_Palette_{key}"
         mi = unreal.load_asset(path) if unreal.EditorAssetLibrary.does_asset_exist(path) else TOOLS.create_asset(
             f"MI_Palette_{key}", folder, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
@@ -187,8 +198,15 @@ def consistency(mesh, kind, palette, lib_cache):
 def main():
     palette = palette_materials()
     lib_cache = {}
-    catalog = {}
+    # Merge into the existing catalog (the realistic mode's PH_* entries live there too); SHINOBI_IMPORT_ONLY=Arch,Camp
+    # re-imports just those categories.
+    with open(CATALOG, encoding="utf-8") as f:
+        catalog = json.load(f)
+    only = [c for c in os.environ.get("SHINOBI_IMPORT_ONLY", "").split(",") if c]
     for category, (folder, pattern, kind) in SOURCES.items():
+        if only and category not in only:
+            continue
+        catalog[category] = {}
         if not os.path.isdir(folder):
             unreal.log_warning(f"[import_library] missing {folder}: {category} skipped (placeholders will be used)")
             continue
