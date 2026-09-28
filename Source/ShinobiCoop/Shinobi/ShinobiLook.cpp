@@ -6,8 +6,8 @@
 
 namespace
 {
-	const TCHAR* Section = TEXT("/Script/ShinobiCoop.ShinobiSettings");
-	const TCHAR* Key = TEXT("bOutline");
+	const TCHAR* OutlineConfigSection = TEXT("/Script/ShinobiCoop.ShinobiSettings");
+	const TCHAR* OutlineConfigKey = TEXT("bOutline");
 }
 
 void ShinobiLook::EnableOutline(UPrimitiveComponent* Mesh, uint8 Stencil)
@@ -22,13 +22,13 @@ void ShinobiLook::EnableOutline(UPrimitiveComponent* Mesh, uint8 Stencil)
 bool ShinobiLook::IsOutlineEnabled()
 {
 	bool bEnabled = true;
-	GConfig->GetBool(Section, Key, bEnabled, GGameUserSettingsIni);
+	GConfig->GetBool(OutlineConfigSection, OutlineConfigKey, bEnabled, GGameUserSettingsIni);
 	return bEnabled;
 }
 
 void ShinobiLook::SetOutlineEnabled(UWorld* World, bool bEnabled)
 {
-	GConfig->SetBool(Section, Key, bEnabled, GGameUserSettingsIni);
+	GConfig->SetBool(OutlineConfigSection, OutlineConfigKey, bEnabled, GGameUserSettingsIni);
 	GConfig->Flush(false, GGameUserSettingsIni);
 	for (TObjectIterator<UPrimitiveComponent> It; It; ++It)
 	{
