@@ -13,10 +13,12 @@ UGA_Fireball::UGA_Fireball()
 	Glyph = INVTEXT("火"); // fire
 	ChakraCost = 20.f;
 	Cooldown = 4.f;
-	WindUp = 0.4f;
+	WindUp = 0.6f;
+	ReleaseDelay = 0.1f; // the ball leaves on the blow, not at the start of the release clip
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Fireball);
 	ActivationOwnedTags.AddTag(ShinobiTags::State_Casting_Fireball); // hand orb (UShinobiCastFxComponent)
-	CastMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Fireball.AM_Fireball")));
+	// ponytail: the old one-clip cast stands in for the seals until the per-phase montages are imported (plan Task 8)
+	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Fireball.AM_Fireball")));
 }
 
 void UGA_Fireball::ExecuteJutsu()
@@ -36,11 +38,12 @@ void UGA_Fireball::ExecuteJutsu()
 		const FTransform Launch((AimPoint - Muzzle).Rotation(), Muzzle);
 		if (AShinobiProjectile* Ball = Self->GetWorld()->SpawnActorDeferred<AShinobiProjectile>(AShinobiProjectile::StaticClass(), Launch, Self, Self, ESpawnActorCollisionHandlingMethod::AlwaysSpawn))
 		{
-			Ball->DirectDamage = DirectDamage;
-			Ball->SplashDamage = SplashDamage;
-			Ball->SplashRadius = SplashRadius;
+			Ball->DirectDamage = DirectDamage * GetDamageScale();
+			Ball->SplashDamage = SplashDamage * GetDamageScale();
+			Ball->SplashRadius = SplashRadius * GetVisualScale();
 			Ball->StatusEffect = UGE_Burn::StaticClass();
-			Ball->StatusDamagePerTick = UGE_Burn::DamagePerTick;
+			Ball->StatusDamagePerTick = UGE_Burn::DamagePerTick * GetDamageScale();
+			Ball->Scale = GetVisualScale();
 			Ball->FinishSpawning(Launch);
 		}
 	}

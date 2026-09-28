@@ -42,6 +42,13 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	float StatusDamagePerTick = 0.f;
 
+	/** Size multiplier (a charged Fireball is bigger): scales the collision, the look and the light. Set before
+	 * FinishSpawning; replicated once, with the spawn. */
+	UPROPERTY(Replicated)
+	float Scale = 1.f;
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 protected:
 	virtual void BeginPlay() override;
 

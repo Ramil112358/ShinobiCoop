@@ -12,10 +12,11 @@ UGA_Amaterasu::UGA_Amaterasu()
 	Glyph = INVTEXT("天"); // heaven
 	ChakraCost = 50.f;
 	Cooldown = 20.f;
-	WindUp = 0.5f;
+	WindUp = 0.4f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Amaterasu);
 	ActivationOwnedTags.AddTag(ShinobiTags::State_Casting_Amaterasu); // hand orb (UShinobiCastFxComponent)
-	CastMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Amaterasu.AM_Amaterasu")));
+	// ponytail: the old one-clip cast stands in for the seals until the per-phase montages are imported (plan Task 8)
+	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Amaterasu.AM_Amaterasu")));
 }
 
 bool UGA_Amaterasu::PrepareJutsu()

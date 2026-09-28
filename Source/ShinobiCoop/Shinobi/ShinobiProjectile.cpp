@@ -4,6 +4,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "GameFramework/ProjectileMovementComponent.h"
+#include "Net/UnrealNetwork.h"
 #include "GameplayEffect.h" // full type: TSubclassOf<UGameplayEffect>'s bool/Get() checks IsChildOf(StaticClass())
 #include "UObject/ConstructorHelpers.h"
 #include "Shinobi/ShinobiCharacterBase.h"
@@ -61,10 +62,22 @@ AShinobiProjectile::AShinobiProjectile()
 void AShinobiProjectile::BeginPlay()
 {
 	Super::BeginPlay();
+	if (Scale != 1.f)
+	{
+		Collision->SetSphereRadius(Collision->GetUnscaledSphereRadius() * Scale);
+		Mesh->SetRelativeScale3D(Mesh->GetRelativeScale3D() * Scale);
+		Light->SetAttenuationRadius(Light->AttenuationRadius * Scale);
+	}
 	if (!IsNetMode(NM_DedicatedServer))
 	{
 		Mesh->SetMaterial(0, ShinobiVfx::MakeGlow(this, GlowColor, GlowIntensity, 1.f));
 	}
+}
+
+void AShinobiProjectile::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME_CONDITION(AShinobiProjectile, Scale, COND_InitialOnly);
 }
 
 void AShinobiProjectile::OnOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)

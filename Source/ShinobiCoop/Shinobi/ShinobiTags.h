@@ -34,6 +34,8 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Casting_Chidori);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Casting_Rasengan);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Casting_Amaterasu);
+	// A jutsu's charge phase (button held after the seals); the charge visuals grow while it's on.
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Casting_Charging);
 
 	// Ability identity (asset tags)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Melee);

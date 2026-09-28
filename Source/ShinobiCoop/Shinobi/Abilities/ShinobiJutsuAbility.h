@@ -5,6 +5,7 @@
 #include "ShinobiJutsuAbility.generated.h"
 
 class UAbilitySystemComponent;
+class UAbilityTask;
 class UAbilityTask_WaitGameplayEvent;
 class UAnimMontage;
 
@@ -18,10 +19,15 @@ struct FShinobiJutsuSlotState
 
 /**
  * Base for the four jutsu. On activation: PrepareJutsu() (may fail for free), pay the chakra cost, face the
- * aim, then a hand-seal wind-up. A staggering hit (Event.Hit.Stagger, >= 20 damage) during the wind-up
- * cancels the jutsu and refunds half the cost without starting the cooldown. Otherwise the cooldown starts
- * and ExecuteJutsu() runs. Each subclass sets its numbers in its constructor (the spec's UJutsuData, kept in
- * C++ like the M1 abilities).
+ * aim, then three phases:
+ * - Seal: the hand seals (WindUp seconds), always played in full, even on a tap.
+ * - Charge: only if the button is still held when the seals end. Up to MaxChargeTime; chakra drains while held
+ *   (ChargeDrainFraction of the cost over a full charge). Ends on release, at the cap, or when chakra runs out.
+ * - Release: the cooldown starts and ExecuteJutsu() runs ReleaseDelay later, reading GetChargeLevel().
+ * A staggering hit (Event.Hit.Stagger, >= 20 damage) during Seal or Charge cancels the jutsu and refunds half
+ * the cost (not the drain) without starting the cooldown. Enemies have no button to hold, so they fire
+ * uncharged. Each subclass sets its numbers in its constructor (the spec's UJutsuData, kept in C++ like the M1
+ * abilities).
  */
 UCLASS(Abstract)
 class SHINOBICOOP_API UShinobiJutsuAbility : public UShinobiGameplayAbility
@@ -32,6 +38,8 @@ public:
 	UShinobiJutsuAbility();
 
 	static constexpr float InterruptRefundFraction = 0.5f;
+	static constexpr float MaxChargeTime = 2.f;
+	static constexpr float ChargeDrainFraction = 0.5f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
 	FText DisplayName;
@@ -46,17 +54,28 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
 	float Cooldown = 0.f;
 
-	/** Hand-seal wind-up before the jutsu fires; a staggering hit interrupts it. */
+	/** Length of the seal phase; a staggering hit interrupts it. */
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu", meta = (ClampMin = "0.01"))
 	float WindUp = 0.5f;
 
-	/** Cast animation (a Mixamo clip, built by Scripts/setup_jutsu_anims.py), played from activation. */
-	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
-	TSoftObjectPtr<UAnimMontage> CastMontage;
+	/** From the release to ExecuteJutsu(), so the effect lands on the release clip's key moment (e.g. the blow). */
+	UPROPERTY(EditDefaultsOnly, Category = "Jutsu", meta = (ClampMin = "0"))
+	float ReleaseDelay = 0.f;
 
-	/** Where in the clip the jutsu is released (0-1); the clip is sped up so that point meets the end of the wind-up. */
-	UPROPERTY(EditDefaultsOnly, Category = "Jutsu", meta = (ClampMin = "0.05", ClampMax = "1"))
-	float CastReleaseFraction = 0.45f;
+	/** Phase animations (built by Scripts/setup_jutsu_anims.py). Seal is rate-fitted to WindUp; any may be unset. */
+	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
+	TSoftObjectPtr<UAnimMontage> SealMontage;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
+	TSoftObjectPtr<UAnimMontage> ChargeMontage;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
+	TSoftObjectPtr<UAnimMontage> ReleaseMontage;
+
+	/** 0-1: how much of MaxChargeTime was charged; fixed at the release. */
+	float GetChargeLevel() const { return ChargeLevel; }
+	float GetDamageScale() const { return 1.f + 0.75f * ChargeLevel; }
+	float GetVisualScale() const { return 1.f + 0.8f * ChargeLevel; }
 
 	/** For the HUD; safe to call on the class default object. */
 	FShinobiJutsuSlotState GetSlotState(const UAbilitySystemComponent& ASC) const;
@@ -66,6 +85,7 @@ public:
 	virtual void ApplyCost(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo) const override;
 	virtual void ApplyCooldown(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo) const override;
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
+	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled) override;
 
 protected:
 	/** Runs before any cost is paid. Return false to fail the activation for free (the HUD flashes the slot). */
@@ -90,12 +110,42 @@ protected:
 	FGameplayTagContainer CooldownTags;
 
 private:
+	enum class EPhase : uint8 { Seal, Charge, Released };
+
 	UFUNCTION()
-	void OnWindUpFinished();
+	void OnSealsFinished();
+
+	UFUNCTION()
+	void OnInputReleased(float TimeHeld);
+
+	UFUNCTION()
+	void OnChargeTick(int32 ActionNumber);
 
 	UFUNCTION()
 	void OnInterruptedByHit(FGameplayEventData Payload);
 
+	UFUNCTION()
+	void OnReleaseDelayFinished();
+
+	void Release();
+
+	/** Server: drains chakra for the charge time since the last drain. Returns false once chakra has run out. */
+	bool DrainCharge();
+
+	float GetChargeTime() const;
+	void PlayPhaseMontage(const TSoftObjectPtr<UAnimMontage>& Montage, float Rate);
+	void SetChargingTag(bool bOn);
+
 	UPROPERTY()
 	TObjectPtr<UAbilityTask_WaitGameplayEvent> InterruptTask;
+
+	UPROPERTY()
+	TObjectPtr<UAbilityTask> ChargeTicker;
+
+	EPhase Phase = EPhase::Seal;
+	bool bReleaseRequested = false;
+	bool bChargingTagAdded = false;
+	float ChargeStartTime = 0.f;
+	float LastDrainTime = 0.f;
+	float ChargeLevel = 0.f;
 };

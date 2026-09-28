@@ -13,10 +13,11 @@ UGA_Rasengan::UGA_Rasengan()
 	Glyph = INVTEXT("螺"); // spiral
 	ChakraCost = 35.f;
 	Cooldown = 10.f;
-	WindUp = 0.8f;
+	WindUp = 0.4f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Rasengan);
 	ActivationOwnedTags.AddTag(ShinobiTags::State_Casting_Rasengan); // hand orb (UShinobiCastFxComponent)
-	CastMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Rasengan.AM_Rasengan")));
+	// ponytail: the old one-clip cast stands in for the seals until the per-phase montages are imported (plan Task 8)
+	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Rasengan.AM_Rasengan")));
 }
 
 void UGA_Rasengan::ExecuteJutsu()

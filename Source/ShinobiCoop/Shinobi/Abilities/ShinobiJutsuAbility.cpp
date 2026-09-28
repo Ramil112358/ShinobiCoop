@@ -2,7 +2,9 @@
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
+#include "Abilities/Tasks/AbilityTask_Repeat.h"
 #include "Abilities/Tasks/AbilityTask_WaitDelay.h"
+#include "Abilities/Tasks/AbilityTask_WaitInputRelease.h"
 #include "Animation/AnimMontage.h"
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
 #include "Engine/World.h"
@@ -45,13 +47,26 @@ void UShinobiJutsuAbility::ActivateAbility(const FGameplayAbilitySpecHandle Hand
 	}
 	FaceAim(nullptr);
 
-	if (UAnimMontage* Anim = CastMontage.LoadSynchronous())
+	// The ability object is instanced per actor and reused: reset the previous cast's state.
+	Phase = EPhase::Seal;
+	ChargeLevel = 0.f;
+	ChargeTicker = nullptr;
+	// Enemies (no input slot) have nothing to hold: they fire uncharged.
+	const FGameplayAbilitySpec* Spec = GetCurrentAbilitySpec();
+	bReleaseRequested = !Spec || Spec->InputID == INDEX_NONE;
+
+	if (const UAnimMontage* Anim = SealMontage.LoadSynchronous())
 	{
-		// ponytail: capped speed-up (1-2.5x) so fast wind-ups don't turn the clip into a twitch; per-jutsu CastReleaseFraction tunes the sync
-		const float Rate = FMath::Clamp(Anim->GetPlayLength() * CastReleaseFraction / WindUp, 1.f, 2.5f);
-		// bStopWhenAbilityEnds = false: let the follow-through finish after the jutsu fires (the interrupt stops it).
-		UAbilityTask_PlayMontageAndWait* Play = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, Anim, Rate, NAME_None, false);
-		Play->ReadyForActivation();
+		// ponytail: the whole seal clip is fitted to WindUp, capped at 0.5-2.5x so it doesn't crawl or twitch
+		PlayPhaseMontage(SealMontage, FMath::Clamp(Anim->GetPlayLength() / WindUp, 0.5f, 2.5f));
+	}
+
+	if (!bReleaseRequested)
+	{
+		// bTestAlreadyReleased: a tap's release can arrive before this task exists.
+		UAbilityTask_WaitInputRelease* WaitRelease = UAbilityTask_WaitInputRelease::WaitInputRelease(this, true);
+		WaitRelease->OnRelease.AddDynamic(this, &UShinobiJutsuAbility::OnInputReleased);
+		WaitRelease->ReadyForActivation();
 	}
 
 	// Event.Hit.Stagger is only sent on the server, so only the server's copy gets interrupted; its cancel
@@ -61,19 +76,158 @@ void UShinobiJutsuAbility::ActivateAbility(const FGameplayAbilitySpecHandle Hand
 	InterruptTask->ReadyForActivation();
 
 	UAbilityTask_WaitDelay* Seals = UAbilityTask_WaitDelay::WaitDelay(this, WindUp);
-	Seals->OnFinish.AddDynamic(this, &UShinobiJutsuAbility::OnWindUpFinished);
+	Seals->OnFinish.AddDynamic(this, &UShinobiJutsuAbility::OnSealsFinished);
 	Seals->ReadyForActivation();
 }
 
-void UShinobiJutsuAbility::OnWindUpFinished()
+void UShinobiJutsuAbility::OnSealsFinished()
 {
+	if (bReleaseRequested)
+	{
+		Release();
+		return;
+	}
+	Phase = EPhase::Charge;
+	ChargeStartTime = LastDrainTime = GetWorld()->GetTimeSeconds();
+	SetChargingTag(true);
+	PlayPhaseMontage(ChargeMontage, 1.f);
+	UAbilityTask_Repeat* Ticker = UAbilityTask_Repeat::RepeatAction(this, 0.1f, MAX_int32);
+	Ticker->OnPerformAction.AddDynamic(this, &UShinobiJutsuAbility::OnChargeTick);
+	ChargeTicker = Ticker;
+	Ticker->ReadyForActivation();
+}
+
+void UShinobiJutsuAbility::OnInputReleased(float TimeHeld)
+{
+	bReleaseRequested = true;
+	if (Phase == EPhase::Charge)
+	{
+		Release();
+	}
+}
+
+void UShinobiJutsuAbility::OnChargeTick(int32 ActionNumber)
+{
+	// Both sides stop at the cap. Only the server drains, but both see chakra run out (the attribute replicates).
+	const bool bHasChakra = HasAuthority(&CurrentActivationInfo)
+		? DrainCharge()
+		: GetAbilitySystemComponentFromActorInfo()->GetNumericAttribute(UShinobiAttributeSet::GetChakraAttribute()) > KINDA_SMALL_NUMBER;
+	if (!bHasChakra || GetChargeTime() >= MaxChargeTime)
+	{
+		Release();
+	}
+}
+
+bool UShinobiJutsuAbility::DrainCharge()
+{
+	const float Now = FMath::Min(GetWorld()->GetTimeSeconds(), ChargeStartTime + MaxChargeTime);
+	const float Chakra = GetAbilitySystemComponentFromActorInfo()->GetNumericAttribute(UShinobiAttributeSet::GetChakraAttribute());
+	const float Amount = FMath::Min(ChakraCost * ChargeDrainFraction / MaxChargeTime * FMath::Max(0.f, Now - LastDrainTime), Chakra);
+	LastDrainTime = Now;
+	if (Amount > 0.f)
+	{
+		FGameplayEffectSpecHandle Drain = MakeOutgoingGameplayEffectSpec(UGE_ChakraGain::StaticClass(), GetAbilityLevel());
+		Drain.Data->SetSetByCallerMagnitude(ShinobiTags::Data_ChakraGain, -Amount);
+		ApplyGameplayEffectSpecToOwner(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, Drain);
+	}
+	return Chakra - Amount > KINDA_SMALL_NUMBER;
+}
+
+float UShinobiJutsuAbility::GetChargeTime() const
+{
+	return Phase == EPhase::Charge ? GetWorld()->GetTimeSeconds() - ChargeStartTime : 0.f;
+}
+
+void UShinobiJutsuAbility::Release()
+{
+	if (Phase == EPhase::Released)
+	{
+		return;
+	}
+	if (Phase == EPhase::Charge)
+	{
+		if (HasAuthority(&CurrentActivationInfo))
+		{
+			DrainCharge(); // the part since the last tick
+		}
+		ChargeLevel = FMath::Clamp(GetChargeTime() / MaxChargeTime, 0.f, 1.f);
+		SetChargingTag(false);
+		if (ChargeTicker)
+		{
+			ChargeTicker->EndTask();
+			ChargeTicker = nullptr;
+		}
+	}
+	Phase = EPhase::Released;
 	if (InterruptTask)
 	{
 		InterruptTask->EndTask();
 		InterruptTask = nullptr;
 	}
 	CommitAbilityCooldown(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true);
+	if (!ReleaseMontage.IsNull())
+	{
+		PlayPhaseMontage(ReleaseMontage, 1.f);
+	}
+	else if (!ChargeMontage.IsNull())
+	{
+		MontageStop(0.2f); // no release clip: don't keep holding the charge pose
+	}
+	if (ReleaseDelay > 0.f)
+	{
+		UAbilityTask_WaitDelay* Delay = UAbilityTask_WaitDelay::WaitDelay(this, ReleaseDelay);
+		Delay->OnFinish.AddDynamic(this, &UShinobiJutsuAbility::OnReleaseDelayFinished);
+		Delay->ReadyForActivation();
+	}
+	else
+	{
+		ExecuteJutsu();
+	}
+}
+
+void UShinobiJutsuAbility::OnReleaseDelayFinished()
+{
 	ExecuteJutsu();
+}
+
+void UShinobiJutsuAbility::PlayPhaseMontage(const TSoftObjectPtr<UAnimMontage>& Montage, float Rate)
+{
+	if (UAnimMontage* Anim = Montage.LoadSynchronous())
+	{
+		// bStopWhenAbilityEnds = false: let the follow-through finish after the jutsu fires (the interrupt stops it).
+		UAbilityTask_PlayMontageAndWait* Play = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, Anim, Rate, NAME_None, false);
+		Play->ReadyForActivation();
+	}
+}
+
+void UShinobiJutsuAbility::SetChargingTag(bool bOn)
+{
+	if (bOn == bChargingTagAdded)
+	{
+		return;
+	}
+	bChargingTagAdded = bOn;
+	// Same as GAS does for ActivationOwnedTags: every machine running the ability adds it, and the replicated count
+	// reaches the other clients.
+	UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
+	const EGameplayTagReplicationState Rep = UAbilitySystemGlobals::Get().ShouldReplicateActivationOwnedTags() ? EGameplayTagReplicationState::CountToOwner : EGameplayTagReplicationState::None;
+	if (bOn)
+	{
+		ASC->AddLooseGameplayTag(ShinobiTags::State_Casting_Charging, 1, Rep);
+	}
+	else
+	{
+		ASC->RemoveLooseGameplayTag(ShinobiTags::State_Casting_Charging, 1, Rep);
+	}
+}
+
+void UShinobiJutsuAbility::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
+{
+	if (IsActive())
+	{
+		SetChargingTag(false); // cancelled mid-charge (interrupt, dodge)
+	}
+	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }
 
 void UShinobiJutsuAbility::OnInterruptedByHit(FGameplayEventData Payload)

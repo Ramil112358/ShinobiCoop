@@ -16,6 +16,8 @@
 #include "Shinobi/Abilities/GA_Melee.h"
 #include "Shinobi/Abilities/GA_Rasengan.h"
 #include "Shinobi/Abilities/GA_Substitution.h"
+#include "Shinobi/Enemies/GA_EnemyAttacks.h"
+#include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiProjectileTest, "ShinobiCoop.Jutsu.ProjectileHitsFirstHostileAndSplashes", ShinobiTestFlags)
 bool FShinobiProjectileTest::RunTest(const FString& Parameters)
@@ -66,11 +68,12 @@ bool FShinobiFireballTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Fireball active"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
 	TestEqual(TEXT("Cost 20 paid up front"), ShinobiTest::Get(P, Chakra), 80.f);
 	TestFalse(TEXT("No cooldown during the wind-up"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Fireball));
-	W.Tick(0.3f);
-	TestEqual(TEXT("Nothing thrown during the 0.4 s wind-up"), ShinobiTest::CountActors<AShinobiProjectile>(W), 0);
+	W.Tick(0.5f);
+	TestEqual(TEXT("Nothing thrown during the 0.6 s seals"), ShinobiTest::CountActors<AShinobiProjectile>(W), 0);
 
-	// Timers started from test code between ticks start counting a tick late, so a 0.4 s wind-up fires at ~0.45-0.5.
-	W.Tick(0.2f); // t = 0.5
+	// Timers started from test code between ticks start counting a tick late, so the 0.6 s seals end at ~0.65-0.7
+	// and the ball leaves 0.1 s later.
+	W.Tick(0.35f); // t = 0.85
 	TestEqual(TEXT("Thrown after the wind-up"), ShinobiTest::CountActors<AShinobiProjectile>(W), 1);
 	TestTrue(TEXT("Cooldown starts after the wind-up"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Fireball));
 	TestFalse(TEXT("Ability ends once thrown"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
@@ -87,7 +90,7 @@ bool FShinobiFireballTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Enemy hit for 60"), ShinobiTest::Get(E, UShinobiAttributeSet::GetHealthAttribute()), 440.f);
 	TestTrue(TEXT("Enemy burning"), ShinobiTest::HasTag(E, ShinobiTags::State_Burning_Normal));
 
-	W.Tick(3.8f); // t = 4.7; the cooldown started at ~0.45-0.5 and lasts 4 s
+	W.Tick(3.8f); // t = 5.05; the cooldown started at the release (~0.65-0.7) and lasts 4 s
 	TestFalse(TEXT("Cooldown over"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Fireball));
 	ShinobiTest::Set(P, Chakra, 19.f);
 	TestFalse(TEXT("HUD: unaffordable below the cost"), Fireball->GetSlotState(*ASC).bAffordable);
@@ -175,11 +178,11 @@ bool FShinobiAmaterasuTest::RunTest(const FString& Parameters)
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
 	TestTrue(TEXT("Casts on the enemy under the crosshair"), ShinobiTest::IsActive(P, UGA_Amaterasu::StaticClass()));
 	TestEqual(TEXT("Cost 50"), ShinobiTest::Get(P, Chakra), 50.f);
-	W.Tick(0.6f); // timers set before a tick start counting one tick late: the 0.5 s wind-up fires at ~0.55-0.6
-	TestTrue(TEXT("Black flame after the 0.5 s wind-up"), ShinobiTest::HasTag(E, ShinobiTags::State_Burning_Black));
+	W.Tick(0.6f); // timers set before a tick start counting one tick late: the 0.4 s seals end at ~0.45-0.5
+	TestTrue(TEXT("Black flame after the 0.4 s seals"), ShinobiTest::HasTag(E, ShinobiTags::State_Burning_Black));
 	TestFalse(TEXT("Not a normal burn"), ShinobiTest::HasTag(E, ShinobiTags::State_Burning_Normal));
 	TestTrue(TEXT("Cooldown started"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Amaterasu));
-	W.Tick(1.2f); // t = 1.8: exactly one tick (~1.6); the next is ~2.6
+	W.Tick(1.2f); // t = 1.8: exactly one tick (~1.5); the next is ~2.5
 	TestEqual(TEXT("15 damage per second"), ShinobiTest::Get(E, Health), 485.f);
 	TestEqual(TEXT("Enemy behind untouched"), ShinobiTest::Get(Behind, Health), 500.f);
 	TestEqual(TEXT("Enemy beyond range untouched"), ShinobiTest::Get(TooFar, Health), 500.f);
@@ -210,7 +213,7 @@ bool FShinobiChidoriTest::RunTest(const FString& Parameters)
 
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
 	TestEqual(TEXT("Cost 30"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 70.f);
-	W.Tick(1.0f); // 0.6 s wind-up + ~0.18 s dash (706 units at 4000 u/s)
+	W.Tick(1.0f); // 0.5 s seals + ~0.18 s dash (706 units at 4000 u/s)
 	TestFalse(TEXT("Chidori finished"), ShinobiTest::IsActive(P, UGA_Chidori::StaticClass()));
 	const float Gap = FVector::Dist2D(P->GetActorLocation(), E->GetActorLocation());
 	TestTrue(FString::Printf(TEXT("Dashed up to the target (gap %.0f)"), Gap), Gap < 200.f);
@@ -234,7 +237,7 @@ bool FShinobiChidoriTurnTest::RunTest(const FString& Parameters)
 	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(800.f, 0.f, 0.f));
 
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
-	W.Tick(0.75f); // mid-dash: the wind-up fires at ~0.65-0.7 and the ~0.18 s dash runs past 0.8
+	W.Tick(0.65f); // mid-dash: the seals end at ~0.55-0.6 and the ~0.18 s dash runs past 0.7
 	TestTrue(TEXT("Still dashing"), ShinobiTest::IsActive(P, UGA_Chidori::StaticClass()));
 	// Stand-in for held strafe input turning the character (orient-to-movement) during the dash.
 	P->SetActorRotation(FRotator(0.f, 90.f, 0.f));
@@ -251,7 +254,7 @@ bool FShinobiChidoriNoTargetTest::RunTest(const FString& Parameters)
 	AShinobiCharacterBase* Side = W.Spawn<AShinobiCharacterBase>(FVector(0.f, 800.f, 0.f)); // 90 degrees off: no snap
 
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
-	W.Tick(1.2f); // 0.6 s wind-up + 0.3 s dash
+	W.Tick(1.2f); // 0.5 s seals + 0.3 s dash
 	const float X = P->GetActorLocation().X;
 	TestTrue(FString::Printf(TEXT("Dashed ~1200 straight ahead (X = %.0f)"), X), X > 1100.f && X < 1300.f);
 	TestEqual(TEXT("Enemy off to the side untouched"), ShinobiTest::Get(Side, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
@@ -271,7 +274,7 @@ bool FShinobiRasenganTest::RunTest(const FString& Parameters)
 
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	TestEqual(TEXT("Cost 35"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 65.f);
-	W.Tick(0.9f); // the 0.8 s wind-up fires at ~0.85-0.9 (pre-tick timers start one tick late); the burn's first tick is ~1.05
+	W.Tick(0.9f); // the 0.4 s seals end at ~0.45-0.5 (pre-tick timers start one tick late); the burn's first tick is ~1.05
 	TestEqual(TEXT("Burning target: 150 + Firestorm 200"), ShinobiTest::Get(E, Health), 150.f);
 	TestEqual(TEXT("Firestorm reaches enemies within 500 of the target"), ShinobiTest::Get(Near, Health), 300.f);
 	TestEqual(TEXT("Firestorm stops at 500"), ShinobiTest::Get(Far, Health), 500.f);
@@ -369,11 +372,147 @@ bool FShinobiJutsuVfxTest::RunTest(const FString& Parameters)
 
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
 	TestTrue(TEXT("Fire orb in hand during the wind-up"), P->GetCastFx()->GetShownTag() == ShinobiTags::State_Casting_Fireball);
-	W.Tick(0.9f); // thrown at ~0.45-0.5, hits at ~0.7
+	W.Tick(1.2f); // thrown at ~0.75-0.8, hits at ~1.0
 	TestFalse(TEXT("Orb gone once the jutsu ends"), P->GetCastFx()->GetShownTag().IsValid());
 	TestEqual(TEXT("One fire burst at the impact"), ShinobiTest::CountActors<AShinobiBurst>(W), 1);
 	TestTrue(TEXT("Burning target glows with the burn aura"), E->GetChakraAura()->GetShownTag() == ShinobiTags::State_Burning_Normal);
 	TestEqual(TEXT("Burn aura faded in"), E->GetChakraAura()->GetFade(), 1.f);
+	return true;
+}
+
+namespace
+{
+	template <class T>
+	T* FirstActor(const FShinobiTestWorld& W)
+	{
+		TActorIterator<T> It(W.World);
+		return It ? *It : nullptr;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChargeTapTest, "ShinobiCoop.Jutsu.ChargeTapFiresUnchargedAfterSeals", ShinobiTestFlags)
+bool FShinobiChargeTapTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(0.5f);
+	TestEqual(TEXT("Nothing thrown during the 0.6 s seals"), ShinobiTest::CountActors<AShinobiProjectile>(W), 0);
+	TestFalse(TEXT("No charge phase on a tap"), ShinobiTest::HasTag(P, ShinobiTags::State_Casting_Charging));
+	W.Tick(0.35f); // t = 0.85: the seals end at ~0.65-0.7, the ball leaves 0.1 s later
+	const AShinobiProjectile* Ball = FirstActor<AShinobiProjectile>(W);
+	TestNotNull(TEXT("Thrown after the seals"), Ball);
+	TestEqual(TEXT("Uncharged size"), Ball ? Ball->Scale : -1.f, 1.f);
+	const float Left = ShinobiTest::Get(P, Chakra);
+	TestTrue(FString::Printf(TEXT("No drain on a tap: cost 20, +2/s regen (got %.2f)"), Left), FMath::IsNearlyEqual(Left, 80.f + 2.f * 0.85f, 1.f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChargeHoldTest, "ShinobiCoop.Jutsu.ChargeHoldScalesAndDrains", ShinobiTestFlags)
+bool FShinobiChargeHoldTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(600.f, 0.f, 0.f));
+	ShinobiTest::Hover(P);
+	ShinobiTest::Hover(E);
+	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(0.7f);
+	TestTrue(TEXT("Charging after the seals while held"), ShinobiTest::HasTag(P, ShinobiTags::State_Casting_Charging));
+	W.Tick(1.f); // charged ~1.0-1.05 s: L ~ 0.5
+	ShinobiTest::Release(P, EShinobiAbilityInputID::Jutsu1);
+	TestFalse(TEXT("Charging tag gone on release"), ShinobiTest::HasTag(P, ShinobiTags::State_Casting_Charging));
+	W.Tick(0.2f);
+	const AShinobiProjectile* Ball = FirstActor<AShinobiProjectile>(W);
+	const float Scale = Ball ? Ball->Scale : -1.f;
+	TestTrue(FString::Printf(TEXT("Half-charged ball is ~1.4x (got %.3f)"), Scale), FMath::IsNearlyEqual(Scale, 1.4f, 0.06f));
+	const float Left = ShinobiTest::Get(P, Chakra);
+	TestTrue(FString::Printf(TEXT("Cost 20, ~5 drained, +2/s regen (got %.2f)"), Left), FMath::IsNearlyEqual(Left, 75.f + 2.f * 1.9f, 1.f));
+	W.Tick(0.4f);
+	const float Health = ShinobiTest::Get(E, UShinobiAttributeSet::GetHealthAttribute());
+	TestTrue(FString::Printf(TEXT("Hit for ~60 x 1.375 (health %.1f)"), Health), FMath::IsNearlyEqual(Health, 500.f - 60.f * 1.375f, 2.f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChargeCapTest, "ShinobiCoop.Jutsu.ChargeAutoReleasesAtCap", ShinobiTestFlags)
+bool FShinobiChargeCapTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W; // no enemy: the ball must still be in flight when checked
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Jutsu1); // never released
+	W.Tick(3.f); // seals end at ~0.7, the cap at ~2.7-2.75 (0.1 s charge ticks), the ball leaves 0.1 s later
+	const AShinobiProjectile* Ball = FirstActor<AShinobiProjectile>(W);
+	TestNotNull(TEXT("Auto-released at the 2 s cap"), Ball);
+	const float Scale = Ball ? Ball->Scale : -1.f;
+	TestTrue(FString::Printf(TEXT("Full charge is 1.8x (got %.3f)"), Scale), FMath::IsNearlyEqual(Scale, 1.8f, 0.06f));
+	const float Left = ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute());
+	TestTrue(FString::Printf(TEXT("Cost 20, 10 drained, +2/s regen (got %.2f)"), Left), FMath::IsNearlyEqual(Left, 70.f + 2.f * 3.f, 1.f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChargeEmptyTest, "ShinobiCoop.Jutsu.ChargeAutoReleasesWhenChakraRunsOut", ShinobiTestFlags)
+bool FShinobiChargeEmptyTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
+	ShinobiTest::Set(P, Chakra, 22.f);
+
+	// 2 left after the cost, ~3 with the +2/s regen by the end of the seals; drain 5/s minus regen 2/s runs dry after
+	// ~1.1 s of charging, well short of the 2 s cap.
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(0.6f + 1.6f);
+	const AShinobiProjectile* Ball = FirstActor<AShinobiProjectile>(W);
+	TestNotNull(TEXT("Released when chakra ran out"), Ball);
+	TestTrue(TEXT("Chakra never negative"), ShinobiTest::Get(P, Chakra) >= 0.f);
+	const float Scale = Ball ? Ball->Scale : -1.f;
+	TestTrue(FString::Printf(TEXT("Partial charge (got %.3f)"), Scale), Scale > 1.1f && Scale < 1.7f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChargeInterruptTest, "ShinobiCoop.Jutsu.InterruptDuringChargeRefundsBaseHalf", ShinobiTestFlags)
+bool FShinobiChargeInterruptTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(0.6f + 1.f);
+	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
+	const float Before = ShinobiTest::Get(P, Chakra);
+	TestTrue(FString::Printf(TEXT("Charging drained chakra (%.2f left)"), Before), Before < 80.f);
+	ShinobiTest::Damage(P, 25.f);
+	TestFalse(TEXT("A staggering hit interrupts the charge"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
+	TestFalse(TEXT("Charging tag removed"), ShinobiTest::HasTag(P, ShinobiTags::State_Casting_Charging));
+	const float Refund = ShinobiTest::Get(P, Chakra) - Before;
+	TestTrue(FString::Printf(TEXT("Refunds half the base cost, not the drain (got %.2f)"), Refund), FMath::IsNearlyEqual(Refund, 10.f, 0.6f));
+	TestFalse(TEXT("No cooldown"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Fireball));
+	W.Tick(0.5f);
+	TestEqual(TEXT("Nothing thrown"), ShinobiTest::CountActors<AShinobiProjectile>(W), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiEnemyJutsuTest, "ShinobiCoop.Jutsu.EnemyJutsuFiresUncharged", ShinobiTestFlags)
+bool FShinobiEnemyJutsuTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiRogueJonin* Boss = W.Spawn<AShinobiRogueJonin>();
+	ShinobiTest::Hover(Boss);
+
+	TestTrue(TEXT("Boss fireball activates"), Boss->GetAbilitySystemComponent()->TryActivateAbilityByClass(UGA_EnemyFireball::StaticClass()));
+	W.Tick(0.8f + 0.1f + 0.15f); // 0.8 s seals + 0.1 s release delay + timer lag; there's no input to hold
+	const AShinobiProjectile* Ball = FirstActor<AShinobiProjectile>(W);
+	TestNotNull(TEXT("Thrown after the seals"), Ball);
+	TestEqual(TEXT("Uncharged"), Ball ? Ball->Scale : -1.f, 1.f);
 	return true;
 }
 #endif // WITH_DEV_AUTOMATION_TESTS

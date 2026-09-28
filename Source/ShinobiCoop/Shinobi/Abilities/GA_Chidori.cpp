@@ -14,10 +14,11 @@ UGA_Chidori::UGA_Chidori()
 	Glyph = INVTEXT("雷"); // lightning
 	ChakraCost = 30.f;
 	Cooldown = 8.f;
-	WindUp = 0.6f;
+	WindUp = 0.5f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Chidori);
 	ActivationOwnedTags.AddTag(ShinobiTags::State_Casting_Chidori); // hand orb (UShinobiCastFxComponent)
-	CastMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Chidori.AM_Chidori")));
+	// ponytail: the old one-clip cast stands in for the seals until the per-phase montages are imported (plan Task 8)
+	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Chidori.AM_Chidori")));
 }
 
 void UGA_Chidori::ExecuteJutsu()
