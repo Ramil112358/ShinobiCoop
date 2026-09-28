@@ -6,6 +6,7 @@
 
 class ALandscape;
 class UMaterialInterface;
+class UStaticMesh;
 
 /**
  * Editor-only helpers for Scripts/world/build_world.py (sub-project #3): what UE's Python API can't do on its own.
@@ -31,4 +32,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|World")
 	static ALandscape* CreateLandscape(UWorld* World, const FString& HeightmapPng, UMaterialInterface* Material,
 		const TMap<FName, FString>& WeightmapPngs, const FString& LayerInfoPath, int32 WorldPartitionGridSize = 4);
+
+	/**
+	 * Replaces a tree's collision with one upright capsule around its trunk: the vertices in the bottom 10% of the
+	 * mesh's height give the trunk centre and radius (80th percentile of their distance from it, clamped to 10-80 cm);
+	 * the capsule reaches 60% of the tree's height, at most 6 m. Traces use it too (simple as complex), so leaves never
+	 * snag players, cameras or kunai. Returns the radius in cm, 0 on failure.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Shinobi|World")
+	static float SetTrunkCollision(UStaticMesh* Mesh);
 };

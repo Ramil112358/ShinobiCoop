@@ -36,3 +36,5 @@ __pycache__/
 
 # Sub-project #3: generated terrain maps and downloaded asset packs (rebuilt by Scripts/world)
 /SourceArt/World/
+
+SourceArt/World/PolyHaven/

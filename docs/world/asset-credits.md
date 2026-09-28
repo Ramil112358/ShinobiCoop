@@ -14,3 +14,10 @@ Every third-party asset used in the open world (sub-project #3), with its licenc
 - Placeholder sounds: `Scripts/make_sfx.py`.
 
 **Not to ship publicly as is** (see `docs/superpowers/plans/2026-09-27-hero-character.md`): the hero's Leaf-style headband symbol and Akatsuki-style cloak are Naruto IP.
+
+## Realistic pass (sub-project #3b)
+
+- **Poly Haven** (https://polyhaven.com), CC0, credit optional; fetched by `Scripts/world/fetch_polyhaven.py`:
+  - models: `pine_tree_01`, `fir_tree_01`, `fir_sapling`, `fir_sapling_medium`, `pine_sapling_small`, `dead_tree_trunk`, `dead_tree_trunk_02`, `tree_stump_01`, `tree_stump_02`, `root_cluster_01`, `root_cluster_02`, `shrub_01`, `shrub_02`, `shrub_03`, `shrub_04`, `fern_02`, `moss_01`, `nettle_plant`, `periwinkle_plant`, `dandelion_01`, `weed_plant_02`, `flower_heliophila`, `flower_gazania`, `grass_medium_01`, `grass_medium_02`, `grass_bermuda_01`, `rock_moss_set_01`, `rock_moss_set_02`, `boulder_01`, `namaqualand_boulder_02`, `namaqualand_boulder_03`, `namaqualand_boulder_04`, `namaqualand_boulder_05`, `namaqualand_boulder_06`, `stone_01`, `rock_07`, `rock_09`, `coastal_cliff_02`, `coastal_cliff_04`, `rock_face_01`, `rock_face_02`, `stone_fire_pit`;
+  - texture sets: `leafy_grass`, `grass_ground`, `forest_leaves_02`, `forest_ground_04`, `stony_dirt_path`, `rocky_trail`, `rocky_terrain`, `rock_face`, `river_small_rocks`, `dry_riverbed_rock`, `japanese_stone_wall`, `clay_roof_tiles`, `grey_roof_tiles`, `white_plaster_rough_01`, `wood_planks_grey`, `oak_wood_planks`, `reed_roof_03`, `thatch_roof_angled`.
+- **Quixel Megaplants on Fab**, Fab Standard License (free, use in UE projects, no raw redistribution): Japanese Cypress, Norway Maple, Japanese Medlar (added by the user through Fab).

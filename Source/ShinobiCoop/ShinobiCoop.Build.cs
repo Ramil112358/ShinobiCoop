@@ -30,7 +30,9 @@ public class ShinobiCoop : ModuleRules
 			"ImageCore",
 			"NavigationSystem",
 			"RenderCore",
-			"RHI"
+			"RHI",
+			"MeshDescription",
+			"StaticMeshDescription"
 		});
 
 		PublicIncludePaths.AddRange(new string[] {

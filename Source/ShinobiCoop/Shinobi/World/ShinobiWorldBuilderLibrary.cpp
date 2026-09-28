@@ -7,6 +7,11 @@
 #include "LandscapeSubsystem.h"
 #include "LandscapeUtils.h"
 #include "Materials/MaterialInterface.h"
+#include "Engine/StaticMesh.h"
+#include "PhysicsEngine/BodySetup.h"
+#if WITH_EDITOR
+#include "StaticMeshAttributes.h"
+#endif
 #include "ShinobiCoop.h"
 
 #if WITH_EDITOR
@@ -131,5 +136,59 @@ ALandscape* UShinobiWorldBuilderLibrary::CreateLandscape(UWorld* World, const FS
 	return Landscape;
 #else
 	return nullptr;
+#endif
+}
+
+float UShinobiWorldBuilderLibrary::SetTrunkCollision(UStaticMesh* Mesh)
+{
+#if WITH_EDITOR
+	const FMeshDescription* Description = Mesh ? Mesh->GetMeshDescription(0) : nullptr;
+	if (!Description || Description->Vertices().Num() == 0)
+	{
+		UE_LOG(LogShinobiCoop, Error, TEXT("SetTrunkCollision: %s has no mesh description"), Mesh ? *Mesh->GetName() : TEXT("null"));
+		return 0.f;
+	}
+	const TVertexAttributesConstRef<FVector3f> Positions = FStaticMeshConstAttributes(*Description).GetVertexPositions();
+	float MinZ = TNumericLimits<float>::Max(), MaxZ = TNumericLimits<float>::Lowest();
+	for (const FVertexID Vertex : Description->Vertices().GetElementIDs())
+	{
+		MinZ = FMath::Min(MinZ, Positions[Vertex].Z);
+		MaxZ = FMath::Max(MaxZ, Positions[Vertex].Z);
+	}
+	const float Height = MaxZ - MinZ, Band = MinZ + 0.1f * Height;
+	TArray<FVector2f> Base;
+	FVector2f Centre = FVector2f::ZeroVector;
+	for (const FVertexID Vertex : Description->Vertices().GetElementIDs())
+	{
+		if (Positions[Vertex].Z <= Band)
+		{
+			Base.Add(FVector2f(Positions[Vertex].X, Positions[Vertex].Y));
+			Centre += Base.Last();
+		}
+	}
+	Centre /= FMath::Max(1, Base.Num());
+	TArray<float> Distances;
+	for (const FVector2f& Point : Base)
+	{
+		Distances.Add(FVector2f::Distance(Point, Centre));
+	}
+	Distances.Sort();
+	const float Radius = FMath::Clamp(Distances.IsEmpty() ? 0.f : Distances[Distances.Num() * 4 / 5], 10.f, 80.f);
+	const float Top = FMath::Min(0.6f * Height, 600.f);
+
+	Mesh->CreateBodySetup();
+	UBodySetup* Body = Mesh->GetBodySetup();
+	Body->Modify();
+	Body->RemoveSimpleCollision();
+	FKSphylElem Capsule(Radius, FMath::Max(0.f, Top - 2.f * Radius));
+	Capsule.Center = FVector(Centre.X, Centre.Y, MinZ + FMath::Max(Top * 0.5f, Radius));
+	Body->AggGeom.SphylElems.Add(Capsule);
+	Body->CollisionTraceFlag = CTF_UseSimpleAsComplex;
+	Body->InvalidatePhysicsData();
+	Body->CreatePhysicsMeshes();
+	Mesh->MarkPackageDirty();
+	return Radius;
+#else
+	return 0.f;
 #endif
 }

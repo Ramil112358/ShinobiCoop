@@ -212,4 +212,151 @@ def main():
     log(f"catalog -> {CATALOG}")
 
 
-main()
+# ------------------------------------------------------------------------------------------------ realistic (Poly Haven)
+PH_DIR = os.path.join(ART, "PolyHaven")
+PH_LIST = os.path.join(PROJECT, "Scripts", "world", "polyhaven_assets.json")
+PH_COLLISION = {"Tree": "trunk", "Log": "kdop", "Shrub": "none", "Grass": "none", "Rock": "kdop", "Cliff": "complex", "Prop": "box"}
+
+
+def texture(path, dest, name, kind):
+    task = unreal.AssetImportTask()
+    task.filename = path
+    task.destination_path = dest
+    task.destination_name = name
+    task.automated = task.save = task.replace_existing = True
+    TOOLS.import_asset_tasks([task])
+    tex = unreal.load_asset(f"{dest}/{name}")
+    if kind == "normal":
+        tex.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_NORMALMAP)
+        tex.set_editor_property("srgb", False)
+    elif kind == "linear":
+        tex.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_MASKS)
+        tex.set_editor_property("srgb", False)
+    unreal.EditorAssetLibrary.save_loaded_asset(tex)
+    return tex
+
+
+def pbr_parent():
+    """M_PBRLayer: Albedo, Normal, Roughness textures at UV x Tiling; AlbedoTint; Substrate slab."""
+    path = f"{LIB}/Materials/M_PBRLayer"
+    if unreal.EditorAssetLibrary.does_asset_exist(path):
+        return unreal.load_asset(path)
+    m = TOOLS.create_asset("M_PBRLayer", f"{LIB}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    uv = MEL.create_material_expression(m, unreal.MaterialExpressionTextureCoordinate, -1200, 0)
+    tiling = MEL.create_material_expression(m, unreal.MaterialExpressionScalarParameter, -1200, 150)
+    tiling.set_editor_property("parameter_name", "Tiling")
+    tiling.set_editor_property("default_value", 1.0)
+    scaled = MEL.create_material_expression(m, unreal.MaterialExpressionMultiply, -1000, 50)
+    MEL.connect_material_expressions(uv, "", scaled, "A")
+    MEL.connect_material_expressions(tiling, "", scaled, "B")
+    samplers = {}
+    for i, (name, sampler) in enumerate((("Albedo", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR),
+                                         ("Normal", unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL),
+                                         ("Roughness", unreal.MaterialSamplerType.SAMPLERTYPE_MASKS))):
+        tex = MEL.create_material_expression(m, unreal.MaterialExpressionTextureSampleParameter2D, -700, -300 + i * 300)
+        tex.set_editor_property("parameter_name", name)
+        tex.set_editor_property("sampler_type", sampler)
+        MEL.connect_material_expressions(scaled, "", tex, "UVs")
+        samplers[name] = tex
+    tint = MEL.create_material_expression(m, unreal.MaterialExpressionVectorParameter, -700, 600)
+    tint.set_editor_property("parameter_name", "AlbedoTint")
+    tint.set_editor_property("default_value", unreal.LinearColor(1, 1, 1, 1))
+    mul = MEL.create_material_expression(m, unreal.MaterialExpressionMultiply, -400, -250)
+    MEL.connect_material_expressions(samplers["Albedo"], "RGB", mul, "A")
+    MEL.connect_material_expressions(tint, "", mul, "B")
+    slab = MEL.create_material_expression(m, unreal.MaterialExpressionSubstrateShadingModels, -150, 0)
+    MEL.connect_material_expressions(mul, "", slab, "BaseColor")
+    MEL.connect_material_expressions(samplers["Roughness"], "R", slab, "Roughness")
+    MEL.connect_material_expressions(samplers["Normal"], "RGB", slab, "Normal")
+    MEL.connect_material_property(slab, "", unreal.MaterialProperty.MP_FRONT_MATERIAL)
+    MEL.set_base_material_usage(m, unreal.MaterialUsage.MATUSAGE_NANITE, True)
+    MEL.set_base_material_usage(m, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES, True)
+    errors = MEL.recompile_material(m)
+    if errors:
+        raise RuntimeError(f"M_PBRLayer failed to compile: {errors}")
+    unreal.EditorAssetLibrary.save_loaded_asset(m)
+    return m
+
+
+def texture_set(asset_id, res):
+    """Imports a Poly Haven texture set as T_<id>_{A,N,R,D} and makes MI_PBR_<id>; returns the MI."""
+    folder = os.path.join(PH_DIR, asset_id)
+    dest = f"{LIB}/Textures/{asset_id}"
+    files = os.listdir(folder)
+
+    def pick(tag):
+        return os.path.join(folder, next(f for f in files if tag in f))
+    albedo = texture(pick("_diff"), dest, f"T_{asset_id}_A", "color")
+    normal = texture(pick("_nor_gl_"), dest, f"T_{asset_id}_N", "normal")
+    rough = texture(pick("_rough_"), dest, f"T_{asset_id}_R", "linear")
+    texture(pick("_disp_"), dest, f"T_{asset_id}_D", "linear")  # used by the landscape height blend (R2)
+    path = f"{LIB}/Materials/MI_PBR_{asset_id}"
+    mi = unreal.load_asset(path) if unreal.EditorAssetLibrary.does_asset_exist(path) else TOOLS.create_asset(
+        f"MI_PBR_{asset_id}", f"{LIB}/Materials", unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    MEL.set_material_instance_parent(mi, pbr_parent())
+    MEL.set_material_instance_texture_parameter_value(mi, "Albedo", albedo)
+    MEL.set_material_instance_texture_parameter_value(mi, "Normal", normal)
+    MEL.set_material_instance_texture_parameter_value(mi, "Roughness", rough)
+    unreal.EditorAssetLibrary.save_loaded_asset(mi)
+    return mi
+
+
+def realistic_meshes(asset_id, category):
+    """The asset's static meshes: already-imported ones are reused (so a crashed run resumes), else the glTF is imported.
+    Extra LOD meshes (_LOD1+) are dropped: Nanite replaces them."""
+    dest = f"{LIB}/PH_{category}/{asset_id}"
+    paths = [p for p in unreal.EditorAssetLibrary.list_assets(dest, recursive=True) if "/StaticMeshes/" in p]         if unreal.EditorAssetLibrary.does_directory_exist(dest) else []
+    if paths:
+        meshes = [unreal.load_asset(p.split(".")[0]) for p in paths]
+    else:
+        folder = os.path.join(PH_DIR, asset_id)
+        gltf = next(f for f in os.listdir(folder) if f.endswith(".gltf"))
+        meshes = import_file(os.path.join(folder, gltf), dest)
+    return [m for m in meshes if isinstance(m, unreal.StaticMesh) and not re.search(r"_LOD[1-9]$", m.get_name())]
+
+
+def variant_name(mesh):
+    return re.sub(r"_(LOD0|\dk)$", "", re.sub(r"_LOD0$", "", mesh.get_name()))
+
+
+def realistic_model(asset_id, category):
+    """{variant name: catalog entry} for every variant mesh of one Poly Haven model."""
+    entries = {}
+    for mesh in realistic_meshes(asset_id, category):
+        nanite = mesh.get_editor_property("nanite_settings")
+        nanite.set_editor_property("enabled", True)
+        mesh.set_editor_property("nanite_settings", nanite)
+        kind = PH_COLLISION[category]
+        bounds = mesh.get_bounding_box()
+        entry = {"mesh": mesh.get_path_name(), "height_m": round((bounds.max.z - bounds.min.z) / 100.0, 2), "collision": kind}
+        if kind == "trunk":
+            entry["trunk_radius_cm"] = round(unreal.ShinobiWorldBuilderLibrary.set_trunk_collision(mesh), 1)
+        else:
+            set_collision(mesh, kind)
+        unreal.EditorAssetLibrary.save_loaded_asset(mesh)
+        entries[variant_name(mesh)] = entry
+    if not entries:
+        unreal.log_warning(f"[import_library] {asset_id}: no static mesh imported")
+    return entries
+
+
+def realistic():
+    with open(PH_LIST, encoding="utf-8") as f:
+        wanted = json.load(f)
+    with open(CATALOG, encoding="utf-8") as f:
+        catalog = json.load(f)
+    for key in [k for k in catalog if k.startswith("PH_")]:
+        del catalog[key]
+    for asset_id, spec in wanted["models"].items():
+        entries = realistic_model(asset_id, spec["category"])
+        catalog.setdefault(f"PH_{spec['category']}", {}).update(entries)
+        log(f"PH_{spec['category']}/{asset_id}: {len(entries)} variants, " + ", ".join(
+            f"{n} {e['height_m']} m" + (f" r{e['trunk_radius_cm']}" if "trunk_radius_cm" in e else "") for n, e in entries.items()))
+    for asset_id, spec in wanted["textures"].items():
+        texture_set(asset_id, spec["res"])
+    log(f"realistic: {sum(len(v) for k, v in catalog.items() if k.startswith('PH_'))} models, {len(wanted['textures'])} texture sets")
+    with open(CATALOG, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(catalog, f, indent=1, sort_keys=True)
+
+
+realistic() if os.environ.get("SHINOBI_IMPORT") == "realistic" else main()

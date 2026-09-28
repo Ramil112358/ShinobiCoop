@@ -12,6 +12,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import layout  # noqa: E402
 import make_heightmap as hm  # noqa: E402
 import make_placements as mp  # noqa: E402
+import fetch_polyhaven as ph  # noqa: E402
+
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def world_to_pixel(lay, x, y):
@@ -89,6 +92,33 @@ def test_placements():
     for b in lay.buildings:
         if b["type"] != "gate":
             assert (np.hypot(bx - b["x"], by - b["y"]) > mp.FOOTPRINT_M[b["type"]]).all(), f"scatter inside {b['type']}"
+
+
+def test_fetch_plan():
+    with open(os.path.join(HERE, "testdata", "polyhaven_rock_07_files.json"), encoding="utf-8") as f:
+        files = json.load(f)
+    plan = ph.plan_downloads(files, "2k", "model")
+    rel = {r for _, r, _ in plan}
+    gltf = files["gltf"]["2k"]["gltf"]
+    assert "rock_07_2k.gltf" in rel and all(name in rel for name in gltf["include"]), rel
+    assert dict((r, s) for _, r, s in plan)["rock_07_2k.gltf"] == gltf["size"]
+    textures = ph.plan_downloads(files, "2k", "texture")
+    assert len(textures) == 4 and all(any(m in r for _, r, _ in textures) for m in ("_diff", "_nor_gl_", "_rough_", "_disp_")), textures
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "f.bin")
+        with open(path, "wb") as f:
+            f.write(b"x" * 10)
+        assert not ph.needs_download(path, 10)
+        assert ph.needs_download(path, 11)  # truncated by an interrupted run
+        assert ph.needs_download(os.path.join(tmp, "missing.bin"), 10)
+
+
+def test_trees_trunk_collision():
+    with open(os.path.join(HERE, "library_catalog.json"), encoding="utf-8") as f:
+        catalog = json.load(f)
+    trees = {name: e for cat in ("PH_Tree", "Mega_Tree") for name, e in catalog.get(cat, {}).items()}
+    assert trees, "no realistic trees imported"
+    assert all(e.get("collision") == "trunk" and 10 <= e.get("trunk_radius_cm", 0) <= 80 for e in trees.values()), trees
 
 
 if __name__ == "__main__":
