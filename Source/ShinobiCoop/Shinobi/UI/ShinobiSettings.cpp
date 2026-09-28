@@ -1,0 +1,113 @@
+#include "Shinobi/UI/ShinobiSettings.h"
+#include "Engine/Engine.h"
+#include "GameFramework/GameUserSettings.h"
+#include "Shinobi/ShinobiLook.h"
+
+namespace
+{
+	const TCHAR* QualityNames[] = { TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic"), TEXT("Cinematic") };
+	const float RenderScales[] = { 50.f, 67.f, 75.f, 100.f };
+	const float FrameCaps[] = { 30.f, 60.f, 120.f, 144.f, 0.f }; // 0 = unlimited
+	const EWindowMode::Type WindowModes[] = { EWindowMode::Fullscreen, EWindowMode::WindowedFullscreen, EWindowMode::Windowed };
+
+	UGameUserSettings* Settings()
+	{
+		return GEngine->GetGameUserSettings();
+	}
+
+	/** Index of the value after Current in Values (the first one if Current isn't in the list). */
+	template <typename T, int32 N>
+	int32 NextIndex(const T (&Values)[N], T Current)
+	{
+		for (int32 Index = 0; Index < N; ++Index)
+		{
+			if (FMath::IsNearlyEqual(double(Values[Index]), double(Current), 0.5))
+			{
+				return (Index + 1) % N;
+			}
+		}
+		return 0;
+	}
+}
+
+float ShinobiSettings::GetRenderScale()
+{
+	float Current = 100.f, Min = 0.f, Max = 0.f, Default = 100.f;
+	Settings()->GetResolutionScaleInformationEx(Default, Current, Min, Max);
+	return Current;
+}
+
+void ShinobiSettings::SetRenderScale(float Percent)
+{
+	Settings()->SetResolutionScaleValueEx(Percent);
+}
+
+FString ShinobiSettings::Label(ERow Row)
+{
+	UGameUserSettings* S = Settings();
+	switch (Row)
+	{
+	case ERow::Quality:
+	{
+		const int32 Level = S->GetOverallScalabilityLevel();
+		return FString::Printf(TEXT("Graphics quality: %s"), Level >= 0 && Level < UE_ARRAY_COUNT(QualityNames) ? QualityNames[Level] : TEXT("Custom"));
+	}
+	case ERow::RenderScale:
+		return FString::Printf(TEXT("Render scale: %d%%"), FMath::RoundToInt(GetRenderScale()));
+	case ERow::WindowMode:
+	{
+		const EWindowMode::Type Mode = S->GetFullscreenMode();
+		return FString::Printf(TEXT("Window: %s"), Mode == EWindowMode::Fullscreen ? TEXT("Fullscreen")
+			: Mode == EWindowMode::WindowedFullscreen ? TEXT("Borderless") : TEXT("Windowed"));
+	}
+	case ERow::FrameCap:
+	{
+		const float Cap = S->GetFrameRateLimit();
+		return Cap <= 0.f ? FString(TEXT("Frame cap: Unlimited")) : FString::Printf(TEXT("Frame cap: %d"), FMath::RoundToInt(Cap));
+	}
+	case ERow::VSync:
+		return FString::Printf(TEXT("VSync: %s"), S->IsVSyncEnabled() ? TEXT("On") : TEXT("Off"));
+	case ERow::Outline:
+		return FString::Printf(TEXT("Character outline: %s"), ShinobiLook::IsOutlineEnabled() ? TEXT("On") : TEXT("Off"));
+	default:
+		return FString();
+	}
+}
+
+void ShinobiSettings::Cycle(ERow Row, UWorld* World)
+{
+	UGameUserSettings* S = Settings();
+	switch (Row)
+	{
+	case ERow::Quality:
+		S->SetOverallScalabilityLevel((FMath::Max(S->GetOverallScalabilityLevel(), -1) + 1) % UE_ARRAY_COUNT(QualityNames));
+		break;
+	case ERow::RenderScale:
+		SetRenderScale(RenderScales[NextIndex(RenderScales, GetRenderScale())]);
+		break;
+	case ERow::WindowMode:
+	{
+		int32 Next = 0;
+		for (int32 Index = 0; Index < UE_ARRAY_COUNT(WindowModes); ++Index)
+		{
+			Next = WindowModes[Index] == S->GetFullscreenMode() ? (Index + 1) % UE_ARRAY_COUNT(WindowModes) : Next;
+		}
+		S->SetFullscreenMode(WindowModes[Next]);
+		S->ApplyResolutionSettings(false);
+		break;
+	}
+	case ERow::FrameCap:
+		S->SetFrameRateLimit(FrameCaps[NextIndex(FrameCaps, S->GetFrameRateLimit())]);
+		break;
+	case ERow::VSync:
+		S->SetVSyncEnabled(!S->IsVSyncEnabled());
+		break;
+	case ERow::Outline:
+		ShinobiLook::SetOutlineEnabled(World, !ShinobiLook::IsOutlineEnabled());
+		return;
+	default:
+		return;
+	}
+	S->ApplyNonResolutionSettings();
+	S->SaveSettings();
+}

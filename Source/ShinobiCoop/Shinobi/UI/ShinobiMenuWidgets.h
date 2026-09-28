@@ -50,6 +50,9 @@ protected:
 	UShinobiSessionSubsystem* GetSessions() const;
 	UShinobiIndexButton* AddButton(UVerticalBox* Box, const FString& Label, int32 Index, FShinobiIndexClicked Handler);
 	UTextBlock* AddText(UVerticalBox* Box, const FString& Text, int32 Size, const FLinearColor& Color);
+	void SetEntryLabel(int32 Index, const FString& Label);
+	/** Opens the settings panel over this menu (hidden until the panel's Back). */
+	void OpenSettings();
 
 	UPROPERTY()
 	TObjectPtr<UVerticalBox> Column;
@@ -72,7 +75,7 @@ class SHINOBICOOP_API UShinobiMainMenuWidget : public UShinobiMenuWidget
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual FString GetTitle() const override { return TEXT("SHINOBI CO-OP"); }
-	virtual TArray<FString> GetEntries() const override { return { TEXT("Host Game"), TEXT("Find Games"), TEXT("Quit") }; }
+	virtual TArray<FString> GetEntries() const override { return { TEXT("Host Game"), TEXT("Find Games"), TEXT("Settings"), TEXT("Quit") }; }
 	virtual void OnEntry(int32 Index) override;
 	virtual void Refresh() override;
 
@@ -95,7 +98,24 @@ class SHINOBICOOP_API UShinobiPauseMenuWidget : public UShinobiMenuWidget
 
 protected:
 	virtual FString GetTitle() const override { return TEXT("PAUSED"); }
-	virtual TArray<FString> GetEntries() const override { return { TEXT("Resume"), TEXT("Invite Friend"), TEXT("Leave") }; }
+	virtual TArray<FString> GetEntries() const override { return { TEXT("Resume"), TEXT("Invite Friend"), TEXT("Settings"), TEXT("Leave") }; }
+	virtual void OnEntry(int32 Index) override;
+	virtual void Refresh() override;
+};
+
+/** Graphics settings (ShinobiSettings rows): each click cycles a row, applies and saves; Back returns to the opener. */
+UCLASS()
+class SHINOBICOOP_API UShinobiSettingsWidget : public UShinobiMenuWidget
+{
+	GENERATED_BODY()
+
+public:
+	/** The menu hidden underneath, shown again on Back. */
+	TWeakObjectPtr<UUserWidget> Opener;
+
+protected:
+	virtual FString GetTitle() const override { return TEXT("SETTINGS"); }
+	virtual TArray<FString> GetEntries() const override;
 	virtual void OnEntry(int32 Index) override;
 	virtual void Refresh() override;
 };

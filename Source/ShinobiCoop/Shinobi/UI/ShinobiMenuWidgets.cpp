@@ -10,6 +10,7 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "Shinobi/ShinobiPlayerController.h"
 #include "Shinobi/Online/ShinobiSessionSubsystem.h"
+#include "Shinobi/UI/ShinobiSettings.h"
 
 namespace
 {
@@ -126,6 +127,25 @@ UTextBlock* UShinobiMenuWidget::AddText(UVerticalBox* Box, const FString& Text, 
 	return Block;
 }
 
+void UShinobiMenuWidget::SetEntryLabel(int32 Index, const FString& Label)
+{
+	if (EntryButtons.IsValidIndex(Index))
+	{
+		if (UTextBlock* Text = Cast<UTextBlock>(EntryButtons[Index]->GetChildAt(0)))
+		{
+			Text->SetText(FText::FromString(Label));
+		}
+	}
+}
+
+void UShinobiMenuWidget::OpenSettings()
+{
+	UShinobiSettingsWidget* Panel = CreateWidget<UShinobiSettingsWidget>(GetOwningPlayer(), UShinobiSettingsWidget::StaticClass());
+	Panel->Opener = this;
+	SetVisibility(ESlateVisibility::Collapsed);
+	Panel->AddToViewport(50);
+}
+
 TSharedRef<SWidget> UShinobiMainMenuWidget::RebuildWidget()
 {
 	const bool bBuild = WidgetTree && !WidgetTree->RootWidget;
@@ -155,6 +175,9 @@ void UShinobiMainMenuWidget::OnEntry(int32 Index)
 		{
 			Sessions->FindGames();
 		}
+		break;
+	case 2:
+		OpenSettings();
 		break;
 	default:
 		UKismetSystemLibrary::QuitGame(this, GetOwningPlayer(), EQuitPreference::Quit, false);
@@ -223,6 +246,9 @@ void UShinobiPauseMenuWidget::OnEntry(int32 Index)
 			Sessions->ShowInviteUI();
 		}
 		break;
+	case 2:
+		OpenSettings();
+		break;
 	default:
 		if (UShinobiSessionSubsystem* Sessions = GetSessions())
 		{
@@ -237,4 +263,37 @@ void UShinobiPauseMenuWidget::Refresh()
 	Super::Refresh();
 	const UShinobiSessionSubsystem* Sessions = GetSessions();
 	EntryButtons[1]->SetIsEnabled(Sessions && !Sessions->IsLanMode()); // the Steam overlay does the inviting
+}
+
+TArray<FString> UShinobiSettingsWidget::GetEntries() const
+{
+	TArray<FString> Entries;
+	for (uint8 Row = 0; Row < uint8(ShinobiSettings::ERow::Num); ++Row)
+	{
+		Entries.Add(ShinobiSettings::Label(ShinobiSettings::ERow(Row)));
+	}
+	Entries.Add(TEXT("Back"));
+	return Entries;
+}
+
+void UShinobiSettingsWidget::OnEntry(int32 Index)
+{
+	if (Index < int32(ShinobiSettings::ERow::Num))
+	{
+		const ShinobiSettings::ERow Row = ShinobiSettings::ERow(Index);
+		ShinobiSettings::Cycle(Row, GetWorld());
+		SetEntryLabel(Index, ShinobiSettings::Label(Row));
+		return;
+	}
+	if (UUserWidget* Menu = Opener.Get())
+	{
+		Menu->SetVisibility(ESlateVisibility::Visible);
+	}
+	RemoveFromParent();
+}
+
+void UShinobiSettingsWidget::Refresh()
+{
+	// Not tied to the session state: rows stay usable while matchmaking.
+	MessageText->SetText(FText::FromString(TEXT("Changes apply and save immediately. Lower quality or render scale for more FPS.")));
 }
