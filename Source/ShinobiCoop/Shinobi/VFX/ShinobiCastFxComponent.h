@@ -10,11 +10,26 @@ class UMaterialInstanceDynamic;
 class UPointLightComponent;
 class UStaticMeshComponent;
 
+/** The pieces a cast can show (for tests and the per-jutsu table). */
+enum class EShinobiCastPart : uint8
+{
+	HandOrb,        // glowing sphere and light in the right hand (Chidori, Rasengan)
+	RasenganShells, // two spinning shells around the orb
+	LightningArcs,  // crackling bolts around the orb (Chidori)
+	MouthFlame,     // flame at the mouth while a Fireball charges
+	EyeGlow,        // red eyes (Amaterasu)
+	BloodStreaks,   // blood running from the eyes (Amaterasu)
+};
+
 /**
- * Jutsu hand orb: a glowing sphere with a small light in the right hand while a jutsu is active (wind-up and
- * execution). Fire for Fireball, crackling lightning for Chidori, a bigger blue spiral for Rasengan, dark
- * purple for Amaterasu. Cosmetic only; it follows the State.Casting.* tags each jutsu grants while active,
- * which GAS replicates to every machine.
+ * What a jutsu looks like on the caster while it's active (seals, charge and, for the dashes, the run-in):
+ * - Fireball: a flame at the mouth while charging, growing with the charge.
+ * - Chidori: a crackling white-blue orb in the right hand with lightning arcs that lengthen with the charge.
+ * - Rasengan: a blue orb with two spinning shells, growing with the charge.
+ * - Amaterasu: glowing red eyes, with blood running down from them during the seals.
+ * Cosmetic only. It follows the State.Casting.* tags each jutsu grants while active (plus State.Casting.Charging),
+ * which GAS replicates to every machine; the charge size runs on this machine's clock from when the Charging tag
+ * appeared.
  */
 UCLASS(ClassGroup = (Shinobi), meta = (BlueprintSpawnableComponent))
 class SHINOBICOOP_API UShinobiCastFxComponent : public USceneComponent
@@ -26,8 +41,14 @@ public:
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-	/** The casting tag the orb currently shows, or an invalid tag when hidden. */
+	/** The casting tag being shown, or an invalid tag when nothing is. */
 	FGameplayTag GetShownTag() const;
+
+	bool IsPartVisible(EShinobiCastPart Part) const;
+
+	/** 1 + 0.8 x the charge so far (by this machine's clock since State.Casting.Charging appeared), frozen at the
+	 * release; 1 when not charging. */
+	float GetChargeVisualScale() const;
 
 protected:
 	virtual void BeginPlay() override;
@@ -35,7 +56,11 @@ protected:
 
 private:
 	void OnCastingTagChanged(const FGameplayTag Tag, int32 NewCount);
+	void OnChargingTagChanged(const FGameplayTag Tag, int32 NewCount);
 	void Refresh();
+	void UpdateHead(float ChargeScale);
+	void UpdateArcs(float ChargeScale);
+	UStaticMeshComponent* MakeMesh(const TCHAR* Name, const TCHAR* MeshPath, UMaterialInstanceDynamic* Material, USceneComponent* Parent, FName Socket = NAME_None);
 
 	UPROPERTY()
 	TObjectPtr<UStaticMeshComponent> Orb;
@@ -46,8 +71,30 @@ private:
 	UPROPERTY()
 	TObjectPtr<UPointLightComponent> Light;
 
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> Shells;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> ArcSegments;
+
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> MouthFlame;
+
+	UPROPERTY()
+	TObjectPtr<UPointLightComponent> MouthLight;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> Eyes;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> Streaks;
+
 	TWeakObjectPtr<UAbilitySystemComponent> AbilitySystem;
 	TArray<FDelegateHandle> TagEventHandles;
+	FDelegateHandle ChargingHandle;
 	int32 ShownIndex = INDEX_NONE;
 	float Age = 0.f;
+	bool bCharging = false;
+	float ChargeAge = 0.f;
+	float NextArcShuffle = 0.f;
 };

@@ -426,13 +426,52 @@ bool FShinobiJutsuVfxTest::RunTest(const FString& Parameters)
 	ShinobiTest::Hover(P);
 	ShinobiTest::Hover(E);
 
-	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
-	TestTrue(TEXT("Fire orb in hand during the wind-up"), P->GetCastFx()->GetShownTag() == ShinobiTags::State_Casting_Fireball);
-	W.Tick(1.2f); // thrown at ~0.75-0.8, hits at ~1.0
-	TestFalse(TEXT("Orb gone once the jutsu ends"), P->GetCastFx()->GetShownTag().IsValid());
+	const UShinobiCastFxComponent* Fx = P->GetCastFx();
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Jutsu1);
+	TestTrue(TEXT("Fireball cast shown"), Fx->GetShownTag() == ShinobiTags::State_Casting_Fireball);
+	TestFalse(TEXT("Fireball: nothing in the hand"), Fx->IsPartVisible(EShinobiCastPart::HandOrb));
+	TestFalse(TEXT("No mouth flame during the seals"), Fx->IsPartVisible(EShinobiCastPart::MouthFlame));
+	W.Tick(0.7f);
+	TestTrue(TEXT("Mouth flame while charging"), Fx->IsPartVisible(EShinobiCastPart::MouthFlame));
+	W.Tick(1.f);
+	TestTrue(FString::Printf(TEXT("The flame grows with the charge (%.2f)"), Fx->GetChargeVisualScale()), Fx->GetChargeVisualScale() > 1.3f);
+	ShinobiTest::Release(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(1.2f); // thrown at ~1.8, hits at ~2.0
+	TestFalse(TEXT("Effects gone once the jutsu ends"), Fx->GetShownTag().IsValid());
+	TestFalse(TEXT("Mouth flame gone"), Fx->IsPartVisible(EShinobiCastPart::MouthFlame));
 	TestNotNull(TEXT("Fire burst at the impact"), FindBurst(W, EShinobiBurst::Fire));
 	TestTrue(TEXT("Burning target glows with the burn aura"), E->GetChakraAura()->GetShownTag() == ShinobiTags::State_Burning_Normal);
 	TestEqual(TEXT("Burn aura faded in"), E->GetChakraAura()->GetFade(), 1.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCastFxPartsTest, "ShinobiCoop.Jutsu.CastFxPartsPerJutsu", ShinobiTestFlags)
+bool FShinobiCastFxPartsTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	const UShinobiCastFxComponent* Fx = P->GetCastFx();
+	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
+	auto Shows = [Fx](EShinobiCastPart Part) { return Fx->IsPartVisible(Part); };
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
+	TestTrue(TEXT("Chidori: orb and lightning arcs"), Shows(EShinobiCastPart::HandOrb) && Shows(EShinobiCastPart::LightningArcs));
+	TestFalse(TEXT("Chidori: no Rasengan shells"), Shows(EShinobiCastPart::RasenganShells));
+	W.Tick(1.5f); // seals, full dash, end
+	TestFalse(TEXT("Chidori over: arcs hidden"), Shows(EShinobiCastPart::LightningArcs));
+
+	ShinobiTest::Set(P, Chakra, 100.f);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
+	TestTrue(TEXT("Rasengan: orb and shells"), Shows(EShinobiCastPart::HandOrb) && Shows(EShinobiCastPart::RasenganShells));
+	TestFalse(TEXT("Rasengan: no lightning"), Shows(EShinobiCastPart::LightningArcs));
+	W.Tick(1.5f);
+
+	ShinobiTest::Set(P, Chakra, 100.f);
+	W.Spawn<AShinobiCharacterBase>(P->GetActorLocation() + FVector(1000.f, 0.f, 0.f));
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
+	TestTrue(TEXT("Amaterasu cast"), ShinobiTest::IsActive(P, UGA_Amaterasu::StaticClass()));
+	TestTrue(TEXT("Amaterasu: glowing, bleeding eyes"), Shows(EShinobiCastPart::EyeGlow) && Shows(EShinobiCastPart::BloodStreaks));
+	TestFalse(TEXT("Amaterasu: nothing in the hand"), Shows(EShinobiCastPart::HandOrb));
 	return true;
 }
 

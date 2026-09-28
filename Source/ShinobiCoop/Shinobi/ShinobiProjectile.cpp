@@ -71,6 +71,17 @@ void AShinobiProjectile::BeginPlay()
 	if (!IsNetMode(NM_DedicatedServer))
 	{
 		Mesh->SetMaterial(0, ShinobiVfx::MakeGlow(this, GlowColor, GlowIntensity, 1.f));
+		if (bFlameShell)
+		{
+			UStaticMeshComponent* Shell = NewObject<UStaticMeshComponent>(this, TEXT("FlameShell"));
+			Shell->SetStaticMesh(Mesh->GetStaticMesh());
+			Shell->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Shell->SetCastShadow(false);
+			Shell->SetMaterial(0, ShinobiVfx::MakeFlame(this, GlowColor, 4.f));
+			Shell->SetupAttachment(Mesh);
+			Shell->SetRelativeScale3D(FVector(1.3f));
+			Shell->RegisterComponent();
+		}
 	}
 }
 
@@ -135,6 +146,7 @@ AShinobiKunai::AShinobiKunai()
 	GlowColor = FLinearColor(0.35f, 0.37f, 0.4f);
 	GlowIntensity = 0.6f;
 	bBurstOnImpact = false;
+	bFlameShell = false;
 	Collision->SetSphereRadius(12.f);
 	Movement->InitialSpeed = 3000.f;
 	Movement->MaxSpeed = 3000.f;

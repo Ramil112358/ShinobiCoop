@@ -56,6 +56,8 @@ protected:
 	FLinearColor GlowColor;
 	float GlowIntensity = 8.f;
 	bool bBurstOnImpact = true;
+	/** A flickering M_Flame shell around the glowing core (the Fireball). */
+	bool bFlameShell = true;
 
 private:
 	UFUNCTION()
