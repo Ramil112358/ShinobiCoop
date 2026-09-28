@@ -30,7 +30,8 @@ for (int i = 0; i < 4; i++)
 if (s0 < 0.5 && nmax > 0.5)
 {
     bool enemy = nmax > 1.5;
-    col = lerp(col, enemy ? float3(0.54, 0.10, 0.08) : float3(0.03, 0.03, 0.03), enemy ? 0.6 : 0.85);
+    // Linear HDR here (before tonemapping): darken for friends, tint toward a deep red for enemies.
+    col = enemy ? lerp(col, float3(0.5, 0.02, 0.01) * max(dot(col, float3(0.3, 0.59, 0.11)), 0.05) * 2.0, 0.6) : col * 0.12;
 }
 return col;
 """
@@ -49,7 +50,9 @@ def outline_material():
     folder, name = MATERIAL.rsplit("/", 1)
     m = TOOLS.create_asset(name, folder, unreal.Material, unreal.MaterialFactoryNew())
     m.set_editor_property("material_domain", unreal.MaterialDomain.MD_POST_PROCESS)
-    m.set_editor_property("blendable_location", unreal.BlendableLocation.BL_SCENE_COLOR_AFTER_TONEMAPPING)
+    # Before the upscaler (TSR): scene colour, depth and stencil then share the render resolution. After tonemapping
+    # the colour is at output resolution while the stencil is not, which shifted outlines off the characters at 4K.
+    m.set_editor_property("blendable_location", unreal.BlendableLocation.BL_SCENE_COLOR_AFTER_DOF)
     scene = MEL.create_material_expression(m, unreal.MaterialExpressionSceneTexture, -700, 0)
     scene.set_editor_property("scene_texture_id", unreal.SceneTextureId.PPI_POST_PROCESS_INPUT0)
     # Referencing the stencil and custom depth makes the material bind those scene textures for the HLSL lookups.
