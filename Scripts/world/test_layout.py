@@ -161,6 +161,25 @@ def test_weights_five_layers():
         assert w["dirt"][r, c] == 255, f"grass could grow in {camp.id}"
 
 
+def test_bank_dressing():
+    lay = layout.load()
+    data = mp.build(lay)
+    bank = data["bank"]
+    assert len(bank) > 150, f"only {len(bank)} bank items"
+    t = mp.Terrain(lay)
+    water = hm.build.water_level
+    x = np.array([b["x"] for b in bank]) / 100
+    y = np.array([b["y"] for b in bank]) / 100
+    d = hm.distance_to_polyline(x, y, lay.river)
+    edge = mp.RIVER_EDGE_M
+    assert ((d >= edge - 0.01) & (d <= edge + 3.01)).all(), f"bank items {d.min():.1f}-{d.max():.1f} m from the river line"
+    assert (t.height(x, y) >= water - 0.3).all(), "bank item under water"
+    bx, by, _ = lay.bridge
+    assert (np.hypot(x - bx, y - by) > 20).all(), "bank item on the bridge"
+    keys = {b["mesh"] for b in bank}
+    assert any(k.startswith("PH_Grass/") for k in keys) and any(k.startswith("PH_Rock/") for k in keys), keys
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

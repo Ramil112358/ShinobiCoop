@@ -10,6 +10,7 @@ environment variable SHINOBI_WORLD_STAGE (default "terrain"); later stages load 
             ring and gate, bridge, camp and boss dressing, camp/boss markers (TargetPoints tagged ShinobiCampSite,
             Camp:<id>, Difficulty:<n>, Boss), and the nature scatter as one AShinobiScatterActor per 128 m chunk.
             Re-running replaces the previous dressing (every actor it spawns carries the tag ShinobiDressing).
+  water     the river surface: a plane at the water level with M_WaterReal (single-layer water, scrolling ripples).
   mood      the warm late-afternoon sun and valley fog (also applied by terrain), and the ambient sounds from
             SourceArt/Audio/World (make_ambience.py, run first): the forest bed everywhere, the river along its course.
             Re-running replaces the previous sounds (tag ShinobiMood).
@@ -46,13 +47,14 @@ GRASS_TYPES = {
                          ("grass_medium_02", 500, 3), ("grass_bermuda_01_medium", 1200, 2), ("dandelion_01", 20, 2),
                          ("flower_gazania_h", 8, 1)]),
     "ForestFloor": ("Forest", [("fern_02", 30, 4), ("grass_medium_02_a", 60, 1), ("weed_plant_02", 30, 2),
-                               ("nettle_plant_tall", 10, 2), ("root_cluster_02", 5, 2)]),
+                               ("nettle_plant_tall", 10, 2)]),
 }
 MEL = unreal.MaterialEditingLibrary
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 EAS = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
 TOON_VOLUME_LABEL = "ShinobiToonPost"
 MOOD_TAG = "ShinobiMood"
+WATER_TAG = "ShinobiWater"
 
 
 def log(message):
@@ -489,6 +491,91 @@ def stage_mood(lay):
     log(f"mood: sun and fog set, {1 + len(lay.river)} ambient sounds")
 
 
-STAGES = {"terrain": stage_terrain, "dress": stage_dress, "mood": stage_mood}
+def water_material():
+    """M_WaterReal: single-layer water (depth-based absorption and scattering, refraction, Lumen reflections) with two
+    ripple normal maps (Scripts/world/make_water_normal.py) scrolling downstream (+Y) at different scales."""
+    subprocess.run(["python", os.path.join(HERE, "make_water_normal.py")], check=True)
+    ensure_dir(f"{WORLD_DIR}/Water")
+    task = unreal.AssetImportTask()
+    task.filename = os.path.join(PROJECT, "SourceArt", "World", "Water", "T_WaterNormal.png")
+    task.destination_path = f"{WORLD_DIR}/Water"
+    task.automated = task.save = task.replace_existing = True
+    TOOLS.import_asset_tasks([task])
+    normal_tex = unreal.load_asset(f"{WORLD_DIR}/Water/T_WaterNormal")
+    normal_tex.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_NORMALMAP)
+    normal_tex.set_editor_property("srgb", False)
+    normal_tex.set_editor_property("flip_green_channel", True)  # generated OpenGL-style
+    unreal.EditorAssetLibrary.save_loaded_asset(normal_tex)
+    m = fresh_asset("M_WaterReal", f"{WORLD_DIR}/Water", unreal.Material, unreal.MaterialFactoryNew())
+    world_xy = expr(m, unreal.MaterialExpressionComponentMask, -1400, 0, r=True, g=True, b=False, a=False)
+    MEL.connect_material_expressions(expr(m, unreal.MaterialExpressionWorldPosition, -1600, 0), "", world_xy, "")
+    ripples = []
+    for i, (tile_cm, speed) in enumerate(((600.0, (0.0, 0.035)), (1500.0, (0.012, 0.05)))):
+        scaled = expr(m, unreal.MaterialExpressionDivide, -1200, i * 300, const_b=tile_cm)
+        MEL.connect_material_expressions(world_xy, "", scaled, "A")
+        pan = expr(m, unreal.MaterialExpressionPanner, -1000, i * 300, speed_x=speed[0], speed_y=speed[1])
+        MEL.connect_material_expressions(scaled, "", pan, "Coordinate")
+        tex = expr(m, unreal.MaterialExpressionTextureSample, -800, i * 300, texture=normal_tex,
+                   sampler_type=unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL)
+        MEL.connect_material_expressions(pan, "", tex, "UVs")
+        ripples.append(tex)
+    added = expr(m, unreal.MaterialExpressionAdd, -550, 150)
+    MEL.connect_material_expressions(ripples[0], "RGB", added, "A")
+    MEL.connect_material_expressions(ripples[1], "RGB", added, "B")
+    normal = expr(m, unreal.MaterialExpressionNormalize, -400, 150)
+    MEL.connect_material_expressions(added, "", normal, "")
+    slab = expr(m, unreal.MaterialExpressionSubstrateShadingModels, -100, 0,
+                shading_model_override=unreal.MaterialShadingModel.MSM_SINGLE_LAYER_WATER)
+    constants = {"BaseColor": (0.01, 0.01, 0.01), "WaterScatteringCoefficients": (0.01, 0.03, 0.035),
+                 "WaterAbsorptionCoefficients": (0.3, 0.09, 0.07)}
+    for k, (name, rgb) in enumerate(constants.items()):
+        c = expr(m, unreal.MaterialExpressionConstant3Vector, -400, 400 + k * 120, constant=unreal.LinearColor(*rgb, 1))
+        MEL.connect_material_expressions(c, "", slab, name)
+    for k, (name, value) in enumerate((("Roughness", 0.04), ("WaterPhaseG", 0.3), ("ColorScaleBehindWater", 0.9))):
+        c = expr(m, unreal.MaterialExpressionConstant, -400, 800 + k * 100, r=value)
+        MEL.connect_material_expressions(c, "", slab, name)
+    MEL.connect_material_expressions(normal, "", slab, "Normal")
+    MEL.connect_material_property(slab, "", unreal.MaterialProperty.MP_FRONT_MATERIAL)
+    # The ray-tracing hit shaders read the water medium from the legacy "Single Layer Water Material" output node.
+    medium = expr(m, unreal.MaterialExpressionSingleLayerWaterMaterialOutput, -100, 600)
+    for k, (name, value) in enumerate((("ScatteringCoefficients", constants["WaterScatteringCoefficients"]),
+                                       ("AbsorptionCoefficients", constants["WaterAbsorptionCoefficients"]))):
+        c = expr(m, unreal.MaterialExpressionConstant3Vector, -400, 1200 + k * 120, constant=unreal.LinearColor(*value, 1))
+        MEL.connect_material_expressions(c, "", medium, name)
+    for k, (name, value) in enumerate((("PhaseG", 0.3), ("ColorScaleBehindWater", 0.9))):
+        c = expr(m, unreal.MaterialExpressionConstant, -400, 1450 + k * 100, r=value)
+        MEL.connect_material_expressions(c, "", medium, name)
+    errors = MEL.recompile_material(m)
+    if errors:
+        with open(os.path.join(PROJECT, "Saved", "water_material_errors.txt"), "w", encoding="utf-8") as f:
+            f.write("\n\n".join(errors))
+        raise RuntimeError("M_WaterReal failed to compile (Saved/water_material_errors.txt)")
+    unreal.EditorAssetLibrary.save_loaded_asset(m)
+    return m
+
+
+def stage_water(lay):
+    """The river surface: one plane at the constant water level with M_WaterReal (replacing the terrain stage's flat
+    RiverWater plane); the terrain hides it everywhere but the river bed. No collision: players wade on the bed.
+    (Spec fallback: UE's Water plugin river spawned but rendered no surface in UE 5.8.) Re-running replaces it."""
+    meta = terrain_maps()
+    material = water_material()
+    world = load_map_fully()
+    for actor in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.Actor):
+        if actor.actor_has_tag(WATER_TAG) or actor.get_actor_label() == "RiverWater":
+            EAS.destroy_actor(actor)
+    plane = spawn_mesh("/Engine/BasicShapes/Plane.Plane", material, (0, 0, uu(meta["water_level_m"])),
+                       (lay.size_m + 100, lay.size_m + 100, 1), label="RiverWater")
+    plane.static_mesh_component.set_collision_profile_name("NoCollision")
+    plane.static_mesh_component.set_cast_shadow(False)
+    plane.set_editor_property("tags", [unreal.Name(WATER_TAG)])
+    plane.set_editor_property("is_spatially_loaded", False)
+    if not unreal.EditorLoadingAndSavingUtils.save_map(world, MAP):
+        raise RuntimeError(f"failed to save {MAP}")
+    unreal.EditorLoadingAndSavingUtils.save_dirty_packages(True, True)
+    log("water: river surface (M_WaterReal) placed")
+
+
+STAGES = {"terrain": stage_terrain, "dress": stage_dress, "mood": stage_mood, "water": stage_water}
 stage = os.environ.get("SHINOBI_WORLD_STAGE", "terrain")
 STAGES[stage](layout_mod.load())

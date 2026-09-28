@@ -25,7 +25,8 @@ WALL_RADIUS_M = 106.0
 WALL_SEGMENT_M = 10.2
 FOOTPRINT_M = hm.FOOTPRINT_M
 # Close-up tour points (m): meadow grass, forest floor, mountain edge, village street.
-TOUR_CLOSEUPS = {"Meadow": (40.0, -35.0), "Forest": (-125.0, -60.0), "Edge": (-400.0, 40.0), "Street": (20.0, -175.0)}
+TOUR_CLOSEUPS = {"Meadow": (40.0, -35.0), "Forest": (-125.0, -60.0), "Edge": (-400.0, 40.0), "Street": (20.0, -175.0),
+                 "Riverbank": (236.0, 40.0)}
 BUILDING_MESH = {"house_small": ["Arch/house_small"], "house_medium": ["Arch/house_medium", "Arch/house_round"],
                  "house_large": ["Arch/house_large"], "stall": ["Arch/stall"], "lantern": ["Arch/lantern"],
                  "gate": ["Arch/gate"], "shrine": ["Arch/shrine"], "torii": ["Arch/torii"], "well": ["Arch/well"],
@@ -33,9 +34,10 @@ BUILDING_MESH = {"house_small": ["Arch/house_small"], "house_medium": ["Arch/hou
 TREES = {"common": [f"Tree/CommonTree_{i}" for i in range(1, 6)], "pine": [f"Tree/Pine_{i}" for i in range(1, 6)],
          "maple": [f"Tree/TwistedTree_{i}" for i in range(1, 6)], "dead": [f"Tree/DeadTree_{i}" for i in range(1, 6)]}
 TREE_SCALE = {"common": (0.9, 1.3), "pine": (1.0, 1.5), "maple": (0.55, 0.8), "dead": (0.6, 0.85)}
-GRASS = ["Grass/Grass_Common_Short", "Grass/Grass_Common_Tall", "Grass/Grass_Wispy_Short", "Grass/Grass_Wispy_Tall",
-         "Grass/Clover_1", "Grass/Clover_2", "Grass/Fern_1"]
-FLOWERS = ["Grass/Flower_3_Group", "Grass/Flower_4_Group", "Grass/Plant_1", "Grass/Plant_7", "Grass/Mushroom_Common"]
+# River banks: the water meets the land where the terrain's dry clamp starts (make_heightmap), 3 m past the bed.
+RIVER_EDGE_M = hm.RIVER_HALF_WIDTH_M + 3.0
+REEDS = ["PH_Grass/grass_medium_01_tall_a", "PH_Grass/grass_medium_01_tall_b", "PH_Grass/grass_medium_02_e"]
+PEBBLES = ["PH_Rock/rock_07", "PH_Rock/stone_01", "PH_Rock/rock_09", "PH_Rock/rock_moss_set_02_rock08"]
 BUSHES = ["Bush/Bush_Common", "Bush/Bush_Common_Flowers"]
 ROCKS = ["Rock/Rock_Medium_1", "Rock/Rock_Medium_2", "Rock/Rock_Medium_3"]
 CAMP_PROPS = ["Prop/Barrel", "Prop/Crate_Wooden", "Prop/FarmCrate_Empty", "Prop/Bag", "Prop/WeaponStand", "Prop/Bench",
@@ -242,6 +244,23 @@ def scatter(t, rng, blockers, out):
         add(ROCKS[int(rng.integers(3))], xi, yi, t.height(xi, yi) - 0.4, rng.uniform(0, 360), rng.uniform(0.6, 1.8), cull=20000.0)
 
     # The grass carpet is landscape grass (build_world.py GRASS_TYPES), generated on the GPU near each viewer.
+
+    # River banks: reeds (tall grass tufts grown to ~1 m) and pebbles in the 3 m above the water's edge.
+    out["bank"] = []
+    bridge_x, bridge_y, _ = lay.bridge
+    x, y = jittered(t, rng, 1.6)
+    d = hm.distance_to_polyline(x, y, lay.river)
+    keep = (d >= RIVER_EDGE_M) & (d <= RIVER_EDGE_M + 3) & (np.hypot(x - bridge_x, y - bridge_y) > 20)
+    keep &= (np.abs(x) < 470) & (np.abs(y) < 470) & (rng.random(x.shape) < 0.55)
+    for xi, yi in zip(x[keep], y[keep]):
+        zi = float(t.height(xi, yi))
+        if rng.random() < 0.65:
+            key, scale, z = REEDS[int(rng.integers(len(REEDS)))], rng.uniform(2.4, 3.4), zi - 0.05
+        else:
+            key, scale, z = PEBBLES[int(rng.integers(len(PEBBLES)))], rng.uniform(2.5, 5.0), zi - 0.08
+        yaw = rng.uniform(0, 360)
+        add(key, xi, yi, z, yaw, scale, cull=8000.0)
+        out["bank"].append(item(key, xi, yi, z, yaw, scale))
 
     out["scatter"] = placed
 
