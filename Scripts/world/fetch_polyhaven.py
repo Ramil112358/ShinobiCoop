@@ -21,7 +21,13 @@ def plan_downloads(files, res, kind):
     if kind == "model":
         gltf = files["gltf"][res]["gltf"]
         plan = [(gltf["url"], gltf["url"].rsplit("/", 1)[-1], gltf["size"])]
-        return plan + [(inc["url"], rel, inc["size"]) for rel, inc in gltf["include"].items()]
+        plan += [(inc["url"], rel, inc["size"]) for rel, inc in gltf["include"].items()]
+        # The glTF's colour maps are JPGs (no alpha): foliage needs its separate alpha maps (Alpha, twig_alpha, ...).
+        for key, levels in files.items():
+            if key.lower().endswith("alpha") and res in levels:
+                jpg = levels[res]["jpg"]
+                plan.append((jpg["url"], "textures/" + jpg["url"].rsplit("/", 1)[-1], jpg["size"]))
+        return plan
     plan = []
     for name in TEXTURE_MAPS:
         jpg = files[name][res]["jpg"]

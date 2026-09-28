@@ -29,11 +29,24 @@ PROJECT = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
 TERRAIN_DIR = os.path.join(PROJECT, "SourceArt", "World", "Terrain")
 MAP = "/Game/Shinobi/Maps/Lvl_HiddenLeafValley"
 WORLD_DIR = "/Game/Shinobi/World"
-LAYERS = {  # name -> flat toon colour (linear); textures replace these in W2
-    "Grass": (0.16, 0.36, 0.09),
-    "Dirt": (0.36, 0.25, 0.14),
-    "Rock": (0.33, 0.33, 0.35),
-    "Bank": (0.30, 0.30, 0.22),
+# Landscape paint layer -> (Poly Haven texture set up close, variation set far away, metres per tile up close).
+LAYERS = {
+    "Grass": ("aerial_grass_rock", "grass_ground", 4.0),
+    "Forest": ("forest_leaves_02", "forest_ground_04", 3.0),
+    "Dirt": ("stony_dirt_path", "rocky_trail", 3.0),
+    "Rock": ("rocky_terrain", "rock_face", 6.0),
+    "Bank": ("river_small_rocks", "dry_riverbed_rock", 2.5),
+}
+TEXTURES = "/Game/Shinobi/World/Library/Textures"
+GRASS_DIR = f"{WORLD_DIR}/Grass"
+# Landscape grass: type -> (paint layer, [(catalog name prefix, instances per 10 x 10 m per variant, max variants)]).
+# Meadow: ~75 clumps per m2 (each Poly Haven clump is sparse), faded out by 50 m; forest floor: ferns, moss and weeds, sparser.
+GRASS_TYPES = {
+    "Meadow": ("Grass", [("grass_medium_01_tall", 700, 2), ("grass_medium_01_mid", 850, 2), ("grass_medium_01_large", 700, 2),
+                         ("grass_medium_02", 500, 3), ("grass_bermuda_01_medium", 1200, 2), ("dandelion_01", 20, 2),
+                         ("flower_gazania_h", 8, 1)]),
+    "ForestFloor": ("Forest", [("fern_02", 30, 4), ("grass_medium_02_a", 60, 1), ("weed_plant_02", 30, 2),
+                               ("nettle_plant_tall", 10, 2), ("root_cluster_02", 5, 2)]),
 }
 MEL = unreal.MaterialEditingLibrary
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
@@ -65,37 +78,141 @@ def fresh_asset(name, directory, cls, factory):
     return asset
 
 
-def terrain_maps():
+def terrain_maps(regenerate=False):
     meta_path = os.path.join(TERRAIN_DIR, "terrain.json")
-    if not os.path.exists(meta_path):
+    if regenerate or not os.path.exists(meta_path):
         subprocess.run(["python", os.path.join(HERE, "make_heightmap.py"), TERRAIN_DIR], check=True)
     with open(meta_path, encoding="utf-8") as f:
         return json.load(f)
 
 
+def expr(m, cls, x, y, **props):
+    node = MEL.create_material_expression(m, cls, x, y)
+    for key, value in props.items():
+        node.set_editor_property(key, value)
+    return node
+
+
+def sample(m, texture_id, suffix, uv, x, y):
+    kind = {"A": unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, "N": unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL}.get(
+        suffix, unreal.MaterialSamplerType.SAMPLERTYPE_MASKS)
+    node = expr(m, unreal.MaterialExpressionTextureSample, x, y, sampler_type=kind,
+                sampler_source=unreal.SamplerSourceMode.SSM_WRAP_WORLD_GROUP_SETTINGS,
+                texture=unreal.load_asset(f"{TEXTURES}/{texture_id}/T_{texture_id}_{suffix}"))
+    MEL.connect_material_expressions(uv, "", node, "UVs")
+    return node
+
+
+def layer_blend(m, x, y):
+    blend = expr(m, unreal.MaterialExpressionLandscapeLayerBlend, x, y)
+    layers = []
+    for name in LAYERS:
+        entry = unreal.LayerBlendInput()
+        entry.set_editor_property("layer_name", name)
+        entry.set_editor_property("blend_type", unreal.LandscapeLayerBlendType.LB_HEIGHT_BLEND)
+        entry.set_editor_property("preview_weight", 1.0 if name == "Grass" else 0.0)
+        layers.append(entry)
+    blend.set_editor_property("layers", layers)
+    return blend
+
+
+def grass_types():
+    """LGT_<type> assets from GRASS_TYPES and the PH_Grass / PH_Shrub catalog variants."""
+    ensure_dir(GRASS_DIR)
+    with open(os.path.join(HERE, "library_catalog.json"), encoding="utf-8") as f:
+        catalog = json.load(f)
+    plants = {**catalog.get("PH_Grass", {}), **catalog.get("PH_Shrub", {})}
+    out = {}
+    for type_name, (_, varieties) in GRASS_TYPES.items():
+        path = f"{GRASS_DIR}/LGT_{type_name}"
+        lgt = unreal.load_asset(path) if unreal.EditorAssetLibrary.does_asset_exist(path) else TOOLS.create_asset(
+            f"LGT_{type_name}", GRASS_DIR, unreal.LandscapeGrassType, None)
+        entries = []
+        for prefix, density, count in varieties:
+            for name in sorted(n for n in plants if n.startswith(prefix))[:count]:
+                v = unreal.GrassVariety()
+                v.set_editor_property("grass_mesh", unreal.load_asset(plants[name]["mesh"]))
+                per = unreal.PerPlatformFloat()
+                per.set_editor_property("default", float(density))
+                v.set_editor_property("grass_density", per)
+                start, end = unreal.PerPlatformInt(), unreal.PerPlatformInt()
+                near_fade = type_name == "Meadow"
+                start.set_editor_property("default", 3500 if near_fade else 5000)
+                end.set_editor_property("default", 5000 if near_fade else 8000)
+                v.set_editor_property("start_cull_distance", start)
+                v.set_editor_property("end_cull_distance", end)
+                v.set_editor_property("random_rotation", True)
+                v.set_editor_property("align_to_surface", True)
+                v.set_editor_property("cast_dynamic_shadow", True)
+                # Poly Haven grass tufts are small (~30 cm): grow the meadow to a lush 40-70 cm.
+                v.set_editor_property("scale_x", unreal.FloatInterval(1.4, 2.2) if type_name == "Meadow" else unreal.FloatInterval(0.8, 1.3))
+                entries.append(v)
+        lgt.set_editor_property("grass_varieties", entries)
+        unreal.EditorAssetLibrary.save_loaded_asset(lgt)
+        out[type_name] = lgt
+        log(f"grass type {type_name}: {len(entries)} varieties")
+    return out
+
+
 def build_landscape_material():
-    """Four paint layers (LandscapeLayerWeight chain) of flat colour into a Substrate slab. W2 swaps in textures."""
-    m = fresh_asset("M_Landscape", WORLD_DIR, unreal.Material, unreal.MaterialFactoryNew())
-    previous, y = None, 0
-    for name, (r, g, b) in LAYERS.items():
-        colour = MEL.create_material_expression(m, unreal.MaterialExpressionVectorParameter, -900, y)
-        colour.set_editor_property("parameter_name", f"{name}Color")
-        colour.set_editor_property("default_value", unreal.LinearColor(r, g, b, 1))
-        weight = MEL.create_material_expression(m, unreal.MaterialExpressionLandscapeLayerWeight, -600, y)
-        weight.set_editor_property("parameter_name", name)
-        if previous is not None:
-            MEL.connect_material_expressions(previous, "", weight, "Base")
-        MEL.connect_material_expressions(colour, "", weight, "Layer")
-        previous, y = weight, y + 200
-    rough = MEL.create_material_expression(m, unreal.MaterialExpressionConstant, -600, y)
-    rough.set_editor_property("r", 0.9)
-    shading = MEL.create_material_expression(m, unreal.MaterialExpressionSubstrateShadingModels, -250, 0)
-    MEL.connect_material_expressions(previous, "", shading, "BaseColor")
-    MEL.connect_material_expressions(rough, "", shading, "Roughness")
-    MEL.connect_material_property(shading, "", unreal.MaterialProperty.MP_FRONT_MATERIAL)
+    """M_LandscapeReal: five height-blended Poly Haven layers (albedo fades to a variation set at 4x scale with distance,
+    large-scale brightness variation against tiling), normal and roughness, and the landscape grass output (meadow on Grass, ferns and moss on Forest)."""
+    m = fresh_asset("M_LandscapeReal", WORLD_DIR, unreal.Material, unreal.MaterialFactoryNew())
+    depth = expr(m, unreal.MaterialExpressionPixelDepth, -2600, -600)
+    near = expr(m, unreal.MaterialExpressionSubtract, -2400, -600, const_b=1500.0)
+    MEL.connect_material_expressions(depth, "", near, "A")
+    far = expr(m, unreal.MaterialExpressionDivide, -2250, -600, const_b=6000.0)
+    MEL.connect_material_expressions(near, "", far, "A")
+    fade = expr(m, unreal.MaterialExpressionSaturate, -2100, -600)
+    MEL.connect_material_expressions(far, "", fade, "")
+    albedo, normal, rough = (layer_blend(m, -600, y) for y in (-400, 0, 300))
+    y = 0
+    for name, (main, variation, tile) in LAYERS.items():
+        uv_near = expr(m, unreal.MaterialExpressionLandscapeLayerCoords, -2400, y, mapping_scale=tile)
+        uv_far = expr(m, unreal.MaterialExpressionLandscapeLayerCoords, -2400, y + 120, mapping_scale=tile * 4)
+        a_near = sample(m, main, "A", uv_near, -2000, y)
+        a_far = sample(m, variation, "A", uv_far, -2000, y + 150)
+        mix = expr(m, unreal.MaterialExpressionLinearInterpolate, -1600, y)
+        MEL.connect_material_expressions(a_near, "RGB", mix, "A")
+        MEL.connect_material_expressions(a_far, "RGB", mix, "B")
+        MEL.connect_material_expressions(fade, "", mix, "Alpha")
+        n = sample(m, main, "N", uv_near, -2000, y + 300)
+        r = sample(m, main, "R", uv_near, -2000, y + 450)
+        d = sample(m, main, "D", uv_near, -2000, y + 600)
+        MEL.connect_material_expressions(mix, "", albedo, f"Layer {name}")
+        MEL.connect_material_expressions(n, "RGB", normal, f"Layer {name}")
+        MEL.connect_material_expressions(r, "R", rough, f"Layer {name}")
+        for blend in (albedo, normal, rough):
+            MEL.connect_material_expressions(d, "R", blend, f"Height {name}")
+        y += 800
+    # Large-scale variation: a height map stretched over 80 m tiles, as a +-15% brightness swing.
+    macro_uv = expr(m, unreal.MaterialExpressionLandscapeLayerCoords, -900, -900, mapping_scale=80.0)
+    macro = sample(m, "rocky_terrain", "D", macro_uv, -700, -900)
+    swing = expr(m, unreal.MaterialExpressionLinearInterpolate, -400, -800, const_a=0.85, const_b=1.15)
+    MEL.connect_material_expressions(macro, "R", swing, "Alpha")
+    base = expr(m, unreal.MaterialExpressionMultiply, -250, -400)
+    MEL.connect_material_expressions(albedo, "", base, "A")
+    MEL.connect_material_expressions(swing, "", base, "B")
+    slab = expr(m, unreal.MaterialExpressionSubstrateShadingModels, -50, 0)
+    MEL.connect_material_expressions(base, "", slab, "BaseColor")
+    MEL.connect_material_expressions(rough, "", slab, "Roughness")
+    MEL.connect_material_expressions(normal, "", slab, "Normal")
+    MEL.connect_material_property(slab, "", unreal.MaterialProperty.MP_FRONT_MATERIAL)
+    types = grass_types()
+    grass = expr(m, unreal.MaterialExpressionLandscapeGrassOutput, -50, 900)
+    inputs = []
+    for type_name in GRASS_TYPES:
+        gi = unreal.GrassInput()
+        gi.set_editor_property("name", type_name)
+        gi.set_editor_property("grass_type", types[type_name])
+        inputs.append(gi)
+    grass.set_editor_property("grass_types", inputs)
+    for i, (type_name, (layer, _)) in enumerate(GRASS_TYPES.items()):
+        weight = expr(m, unreal.MaterialExpressionLandscapeLayerSample, -400, 900 + i * 150, parameter_name=layer)
+        MEL.connect_material_expressions(weight, "", grass, type_name)
     errors = MEL.recompile_material(m)
     if errors:
-        raise RuntimeError(f"M_Landscape failed to compile: {errors}")
+        raise RuntimeError(f"M_LandscapeReal failed to compile: {errors}")
     unreal.EditorAssetLibrary.save_loaded_asset(m)
     return m
 
@@ -130,7 +247,7 @@ def apply_mood(sun, fog):
     light = sun.light_component
     light.set_editor_property("intensity", 7.0)
     light.set_editor_property("use_temperature", True)
-    light.set_editor_property("temperature", 4800.0)
+    light.set_editor_property("temperature", 5600.0)
     component = fog.component
     component.set_editor_property("fog_density", 0.025)
     component.set_editor_property("fog_height_falloff", 0.12)
@@ -139,7 +256,7 @@ def apply_mood(sun, fog):
 
 
 def stage_terrain(lay):
-    meta = terrain_maps()
+    meta = terrain_maps(regenerate=True)
     ensure_dir(WORLD_DIR)
     ensure_dir("/Game/Shinobi/Maps")
     level_editor = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
@@ -269,6 +386,11 @@ def stage_dress(lay):
     for i, it in enumerate(data["walls"]):
         place(mesh_of, it, f"VillageWall_{i:02d}")
     place(mesh_of, data["bridge"], "RiverBridge", "Tour", "Tour:Bridge")
+    # Close-up tour points (sub-project #3b): ground, grass and forest detail.
+    for name, p in data["tour_points"].items():
+        point = EAS.spawn_actor_from_class(unreal.TargetPoint, unreal.Vector(p["x"], p["y"], p["z"] + 50), unreal.Rotator(0, 0, 0))
+        point.set_actor_label(f"Tour_{name}")
+        tag(point, "Tour", f"Tour:{name}")
     for camp in data["camps"]:
         for i, it in enumerate(camp["dressing"]):
             place(mesh_of, it, f"{camp['id']}_{it['mesh'].split('/')[-1]}_{i:02d}")
@@ -355,6 +477,8 @@ def stage_mood(lay):
     sun = next(a for a in actors if isinstance(a, unreal.DirectionalLight))
     fog = next(a for a in actors if isinstance(a, unreal.ExponentialHeightFog))
     apply_mood(sun, fog)
+    for volume in [a for a in actors if a.get_actor_label() == TOON_VOLUME_LABEL]:
+        EAS.destroy_actor(volume)  # realistic pass: no screen-wide cartoon post (the character outline replaces it, R5)
     meta = terrain_maps()
     ambient(world, sounds["Amb_Forest"], (0, 0, 0), 0.35, label="Amb_Forest")
     for i, (x, y) in enumerate(lay.river):

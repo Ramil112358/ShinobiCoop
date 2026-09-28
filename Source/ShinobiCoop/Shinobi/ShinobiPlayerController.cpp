@@ -1,5 +1,6 @@
 #include "Shinobi/ShinobiPlayerController.h"
 #include "RHI.h"
+#include "GameFramework/SpringArmComponent.h"
 #include "AbilitySystemComponent.h"
 #include "EngineUtils.h"
 #include "GameFramework/Character.h"
@@ -322,8 +323,19 @@ void AShinobiPlayerController::RunWorldTourTest()
 				Body->GetCharacterMovement()->SetMovementMode(MOVE_Flying);
 				Body->GetCharacterMovement()->StopMovementImmediately();
 				// The spring arm sits ~4.5 m behind the pawn: stand off 16 m, 9 m up, looking at the point.
-				const FVector Eye = Point.Location + FVector(-1300.f, -900.f, 900.f);
+				// Close-up points (ground and plant detail) stand off ~5 m, 2.5 m up.
+				static const TSet<FString> CloseUps = { TEXT("Meadow"), TEXT("Forest"), TEXT("Street"), TEXT("Edge") };
+				const FVector Eye = Point.Location + (Point.Name == TEXT("Meadow") ? FVector(-300.f, 0.f, 120.f)
+					: CloseUps.Contains(Point.Name) ? FVector(-450.f, -250.f, 250.f) : FVector(-1300.f, -900.f, 900.f));
 				Body->SetActorLocation(Eye, false, nullptr, ETeleportType::TeleportPhysics);
+				if (USpringArmComponent* Boom = Body->FindComponentByClass<USpringArmComponent>())
+				{
+					// Plant close-ups: camera 1.2 m behind the pawn; everything else keeps the normal boom.
+					static const float NormalArm = Boom->TargetArmLength;
+					const bool bPlants = Point.Name == TEXT("Meadow") || Point.Name == TEXT("Forest");
+					Boom->TargetArmLength = bPlants ? 120.f : NormalArm;
+					Boom->bDoCollisionTest = !bPlants;
+				}
 				SetControlRotation((Point.Location - Eye).Rotation());
 			}
 		}), FirstAt + Index * Step, false);

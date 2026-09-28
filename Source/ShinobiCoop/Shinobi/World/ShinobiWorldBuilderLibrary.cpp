@@ -192,3 +192,36 @@ float UShinobiWorldBuilderLibrary::SetTrunkCollision(UStaticMesh* Mesh)
 	return 0.f;
 #endif
 }
+
+FVector UShinobiWorldBuilderLibrary::RecenterPivot(UStaticMesh* Mesh)
+{
+#if WITH_EDITOR
+	FMeshDescription* Description = Mesh ? Mesh->GetMeshDescription(0) : nullptr;
+	if (!Description || Description->Vertices().Num() == 0)
+	{
+		return FVector::ZeroVector;
+	}
+	TVertexAttributesRef<FVector3f> Positions = FStaticMeshAttributes(*Description).GetVertexPositions();
+	FBox3f Bounds(ForceInit);
+	for (const FVertexID Vertex : Description->Vertices().GetElementIDs())
+	{
+		Bounds += Positions[Vertex];
+	}
+	const FVector3f Offset(Bounds.GetCenter().X, Bounds.GetCenter().Y, Bounds.Min.Z);
+	if (Offset.Size() < 0.5f)
+	{
+		return FVector::ZeroVector;
+	}
+	for (const FVertexID Vertex : Description->Vertices().GetElementIDs())
+	{
+		Positions[Vertex] -= Offset;
+	}
+	Mesh->Modify();
+	Mesh->CommitMeshDescription(0);
+	Mesh->Build();
+	Mesh->MarkPackageDirty();
+	return FVector(Offset);
+#else
+	return FVector::ZeroVector;
+#endif
+}

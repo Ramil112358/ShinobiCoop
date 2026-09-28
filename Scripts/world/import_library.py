@@ -232,15 +232,23 @@ def texture(path, dest, name, kind):
     elif kind == "linear":
         tex.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_MASKS)
         tex.set_editor_property("srgb", False)
+    if kind == "normal_gl":  # OpenGL normal map (Poly Haven nor_gl): flip green for UE
+        tex.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_NORMALMAP)
+        tex.set_editor_property("srgb", False)
+        tex.set_editor_property("flip_green_channel", True)
+    tex.set_editor_property("virtual_texture_streaming", False)
     unreal.EditorAssetLibrary.save_loaded_asset(tex)
     return tex
 
 
-def pbr_parent():
+def pbr_parent(defaults):
     """M_PBRLayer: Albedo, Normal, Roughness textures at UV x Tiling; AlbedoTint; Substrate slab."""
     path = f"{LIB}/Materials/M_PBRLayer"
-    if unreal.EditorAssetLibrary.does_asset_exist(path):
+    if unreal.EditorAssetLibrary.does_asset_exist(path) and not pbr_parent.rebuild:
         return unreal.load_asset(path)
+    if unreal.EditorAssetLibrary.does_asset_exist(path):
+        unreal.EditorAssetLibrary.delete_asset(path)
+    pbr_parent.rebuild = False
     m = TOOLS.create_asset("M_PBRLayer", f"{LIB}/Materials", unreal.Material, unreal.MaterialFactoryNew())
     uv = MEL.create_material_expression(m, unreal.MaterialExpressionTextureCoordinate, -1200, 0)
     tiling = MEL.create_material_expression(m, unreal.MaterialExpressionScalarParameter, -1200, 150)
@@ -256,6 +264,7 @@ def pbr_parent():
         tex = MEL.create_material_expression(m, unreal.MaterialExpressionTextureSampleParameter2D, -700, -300 + i * 300)
         tex.set_editor_property("parameter_name", name)
         tex.set_editor_property("sampler_type", sampler)
+        tex.set_editor_property("texture", defaults[name])  # a matching default, or the material fails to compile
         MEL.connect_material_expressions(scaled, "", tex, "UVs")
         samplers[name] = tex
     tint = MEL.create_material_expression(m, unreal.MaterialExpressionVectorParameter, -700, 600)
@@ -278,6 +287,9 @@ def pbr_parent():
     return m
 
 
+pbr_parent.rebuild = bool(os.environ.get("SHINOBI_REBUILD_FOLIAGE"))
+
+
 def texture_set(asset_id, res):
     """Imports a Poly Haven texture set as T_<id>_{A,N,R,D} and makes MI_PBR_<id>; returns the MI."""
     folder = os.path.join(PH_DIR, asset_id)
@@ -293,7 +305,7 @@ def texture_set(asset_id, res):
     path = f"{LIB}/Materials/MI_PBR_{asset_id}"
     mi = unreal.load_asset(path) if unreal.EditorAssetLibrary.does_asset_exist(path) else TOOLS.create_asset(
         f"MI_PBR_{asset_id}", f"{LIB}/Materials", unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
-    MEL.set_material_instance_parent(mi, pbr_parent())
+    MEL.set_material_instance_parent(mi, pbr_parent({"Albedo": albedo, "Normal": normal, "Roughness": rough}))
     MEL.set_material_instance_texture_parameter_value(mi, "Albedo", albedo)
     MEL.set_material_instance_texture_parameter_value(mi, "Normal", normal)
     MEL.set_material_instance_texture_parameter_value(mi, "Roughness", rough)
@@ -319,6 +331,94 @@ def variant_name(mesh):
     return re.sub(r"_(LOD0|\dk)$", "", re.sub(r"_LOD0$", "", mesh.get_name()))
 
 
+def foliage_parent(defaults):
+    """M_PBRFoliage: masked, two-sided. BaseColorTexture RGB -> colour; AlphaTexture R -> opacity mask (Poly Haven ships
+    foliage alpha as its own map; the glTF colour JPG has none); NormalTexture; MetallicRoughnessTexture G -> roughness.
+    Nanite and instancing usage."""
+    path = f"{LIB}/Materials/M_PBRFoliage"
+    if unreal.EditorAssetLibrary.does_asset_exist(path):
+        m = unreal.load_asset(path)
+        if "Tint" in [str(n) for n in MEL.get_vector_parameter_names(m)] and not foliage_parent.rebuild:
+            return m
+        unreal.EditorAssetLibrary.delete_asset(path)  # an older version (no alpha map / foliage shading)
+    m = TOOLS.create_asset("M_PBRFoliage", f"{LIB}/Materials", unreal.Material, unreal.MaterialFactoryNew())
+    m.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MASKED)
+    m.set_editor_property("two_sided", True)
+    nodes = {}
+    for i, (name, sampler) in enumerate((("BaseColorTexture", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR),
+                                         ("NormalTexture", unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL),
+                                         ("MetallicRoughnessTexture", unreal.MaterialSamplerType.SAMPLERTYPE_MASKS),
+                                         ("AlphaTexture", unreal.MaterialSamplerType.SAMPLERTYPE_MASKS))):
+        tex = MEL.create_material_expression(m, unreal.MaterialExpressionTextureSampleParameter2D, -700, -300 + i * 300)
+        tex.set_editor_property("parameter_name", name)
+        tex.set_editor_property("sampler_type", sampler)
+        tex.set_editor_property("texture", defaults[name])  # a matching default, or the material fails to compile
+        nodes[name] = tex
+    # Poly Haven's scanned foliage is muted olive; a gentle tint keeps it reading as living green under the warm sun.
+    tint = MEL.create_material_expression(m, unreal.MaterialExpressionVectorParameter, -700, 900)
+    tint.set_editor_property("parameter_name", "Tint")
+    tint.set_editor_property("default_value", unreal.LinearColor(0.95, 1.1, 0.8, 1))
+    colour = MEL.create_material_expression(m, unreal.MaterialExpressionMultiply, -420, -300)
+    MEL.connect_material_expressions(nodes["BaseColorTexture"], "RGB", colour, "A")
+    MEL.connect_material_expressions(tint, "", colour, "B")
+    # ponytail: default-lit, two-sided. Substrate's two-sided foliage model washed Poly Haven leaves out to near-white.
+    slab = MEL.create_material_expression(m, unreal.MaterialExpressionSubstrateShadingModels, -150, 0)
+    MEL.connect_material_expressions(colour, "", slab, "BaseColor")
+    MEL.connect_material_expressions(nodes["MetallicRoughnessTexture"], "G", slab, "Roughness")
+    MEL.connect_material_expressions(nodes["NormalTexture"], "RGB", slab, "Normal")
+    MEL.connect_material_property(slab, "", unreal.MaterialProperty.MP_FRONT_MATERIAL)
+    MEL.connect_material_property(nodes["AlphaTexture"], "R", unreal.MaterialProperty.MP_OPACITY_MASK)
+    MEL.set_base_material_usage(m, unreal.MaterialUsage.MATUSAGE_NANITE, True)
+    MEL.set_base_material_usage(m, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES, True)
+    errors = MEL.recompile_material(m)
+    if errors:
+        raise RuntimeError(f"M_PBRFoliage failed to compile: {errors}")
+    unreal.EditorAssetLibrary.save_loaded_asset(m)
+    foliage_parent.rebuild = False
+    return m
+
+
+foliage_parent.rebuild = bool(os.environ.get("SHINOBI_REBUILD_FOLIAGE"))
+
+
+def fix_foliage_materials(mesh, asset_id):
+    """Slots whose glTF material is masked or blended (AlphaMode >= 1) get MI_Foliage_<name> of M_PBRFoliage with the
+    same textures plus the material's alpha map (<name>_alpha_<res>.jpg, fetched next to the glTF's textures)."""
+    textures = os.path.join(PH_DIR, asset_id, "textures")
+    for index, slot in enumerate(mesh.get_editor_property("static_materials")):
+        mat = slot.get_editor_property("material_interface")
+        if not isinstance(mat, unreal.MaterialInstanceConstant):
+            continue
+        folder = mat.get_path_name().rsplit("/", 1)[0]
+        original = mat
+        if mat.get_name().startswith("MI_Foliage_"):
+            original = unreal.load_asset(f"{folder}/{mat.get_name()[len('MI_Foliage_'):]}")
+        alpha = {str(p.parameter_info.name): p.parameter_value for p in original.get_editor_property("scalar_parameter_values")}.get("AlphaMode", 0)
+        if alpha < 1:
+            continue
+        base = original.get_name()
+
+        def source(map_name):
+            return next((os.path.join(textures, f) for f in sorted(os.listdir(textures)) if f.startswith(f"{base}_{map_name}_")), None)
+        files = {m: source(m) for m in ("diff", "nor_gl", "arm", "alpha")}
+        if not all(files.values()):
+            unreal.log_warning(f"[import_library] {base}: missing maps {[m for m, f in files.items() if not f]}, kept the glTF material")
+            continue
+        maps = {"BaseColorTexture": texture(files["diff"], folder, f"T_{base}_diff", "color"),
+                "NormalTexture": texture(files["nor_gl"], folder, f"T_{base}_nor", "normal_gl"),
+                "MetallicRoughnessTexture": texture(files["arm"], folder, f"T_{base}_arm", "linear"),
+                "AlphaTexture": texture(files["alpha"], folder, f"T_{base}_alpha", "linear")}
+        name = f"MI_Foliage_{original.get_name()}"
+        path = f"{folder}/{name}"
+        mi = unreal.load_asset(path) if unreal.EditorAssetLibrary.does_asset_exist(path) else TOOLS.create_asset(
+            name, folder, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+        MEL.set_material_instance_parent(mi, foliage_parent(maps))
+        for param, tex in maps.items():
+            MEL.set_material_instance_texture_parameter_value(mi, param, tex)
+        unreal.EditorAssetLibrary.save_loaded_asset(mi)
+        mesh.set_material(index, mi)
+
+
 def realistic_model(asset_id, category):
     """{variant name: catalog entry} for every variant mesh of one Poly Haven model."""
     entries = {}
@@ -326,6 +426,8 @@ def realistic_model(asset_id, category):
         nanite = mesh.get_editor_property("nanite_settings")
         nanite.set_editor_property("enabled", True)
         mesh.set_editor_property("nanite_settings", nanite)
+        unreal.ShinobiWorldBuilderLibrary.recenter_pivot(mesh)  # variants keep their source-scene offsets
+        fix_foliage_materials(mesh, asset_id)
         kind = PH_COLLISION[category]
         bounds = mesh.get_bounding_box()
         entry = {"mesh": mesh.get_path_name(), "height_m": round((bounds.max.z - bounds.min.z) / 100.0, 2), "collision": kind}

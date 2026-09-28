@@ -1,66 +1,228 @@
 {
  "models": {
-  "pine_tree_01": {"category": "Tree", "res": "2k"},
-  "fir_tree_01": {"category": "Tree", "res": "2k"},
-  "fir_sapling": {"category": "Tree", "res": "2k"},
-  "fir_sapling_medium": {"category": "Tree", "res": "2k"},
-  "pine_sapling_small": {"category": "Tree", "res": "2k"},
-  "dead_tree_trunk": {"category": "Log", "res": "2k"},
-  "dead_tree_trunk_02": {"category": "Log", "res": "2k"},
-  "tree_stump_01": {"category": "Log", "res": "2k"},
-  "tree_stump_02": {"category": "Log", "res": "2k"},
-  "root_cluster_01": {"category": "Shrub", "res": "2k"},
-  "root_cluster_02": {"category": "Shrub", "res": "2k"},
-  "shrub_01": {"category": "Shrub", "res": "2k"},
-  "shrub_02": {"category": "Shrub", "res": "2k"},
-  "shrub_03": {"category": "Shrub", "res": "2k"},
-  "shrub_04": {"category": "Shrub", "res": "2k"},
-  "fern_02": {"category": "Shrub", "res": "2k"},
-  "moss_01": {"category": "Shrub", "res": "2k"},
-  "nettle_plant": {"category": "Shrub", "res": "2k"},
-  "periwinkle_plant": {"category": "Shrub", "res": "2k"},
-  "dandelion_01": {"category": "Shrub", "res": "2k"},
-  "weed_plant_02": {"category": "Shrub", "res": "2k"},
-  "flower_heliophila": {"category": "Shrub", "res": "2k"},
-  "flower_gazania": {"category": "Shrub", "res": "2k"},
-  "grass_medium_01": {"category": "Grass", "res": "2k"},
-  "grass_medium_02": {"category": "Grass", "res": "2k"},
-  "grass_bermuda_01": {"category": "Grass", "res": "2k"},
-  "rock_moss_set_01": {"category": "Rock", "res": "2k"},
-  "rock_moss_set_02": {"category": "Rock", "res": "2k"},
-  "boulder_01": {"category": "Rock", "res": "2k"},
-  "namaqualand_boulder_02": {"category": "Rock", "res": "2k"},
-  "namaqualand_boulder_03": {"category": "Rock", "res": "2k"},
-  "namaqualand_boulder_04": {"category": "Rock", "res": "2k"},
-  "namaqualand_boulder_05": {"category": "Rock", "res": "2k"},
-  "namaqualand_boulder_06": {"category": "Rock", "res": "2k"},
-  "stone_01": {"category": "Rock", "res": "2k"},
-  "rock_07": {"category": "Rock", "res": "2k"},
-  "rock_09": {"category": "Rock", "res": "2k"},
-  "coastal_cliff_02": {"category": "Cliff", "res": "4k"},
-  "coastal_cliff_04": {"category": "Cliff", "res": "4k"},
-  "rock_face_01": {"category": "Cliff", "res": "2k"},
-  "rock_face_02": {"category": "Cliff", "res": "2k"},
-  "stone_fire_pit": {"category": "Prop", "res": "2k"}
+  "pine_tree_01": {
+   "category": "Tree",
+   "res": "2k"
+  },
+  "fir_tree_01": {
+   "category": "Tree",
+   "res": "2k"
+  },
+  "fir_sapling": {
+   "category": "Tree",
+   "res": "2k"
+  },
+  "fir_sapling_medium": {
+   "category": "Tree",
+   "res": "2k"
+  },
+  "pine_sapling_small": {
+   "category": "Tree",
+   "res": "2k"
+  },
+  "dead_tree_trunk": {
+   "category": "Log",
+   "res": "2k"
+  },
+  "dead_tree_trunk_02": {
+   "category": "Log",
+   "res": "2k"
+  },
+  "tree_stump_01": {
+   "category": "Log",
+   "res": "2k"
+  },
+  "tree_stump_02": {
+   "category": "Log",
+   "res": "2k"
+  },
+  "root_cluster_01": {
+   "category": "Shrub",
+   "res": "2k"
+  },
+  "root_cluster_02": {
+   "category": "Shrub",
+   "res": "2k"
+  },
+  "shrub_01": {
+   "category": "Shrub",
+   "res": "2k"
+  },
+  "shrub_02": {
+   "category": "Shrub",
+   "res": "2k"
+  },
+  "shrub_03": {
+   "category": "Shrub",
+   "res": "2k"
+  },
+  "shrub_04": {
+   "category": "Shrub",
+   "res": "2k"
+  },
+  "fern_02": {
+   "category": "Shrub",
+   "res": "2k"
+  },
+  "moss_01": {
+   "category": "Shrub",
+   "res": "2k"
+  },
+  "nettle_plant": {
+   "category": "Shrub",
+   "res": "2k"
+  },
+  "periwinkle_plant": {
+   "category": "Shrub",
+   "res": "2k"
+  },
+  "dandelion_01": {
+   "category": "Shrub",
+   "res": "2k"
+  },
+  "weed_plant_02": {
+   "category": "Shrub",
+   "res": "2k"
+  },
+  "flower_heliophila": {
+   "category": "Shrub",
+   "res": "2k"
+  },
+  "flower_gazania": {
+   "category": "Shrub",
+   "res": "2k"
+  },
+  "grass_medium_01": {
+   "category": "Grass",
+   "res": "2k"
+  },
+  "grass_medium_02": {
+   "category": "Grass",
+   "res": "2k"
+  },
+  "grass_bermuda_01": {
+   "category": "Grass",
+   "res": "2k"
+  },
+  "rock_moss_set_01": {
+   "category": "Rock",
+   "res": "2k"
+  },
+  "rock_moss_set_02": {
+   "category": "Rock",
+   "res": "2k"
+  },
+  "boulder_01": {
+   "category": "Rock",
+   "res": "2k"
+  },
+  "namaqualand_boulder_02": {
+   "category": "Rock",
+   "res": "2k"
+  },
+  "namaqualand_boulder_03": {
+   "category": "Rock",
+   "res": "2k"
+  },
+  "namaqualand_boulder_04": {
+   "category": "Rock",
+   "res": "2k"
+  },
+  "namaqualand_boulder_05": {
+   "category": "Rock",
+   "res": "2k"
+  },
+  "namaqualand_boulder_06": {
+   "category": "Rock",
+   "res": "2k"
+  },
+  "stone_01": {
+   "category": "Rock",
+   "res": "2k"
+  },
+  "rock_07": {
+   "category": "Rock",
+   "res": "2k"
+  },
+  "rock_09": {
+   "category": "Rock",
+   "res": "2k"
+  },
+  "coastal_cliff_02": {
+   "category": "Cliff",
+   "res": "4k"
+  },
+  "coastal_cliff_04": {
+   "category": "Cliff",
+   "res": "4k"
+  },
+  "rock_face_01": {
+   "category": "Cliff",
+   "res": "2k"
+  },
+  "rock_face_02": {
+   "category": "Cliff",
+   "res": "2k"
+  },
+  "stone_fire_pit": {
+   "category": "Prop",
+   "res": "2k"
+  }
  },
  "textures": {
-  "leafy_grass": {"res": "4k"},
-  "grass_ground": {"res": "4k"},
-  "forest_leaves_02": {"res": "4k"},
-  "forest_ground_04": {"res": "4k"},
-  "stony_dirt_path": {"res": "4k"},
-  "rocky_trail": {"res": "4k"},
-  "rocky_terrain": {"res": "4k"},
-  "rock_face": {"res": "4k"},
-  "river_small_rocks": {"res": "4k"},
-  "dry_riverbed_rock": {"res": "4k"},
-  "japanese_stone_wall": {"res": "2k"},
-  "clay_roof_tiles": {"res": "2k"},
-  "grey_roof_tiles": {"res": "2k"},
-  "white_plaster_rough_01": {"res": "2k"},
-  "wood_planks_grey": {"res": "2k"},
-  "oak_wood_planks": {"res": "2k"},
-  "reed_roof_03": {"res": "2k"},
-  "thatch_roof_angled": {"res": "2k"}
+  "aerial_grass_rock": {
+   "res": "4k"
+  },
+  "grass_ground": {
+   "res": "4k"
+  },
+  "forest_leaves_02": {
+   "res": "4k"
+  },
+  "forest_ground_04": {
+   "res": "4k"
+  },
+  "stony_dirt_path": {
+   "res": "4k"
+  },
+  "rocky_trail": {
+   "res": "4k"
+  },
+  "rocky_terrain": {
+   "res": "4k"
+  },
+  "rock_face": {
+   "res": "4k"
+  },
+  "river_small_rocks": {
+   "res": "4k"
+  },
+  "dry_riverbed_rock": {
+   "res": "4k"
+  },
+  "japanese_stone_wall": {
+   "res": "2k"
+  },
+  "clay_roof_tiles": {
+   "res": "2k"
+  },
+  "grey_roof_tiles": {
+   "res": "2k"
+  },
+  "white_plaster_rough_01": {
+   "res": "2k"
+  },
+  "wood_planks_grey": {
+   "res": "2k"
+  },
+  "oak_wood_planks": {
+   "res": "2k"
+  },
+  "reed_roof_03": {
+   "res": "2k"
+  },
+  "thatch_roof_angled": {
+   "res": "2k"
+  }
  }
 }

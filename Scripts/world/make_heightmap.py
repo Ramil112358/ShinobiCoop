@@ -4,8 +4,10 @@
 
 Writes (1009 x 1009 px, ~1 m per pixel, +X = image right, +Y = image down: row 0 is the landscape's minimum Y):
   height.png          16-bit, UE landscape encoding: value = 32768 + metres * 128 (landscape Z scale 100)
-  weight_grass/dirt/rock/bank.png   8-bit layer weights, summing to 255 per pixel
-  terrain.json        {"size_m", "pixels", "height_scale_z": 100.0, "min_m", "max_m"}
+  weight_<layer>.png  8-bit layer weights for LAYERS, summing to 255 per pixel
+  terrain.json        {"size_m", "pixels", "height_scale_z": 100.0, "min_m", "max_m", "layers", ...}
+The hills and mountains are weathered by droplet erosion (masked off the village, camps, boss arena, paths and the
+river floodplain, which keep their exact shape); steep slopes get a little rocky detail.
 Deterministic (fixed seed). Needs numpy + Pillow (system Python, not UE's).
 """
 import json
@@ -26,6 +28,10 @@ RIVER_HALF_WIDTH_M = 7.0
 PATH_HALF_WIDTH_M = 3.0
 BOSS_RISE_M = 30.0
 MOUNTAIN_START_M = 450.0
+LAYERS = ["grass", "forest", "dirt", "rock", "bank"]
+# Building footprint radii (m): no scatter inside them (make_placements) and bare dirt under them (no grass).
+FOOTPRINT_M = {"house_small": 5.0, "house_medium": 6.0, "house_large": 7.5, "stall": 2.5, "lantern": 0.6, "gate": 7.0,
+               "shrine": 5.5, "torii": 4.0, "well": 2.0, "training_post": 0.6}
 
 
 def grid(size_m):
@@ -71,7 +77,69 @@ def smoothstep(e0, e1, v):
     return t * t * (3 - 2 * t)
 
 
-def build(lay):
+def forest_density(lay, x, y):
+    """0-1 tree density: the forest ring around the village, thinning into the mountain foot. Trees are placed from it
+    (make_placements) and the forest-floor layer is painted from it."""
+    vx, vy, vr = lay.areas["village"]
+    edge = np.maximum(np.abs(x), np.abs(y))
+    f = smoothstep(vr + 15, vr + 60, np.hypot(x - vx, y - vy)) * (edge < 478)
+    return f * (1 - smoothstep(452, 478, edge) * 0.6)
+
+
+def bilinear(h, px, py):
+    x0, y0 = px.astype(int), py.astype(int)
+    fx, fy = px - x0, py - y0
+    return (h[y0, x0] * (1 - fx) * (1 - fy) + h[y0, x0 + 1] * fx * (1 - fy)
+            + h[y0 + 1, x0] * (1 - fx) * fy + h[y0 + 1, x0 + 1] * fx * fy)
+
+
+def erode(h, mask, iterations=200_000, seed=SEED, batch=20_000, steps=48):
+    """Hydraulic droplet erosion (after Lague), all droplets of a batch stepped together. Heights in metres on a 1 m
+    grid. Returns h + (eroded - h) * mask, the change softened by a small blur so single droplets leave no pits."""
+    rng = np.random.default_rng(seed + 1)
+    n = h.shape[0]
+    work = h.astype(np.float64).copy()
+    inertia, capacity_k, deposit_k, erode_k, evaporate, gravity, min_slope = 0.1, 6.0, 0.3, 0.4, 0.03, 9.8, 0.02
+    for _ in range(iterations // batch):
+        px, py = rng.uniform(1, n - 2.001, batch), rng.uniform(1, n - 2.001, batch)
+        dx, dy = np.zeros(batch), np.zeros(batch)
+        speed, water, sediment = np.ones(batch), np.ones(batch), np.zeros(batch)
+        alive = np.ones(batch, bool)
+        for _ in range(steps):
+            x0, y0 = px.astype(int), py.astype(int)
+            fx, fy = px - x0, py - y0
+            h00, h10, h01, h11 = work[y0, x0], work[y0, x0 + 1], work[y0 + 1, x0], work[y0 + 1, x0 + 1]
+            gx = (h10 - h00) * (1 - fy) + (h11 - h01) * fy
+            gy = (h01 - h00) * (1 - fx) + (h11 - h10) * fx
+            here = h00 * (1 - fx) * (1 - fy) + h10 * fx * (1 - fy) + h01 * (1 - fx) * fy + h11 * fx * fy
+            dx, dy = dx * inertia - gx * (1 - inertia), dy * inertia - gy * (1 - inertia)
+            length = np.hypot(dx, dy)
+            alive &= length > 1e-9
+            length[length <= 1e-9] = 1.0
+            dx, dy = dx / length, dy / length
+            nx, ny = px + dx, py + dy
+            alive &= (nx >= 1) & (nx < n - 2.001) & (ny >= 1) & (ny < n - 2.001)
+            nx, ny = np.clip(nx, 1, n - 2.001), np.clip(ny, 1, n - 2.001)
+            dh = bilinear(work, nx, ny) - here
+            capacity = np.maximum(-dh, min_slope) * speed * water * capacity_k
+            depositing = (sediment > capacity) | (dh > 0)
+            deposit = np.where(dh > 0, np.minimum(dh, sediment), (sediment - capacity) * deposit_k)
+            erosion = np.minimum((capacity - sediment) * erode_k, np.maximum(-dh, 0))
+            change = np.where(depositing, deposit, -erosion) * alive
+            sediment -= change
+            for oy, ox, weight in ((0, 0, (1 - fx) * (1 - fy)), (0, 1, fx * (1 - fy)), (1, 0, (1 - fx) * fy), (1, 1, fx * fy)):
+                np.add.at(work, (y0 + oy, x0 + ox), change * weight)
+            speed = np.sqrt(np.maximum(speed ** 2 - dh * gravity, 0.0))
+            water *= 1 - evaporate
+            px, py = nx, ny
+    delta = work - h
+    for _ in range(3):  # soften: 3x3 box blur
+        padded = np.pad(delta, 1, mode="edge")
+        delta = sum(padded[1 + oy:n + 1 + oy, 1 + ox:n + 1 + ox] for oy in (-1, 0, 1) for ox in (-1, 0, 1)) / 9.0
+    return h + delta * mask
+
+
+def build(lay, erosion=True):
     rng = np.random.default_rng(SEED)
     x, y = grid(lay.size_m)
     # Rolling hills with real relief: contrast-stretched fractal noise, ~5-40 m.
@@ -125,6 +193,22 @@ def build(lay):
     h = np.where(dry, np.maximum(h, water_level + 0.8), h)
     build.water_level = water_level
 
+    # Weathering, masked to zero on playable ground (with a soft ramp beyond it).
+    protect = 1 - smoothstep(vr + 15, vr + 40, d_village)
+    protect = np.maximum(protect, 1 - smoothstep(br + 10, br + 30, d_boss))
+    protect = np.maximum(protect, 1 - smoothstep(PATH_HALF_WIDTH_M + 5, PATH_HALF_WIDTH_M + 20, d_path))
+    protect = np.maximum(protect, 1 - smoothstep(110, 140, d_river))
+    for camp in lay.camps:
+        protect = np.maximum(protect, 1 - smoothstep(camp.r + 10, camp.r + 30, np.hypot(x - camp.x, y - camp.y)))
+    mask = 1 - protect
+    if erosion:
+        h = erode(h, mask)
+        cell = lay.size_m / (PIXELS - 1)
+        gy_, gx_ = np.gradient(h, cell)
+        steep = smoothstep(22, 38, np.degrees(np.arctan(np.hypot(gx_, gy_))))
+        h = h + (value_noise(x, y, 4.0, rng) - 0.5) * 0.8 * steep * mask
+        h = np.where(dry, np.maximum(h, water_level + 0.8), h)
+
     # Weights.
     cell = lay.size_m / (PIXELS - 1)
     gy_, gx_ = np.gradient(h, cell)
@@ -133,6 +217,10 @@ def build(lay):
     dirt = np.maximum(dirt, 1 - smoothstep(30, 40, d_village))  # village square
     for camp in lay.camps + [type("B", (), {"x": bx, "y": by, "r": br})]:
         dirt = np.maximum(dirt, 1 - smoothstep(camp.r * 0.7, camp.r, np.hypot(x - camp.x, y - camp.y)))
+    for b in lay.buildings:
+        if b["type"] != "gate":
+            radius = max(FOOTPRINT_M[b["type"]], 1.0)
+            dirt = np.maximum(dirt, 1 - smoothstep(radius, radius + 1.5, np.hypot(x - b["x"], y - b["y"])))
     bank_w = 1 - smoothstep(RIVER_HALF_WIDTH_M + 2, RIVER_HALF_WIDTH_M + 8, d_river)
     rock = np.maximum(smoothstep(28, 36, slope_deg), smoothstep(MOUNTAIN_START_M, MOUNTAIN_START_M + 30, edge))
     rock = rock * (1 - dirt)
@@ -141,6 +229,10 @@ def build(lay):
     grass = np.clip(1 - dirt - rock - bank_w, 0, 1)
     total = grass + dirt + rock + bank_w
     weights = {name: w / total for name, w in (("grass", grass), ("dirt", dirt), ("rock", rock), ("bank", bank_w))}
+    # Forest floor takes over the grass under the trees.
+    forest = np.minimum(weights["grass"], smoothstep(0.15, 0.5, forest_density(lay, x, y)))
+    weights["grass"] = weights["grass"] - forest
+    weights["forest"] = forest
     build.village_height = village_height
     return h, weights, d_path, d_river
 
@@ -152,12 +244,12 @@ def write(out_dir, lay=None):
     encoded = np.clip(np.round(32768 + h * 128), 0, 65535).astype(np.uint16)
     Image.fromarray(encoded).save(os.path.join(out_dir, "height.png"))
     # Floor three layers and give grass the remainder: the sum is exactly 255 and grass never goes negative.
-    quantised = {name: np.floor(weights[name] * 255) for name in ("dirt", "rock", "bank")}
-    quantised["grass"] = 255 - quantised["dirt"] - quantised["rock"] - quantised["bank"]
+    quantised = {name: np.floor(weights[name] * 255) for name in LAYERS if name != "grass"}
+    quantised["grass"] = 255 - sum(quantised.values())
     for name, w in quantised.items():
         Image.fromarray(np.clip(w, 0, 255).astype(np.uint8)).save(os.path.join(out_dir, f"weight_{name}.png"))
     meta = {"size_m": lay.size_m, "pixels": PIXELS, "height_scale_z": 100.0, "min_m": float(h.min()), "max_m": float(h.max()),
-            "village_height_m": build.village_height, "water_level_m": build.water_level}
+            "village_height_m": build.village_height, "water_level_m": build.water_level, "layers": LAYERS}
     with open(os.path.join(out_dir, "terrain.json"), "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=1)
     return meta

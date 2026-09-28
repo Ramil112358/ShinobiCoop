@@ -23,8 +23,9 @@ SEED = 11
 CHUNK_M = 128.0
 WALL_RADIUS_M = 106.0
 WALL_SEGMENT_M = 10.2
-FOOTPRINT_M = {"house_small": 5.0, "house_medium": 6.0, "house_large": 7.5, "stall": 2.5, "lantern": 0.6, "gate": 7.0,
-               "shrine": 5.5, "torii": 4.0, "well": 2.0, "training_post": 0.6}
+FOOTPRINT_M = hm.FOOTPRINT_M
+# Close-up tour points (m): meadow grass, forest floor, mountain edge, village street.
+TOUR_CLOSEUPS = {"Meadow": (40.0, -35.0), "Forest": (-125.0, -60.0), "Edge": (-400.0, 40.0), "Street": (20.0, -175.0)}
 BUILDING_MESH = {"house_small": ["Arch/house_small"], "house_medium": ["Arch/house_medium", "Arch/house_round"],
                  "house_large": ["Arch/house_large"], "stall": ["Arch/stall"], "lantern": ["Arch/lantern"],
                  "gate": ["Arch/gate"], "shrine": ["Arch/shrine"], "torii": ["Arch/torii"], "well": ["Arch/well"],
@@ -159,6 +160,7 @@ def build(lay=None):
     for route in lay.villagers:
         out["villagers"].append([{"x": uu(x), "y": uu(y), "z": uu(t.height(x, y))} for x, y in route])
 
+    out["tour_points"] = {name: {"x": uu(x), "y": uu(y), "z": uu(t.height(x, y))} for name, (x, y) in TOUR_CLOSEUPS.items()}
     scatter(t, rng, blockers, out)
     return out
 
@@ -188,8 +190,7 @@ def scatter(t, rng, blockers, out):
     edge = np.maximum(np.abs(t.x), np.abs(t.y))
     d_village = np.hypot(t.x - vx, t.y - vy)
     d_boss = np.hypot(t.x - lay.boss["x"], t.y - lay.boss["y"])
-    forest = hm.smoothstep(vr + 15, vr + 60, d_village) * (edge < 478)
-    forest = forest * (1 - hm.smoothstep(452, 478, edge) * 0.6)
+    forest = hm.forest_density(lay, t.x, t.y)
     placed = {}
 
     def add(key, x, y, z, yaw, scale, cull=0.0):
@@ -240,15 +241,7 @@ def scatter(t, rng, blockers, out):
     for xi, yi in zip(x[keep], y[keep]):
         add(ROCKS[int(rng.integers(3))], xi, yi, t.height(xi, yi) - 0.4, rng.uniform(0, 360), rng.uniform(0.6, 1.8), cull=20000.0)
 
-    # Grass and flowers on grass-painted ground only (not paths, village square, camps or river banks), culled at 60 m.
-    x, y = jittered(t, rng, 2.4)
-    grass_weight = field(t.weights["grass"], x, y)
-    patch = hm.value_noise(x, y, 18.0, rng)
-    keep = (grass_weight > 0.8) & (rng.random(x.shape) < 0.5 * hm.smoothstep(0.35, 0.65, patch)) & (np.abs(x) < 470) & (np.abs(y) < 470)
-    keep &= free_of([(bx, by, r * 0.6) for bx, by, r in blockers if r < 20], x, y)
-    for xi, yi in zip(x[keep], y[keep]):
-        key = FLOWERS[int(rng.integers(len(FLOWERS)))] if rng.random() < 0.08 else GRASS[int(rng.integers(len(GRASS)))]
-        add(key, xi, yi, t.height(xi, yi) - 0.05, rng.uniform(0, 360), rng.uniform(0.8, 1.3), cull=6000.0)
+    # The grass carpet is landscape grass (build_world.py GRASS_TYPES), generated on the GPU near each viewer.
 
     out["scatter"] = placed
 

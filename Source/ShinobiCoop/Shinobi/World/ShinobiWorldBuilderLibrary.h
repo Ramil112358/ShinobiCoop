@@ -41,4 +41,10 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|World")
 	static float SetTrunkCollision(UStaticMesh* Mesh);
+
+	/** Moves the mesh's pivot to the bottom centre of its bounds (Poly Haven variants keep their offsets from the
+	 *  source scene, up to metres). Rebuilds the mesh; returns the offset removed (zero if already centred). */
+	UFUNCTION(BlueprintCallable, Category = "Shinobi|World")
+	static FVector RecenterPivot(UStaticMesh* Mesh);
+
 };

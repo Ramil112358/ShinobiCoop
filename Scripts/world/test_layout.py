@@ -62,7 +62,7 @@ def test_terrain():
     with tempfile.TemporaryDirectory() as out:
         hm.write(out, lay)
         dirt = np.asarray(Image.open(os.path.join(out, "weight_dirt.png")))
-        total = sum(np.asarray(Image.open(os.path.join(out, f"weight_{n}.png")), dtype=np.int32) for n in ("grass", "dirt", "rock", "bank"))
+        total = sum(np.asarray(Image.open(os.path.join(out, f"weight_{n}.png")), dtype=np.int32) for n in hm.LAYERS)
         assert (total == 255).all(), "layer weights must sum to 255"
         px, py = lay.paths[0][1]
         assert dirt[world_to_pixel(lay, px, py)] == 255, "path centre fully dirt"
@@ -104,6 +104,10 @@ def test_fetch_plan():
     assert dict((r, s) for _, r, s in plan)["rock_07_2k.gltf"] == gltf["size"]
     textures = ph.plan_downloads(files, "2k", "texture")
     assert len(textures) == 4 and all(any(m in r for _, r, _ in textures) for m in ("_diff", "_nor_gl_", "_rough_", "_disp_")), textures
+    # Foliage: the glTF's colour JPG has no alpha, so the separate alpha maps come along (Alpha, twig_alpha, ...).
+    leafy = dict(files, twig_alpha={"2k": {"jpg": {"url": "https://x/tree_twig_alpha_2k.jpg", "size": 5}}})
+    extra = [(u, r, s) for u, r, s in ph.plan_downloads(leafy, "2k", "model") if "alpha" in r]
+    assert extra == [("https://x/tree_twig_alpha_2k.jpg", "textures/tree_twig_alpha_2k.jpg", 5)], extra
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "f.bin")
         with open(path, "wb") as f:
@@ -119,6 +123,42 @@ def test_trees_trunk_collision():
     trees = {name: e for cat in ("PH_Tree", "Mega_Tree") for name, e in catalog.get(cat, {}).items()}
     assert trees, "no realistic trees imported"
     assert all(e.get("collision") == "trunk" and 10 <= e.get("trunk_radius_cm", 0) <= 80 for e in trees.values()), trees
+
+
+def test_erosion_protects_playable():
+    lay = layout.load()
+    eroded, _, d_path, _ = hm.build(lay)
+    plain, _, _, _ = hm.build(lay, erosion=False)
+    x, y = hm.grid(lay.size_m)
+    delta = np.abs(eroded - plain)
+    vx, vy, vr = lay.areas["village"]
+    protected = (np.hypot(x - vx, y - vy) < vr) | (np.hypot(x - lay.boss["x"], y - lay.boss["y"]) < lay.boss["r"]) | (d_path < 3)
+    for camp in lay.camps:
+        protected |= np.hypot(x - camp.x, y - camp.y) < camp.r
+    assert delta[protected].max() < 0.05, f"erosion moved playable ground by {delta[protected].max():.2f} m"
+    assert delta[~protected].mean() > 0.2, f"erosion barely changed the terrain ({delta[~protected].mean():.3f} m)"
+
+
+def test_weights_five_layers():
+    lay = layout.load()
+    with tempfile.TemporaryDirectory() as tmp:
+        hm.write(tmp, lay)
+        w = {n: np.asarray(Image.open(os.path.join(tmp, f"weight_{n}.png"))).astype(int) for n in hm.LAYERS}
+        meta = json.load(open(os.path.join(tmp, "terrain.json"), encoding="utf-8"))
+    assert meta["layers"] == ["grass", "forest", "dirt", "rock", "bank"]
+    assert (sum(w.values()) == 255).all()
+    data = mp.build(lay)
+    trees = [(x / 100, y / 100) for chunk in data["scatter"].values() for key, entry in chunk.items()
+             if key.split("/")[0] in ("Tree", "PH_Tree", "Mega_Tree") for x, y, *_ in entry["items"]]
+    rows, cols = zip(*(world_to_pixel(lay, x, y) for x, y in trees))
+    assert (w["forest"][list(rows), list(cols)] > 128).mean() >= 0.6, "forest floor missing under the trees"
+    for b in lay.buildings:
+        if b["type"] != "gate":
+            r, c = world_to_pixel(lay, b["x"], b["y"])
+            assert w["dirt"][r, c] == 255, f"grass could grow inside {b['type']} at {b['x']},{b['y']}"
+    for camp in lay.camps:
+        r, c = world_to_pixel(lay, camp.x, camp.y)
+        assert w["dirt"][r, c] == 255, f"grass could grow in {camp.id}"
 
 
 if __name__ == "__main__":
