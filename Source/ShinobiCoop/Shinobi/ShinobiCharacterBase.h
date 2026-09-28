@@ -45,8 +45,9 @@ public:
 	 * orb and the death ragdoll act on it; animation always runs on GetMesh(). */
 	virtual USkeletalMeshComponent* GetBodyMesh() const { return GetMesh(); }
 
-	/** The body mesh's right-hand bone: "hand_r" on Manny, "RightHand" on a Mixamo-rigged hero. */
+	/** The body mesh's right-hand and head bones: "hand_r"/"head" on Manny, "RightHand"/"Head" on a Mixamo-rigged hero. */
 	FName GetRightHandBone() const;
+	FName GetHeadBone() const;
 
 	/** False once downed or dead: out of the fight, so not a target. */
 	bool IsAlive() const;

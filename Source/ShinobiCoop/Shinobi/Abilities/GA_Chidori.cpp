@@ -60,9 +60,9 @@ void UGA_Chidori::OnDashFinished()
 	if (HasAuthority(&CurrentActivationInfo))
 	{
 		AShinobiCharacterBase* Victim = FindNearestHostileInCone(StrikeRange, 60.f);
-		if (Victim && ApplyDamage(Victim, Damage))
+		if (Victim && ApplyDamage(Victim, Damage * GetDamageScale()))
 		{
-			AShinobiBurst::Spawn(Victim->GetWorld(), EShinobiBurst::Lightning, Victim->GetActorLocation());
+			AShinobiBurst::Spawn(Victim->GetWorld(), EShinobiBurst::Lightning, Victim->GetActorLocation(), GetVisualScale());
 			// Bonus after the hit, so it boosts the follow-up rather than this strike.
 			UAbilitySystemComponent* Source = GetAbilitySystemComponentFromActorInfo();
 			ShinobiCombat::ApplyStun(Source, Victim);

@@ -19,6 +19,7 @@ AShinobiBurst::AShinobiBurst()
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereMesh(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMesh(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> ConeMesh(TEXT("/Engine/BasicShapes/Cone.Cone"));
 
 	Sphere = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Sphere"));
 	Sphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -40,6 +41,18 @@ AShinobiBurst::AShinobiBurst()
 		Log->SetStaticMesh(CylinderMesh.Object);
 	}
 
+	Cone = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Cone"));
+	Cone->SetupAttachment(Sphere);
+	Cone->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Cone->SetCastShadow(false);
+	Cone->SetUsingAbsoluteScale(true); // sized in Tick, independent of the (hidden) sphere
+	Cone->SetRelativeRotation(FRotator(90.f, 0.f, 0.f)); // the engine cone's tip (+Z) turned back toward the actor
+	Cone->SetVisibility(false);
+	if (ConeMesh.Succeeded())
+	{
+		Cone->SetStaticMesh(ConeMesh.Object);
+	}
+
 	Light = CreateDefaultSubobject<UPointLightComponent>(TEXT("Light"));
 	Light->SetupAttachment(Sphere);
 	Light->SetCastShadows(false);
@@ -47,17 +60,18 @@ AShinobiBurst::AShinobiBurst()
 	Light->SetVisibility(false);
 }
 
-AShinobiBurst* AShinobiBurst::Spawn(UWorld* World, EShinobiBurst Kind, const FVector& Location)
+AShinobiBurst* AShinobiBurst::Spawn(UWorld* World, EShinobiBurst Kind, const FVector& Location, float Scale, const FRotator& Rotation)
 {
 	if (!World || World->GetNetMode() == NM_Client)
 	{
 		return nullptr;
 	}
-	const FTransform Where(Location);
+	const FTransform Where(Rotation, Location);
 	AShinobiBurst* Burst = World->SpawnActorDeferred<AShinobiBurst>(AShinobiBurst::StaticClass(), Where, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 	if (Burst)
 	{
 		Burst->Kind = Kind;
+		Burst->Scale = Scale;
 		Burst->FinishSpawning(Where);
 	}
 	return Burst;
@@ -67,6 +81,7 @@ void AShinobiBurst::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME_CONDITION(AShinobiBurst, Kind, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AShinobiBurst, Scale, COND_InitialOnly);
 }
 
 void AShinobiBurst::BeginPlay()
@@ -77,7 +92,7 @@ void AShinobiBurst::BeginPlay()
 		SetActorTickEnabled(false);
 		return;
 	}
-	static const EShinobiSfx Sounds[] = { EShinobiSfx::Explosion, EShinobiSfx::Explosion, EShinobiSfx::Zap, EShinobiSfx::Whirr, EShinobiSfx::Poof };
+	static const EShinobiSfx Sounds[] = { EShinobiSfx::Explosion, EShinobiSfx::Explosion, EShinobiSfx::Zap, EShinobiSfx::Whirr, EShinobiSfx::Poof, EShinobiSfx::Whoosh, EShinobiSfx::Whoosh };
 	ShinobiSfx::Play(this, Sounds[static_cast<uint8>(Kind)], GetActorLocation(), Kind == EShinobiBurst::Fire ? 0.7f : 1.f);
 
 	// Mostly-rim shells (low Core) at modest intensity: a solid bright sphere blows out to a white wall under bloom.
@@ -90,10 +105,23 @@ void AShinobiBurst::BeginPlay()
 	case EShinobiBurst::Lightning:    Color = ShinobiVfx::Colors::Lightning; Duration = 0.3f; MaxScale = 2.5f; Intensity = 4.f;   LightIntensity = 30000.f; break;
 	case EShinobiBurst::Spiral:       Color = ShinobiVfx::Colors::Chakra;    Duration = 0.4f; MaxScale = 3.f;  Intensity = 4.f;   LightIntensity = 20000.f; break;
 	case EShinobiBurst::Substitution: Color = ShinobiVfx::Colors::Smoke;     Duration = 0.5f; MaxScale = 2.2f; Intensity = 0.8f;  LightIntensity = 0.f;     Core = 0.6f; break;
+	case EShinobiBurst::FireBreath:   Color = ShinobiVfx::Colors::Fire;      Duration = 0.3f; MaxScale = 2.2f; Intensity = 4.f;   LightIntensity = 15000.f; break;
+	case EShinobiBurst::BlackFlameIgnite: Color = ShinobiVfx::Colors::BlackFlame; Duration = 0.5f; MaxScale = 2.5f; Intensity = 3.f; LightIntensity = 15000.f; Core = 0.5f; break;
 	}
+	MaxScale *= Scale;
 	SphereMaterial = ShinobiVfx::MakeGlow(this, Color, Intensity, Core);
 	Sphere->SetMaterial(0, SphereMaterial);
-	Sphere->SetRelativeScale3D(FVector(0.2f * MaxScale));
+	if (Kind == EShinobiBurst::FireBreath)
+	{
+		Sphere->SetVisibility(false, false); // the cone is the whole effect; the light stays
+		Sphere->SetRelativeScale3D(FVector::OneVector); // unscaled root, so the cone's offset is in plain units
+		Cone->SetMaterial(0, SphereMaterial);
+		Cone->SetVisibility(true);
+	}
+	else
+	{
+		Sphere->SetRelativeScale3D(FVector(0.2f * MaxScale));
+	}
 	Light->SetLightColor(Color);
 	Light->SetAttenuationRadius(60.f * MaxScale);
 	Light->SetVisibility(LightIntensity > 0.f);
@@ -117,7 +145,18 @@ void AShinobiBurst::Tick(float DeltaSeconds)
 	Age += DeltaSeconds;
 	const float T = FMath::Clamp(Age / Duration, 0.f, 1.f);
 	const float Grow = 1.f - FMath::Square(1.f - T); // fast out, slowing down
-	Sphere->SetRelativeScale3D(FVector(FMath::Lerp(0.2f, 1.f, Grow) * MaxScale));
+	if (!Cone->IsVisible())
+	{
+		Sphere->SetRelativeScale3D(FVector(FMath::Lerp(0.2f, 1.f, Grow) * MaxScale));
+	}
+	else
+	{
+		// The engine cone is 100 units long around its centre: shift it half its length forward so the tip stays put.
+		const float Length = FMath::Lerp(0.3f, 1.f, Grow) * MaxScale;
+		const float Width = 0.35f * FMath::Lerp(0.5f, 1.f, Grow) * MaxScale;
+		Cone->SetWorldScale3D(FVector(Width, Width, Length));
+		Cone->SetRelativeLocation(FVector(50.f * Length, 0.f, 0.f));
+	}
 	if (SphereMaterial)
 	{
 		SphereMaterial->SetScalarParameterValue(TEXT("Fade"), 1.f - T);
@@ -126,6 +165,7 @@ void AShinobiBurst::Tick(float DeltaSeconds)
 	if (T >= 1.f)
 	{
 		Sphere->SetVisibility(false); // the log (a child with absolute scale) keeps its own visibility
+		Cone->SetVisibility(false);
 		Light->SetVisibility(false);
 		SetActorTickEnabled(false);
 	}

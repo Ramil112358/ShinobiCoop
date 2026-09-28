@@ -19,6 +19,28 @@
 #include "Shinobi/Enemies/GA_EnemyAttacks.h"
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 
+namespace
+{
+	template <class T>
+	T* FirstActor(const FShinobiTestWorld& W)
+	{
+		TActorIterator<T> It(W.World);
+		return It ? *It : nullptr;
+	}
+
+	const AShinobiBurst* FindBurst(const FShinobiTestWorld& W, EShinobiBurst Kind)
+	{
+		for (TActorIterator<AShinobiBurst> It(W.World); It; ++It)
+		{
+			if (It->GetKind() == Kind)
+			{
+				return *It;
+			}
+		}
+		return nullptr;
+	}
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiProjectileTest, "ShinobiCoop.Jutsu.ProjectileHitsFirstHostileAndSplashes", ShinobiTestFlags)
 bool FShinobiProjectileTest::RunTest(const FString& Parameters)
 {
@@ -374,20 +396,10 @@ bool FShinobiJutsuVfxTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Fire orb in hand during the wind-up"), P->GetCastFx()->GetShownTag() == ShinobiTags::State_Casting_Fireball);
 	W.Tick(1.2f); // thrown at ~0.75-0.8, hits at ~1.0
 	TestFalse(TEXT("Orb gone once the jutsu ends"), P->GetCastFx()->GetShownTag().IsValid());
-	TestEqual(TEXT("One fire burst at the impact"), ShinobiTest::CountActors<AShinobiBurst>(W), 1);
+	TestNotNull(TEXT("Fire burst at the impact"), FindBurst(W, EShinobiBurst::Fire));
 	TestTrue(TEXT("Burning target glows with the burn aura"), E->GetChakraAura()->GetShownTag() == ShinobiTags::State_Burning_Normal);
 	TestEqual(TEXT("Burn aura faded in"), E->GetChakraAura()->GetFade(), 1.f);
 	return true;
-}
-
-namespace
-{
-	template <class T>
-	T* FirstActor(const FShinobiTestWorld& W)
-	{
-		TActorIterator<T> It(W.World);
-		return It ? *It : nullptr;
-	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChargeTapTest, "ShinobiCoop.Jutsu.ChargeTapFiresUnchargedAfterSeals", ShinobiTestFlags)
@@ -498,6 +510,58 @@ bool FShinobiChargeInterruptTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("No cooldown"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Fireball));
 	W.Tick(0.5f);
 	TestEqual(TEXT("Nothing thrown"), ShinobiTest::CountActors<AShinobiProjectile>(W), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChargedHitsTest, "ShinobiCoop.Jutsu.ChargedHitsScaleDamage", ShinobiTestFlags)
+bool FShinobiChargedHitsTest::RunTest(const FString& Parameters)
+{
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+	{
+		// Chidori held to the cap: 120 x 1.75, and a full-size lightning burst.
+		FShinobiTestWorld W;
+		AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+		AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(600.f, 0.f, 0.f));
+		ShinobiTest::Press(P, EShinobiAbilityInputID::Jutsu2);
+		W.Tick(3.f); // seals end ~0.55-0.6, the cap ~2.6-2.7, then a ~0.13 s dash
+		TestTrue(FString::Printf(TEXT("Full-charge Chidori hits for 210 (health %.1f)"), ShinobiTest::Get(E, Health)), FMath::IsNearlyEqual(ShinobiTest::Get(E, Health), 290.f, 1.f));
+		const AShinobiBurst* Bolt = FindBurst(W, EShinobiBurst::Lightning);
+		TestTrue(TEXT("Lightning burst at full size"), Bolt && FMath::IsNearlyEqual(Bolt->GetScale(), 1.8f, 0.01f));
+	}
+	{
+		// Amaterasu half-charged: a bigger ignition and a stronger black flame.
+		FShinobiTestWorld W;
+		AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+		AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(1500.f, 0.f, 0.f));
+		ShinobiTest::Press(P, EShinobiAbilityInputID::Jutsu4);
+		W.Tick(0.5f); // seals end ~0.45-0.5
+		W.Tick(1.f);
+		ShinobiTest::Release(P, EShinobiAbilityInputID::Jutsu4); // charged ~1.0-1.05 s
+		W.Tick(0.1f);
+		const AShinobiBurst* Ignite = FindBurst(W, EShinobiBurst::BlackFlameIgnite);
+		const float Scale = Ignite ? Ignite->GetScale() : -1.f;
+		TestTrue(FString::Printf(TEXT("Ignition burst ~1.4x (got %.3f)"), Scale), FMath::IsNearlyEqual(Scale, 1.4f, 0.06f));
+		W.Tick(1.1f); // the first black-flame tick is 1 s after the release
+		const float Left = ShinobiTest::Get(E, Health);
+		TestTrue(FString::Printf(TEXT("One tick of 15 x ~1.38 (health %.1f)"), Left), FMath::IsNearlyEqual(Left, 500.f - 15.f * 1.385f, 1.f));
+	}
+	{
+		// Fireball tap: fire breath at the mouth, uncharged.
+		FShinobiTestWorld W;
+		AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+		ShinobiTest::Hover(P);
+		ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+		W.Tick(0.85f);
+		const AShinobiBurst* Breath = FindBurst(W, EShinobiBurst::FireBreath);
+		TestNotNull(TEXT("Fire breath on the release"), Breath);
+		if (Breath)
+		{
+			const FVector Head = P->GetBodyMesh()->GetSocketLocation(P->GetHeadBone());
+			const float Gap = FVector::Dist(Breath->GetActorLocation(), Head);
+			TestTrue(FString::Printf(TEXT("Breath starts at the mouth (%.0f from the head bone)"), Gap), Gap < 40.f);
+			TestEqual(TEXT("Uncharged breath"), Breath->GetScale(), 1.f);
+		}
+	}
 	return true;
 }
 

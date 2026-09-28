@@ -109,7 +109,7 @@ void AShinobiProjectile::Explode(AShinobiCharacterBase* DirectTarget, const FVec
 	bExploded = true;
 	if (bBurstOnImpact)
 	{
-		AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::Fire, Location);
+		AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::Fire, Location, Scale);
 	}
 
 	const AShinobiCharacterBase* Caster = Cast<AShinobiCharacterBase>(GetInstigator());

@@ -16,6 +16,8 @@ enum class EShinobiBurst : uint8
 	Lightning,    // Chidori strike
 	Spiral,       // Rasengan strike
 	Substitution, // a log left where the player stood, in a puff of smoke
+	FireBreath,       // Fireball: a flame cone from the caster's mouth along the burst's rotation
+	BlackFlameIgnite, // Amaterasu: the black flames catching on the target
 };
 
 /**
@@ -32,13 +34,15 @@ class SHINOBICOOP_API AShinobiBurst : public AActor
 public:
 	AShinobiBurst();
 
-	/** Server only (does nothing on a client); returns the spawned burst, or null. */
-	static AShinobiBurst* Spawn(UWorld* World, EShinobiBurst Kind, const FVector& Location);
+	/** Server only (does nothing on a client); returns the spawned burst, or null. Scale multiplies its size (a charged
+	 * jutsu's burst is bigger); Rotation aims the directional kinds (FireBreath). */
+	static AShinobiBurst* Spawn(UWorld* World, EShinobiBurst Kind, const FVector& Location, float Scale = 1.f, const FRotator& Rotation = FRotator::ZeroRotator);
 
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	EShinobiBurst GetKind() const { return Kind; }
+	float GetScale() const { return Scale; }
 
 protected:
 	virtual void BeginPlay() override;
@@ -47,11 +51,18 @@ private:
 	UPROPERTY(Replicated)
 	EShinobiBurst Kind = EShinobiBurst::Fire;
 
+	UPROPERTY(Replicated)
+	float Scale = 1.f;
+
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UStaticMeshComponent> Sphere;
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UStaticMeshComponent> Log;
+
+	/** FireBreath's flame cone: tip at the actor, widening along its forward. */
+	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
+	TObjectPtr<UStaticMeshComponent> Cone;
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UPointLightComponent> Light;

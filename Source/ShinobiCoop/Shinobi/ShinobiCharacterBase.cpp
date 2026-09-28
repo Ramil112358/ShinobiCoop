@@ -101,6 +101,13 @@ FName AShinobiCharacterBase::GetRightHandBone() const
 	return GetBodyMesh()->GetBoneIndex(MannyHand) != INDEX_NONE ? MannyHand : MixamoHand;
 }
 
+FName AShinobiCharacterBase::GetHeadBone() const
+{
+	static const FName MannyHead(TEXT("head"));
+	static const FName MixamoHead(TEXT("Head"));
+	return GetBodyMesh()->GetBoneIndex(MannyHead) != INDEX_NONE ? MannyHead : MixamoHead;
+}
+
 void AShinobiCharacterBase::UseMannequinMesh(bool bQuinn)
 {
 	static ConstructorHelpers::FObjectFinder<USkeletalMesh> MannyMesh(TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"));

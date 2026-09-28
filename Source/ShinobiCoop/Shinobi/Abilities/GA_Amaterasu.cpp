@@ -4,6 +4,7 @@
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
+#include "Shinobi/VFX/ShinobiBurst.h"
 
 UGA_Amaterasu::UGA_Amaterasu()
 {
@@ -39,7 +40,10 @@ void UGA_Amaterasu::ExecuteJutsu()
 {
 	if (Target.IsValid() && HasAuthority(&CurrentActivationInfo))
 	{
-		ShinobiCombat::ApplyStatus(GetAbilitySystemComponentFromActorInfo(), Target.Get(), UGE_BlackFlame::StaticClass(), UGE_BlackFlame::DamagePerTick);
+		if (ShinobiCombat::ApplyStatus(GetAbilitySystemComponentFromActorInfo(), Target.Get(), UGE_BlackFlame::StaticClass(), UGE_BlackFlame::DamagePerTick * GetDamageScale()))
+		{
+			AShinobiBurst::Spawn(Target->GetWorld(), EShinobiBurst::BlackFlameIgnite, Target->GetActorLocation(), GetVisualScale());
+		}
 	}
 	EndJutsu();
 }
