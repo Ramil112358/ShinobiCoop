@@ -130,3 +130,18 @@
 - [ ] **Step 5:** After the user's OK: merge `feature/open-world` then `feature/realistic-world` into `main`, tag `open-world` and `realistic-world`.
 
 ## Progress notes
+- **R1 (f9b4576):** Poly Haven fetch (about 3 GB, resumable) and PBR import: 173 Nanite model variants and 18 texture sets. Trees get trunk-capsule collision.
+- **R2 (0968f5d):** eroded terrain, five height-blended photoscanned layers, landscape grass (dense meadow and forest floor).
+  - Poly Haven foliage needs its separate alpha maps and its own material (`M_PBRFoliage`, default lit), and its pivots recentred.
+  - The Nanite landscape was dropped: it rendered flat under the water.
+- **R3 (be078e2):** river surface via the spec fallback, because the Water plugin rendered no surface in UE 5.8.
+  - The surface is single-layer water with scrolling ripple normals.
+  - Reeds and pebbles line the banks.
+- **R4 (0355e6b):** Poly Haven trees, logs, rocks, bushes, camp props and the stone fire pit; a cliff ring on the mountain edge; Blender pieces with bevels, metric UVs and PBR materials.
+  - Megaplants are pending: the launcher's project picker didn't list the moved project. Placements switch to `Mega_Tree` automatically once they're imported.
+- **R5 (385bb7d):** character-only outline (stencil custom depth; `M_OutlinePost` in the valley and all arenas), realistic post, volumetric fog, foliage wind, Nanite PreserveArea.
+- **R6:** performance.
+  - Hardware ray-traced Lumen plus dense Nanite foliage ran at about 4–8 fps.
+  - Software Lumen (`r.Lumen.HardwareRayTracing=False`) plus `r.Nanite.MaxPixelsPerEdge=2` brings Epic at 1080p to 94–145 fps across all 15 tour points, with no visible quality loss.
+  - Medium/Low scalability tuning is skipped as unnecessary.
+- **Tests:** 68 automation tests pass and both smoke tests pass. The 3 charge tests fail only because of parallel jutsu edits outside this branch, which the user said to leave alone.
