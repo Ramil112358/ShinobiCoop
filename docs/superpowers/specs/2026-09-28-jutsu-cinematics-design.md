@@ -31,12 +31,12 @@ Make the four jutsu look and play like the ones in Naruto games. Today each juts
 
 ## 2. Cast timeline and charge
 
-Every jutsu runs in three phases. Each jutsu has one montage with three matching sections.
+Every jutsu runs in three phases. Each phase has its own montage: `AM_<Jutsu>_Seal`, `AM_<Jutsu>_Charge` and `AM_<Jutsu>_Release`.
 
 | Phase | Behaviour |
 |---|---|
 | **Seal** | Fixed length. Hand seals plus the jutsu's body move. Always plays in full, even on a tap. |
-| **Charge** | Starts when the seals end, if the button is still held. A looping pose; the effect grows. Lasts until the button is released, the 2 s cap is reached, or chakra runs out. |
+| **Charge** | Starts when the seals end, if the button is still held. A slow hold pose (the clip is at least 2.2 s, longer than the cap, so it never needs to loop); the effect grows. Lasts until the button is released, the 2 s cap is reached, or chakra runs out. |
 | **Release** | The jutsu fires and the cooldown starts. If the button was released during the seals, the release follows the seals directly. |
 
 **Charge level.** `L = ChargeTime / MaxChargeTime`, from 0 to 1, with `MaxChargeTime = 2.0 s`.
@@ -61,7 +61,7 @@ The seal lengths are starting points, tuned against the preview renders and scre
 
 **Networking.**
 - The owning client's input release reaches the server through GAS's replicated input events (`UAbilityTask_WaitInputRelease`, as `GA_ChakraCharge` and `GA_Sprint` already use). The server measures the charge time itself, so the server's `L` is authoritative.
-- The montage section jump to Release (`MontageJumpToSection`) is replicated by the ASC.
+- Each phase montage is played through the ASC, which replicates it.
 - A new tag, `State.Casting.Charging`, is granted during the Charge phase. Remote machines grow the charge visuals from their own clock, starting when that replicated tag appears, capped at full size. No new replicated property is needed.
 - Things created at release carry the server's `L`: the fireball projectile and `AShinobiBurst` get an initial-only replicated `Scale`.
 
@@ -72,17 +72,16 @@ The seal lengths are starting points, tuned against the preview renders and scre
 - Holds a **pose library**: named poses, each a map from Mixamo bone to rotation, fingers included.
   - Seals: Tiger, Ram, Snake, Horse, Ox, Monkey, Rabbit.
   - Body poses: `lean_back_inhale`, `blow_forward`, `chidori_hold`, `rasengan_hold`, `eye_focus`, `dash_strike`.
-- Builds one action per jutsu as a keyed sequence of poses with timings and easing, split into Seal, Charge and Release. The Charge part loops seamlessly: its first and last keys match, with a small breathing and tremble motion in between.
+- Builds three actions per jutsu (Seal, Charge, Release), each a keyed sequence of poses with timings and easing. Charge is a 2.2 s hold with a small breathing and tremble motion, plus any slow build-up (for example, the Rasengan hand rising).
 - May layer a downloaded Mixamo clip underneath as base body motion (for example `Praying` for hands-together, or `Standing 2H Cast Spell 01`), but only where the previews show it helps.
-- Writes `SourceArt/Mixamo/Jutsu/<Jutsu>.fbx`, plus a preview strip of key frames (front and side views) under `Saved/JutsuPreviews/` for review.
-- Writes the section boundaries to `SourceArt/Mixamo/Jutsu/phases.json`, which is the single source for the phase timings.
+- Writes `SourceArt/Mixamo/Jutsu/<Jutsu>_<Phase>.fbx`, plus a preview strip of key frames (front and side views) under `Saved/JutsuPreviews/` for review.
 
 **`Scripts/setup_jutsu_anims.py`** (updated):
 - Imports these FBX files instead of the generic Mixamo casts.
 - Retargets them as today (`RTG_MixamoToManny`, whose finger chains are already exact-mapped; `RTG_MannyToHero` carries them on to the hero).
-- Builds the montages with three sections from `phases.json`: `Seal` links to `Charge`, and `Charge` links to itself so it loops.
+- Builds one montage per phase. (Montage sections can't be authored from UE Python, since `CompositeSections` isn't exposed; separate montages avoid that.)
 
-**Ability side:** the montage plays from `Seal` and flows into the looping `Charge`. On release, the ability jumps to `Release`. The jutsu's effect (projectile, dash, ignition) starts at the Release section's start plus a per-jutsu offset (for example, Fireball's blow lands at +0.1 s).
+**Ability side:** the ability plays the Seal montage, sped up or slowed so it ends when the seal phase ends. It then plays Charge if the button is still held, and Release on release. The gameplay timings (seal length, release delay) live in C++, and the clips are stretched to fit them. The jutsu's effect (projectile, dash, ignition) starts at the Release section's start plus a per-jutsu offset (for example, Fireball's blow lands at +0.1 s).
 
 **Iteration loop:** poses are tuned from the Blender preview renders first, since that is cheap. The user reviews those strips before the engine import. Then the in-engine `-ShinobiJutsuShot` screenshots are checked for each phase, on the hero mesh.
 
@@ -113,7 +112,7 @@ The seal lengths are starting points, tuned against the preview renders and scre
 
 | Unit | Change |
 |---|---|
-| `UShinobiJutsuAbility` | Replaces the single `WindUp` with Seal, Charge and Release. Adds `MaxChargeTime`, `ChargeDrainFraction`, `GetChargeLevel()`, a server-side drain tick and auto-release, the montage section jump, and grants `State.Casting.Charging`. `ExecuteJutsu()` is called at release, with the level readable by subclasses. |
+| `UShinobiJutsuAbility` | Replaces the single `WindUp` with Seal, Charge and Release. Adds `MaxChargeTime`, `ChargeDrainFraction`, `GetChargeLevel()`, a server-side drain tick and auto-release, and the three phase montages, and grants `State.Casting.Charging`. `ExecuteJutsu()` is called at release, with the level readable by subclasses. |
 | `GA_Fireball` | Launches from the mouth. Scales damage, size and splash radius. |
 | `GA_Chidori` | Scales damage. Otherwise as today. |
 | `GA_Rasengan` | Rewritten as a dash and strike, sharing Chidori's dash approach. Scales damage and knockback. |
