@@ -28,6 +28,14 @@
    "height_m": 3.2,
    "mesh": "/Game/Shinobi/World/Library/Arch/lantern/StaticMeshes/lantern.lantern"
   },
+  "ruin_pillar": {
+   "height_m": 6.18,
+   "mesh": "/Game/Shinobi/World/Library/Arch/ruin_pillar/StaticMeshes/ruin_pillar.ruin_pillar"
+  },
+  "ruin_wall": {
+   "height_m": 4.15,
+   "mesh": "/Game/Shinobi/World/Library/Arch/ruin_wall/StaticMeshes/ruin_wall.ruin_wall"
+  },
   "shrine": {
    "height_m": 7.11,
    "mesh": "/Game/Shinobi/World/Library/Arch/shrine/StaticMeshes/shrine.shrine"

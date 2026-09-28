@@ -213,3 +213,13 @@
 - **W2 (9558180):** CC0 Quaternius nature, village and props through itch's keyless free-download flow. The village kit is European, so the Japanese architecture is generated in Blender (`make_gap_pieces.py`, original designs). Trees get trunk-only UCX collision. Nanite is on everything.
 - **W3 (75ee613):** offline placements (`make_placements.py`) instead of PCG (deviation: deterministic and unit-tested), in chunked `AShinobiScatterActor` HISMs, about 49k instances. The nature pack's imported materials lost their colour textures, so the shared `M_LibraryTextured` (masked, two-sided) is applied by slot name. The tour harness covers 10 points.
   - Polish backlog for W5: stone boss ruins, village ground dressing (paths, gardens), gate doors, water colour, an HLOD build.
+- **W4 (f112899, 99b4213):** camps, the world game mode, villagers (6 routes, 10 barks, E to talk when nobody is downed), the HUD compass, and Hidden Leaf Valley first in the map picker (it is now `smoke_m4.ps1`'s host map). There are 64 automation tests.
+- **W5:** perf, mood, audio, boss ruins.
+  - Perf: `shot_chakra.ps1 -Perf` runs the tour at 1080p, Epic, no vsync, 10 s per point. Direct launch, editor build: 87–98 fps at 7 of 10 points, 53–60 at the last three (several camps awake at once).
+    - Windows throttles a background game window (about 2× slower), so keep it in the foreground.
+    - Short tour holds measure streaming churn, not steady state.
+    - Ground cover casts no shadows; bushes and rocks cull at 200 m.
+  - Mood: warm, low sun (4800 K, pitch −22°) and valley fog; the new `mood` stage in `build_world.py`.
+  - Audio: synthesised seamless ambient loops (`make_ambience.py`), a forest bed plus river sounds along the course. Village chatter is skipped (it needs a real recording).
+  - Boss ruins: Blender `ruin_wall` and `ruin_pillar`. The gate already had doors.
+  - Skipped: HLOD (perf holds without it) and village gardens. Add them if long-range views cost too much or the village feels bare.

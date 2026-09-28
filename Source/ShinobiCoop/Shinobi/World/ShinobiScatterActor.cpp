@@ -32,6 +32,7 @@ void AShinobiScatterActor::AddInstances(UStaticMesh* Mesh, const TArray<FTransfo
 		Component->SetStaticMesh(Mesh);
 		Component->SetCullDistances(0, static_cast<int32>(CullDistance));
 		Component->bAffectDistanceFieldLighting = false;
+		Component->SetCastShadow(CullDistance <= 0.f || CullDistance > 10000.f); // ground cover (short cull) casts no shadow
 		Component->RegisterComponent();
 		AddInstanceComponent(Component);
 		Instances.Add(Component);

@@ -28,7 +28,9 @@ public class ShinobiCoop : ModuleRules
 			"IKRig",
 			"Landscape",
 			"ImageCore",
-			"NavigationSystem"
+			"NavigationSystem",
+			"RenderCore",
+			"RHI"
 		});
 
 		PublicIncludePaths.AddRange(new string[] {

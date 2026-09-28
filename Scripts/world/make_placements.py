@@ -137,7 +137,9 @@ def build(lay=None):
             continue  # entrance toward the path (south)
         x, y = bx + br * math.cos(a), by + br * math.sin(a)
         if i % 3 == 0:
-            ruins.append(item("Arch/wall_segment", x, y, t.height(x, y) - 1.2, math.degrees(a) + 90 + rng.uniform(-12, 12), 0.9))
+            ruins.append(item("Arch/ruin_wall", x, y, t.height(x, y) - 0.3, math.degrees(a) + 90 + rng.uniform(-12, 12), 1.0))
+        elif i % 3 == 1:
+            ruins.append(item("Arch/ruin_pillar", x, y, t.height(x, y) - 0.2, rng.uniform(0, 90), rng.uniform(0.9, 1.2)))
         else:
             ruins.append(item(ROCKS[i % 3], x, y, t.height(x, y) - 0.5, rng.uniform(0, 360), rng.uniform(2.2, 3.4)))
     for s in (-1, 1):
@@ -228,7 +230,7 @@ def scatter(t, rng, blockers, out):
     density = np.maximum(field(forest, x, y) * 0.28, (np.abs(field(d_village, x, y) - (WALL_RADIUS_M + 9)) < 4) * 0.5)
     keep &= rng.random(x.shape) < density
     for xi, yi in zip(x[keep], y[keep]):
-        add(BUSHES[int(rng.integers(2))], xi, yi, t.height(xi, yi) - 0.1, rng.uniform(0, 360), rng.uniform(0.8, 1.4))
+        add(BUSHES[int(rng.integers(2))], xi, yi, t.height(xi, yi) - 0.1, rng.uniform(0, 360), rng.uniform(0.8, 1.4), cull=20000.0)
 
     # Rocks: sparse everywhere, more on slopes and the mountain foot.
     x, y = jittered(t, rng, 12.0)
@@ -236,7 +238,7 @@ def scatter(t, rng, blockers, out):
     density = 0.08 + 0.35 * hm.smoothstep(18, 35, field(slope, x, y)) + 0.3 * (field(edge, x, y) > 440)
     keep &= (rng.random(x.shape) < density) & (np.abs(x) < 478) & (np.abs(y) < 478)
     for xi, yi in zip(x[keep], y[keep]):
-        add(ROCKS[int(rng.integers(3))], xi, yi, t.height(xi, yi) - 0.4, rng.uniform(0, 360), rng.uniform(0.6, 1.8))
+        add(ROCKS[int(rng.integers(3))], xi, yi, t.height(xi, yi) - 0.4, rng.uniform(0, 360), rng.uniform(0.6, 1.8), cull=20000.0)
 
     # Grass and flowers on grass-painted ground only (not paths, village square, camps or river banks), culled at 60 m.
     x, y = jittered(t, rng, 2.4)

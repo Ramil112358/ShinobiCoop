@@ -1,4 +1,5 @@
 #include "Shinobi/ShinobiPlayerController.h"
+#include "RHI.h"
 #include "AbilitySystemComponent.h"
 #include "EngineUtils.h"
 #include "GameFramework/Character.h"
@@ -303,7 +304,9 @@ void AShinobiPlayerController::RunWorldTourTest()
 		}
 	}
 	UE_LOG(LogShinobiCoop, Log, TEXT("World tour: %d points"), Points.Num());
-	constexpr float FirstAt = 4.f, Step = 4.f;
+	// -ShinobiPerf: hold each point 10 s so streaming settles, and time the last 5 s.
+	const bool bPerf = FParse::Param(FCommandLine::Get(), TEXT("ShinobiPerf"));
+	const float FirstAt = 4.f, Step = bPerf ? 10.f : 4.f, Window = bPerf ? 5.f : 2.f;
 	for (int32 Index = 0; Index < Points.Num(); ++Index)
 	{
 		const FTourPoint Point = Points[Index];
@@ -312,6 +315,10 @@ void AShinobiPlayerController::RunWorldTourTest()
 		{
 			if (ACharacter* Body = GetPawn<ACharacter>())
 			{
+				if (const AShinobiCharacterBase* Shinobi = Cast<AShinobiCharacterBase>(Body))
+				{
+					Shinobi->GetAbilitySystemComponent()->SetLooseGameplayTagCount(ShinobiTags::State_Invulnerable, 1); // camps wake up as we pass
+				}
 				Body->GetCharacterMovement()->SetMovementMode(MOVE_Flying);
 				Body->GetCharacterMovement()->StopMovementImmediately();
 				// The spring arm sits ~4.5 m behind the pawn: stand off 16 m, 9 m up, looking at the point.
@@ -321,8 +328,18 @@ void AShinobiPlayerController::RunWorldTourTest()
 			}
 		}), FirstAt + Index * Step, false);
 		const FString File = FString::Printf(TEXT("ShinobiWorldTour_%02d_%s"), Index, *Point.Name);
-		GetWorldTimerManager().SetTimer(Shot, FTimerDelegate::CreateWeakLambda(this, [File]()
+		// Average frame time over the Window before each shot, for the perf targets.
+		TSharedRef<TPair<double, uint64>> Mark = MakeShared<TPair<double, uint64>>();
+		FTimerHandle Measure;
+		GetWorldTimerManager().SetTimer(Measure, FTimerDelegate::CreateWeakLambda(this, [Mark]()
 		{
+			*Mark = { FPlatformTime::Seconds(), GFrameCounter };
+		}), FirstAt + Index * Step + Step - 0.5f - Window, false);
+		GetWorldTimerManager().SetTimer(Shot, FTimerDelegate::CreateWeakLambda(this, [File, Mark, Point]()
+		{
+			const double Ms = 1000.0 * (FPlatformTime::Seconds() - Mark->Key) / FMath::Max<uint64>(1, GFrameCounter - Mark->Value);
+			UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiPerf %s: %.2f ms (%.0f fps) game %.1f render %.1f gpu %.1f"), *Point.Name, Ms, 1000.0 / Ms,
+				FPlatformTime::ToMilliseconds(GGameThreadTime), FPlatformTime::ToMilliseconds(GRenderThreadTime), FPlatformTime::ToMilliseconds(RHIGetGPUFrameCycles()));
 			FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / File), false, false);
 		}), FirstAt + Index * Step + Step - 0.5f, false);
 	}

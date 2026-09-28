@@ -10,6 +10,9 @@ environment variable SHINOBI_WORLD_STAGE (default "terrain"); later stages load 
             ring and gate, bridge, camp and boss dressing, camp/boss markers (TargetPoints tagged ShinobiCampSite,
             Camp:<id>, Difficulty:<n>, Boss), and the nature scatter as one AShinobiScatterActor per 128 m chunk.
             Re-running replaces the previous dressing (every actor it spawns carries the tag ShinobiDressing).
+  mood      the warm late-afternoon sun and valley fog (also applied by terrain), and the ambient sounds from
+            SourceArt/Audio/World (make_ambience.py, run first): the forest bed everywhere, the river along its course.
+            Re-running replaces the previous sounds (tag ShinobiMood).
 """
 import json
 import os
@@ -36,6 +39,7 @@ MEL = unreal.MaterialEditingLibrary
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 EAS = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
 TOON_VOLUME_LABEL = "ShinobiToonPost"
+MOOD_TAG = "ShinobiMood"
 
 
 def log(message):
@@ -120,6 +124,20 @@ def spawn_mesh(mesh_path, material, location, scale, yaw=0.0, label=None):
     return actor
 
 
+def apply_mood(sun, fog):
+    """Warm, low sun from the south-west; thin fog pooling in the valley (it thins with height)."""
+    sun.set_actor_rotation(unreal.Rotator(0, -22, -35), False)
+    light = sun.light_component
+    light.set_editor_property("intensity", 7.0)
+    light.set_editor_property("use_temperature", True)
+    light.set_editor_property("temperature", 4800.0)
+    component = fog.component
+    component.set_editor_property("fog_density", 0.025)
+    component.set_editor_property("fog_height_falloff", 0.12)
+    component.set_editor_property("start_distance", 2500.0)
+    component.set_editor_property("fog_inscattering_luminance", unreal.LinearColor(0.55, 0.45, 0.35, 1.0))
+
+
 def stage_terrain(lay):
     meta = terrain_maps()
     ensure_dir(WORLD_DIR)
@@ -137,15 +155,14 @@ def stage_terrain(lay):
     if landscape is None:
         raise RuntimeError("landscape creation failed (see LogShinobiCoop)")
 
-    # Light and atmosphere: a warm afternoon sun, sky, soft fog, clouds, the toon post-process.
-    sun = spawn_class(unreal.DirectionalLight, (0, 0, uu(200)), yaw=-35, pitch=-40, label="Sun")
+    # Light and atmosphere: a warm late-afternoon sun, sky, valley fog, clouds, the toon post-process.
+    sun = spawn_class(unreal.DirectionalLight, (0, 0, uu(200)), label="Sun")
     sun.light_component.set_editor_property("atmosphere_sun_light", True)
-    sun.light_component.set_editor_property("intensity", 8.0)
     spawn_class(unreal.SkyAtmosphere, (0, 0, 0), label="SkyAtmosphere")
     sky = spawn_class(unreal.SkyLight, (0, 0, uu(50)), label="SkyLight")
     sky.light_component.set_editor_property("real_time_capture", True)
     fog = spawn_class(unreal.ExponentialHeightFog, (0, 0, uu(meta["water_level_m"])), label="Fog")
-    fog.component.set_editor_property("fog_density", 0.01)
+    apply_mood(sun, fog)
     spawn_class(unreal.VolumetricCloud, (0, 0, 0), label="Clouds")
     volume = spawn_class(unreal.PostProcessVolume, (0, 0, 0), label=TOON_VOLUME_LABEL)
     volume.set_editor_property("unbound", True)
@@ -290,6 +307,64 @@ def stage_dress(lay):
         f"{instances} scattered instances in {len(data['scatter'])} chunks")
 
 
-STAGES = {"terrain": stage_terrain, "dress": stage_dress}
+def import_ambience():
+    subprocess.run(["python", os.path.join(HERE, "make_ambience.py")], check=True)
+    source = os.path.join(PROJECT, "SourceArt", "Audio", "World")
+    tasks = []
+    for name in ("Amb_Forest", "Amb_River"):
+        task = unreal.AssetImportTask()
+        task.filename = os.path.join(source, f"{name}.wav")
+        task.destination_path = f"{WORLD_DIR}/Audio"
+        task.automated = task.save = task.replace_existing = True
+        tasks.append(task)
+    TOOLS.import_asset_tasks(tasks)
+    sounds = {}
+    for name in ("Amb_Forest", "Amb_River"):
+        wave = unreal.load_asset(f"{WORLD_DIR}/Audio/{name}")
+        wave.set_editor_property("looping", True)
+        unreal.EditorAssetLibrary.save_loaded_asset(wave)
+        sounds[name] = wave
+    return sounds
+
+
+def ambient(world, sound, location, volume, radius=None, label=None):
+    actor = EAS.spawn_actor_from_class(unreal.AmbientSound, unreal.Vector(*location), unreal.Rotator(0, 0, 0))
+    actor.set_actor_label(label)
+    audio = actor.audio_component
+    audio.set_sound(sound)
+    audio.set_editor_property("volume_multiplier", volume)
+    if radius is None:
+        audio.set_editor_property("allow_spatialization", False)  # a bed heard everywhere
+    else:
+        audio.set_editor_property("override_attenuation", True)
+        settings = audio.get_editor_property("attenuation_overrides")
+        settings.set_editor_property("attenuation_shape_extents", unreal.Vector(radius, 0, 0))
+        settings.set_editor_property("falloff_distance", radius * 2)
+        audio.set_editor_property("attenuation_overrides", settings)
+    actor.set_editor_property("tags", [unreal.Name(MOOD_TAG)])
+    actor.set_editor_property("is_spatially_loaded", False)
+    return actor
+
+
+def stage_mood(lay):
+    sounds = import_ambience()
+    world = load_map_fully()
+    actors = unreal.GameplayStatics.get_all_actors_of_class(world, unreal.Actor)
+    for actor in [a for a in actors if a.actor_has_tag(MOOD_TAG)]:
+        EAS.destroy_actor(actor)
+    sun = next(a for a in actors if isinstance(a, unreal.DirectionalLight))
+    fog = next(a for a in actors if isinstance(a, unreal.ExponentialHeightFog))
+    apply_mood(sun, fog)
+    meta = terrain_maps()
+    ambient(world, sounds["Amb_Forest"], (0, 0, 0), 0.35, label="Amb_Forest")
+    for i, (x, y) in enumerate(lay.river):
+        ambient(world, sounds["Amb_River"], (uu(x), uu(y), uu(meta["water_level_m"]) + 100), 0.8, radius=uu(40), label=f"Amb_River_{i}")
+    if not unreal.EditorLoadingAndSavingUtils.save_map(world, MAP):
+        raise RuntimeError(f"failed to save {MAP}")
+    unreal.EditorLoadingAndSavingUtils.save_dirty_packages(True, True)
+    log(f"mood: sun and fog set, {1 + len(lay.river)} ambient sounds")
+
+
+STAGES = {"terrain": stage_terrain, "dress": stage_dress, "mood": stage_mood}
 stage = os.environ.get("SHINOBI_WORLD_STAGE", "terrain")
 STAGES[stage](layout_mod.load())

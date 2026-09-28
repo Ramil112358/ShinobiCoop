@@ -238,6 +238,26 @@ def wall_segment(name="wall_segment"):
     export(name)
 
 
+def ruin_wall(name="ruin_wall"):
+    """A broken stone wall, 8 m: a plinth, block courses whose tops step down unevenly, two fallen blocks."""
+    box((8.4, 1.3, 0.5), (0, 0, 0.25), "Stone")
+    heights = (3.6, 3.1, 2.4, 2.8, 1.6, 1.1, 1.9, 0.8)
+    for i, h in enumerate(heights):
+        box((0.98, 1.0, h), (-3.5 + i, 0, 0.5 + h / 2), "Stone")
+    box((1.0, 0.9, 0.7), (1.2, 1.5, 0.35), "Stone", rot=(0, 0, math.radians(20)))
+    box((0.9, 0.8, 0.6), (3.4, -1.3, 0.3), "Stone", rot=(math.radians(8), 0, math.radians(-35)))
+    export(name)
+
+
+def ruin_pillar(name="ruin_pillar"):
+    """A weathered stone pillar, 6 m, on a stepped base, its top block knocked askew."""
+    box((2.0, 2.0, 0.4), (0, 0, 0.2), "Stone")
+    box((1.6, 1.6, 0.4), (0, 0, 0.6), "Stone")
+    box((1.1, 1.1, 4.6), (0, 0, 3.1), "Stone")
+    box((1.5, 1.5, 0.6), (0.1, 0.05, 5.75), "Stone", rot=(math.radians(6), math.radians(-4), math.radians(12)))
+    export(name)
+
+
 def stall(name="stall"):
     box((3.0, 1.6, 1.0), (0, 0, 0.5), "WoodLight")
     box((3.1, 1.7, 0.1), (0, 0, 1.05), "WoodDark")
@@ -369,6 +389,8 @@ if __name__ == "__main__":
     torii()
     gate()
     wall_segment()
+    ruin_wall()
+    ruin_pillar()
     stall()
     stone_lantern()
     paper_lantern()

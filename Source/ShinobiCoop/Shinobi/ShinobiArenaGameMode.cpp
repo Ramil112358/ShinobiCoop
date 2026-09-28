@@ -26,7 +26,7 @@ namespace
 		}));
 
 	// ponytail: fixed table; a data asset when there's more than one arena
-	const FShinobiWave Waves[] = {
+	const FShinobiWave ArenaWaves[] = {
 		{ 4, 0, false },
 		{ 4, 3, false },
 		{ 6, 4, false },
@@ -46,12 +46,12 @@ AShinobiArenaGameMode::AShinobiArenaGameMode()
 
 int32 AShinobiArenaGameMode::GetNumWaves()
 {
-	return UE_ARRAY_COUNT(Waves);
+	return UE_ARRAY_COUNT(ArenaWaves);
 }
 
 FShinobiWave AShinobiArenaGameMode::GetWave(int32 Wave)
 {
-	return Waves[FMath::Clamp(Wave, 1, GetNumWaves()) - 1];
+	return ArenaWaves[FMath::Clamp(Wave, 1, GetNumWaves()) - 1];
 }
 
 float AShinobiArenaGameMode::GetHealthScale(int32 NumPlayers)

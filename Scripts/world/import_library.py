@@ -43,7 +43,7 @@ SOURCES = {
     "Rock": (NATURE, r"^Rock_Medium.*\.gltf$", "kdop"),
     "Pebble": (NATURE, r"^(Pebble_|RockPath_).*\.gltf$", "none"),
     "Prop": (PROPS, r"^(Barrel|Barrel_Apples|Crate_Wooden|Crate_Metal|FarmCrate_\w+|Bench|Table_Large|Stool|Bucket_Wooden_1|Chest_Wood|WeaponStand|Workbench|Anvil|Anvil_Log|Banner_1|Banner_2|Torch_Metal|Lantern_Wall|Pot_1|Vase_2|Rope_1|Bag|Cauldron|Stall_Cart_Empty|Dummy|Shield_Wooden)\.gltf$", "box"),
-    "Arch": (os.path.join(ART, "Generated"), r"^(house_\w+|shrine|torii|gate|wall_segment|stall|lantern|stone_lantern|well|training_post|bridge)\.glb$", "complex"),
+    "Arch": (os.path.join(ART, "Generated"), r"^(house_\w+|shrine|torii|gate|wall_segment|ruin_wall|ruin_pillar|stall|lantern|stone_lantern|well|training_post|bridge)\.glb$", "complex"),
     "Camp": (os.path.join(ART, "Generated"), r"^(tent|palisade|campfire)\.glb$", "complex"),
 }
 
