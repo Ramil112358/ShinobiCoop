@@ -179,6 +179,98 @@
    "mesh": "/Game/Shinobi/World/Library/Grass/Plant_7_Big/StaticMeshes/Plant_7_Big.Plant_7_Big"
   }
  },
+ "Mega_Tree": {
+  "Tree_Japanese_Cypress_01_A": {
+   "collision": "trunk",
+   "height_m": 28.15,
+   "mesh": "/Game/Shinobi/World/Library/Mega_Tree/Tree_Japanese_Cypress_01_A.Tree_Japanese_Cypress_01_A",
+   "trunk_radius_cm": 55.4
+  },
+  "Tree_Japanese_Cypress_01_B": {
+   "collision": "trunk",
+   "height_m": 20.02,
+   "mesh": "/Game/Shinobi/World/Library/Mega_Tree/Tree_Japanese_Cypress_01_B.Tree_Japanese_Cypress_01_B",
+   "trunk_radius_cm": 22.5
+  },
+  "Tree_Japanese_Cypress_01_C": {
+   "collision": "trunk",
+   "height_m": 17.42,
+   "mesh": "/Game/Shinobi/World/Library/Mega_Tree/Tree_Japanese_Cypress_01_C.Tree_Japanese_Cypress_01_C",
+   "trunk_radius_cm": 22.4
+  },
+  "Tree_Japanese_Cypress_01_D": {
+   "collision": "trunk",
+   "height_m": 13.39,
+   "mesh": "/Game/Shinobi/World/Library/Mega_Tree/Tree_Japanese_Cypress_01_D.Tree_Japanese_Cypress_01_D",
+   "trunk_radius_cm": 12.4
+  },
+  "Tree_Japanese_Cypress_01_E": {
+   "collision": "trunk",
+   "height_m": 3.09,
+   "mesh": "/Game/Shinobi/World/Library/Mega_Tree/Tree_Japanese_Cypress_01_E.Tree_Japanese_Cypress_01_E",
+   "trunk_radius_cm": 10.0
+  },
+  "Tree_Japanese_Cypress_01_F": {
+   "collision": "trunk",
+   "height_m": 20.1,
+   "mesh": "/Game/Shinobi/World/Library/Mega_Tree/Tree_Japanese_Cypress_01_F.Tree_Japanese_Cypress_01_F",
+   "trunk_radius_cm": 18.2
+  },
+  "Tree_Japanese_Cypress_01_G": {
+   "collision": "trunk",
+   "height_m": 10.06,
+   "mesh": "/Game/Shinobi/World/Library/Mega_Tree/Tree_Japanese_Cypress_01_G.Tree_Japanese_Cypress_01_G",
+   "trunk_radius_cm": 10.0
+  },
+  "Tree_Japanese_Medlar_01_A": {
+   "collision": "trunk",
+   "height_m": 3.24,
+   "mesh": "/Game/Shinobi/World/Library/Mega_Tree/Tree_Japanese_Medlar_01_A.Tree_Japanese_Medlar_01_A",
+   "trunk_radius_cm": 10.0
+  },
+  "Tree_Japanese_Medlar_01_B": {
+   "collision": "trunk",
+   "height_m": 2.69,
+   "mesh": "/Game/Shinobi/World/Library/Mega_Tree/Tree_Japanese_Medlar_01_B.Tree_Japanese_Medlar_01_B",
+   "trunk_radius_cm": 18.7
+  },
+  "Tree_Japanese_Medlar_01_C": {
+   "collision": "trunk",
+   "height_m": 1.9,
+   "mesh": "/Game/Shinobi/World/Library/Mega_Tree/Tree_Japanese_Medlar_01_C.Tree_Japanese_Medlar_01_C",
+   "trunk_radius_cm": 10.0
+  },
+  "Tree_Japanese_Medlar_01_D": {
+   "collision": "trunk",
+   "height_m": 1.17,
+   "mesh": "/Game/Shinobi/World/Library/Mega_Tree/Tree_Japanese_Medlar_01_D.Tree_Japanese_Medlar_01_D",
+   "trunk_radius_cm": 10.0
+  },
+  "Tree_Norway_Maple_Forest_01_A": {
+   "collision": "trunk",
+   "height_m": 12.23,
+   "mesh": "/Game/Shinobi/World/Library/Mega_Tree/Tree_Norway_Maple_Forest_01_A.Tree_Norway_Maple_Forest_01_A",
+   "trunk_radius_cm": 14.6
+  },
+  "Tree_Norway_Maple_Forest_01_B": {
+   "collision": "trunk",
+   "height_m": 13.79,
+   "mesh": "/Game/Shinobi/World/Library/Mega_Tree/Tree_Norway_Maple_Forest_01_B.Tree_Norway_Maple_Forest_01_B",
+   "trunk_radius_cm": 13.0
+  },
+  "Tree_Norway_Maple_Forest_01_C": {
+   "collision": "trunk",
+   "height_m": 5.65,
+   "mesh": "/Game/Shinobi/World/Library/Mega_Tree/Tree_Norway_Maple_Forest_01_C.Tree_Norway_Maple_Forest_01_C",
+   "trunk_radius_cm": 10.0
+  },
+  "Tree_Norway_Maple_Forest_01_D": {
+   "collision": "trunk",
+   "height_m": 2.21,
+   "mesh": "/Game/Shinobi/World/Library/Mega_Tree/Tree_Norway_Maple_Forest_01_D.Tree_Norway_Maple_Forest_01_D",
+   "trunk_radius_cm": 10.0
+  }
+ },
  "PH_Cliff": {
   "coastal_cliff_02": {
    "collision": "complex",
@@ -817,7 +909,7 @@
   },
   "periwinkle_plant_02": {
    "collision": "none",
-   "height_m": 0.41,
+   "height_m": 0.42,
    "mesh": "/Game/Shinobi/World/Library/PH_Shrub/periwinkle_plant/periwinkle_plant_2k/StaticMeshes/periwinkle_plant_02_LOD0.periwinkle_plant_02_LOD0"
   },
   "periwinkle_plant_03": {
@@ -827,7 +919,7 @@
   },
   "periwinkle_plant_04": {
    "collision": "none",
-   "height_m": 0.26,
+   "height_m": 0.27,
    "mesh": "/Game/Shinobi/World/Library/PH_Shrub/periwinkle_plant/periwinkle_plant_2k/StaticMeshes/periwinkle_plant_04_LOD0.periwinkle_plant_04_LOD0"
   },
   "periwinkle_plant_05": {
@@ -842,12 +934,12 @@
   },
   "root_cluster_01": {
    "collision": "none",
-   "height_m": 1.51,
+   "height_m": 1.63,
    "mesh": "/Game/Shinobi/World/Library/PH_Shrub/root_cluster_01/root_cluster_01_2k/StaticMeshes/root_cluster_01_2k.root_cluster_01_2k"
   },
   "root_cluster_02_a": {
    "collision": "none",
-   "height_m": 0.19,
+   "height_m": 0.21,
    "mesh": "/Game/Shinobi/World/Library/PH_Shrub/root_cluster_02/root_cluster_02_2k/StaticMeshes/root_cluster_02_a.root_cluster_02_a"
   },
   "root_cluster_02_b": {

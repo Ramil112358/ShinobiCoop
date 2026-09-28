@@ -7,6 +7,7 @@
 class ALandscape;
 class UMaterialInterface;
 class UStaticMesh;
+class USkeletalMesh;
 
 /**
  * Editor-only helpers for Scripts/world/build_world.py (sub-project #3): what UE's Python API can't do on its own.
@@ -46,5 +47,12 @@ public:
 	 *  source scene, up to metres). Rebuilds the mesh; returns the offset removed (zero if already centred). */
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|World")
 	static FVector RecenterPivot(UStaticMesh* Mesh);
+
+	/**
+	 * Bakes a skeletal mesh in its reference pose into a new static mesh at PackageName (e.g. Megaplants' skinned
+	 * trees, so they fit instanced static mesh scatter). Uses a temporary component in World. Returns null on failure.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Shinobi|World")
+	static UStaticMesh* BakeSkeletalToStatic(UWorld* World, USkeletalMesh* Skeletal, const FString& PackageName);
 
 };

@@ -42,14 +42,23 @@ def catalog_keys(category, *prefixes):
     return keys
 
 
-# Megaplants (Fab) take over the broadleaf slots once they are in the catalog; Poly Haven broadleaf trees until then.
-BROADLEAF = catalog_keys("Mega_Tree", "") if CATALOG.get("Mega_Tree") else catalog_keys("PH_Tree", "island_tree", "tree_small")
+# Megaplants (Fab), when imported: autumn-red Norway maples take the broadleaf slots, Japanese cypress joins the
+# mid-forest conifers, Japanese medlar lines the village wall. Poly Haven broadleaf trees (and firs) otherwise.
+# ponytail: off. Megaplants are Nanite assemblies that need r.Nanite.AllowAssemblies + r.Nanite.Foliage (experimental in
+# UE 5.8): they rendered as shards and dropped the valley to 4-10 fps. Flip to retry on a later engine version.
+USE_MEGAPLANTS = False
+MEGA = USE_MEGAPLANTS and bool(CATALOG.get("Mega_Tree"))
+BROADLEAF = (catalog_keys("Mega_Tree", *(f"Tree_Norway_Maple_Forest_01_{v}" for v in "ABC")) if MEGA
+             else catalog_keys("PH_Tree", "island_tree", "tree_small"))
 TREES = {"pine": catalog_keys("PH_Tree", "pine_tree_01"), "fir": catalog_keys("PH_Tree", "fir_tree_01"),
          "sapling": catalog_keys("PH_Tree", "fir_sapling_medium"), "broadleaf": BROADLEAF,
+         "cypress": (catalog_keys("Mega_Tree", *(f"Tree_Japanese_Cypress_01_{v}" for v in "BCDF")) if MEGA
+                     else catalog_keys("PH_Tree", "fir_tree_01")),
          "dead": catalog_keys("PH_Log", "dead_tree_trunk_02", "tree_stump")}
+MEDLARS = catalog_keys("Mega_Tree", "Tree_Japanese_Medlar_01_A", "Tree_Japanese_Medlar_01_B") if MEGA else []
 # Poly Haven's broadleaf trees are small (2.6-5 m): grown to 5-13 m. Megaplants come at real size.
-TREE_SCALE = {"pine": (0.8, 1.15), "fir": (0.8, 1.2), "sapling": (0.7, 1.1), "dead": (0.8, 1.2),
-              "broadleaf": (0.8, 1.2) if CATALOG.get("Mega_Tree") else (1.8, 2.6)}
+TREE_SCALE = {"pine": (0.8, 1.15), "fir": (0.8, 1.2), "sapling": (0.7, 1.1), "dead": (0.8, 1.2), "cypress": (0.8, 1.1),
+              "broadleaf": (0.9, 1.25) if MEGA else (1.8, 2.6)}
 LOGS = catalog_keys("PH_Log", "dead_tree_trunk", "tree_stump")
 CLIFFS = {"PH_Cliff/coastal_cliff_02": (3.0, 4.5), "PH_Cliff/coastal_cliff_04": (3.0, 4.5),
           "PH_Cliff/rock_face_01": (6.0, 9.0), "PH_Cliff/rock_face_02": (7.0, 10.0)}
@@ -240,7 +249,7 @@ def scatter(t, rng, blockers, out):
         elif (near_river or near_village) and roll < 0.55:
             kind = "broadleaf"
         else:
-            kind = "broadleaf" if roll < 0.5 else ("sapling" if roll < 0.6 else ("pine" if roll < 0.8 else "fir"))
+            kind = "broadleaf" if roll < 0.45 else ("cypress" if roll < 0.65 else ("sapling" if roll < 0.72 else ("pine" if roll < 0.86 else "fir")))
         key = TREES[kind][int(rng.integers(len(TREES[kind])))]
         add(key, xi, yi, zi - 0.2, rng.uniform(0, 360), rng.uniform(*TREE_SCALE[kind]))
 
@@ -273,6 +282,10 @@ def scatter(t, rng, blockers, out):
     density = np.maximum(field(forest, x, y) * 0.28, (np.abs(field(d_village, x, y) - (WALL_RADIUS_M + 9)) < 4) * 0.5)
     keep &= rng.random(x.shape) < density
     for xi, yi in zip(x[keep], y[keep]):
+        by_wall = abs(field(d_village, xi, yi) - (WALL_RADIUS_M + 9)) < 4
+        if MEDLARS and by_wall and rng.random() < 0.35:  # small Japanese medlar trees along the village wall
+            add(MEDLARS[int(rng.integers(len(MEDLARS)))], xi, yi, t.height(xi, yi) - 0.1, rng.uniform(0, 360), rng.uniform(0.9, 1.3))
+            continue
         add(BUSHES[int(rng.integers(len(BUSHES)))], xi, yi, t.height(xi, yi) - 0.1, rng.uniform(0, 360), rng.uniform(0.8, 1.4), cull=20000.0)
 
     # Rocks: sparse everywhere, more on slopes and the mountain foot.

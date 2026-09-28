@@ -11,6 +11,10 @@
 #include "PhysicsEngine/BodySetup.h"
 #if WITH_EDITOR
 #include "StaticMeshAttributes.h"
+#include "MeshUtilities.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
+#include "GameFramework/Actor.h"
 #endif
 #include "ShinobiCoop.h"
 
@@ -223,5 +227,98 @@ FVector UShinobiWorldBuilderLibrary::RecenterPivot(UStaticMesh* Mesh)
 	return FVector(Offset);
 #else
 	return FVector::ZeroVector;
+#endif
+}
+
+UStaticMesh* UShinobiWorldBuilderLibrary::BakeSkeletalToStatic(UWorld* World, USkeletalMesh* Skeletal, const FString& PackageName)
+{
+#if WITH_EDITOR
+	if (!World || !Skeletal)
+	{
+		return nullptr;
+	}
+	AActor* Holder = World->SpawnActor<AActor>();
+	USkeletalMeshComponent* Component = NewObject<USkeletalMeshComponent>(Holder);
+	Holder->SetRootComponent(Component);
+	Component->SetSkeletalMeshAsset(Skeletal);
+	Component->RegisterComponent();
+	IMeshUtilities& Utilities = FModuleManager::Get().LoadModuleChecked<IMeshUtilities>("MeshUtilities");
+	UStaticMesh* Static = Utilities.ConvertMeshesToStaticMesh({ Component }, FTransform::Identity, PackageName);
+	Holder->Destroy();
+	if (!Static)
+	{
+		UE_LOG(LogShinobiCoop, Error, TEXT("BakeSkeletalToStatic: %s failed"), *Skeletal->GetName());
+		return nullptr;
+	}
+
+	// Megaplants are Nanite assemblies: the skeletal mesh is the trunk, the leafy branches are static mesh parts placed
+	// at nodes (often relative to a bone). Carry the assembly over, with bone-relative nodes baked into the reference
+	// pose, and give the static mesh the skeletal mesh's material list so the parts' material remaps still line up.
+	const FNaniteAssemblyData& Assembly = Skeletal->GetNaniteSettings().NaniteAssemblyData;
+	if (Assembly.IsValid())
+	{
+		TArray<FStaticMaterial> Materials;
+		for (const FSkeletalMaterial& Material : Skeletal->GetMaterials())
+		{
+			Materials.Add(FStaticMaterial(Material.MaterialInterface, Material.MaterialSlotName, Material.ImportedMaterialSlotName));
+		}
+		const TArray<FStaticMaterial> Baked = Static->GetStaticMaterials();
+		FMeshSectionInfoMap& Sections = Static->GetSectionInfoMap();
+		for (int32 Lod = 0; Lod < Static->GetNumSourceModels(); ++Lod)
+		{
+			for (int32 Section = 0; Section < Sections.GetSectionNumber(Lod); ++Section)
+			{
+				FMeshSectionInfo Info = Sections.Get(Lod, Section);
+				const UMaterialInterface* Used = Baked.IsValidIndex(Info.MaterialIndex) ? Baked[Info.MaterialIndex].MaterialInterface.Get() : nullptr;
+				const int32 Index = Materials.IndexOfByPredicate([Used](const FStaticMaterial& M) { return M.MaterialInterface == Used; });
+				if (Index != INDEX_NONE)
+				{
+					Info.MaterialIndex = Index;
+					Sections.Set(Lod, Section, Info);
+				}
+			}
+		}
+		Static->SetStaticMaterials(Materials);
+
+		const FReferenceSkeleton& Skeleton = Skeletal->GetRefSkeleton();
+		TArray<FTransform> BoneToComponent;
+		BoneToComponent.SetNum(Skeleton.GetRawBoneNum());
+		for (int32 Bone = 0; Bone < BoneToComponent.Num(); ++Bone)
+		{
+			const int32 Parent = Skeleton.GetRawParentIndex(Bone);
+			BoneToComponent[Bone] = Parent >= 0 ? Skeleton.GetRawRefBonePose()[Bone] * BoneToComponent[Parent] : Skeleton.GetRawRefBonePose()[Bone];
+		}
+		FNaniteAssemblyData BakedAssembly = Assembly;
+		int32 Converted = 0;
+		for (FNaniteAssemblyNode& Node : BakedAssembly.Nodes)
+		{
+			if (Node.TransformSpace == ENaniteAssemblyNodeTransformSpace::BoneRelative && Node.BoneInfluences.Num() > 0)
+			{
+				const FNaniteAssemblyBoneInfluence* Main = &Node.BoneInfluences[0];
+				for (const FNaniteAssemblyBoneInfluence& Influence : Node.BoneInfluences)
+				{
+					Main = Influence.BoneWeight > Main->BoneWeight ? &Influence : Main;
+				}
+				if (BoneToComponent.IsValidIndex(Main->BoneIndex))
+				{
+					Node.Transform = FTransform3f(FTransform(Node.Transform) * BoneToComponent[Main->BoneIndex]);
+					++Converted;
+				}
+			}
+			Node.TransformSpace = ENaniteAssemblyNodeTransformSpace::Local;
+			Node.BoneInfluences.Empty();
+		}
+		FMeshNaniteSettings Nanite = Static->GetNaniteSettings();
+		Nanite.bEnabled = true;
+		Nanite.NaniteAssemblyData = BakedAssembly;
+		Static->SetNaniteSettings(Nanite);
+		Static->Build();
+		Static->MarkPackageDirty();
+		UE_LOG(LogShinobiCoop, Log, TEXT("BakeSkeletalToStatic: %s: %d parts, %d nodes (%d bone-relative baked), %d materials"),
+			*Skeletal->GetName(), BakedAssembly.Parts.Num(), BakedAssembly.Nodes.Num(), Converted, Materials.Num());
+	}
+	return Static;
+#else
+	return nullptr;
 #endif
 }

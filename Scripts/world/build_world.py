@@ -45,7 +45,7 @@ GRASS_DIR = f"{WORLD_DIR}/Grass"
 # Meadow: ~75 clumps per m2 (each Poly Haven clump is sparse), faded out by 50 m; forest floor: ferns, moss and weeds, sparser.
 GRASS_TYPES = {
     "Meadow": ("Grass", [("grass_medium_01_tall", 700, 2), ("grass_medium_01_mid", 850, 2), ("grass_medium_01_large", 700, 2),
-                         ("grass_medium_02", 500, 3), ("grass_bermuda_01_medium", 1200, 2), ("dandelion_01", 20, 2),
+                         ("grass_medium_02", 500, 3), ("grass_bermuda_01_medium", 300, 2), ("dandelion_01", 20, 2),
                          ("flower_gazania_h", 8, 1)]),
     "ForestFloor": ("Forest", [("fern_02", 30, 4), ("grass_medium_02_a", 60, 1), ("weed_plant_02", 30, 2),
                                ("nettle_plant_tall", 10, 2)]),

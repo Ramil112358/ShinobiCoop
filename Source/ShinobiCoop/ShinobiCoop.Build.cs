@@ -35,6 +35,11 @@ public class ShinobiCoop : ModuleRules
 			"StaticMeshDescription"
 		});
 
+		if (Target.bBuildEditor)
+		{
+			PrivateDependencyModuleNames.Add("MeshUtilities"); // world builder: skeletal to static mesh (editor only)
+		}
+
 		PublicIncludePaths.AddRange(new string[] {
 			"ShinobiCoop",
 			"ShinobiCoop/Variant_Combat",

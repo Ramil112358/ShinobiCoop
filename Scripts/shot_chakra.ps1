@@ -9,7 +9,7 @@
 #   -Tour:    -ShinobiWorldTour: flies to every tour point of the open world (village, gate, bridge, camps, boss).
 #   -Perf:    the tour at 1920x1080, Epic preset, no vsync, 10 s per point; prints the average frame time at each point.
 #             Keep the game window in the foreground: Windows throttles background windows (about 2x slower).
-param([switch]$Jutsu, [switch]$Look, [switch]$Tour, [switch]$Perf, [string]$Map = "/Game/Shinobi/Maps/Lvl_TrainingGrounds")
+param([switch]$Jutsu, [switch]$Look, [switch]$Tour, [switch]$Perf, [int]$TimeoutSec = 300, [string]$Map = "/Game/Shinobi/Maps/Lvl_TrainingGrounds")
 $ErrorActionPreference = "Stop"
 $Editor = "C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe"
 $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
@@ -24,7 +24,7 @@ $Level = if ($Tour) { "/Game/Shinobi/Maps/Lvl_HiddenLeafValley" } elseif ($Look)
 Get-ChildItem $ShotRoot -Recurse -Filter $Pattern -ErrorAction SilentlyContinue | Remove-Item
 $game = Start-Process $Editor -PassThru -ArgumentList "`"$Project`" $Level -game -nosteam -windowed $Res -nosound -unattended -nosplash -$Flag -log=$Flag.log"
 $null = $game.Handle
-if (-not $game.WaitForExit(300000)) { Stop-Process $game -Force; throw "Game did not quit within 300s" }
+if (-not $game.WaitForExit($TimeoutSec * 1000)) { Stop-Process $game -Force; throw "Game did not quit within $TimeoutSec s" }
 
 $shots = Get-ChildItem $ShotRoot -Recurse -Filter $Pattern -ErrorAction SilentlyContinue | Sort-Object Name
 if (-not $shots) { throw "No $Pattern under $ShotRoot; see Saved\Logs\$Flag.log" }

@@ -439,9 +439,10 @@ def fix_foliage_materials(mesh, asset_id):
         if mat.get_name().startswith("MI_Foliage_"):
             original = unreal.load_asset(f"{folder}/{mat.get_name()[len('MI_Foliage_'):]}")
         alpha = {str(p.parameter_info.name): p.parameter_value for p in original.get_editor_property("scalar_parameter_values")}.get("AlphaMode", 0)
-        if alpha < 1:
-            continue
         base = original.get_name()
+        has_alpha_map = os.path.isdir(textures) and any(f.startswith(f"{base}_alpha_") for f in os.listdir(textures))
+        if alpha < 1 and not has_alpha_map:  # some foliage glTFs (bermuda grass, gazania) don't declare their alpha mode
+            continue
 
         def source(map_name):
             return next((os.path.join(textures, f) for f in sorted(os.listdir(textures)) if f.startswith(f"{base}_{map_name}_")), None)
@@ -490,13 +491,81 @@ def realistic_model(asset_id, category):
     return entries
 
 
+# Megaplants (Fab, added by the user): species folder -> (tree folder, autumn leaf tint or None).
+MEGAPLANTS = {"Tree_Japanese_Cypress": ("Tree_Japanese_Cypress_01", None),
+              "Tree_Japanese_Medlar": ("Tree_Japanese_Medlar_01", None),
+              "Tree_Norway_Maple": ("Tree_Norway_Maple_Forest_01", (1.0, 0.22, 0.06))}
+MEGA_SRC = "/Game/Megaplant_Library"
+
+
+def autumn_material(leaf_mi, tint):
+    """MI_Autumn_<leaf MI>: a child of the Megaplant leaf material with its leaf tint turned toward red."""
+    name = f"MI_Autumn_{leaf_mi.get_name()}"
+    path = f"{LIB}/Mega_Tree/{name}"
+    mi = unreal.load_asset(path) if unreal.EditorAssetLibrary.does_asset_exist(path) else TOOLS.create_asset(
+        name, f"{LIB}/Mega_Tree", unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    MEL.set_material_instance_parent(mi, leaf_mi)
+    MEL.set_material_instance_vector_parameter_value(mi, "BaseColor Tint Leaves", unreal.LinearColor(*tint, 1))
+    MEL.set_material_instance_vector_parameter_value(mi, "BaseColor Tint Leaf Backside", unreal.LinearColor(*tint, 1))
+    unreal.EditorAssetLibrary.save_loaded_asset(mi)
+    return mi
+
+
+def mega_trees():
+    """Bakes each Megaplant variant (skinned trees) into a static Nanite mesh (Mega_Tree/<variant>) so the offline
+    scatter can instance it; trunk collision; the maple's leaves go autumn red. Needs rendering (run_python.ps1 -Render).
+    Skips species that aren't in the project. ponytail: baked in the reference pose, so the Megaplant skeletal wind is
+    lost; swap to skinned actors near the camera if still trees look wrong."""
+    world = unreal.EditorLoadingAndSavingUtils.new_blank_map(False)
+    entries = {}
+    for species, (tree, tint) in MEGAPLANTS.items():
+        folder = f"{MEGA_SRC}/{species}/{tree}"
+        if not unreal.EditorAssetLibrary.does_directory_exist(folder):
+            unreal.log_warning(f"[import_library] Megaplant {species} not in the project: skipped")
+            continue
+        variants = sorted(p.split(".")[0] for p in unreal.EditorAssetLibrary.list_assets(folder, recursive=False)
+                          if re.search(r"_[A-Z]\.[^.]+$", p) and not p.endswith("_Skeleton"))
+        for path in variants:
+            skeletal = unreal.load_asset(path)
+            if not isinstance(skeletal, unreal.SkeletalMesh):
+                continue
+            name = path.rsplit("/", 1)[1]
+            target = f"{LIB}/Mega_Tree/{name}"
+            if unreal.EditorAssetLibrary.does_asset_exist(target):
+                unreal.EditorAssetLibrary.delete_asset(target)
+            mesh = unreal.ShinobiWorldBuilderLibrary.bake_skeletal_to_static(world, skeletal, target)
+            if mesh is None:
+                continue
+            nanite = mesh.get_editor_property("nanite_settings")
+            nanite.set_editor_property("enabled", True)
+            nanite.set_editor_property("shape_preservation", unreal.NaniteShapePreservation.PRESERVE_AREA)
+            mesh.set_editor_property("nanite_settings", nanite)
+            if tint:
+                for index, slot in enumerate(mesh.get_editor_property("static_materials")):
+                    mat = slot.get_editor_property("material_interface")
+                    if mat and "Foliage" in mat.get_name():
+                        mesh.set_material(index, autumn_material(mat, tint))
+            bounds = mesh.get_bounding_box()
+            entries[name] = {"mesh": mesh.get_path_name(), "height_m": round((bounds.max.z - bounds.min.z) / 100.0, 2),
+                             "collision": "trunk", "trunk_radius_cm": round(unreal.ShinobiWorldBuilderLibrary.set_trunk_collision(mesh), 1)}
+            unreal.EditorAssetLibrary.save_loaded_asset(mesh)
+            log(f"Mega_Tree/{name}: {entries[name]['height_m']} m, r{entries[name]['trunk_radius_cm']}")
+    return entries
+
+
 def realistic():
     with open(PH_LIST, encoding="utf-8") as f:
         wanted = json.load(f)
     with open(CATALOG, encoding="utf-8") as f:
         catalog = json.load(f)
+    if os.environ.get("SHINOBI_IMPORT_ONLY") == "Mega":
+        catalog["Mega_Tree"] = mega_trees()
+        with open(CATALOG, "w", encoding="utf-8", newline="\n") as f:
+            json.dump(catalog, f, indent=1, sort_keys=True)
+        return
     for key in [k for k in catalog if k.startswith("PH_")]:
         del catalog[key]
+    catalog["Mega_Tree"] = mega_trees()
     for asset_id, spec in wanted["models"].items():
         entries = realistic_model(asset_id, spec["category"])
         catalog.setdefault(f"PH_{spec['category']}", {}).update(entries)
