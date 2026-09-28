@@ -5,6 +5,7 @@
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiProjectile.h"
+#include "Shinobi/VFX/ShinobiBlackFlameComponent.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
 #include "Shinobi/VFX/ShinobiCastFxComponent.h"
 #include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
@@ -654,6 +655,27 @@ bool FShinobiFlameMaterialsTest::RunTest(const FString& Parameters)
 	const UMaterialInstanceDynamic* Streak = ShinobiVfx::MakeStreak(Outer, ShinobiVfx::Colors::Blood);
 	FLinearColor Color;
 	TestTrue(TEXT("Streak material takes a Color"), Streak && Streak->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("Color")), Color));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlackFlameClusterTest, "ShinobiCoop.Jutsu.BlackFlameClusterFollowsTag", ShinobiTestFlags)
+bool FShinobiBlackFlameClusterTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>();
+	const UShinobiBlackFlameComponent* Flames = E->GetBlackFlame();
+	TestFalse(TEXT("No flames before the black flame"), Flames->IsBurning());
+
+	ShinobiTest::ApplySetByCaller(E, UGE_BlackFlame::StaticClass(), ShinobiTags::Data_Damage, UGE_BlackFlame::DamagePerTick);
+	W.Tick(0.1f);
+	TestTrue(TEXT("Burning black"), Flames->IsBurning());
+	TestEqual(TEXT("Ten flame tongues"), Flames->NumVisibleTongues(), 10);
+
+	E->GetAbilitySystemComponent()->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_Burning_Black));
+	W.Tick(0.1f);
+	TestFalse(TEXT("Flames out with the effect"), Flames->IsBurning());
+	TestEqual(TEXT("No tongues left"), Flames->NumVisibleTongues(), 0);
+	TestFalse(TEXT("Stops ticking"), Flames->IsComponentTickEnabled());
 	return true;
 }
 

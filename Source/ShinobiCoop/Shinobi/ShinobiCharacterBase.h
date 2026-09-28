@@ -10,6 +10,7 @@ class UAbilitySystemComponent;
 class UGameplayEffect;
 class UShinobiAttributeSet;
 class UShinobiGameplayAbility;
+class UShinobiBlackFlameComponent;
 class UShinobiCastFxComponent;
 class UShinobiChakraAuraComponent;
 class UShinobiFeedbackComponent;
@@ -37,6 +38,8 @@ public:
 	UShinobiChakraAuraComponent* GetChakraAura() const { return ChakraAura; }
 	/** Hand orb shown while a jutsu is active. */
 	UShinobiCastFxComponent* GetCastFx() const { return CastFx; }
+
+	UShinobiBlackFlameComponent* GetBlackFlame() const { return BlackFlame; }
 
 	EShinobiTeam GetTeam() const { return Team; }
 	bool IsHostileTo(const AShinobiCharacterBase* Other) const { return Other && Other != this && Other->Team != Team; }
@@ -80,6 +83,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UShinobiCastFxComponent> CastFx;
+
+	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
+	TObjectPtr<UShinobiBlackFlameComponent> BlackFlame;
 
 	/** Damage numbers, hit-stop, camera shake and sounds (cosmetic, every machine that renders). */
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")

@@ -25,7 +25,7 @@ namespace
 	const TArray<FAuraLook>& Looks()
 	{
 		static const TArray<FAuraLook> Table = {
-			{ ShinobiTags::State_Burning_Black, ShinobiVfx::Colors::BlackFlame, 4.f, false },
+			{ ShinobiTags::State_Burning_Black, ShinobiVfx::Colors::BlackFlame, 1.5f, false }, // a faint rim: the flame tongues (UShinobiBlackFlameComponent) carry the look
 			{ ShinobiTags::State_Burning_Normal, ShinobiVfx::Colors::Fire, 2.5f, false },
 			{ ShinobiTags::State_Shocked, ShinobiVfx::Colors::Lightning, 4.f, true },
 			{ ShinobiTags::State_ChakraCharging, ShinobiVfx::Colors::Chakra, 2.5f, false },
