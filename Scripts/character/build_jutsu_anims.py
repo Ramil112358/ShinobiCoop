@@ -5,15 +5,18 @@
 Poses the Mixamo "Power Up" rig (SourceArt/Mixamo/Power_Up_30fps.fbx, the source skeleton the UE retarget pipeline
 already uses) key by key, and writes one animation per jutsu phase:
   SourceArt/Mixamo/Jutsu/<Jutsu>_<Seal|Charge|Release>.fbx  (armature only, 30 fps; imported by setup_jutsu_anims.py)
-  Saved/JutsuPreviews/<Jutsu>_<Phase>.png                   (4 frames, front row over side row, for review)
+  Saved/JutsuPreviews/<Jutsu>_<Phase>.png                   (6 frames: a 3/4 front row over a side row, for review)
 
 Poses are written as targets, not raw bone angles, since the Mixamo bones' local axes are hard to reason about:
-- arms: a wrist target and an elbow pole (armature space), solved with two-bone IK;
-- hands: the fingers' direction and the palm's normal;
-- fingers: a curl per finger (degrees per joint, towards the palm);
-- spine, neck and head: pitch (negative leans back) and yaw.
-Armature space is the Mixamo rig's own, in cm: +X = the character's left, +Y = up, +Z = forward. The wrists meet the
-chest at about Y 125-135, Z 20-30.
+- stance: pelvis drop / yaw / pitch, and a planted ankle target per foot (two-bone leg IK, knees bend to reach);
+- arms: a wrist target and an elbow pole, solved with two-bone IK;
+- hands: the fingers' direction and the palm's normal; fingers: a curl per finger (degrees per joint, towards the palm);
+- spine, neck and head: pitch (negative leans back) and yaw (positive turns to the character's left).
+Armature space is the Mixamo rig's own, in cm: +X = the character's left, +Y = up, +Z = forward, the ground at Y 0.
+
+Motion follows the usual game-animation rules, per key: "snap" (hand seals: a fast exponential move, then a hold key),
+"back" (strikes: overshoot and settle), "smooth" (Bezier ease in and out); every release has an anticipation key
+before the action and a settle after it.
 
 FBX round trip (checked by a spike: every bone within 5 mm of the source after export + re-import): export the armature
 only, add_leaf_bones=False, armature_nodetype="NULL", default axes and scale. Blender's importer shifts animation by
@@ -34,12 +37,14 @@ PREVIEW_DIR = os.path.join(ROOT, "Saved", "JutsuPreviews")
 FPS = 30
 P = "mixamorig:"
 FINGERS = ("Thumb", "Index", "Middle", "Ring", "Pinky")
+ANKLE_HEIGHT = 8.7
 
 # ---------------------------------------------------------------------------------------------------------------
 # Pose library. A pose is a dict with any of:
-#   spine: (pitch, yaw) degrees, spread over Spine/Spine1/Spine2; neck, head: (pitch, yaw)
+#   hips: (drop cm, yaw, pitch); feet: {"R"/"L": (x, z, yaw)} ankle targets on the ground
+#   spine: (pitch, yaw) spread over Spine/Spine1/Spine2; neck, head: (pitch, yaw)
 #   R, L: arm spec {wrist, pole, fingers, palm, curl: (thumb, index, middle, ring, pinky)}
-# Poses combine with merge(): later keys win, arm specs merge key by key.
+# merge() combines poses: later keys win; arm and feet specs merge key by key.
 # ---------------------------------------------------------------------------------------------------------------
 V = Vector
 UP, DOWN, FWD, BACK, LEFT, RIGHT = V((0, 1, 0)), V((0, -1, 0)), V((0, 0, 1)), V((0, 0, -1)), V((1, 0, 0)), V((-1, 0, 0))
@@ -53,141 +58,213 @@ def merge(*poses):
     out = {}
     for pose in poses:
         for key, value in pose.items():
-            if key in ("R", "L") and key in out:
+            if key in ("R", "L", "feet") and key in out:
                 out[key] = {**out[key], **value}
             else:
                 out[key] = value
     return out
 
 
+def shift(pose, side, offset):
+    """The pose with one wrist moved by offset (cm)."""
+    return merge(pose, {side: {"wrist": pose[side]["wrist"] + V(offset)}})
+
+
 OPEN = (5, 5, 5, 5, 5)
 FIST = (40, 95, 95, 95, 95)
+CLAW = (30, 40, 45, 50, 55)
 TWO_UP = (15, 0, 0, 85, 85)  # index and middle straight, the rest folded (Tiger)
 ELBOW_R, ELBOW_L = (-1, -0.6, 0.1), (1, -0.6, 0.1)  # elbows out and down, as when holding hands at the chest
 
-NEUTRAL = {
-    "spine": (0, 0), "neck": (0, 0), "head": (0, 0),
+# Stances. Right-handed: the right foot drops back for the ready stance and steps forward to strike.
+IDLE = {"hips": (2, 0, 0), "feet": {"R": (-11, 0, -8), "L": (11, 0, 8)}}
+READY = {"hips": (8, -12, 0), "feet": {"R": (-17, -9, -22), "L": (15, 10, 8)}}
+BRACE = {"hips": (12, -16, 0), "feet": {"R": (-21, -17, -28), "L": (18, 15, 5)}}
+CROUCH = {"hips": (20, -22, 10), "feet": {"R": (-25, -13, -28), "L": (21, 19, 8)}}
+LUNGE = {"hips": (17, 16, 12), "feet": {"R": (-19, 40, 5), "L": (21, -36, 20)}}
+RUN_A = {"hips": (9, 10, 14), "feet": {"R": (-14, 30, 0), "L": (14, -24, 10)}}
+RUN_B = {"hips": (7, -10, 14), "feet": {"R": (-14, -24, -10), "L": (14, 30, 0)}}
+
+ARMS_DOWN = {
     "R": arm((-21, 93, 3), (0, 0, -1), DOWN, LEFT, (15, 15, 20, 25, 30)),
     "L": arm((21, 93, 3), (0, 0, -1), DOWN, RIGHT, (15, 15, 20, 25, 30)),
 }
+NEUTRAL = merge({"spine": (0, 0), "neck": (0, 0), "head": (0, 0)}, IDLE, ARMS_DOWN)
+# Arms loose but held a little forward and out, clear of the turned hips.
+ARMS_READY = {
+    "R": arm((-25, 94, 12), (-0.3, 0, -1), (0, -1, 0.3), LEFT, (20, 25, 30, 35, 40)),
+    "L": arm((25, 94, 10), (0.3, 0, -1), (0, -1, 0.3), RIGHT, (20, 25, 30, 35, 40)),
+}
+READY_BODY = merge(READY, {"spine": (3, 9), "neck": (0, 2), "head": (-2, 3)}, ARMS_READY)  # shoulders turned back to the front
 
-# Hand seals: both hands in front of the chest. The palm normal of each hand faces the other hand for the clasped ones.
+# Hand seals: both hands in front of the chest. For the clasped ones each palm faces the other hand.
 SEALS = {
     # Tiger: palms together, index and middle up, the others interlaced.
     "Tiger": {"R": arm((-4, 127, 20), ELBOW_R, (0.05, 1, 0.25), LEFT, TWO_UP),
               "L": arm((4, 127, 20), ELBOW_L, (-0.05, 1, 0.25), RIGHT, TWO_UP)},
     # Ram: right hand as Tiger; the left hand wraps round its two raised fingers.
     "Ram": {"R": arm((-4, 127, 20), ELBOW_R, (0.05, 1, 0.25), LEFT, TWO_UP),
-            "L": arm((5, 124, 27), ELBOW_L, (-0.7, 0.4, 0.6), (-0.5, 0, -0.8), (30, 70, 75, 80, 85))},
+            "L": arm((5, 124, 22), ELBOW_L, (-0.7, 0.4, 0.6), (-0.5, 0, -0.8), (30, 70, 75, 80, 85))},
     # Snake: fingers interlaced, palms clasped.
-    "Snake": {"R": arm((-4, 125, 26), ELBOW_R, (0.35, 0.6, 0.7), LEFT, (25, 55, 55, 55, 55)),
-              "L": arm((4, 125, 26), ELBOW_L, (-0.35, 0.6, 0.7), RIGHT, (25, 55, 55, 55, 55))},
-    # Horse: index fingers and thumbs meet in a triangle pointing forward, the rest folded.
-    "Horse": {"R": arm((-6, 127, 22), ELBOW_R, (0.3, 0.3, 0.9), (0.4, -0.9, 0), (0, 0, 90, 90, 90)),
-              "L": arm((6, 127, 22), ELBOW_L, (-0.3, 0.3, 0.9), (-0.4, -0.9, 0), (0, 0, 90, 90, 90))},
+    "Snake": {"R": arm((-4, 125, 21), ELBOW_R, (0.35, 0.6, 0.7), LEFT, (25, 55, 55, 55, 55)),
+              "L": arm((4, 125, 21), ELBOW_L, (-0.35, 0.6, 0.7), RIGHT, (25, 55, 55, 55, 55))},
     # Ox: right hand upright, left hand across it horizontally.
-    "Ox": {"R": arm((-3, 126, 24), ELBOW_R, (0, 1, 0.2), LEFT, (10, 10, 15, 20, 25)),
-           "L": arm((7, 130, 27), ELBOW_L, (-1, 0.1, 0.1), BACK, (10, 20, 25, 30, 35))},
+    "Ox": {"R": arm((-3, 126, 19), ELBOW_R, (0, 1, 0.2), LEFT, (10, 10, 15, 20, 25)),
+           "L": arm((7, 130, 22), ELBOW_L, (-1, 0.1, 0.1), BACK, (10, 20, 25, 30, 35))},
     # Monkey: palms together, the left hand's fingers folded over the right's.
     "Monkey": {"R": arm((-4, 127, 20), ELBOW_R, (0.05, 1, 0.25), LEFT, OPEN),
                "L": arm((4, 127, 20), ELBOW_L, (-0.05, 1, 0.25), RIGHT, (20, 45, 45, 45, 45))},
     # Rabbit: left fist, right hand flat on top of it.
-    "Rabbit": {"R": arm((-3, 134, 24), ELBOW_R, (0.3, 0, 1), DOWN, OPEN),
-               "L": arm((3, 124, 23), ELBOW_L, (-0.2, 0.2, 1), RIGHT, FIST)},
+    "Rabbit": {"R": arm((-3, 134, 19), ELBOW_R, (0.3, 0, 1), DOWN, OPEN),
+               "L": arm((3, 124, 18), ELBOW_L, (-0.2, 0.2, 1), RIGHT, FIST)},
 }
 
-def seal(name, body=None):
-    return merge(NEUTRAL, body or {}, SEALS[name])
+
+def seal(name, *body):
+    return merge(NEUTRAL, READY_BODY, *body, SEALS[name])
 
 
-# Body moves.
-LEAN_BACK = {"spine": (-7, 0), "neck": (-6, 0), "head": (-8, 0)}           # the Fireball inhale
-LEAN_BACK_DEEP = {"spine": (-8.5, 0), "neck": (-7, 0), "head": (-9, 0)}
-# Leaning into the blow with the Tiger seal still held, as Sasuke does, which keeps the mouth clear for the fire.
-BLOW = seal("Tiger", {"spine": (10, 0), "neck": (8, 0), "head": (12, 0)})
-CHIDORI_HOLD = merge(NEUTRAL, {
-    "spine": (8, -8), "neck": (-4, 5), "head": (-4, 5),
-    # Right hand low and forward, fingers clawed; the left hand grips the right wrist.
-    "R": arm((-28, 98, 38), (-0.6, 0, -1), (-0.2, -0.3, 1), DOWN, (30, 35, 35, 35, 35)),
-    "L": arm((-20, 103, 33), ELBOW_L, (-1, -0.2, 0.2), BACK, (40, 60, 60, 60, 60)),
+# Fireball: breathe in leaning back on a braced stance, then throw the whole body into the blow, seal still held
+# (as Sasuke does), which keeps the mouth clear for the fire.
+INHALE = merge(BRACE, {"spine": (-8, 9), "neck": (-7, 2), "head": (-10, 3)})
+INHALE_DEEP = merge(INHALE, {"spine": (-10, 9), "head": (-13, 3)})
+BLOW = seal("Tiger", BRACE, {"hips": (13, -16, 8), "spine": (7, 9), "neck": (10, 2), "head": (-24, 3)})  # neck thrust, face level (spine pitch is per bone, x3)
+BLOW_RECOIL = seal("Tiger", BRACE, {"hips": (12, -16, 3), "spine": (4, 9), "neck": (5, 2), "head": (-12, 3)})
+
+# Chidori: crouched low, right hand down and forward in a claw, the left hand gripping the right wrist.
+CHIDORI_HOLD = merge(NEUTRAL, CROUCH, {
+    "spine": (10, 14), "neck": (-8, 4), "head": (-8, 6),
+    "R": arm((-26, 84, 38), (-0.6, 0, -1), (-0.2, -0.3, 1), DOWN, CLAW),
+    "L": arm((-18, 90, 33), ELBOW_L, (-1, -0.2, 0.2), BACK, (40, 60, 60, 60, 60)),
 })
-RASENGAN_HOLD = merge(NEUTRAL, {
-    "spine": (5, -6), "neck": (-2, 3), "head": (-2, 3),
-    # Right palm up, in front of the belly; left hand hovering over it, palm down.
-    "R": arm((-17, 112, 33), (-1, -0.4, -0.3), (0.2, 0, 1), UP, (20, 30, 30, 30, 30)),
-    "L": arm((-12, 132, 33), ELBOW_L, (-0.3, -0.2, 1), DOWN, (20, 30, 30, 30, 30)),
+CHIDORI_DEEP = merge(CHIDORI_HOLD, {"hips": (26, -24, 14), "spine": (13, 14)})
+# Rasengan: right palm up in front of the belly, the left hand shaping the ball above it.
+RASENGAN_HOLD = merge(NEUTRAL, READY, {
+    "spine": (6, 4), "neck": (-2, 3), "head": (-4, 3),
+    "R": arm((-17, 110, 33), (-1, -0.4, -0.3), (0.2, 0, 1), UP, (20, 30, 30, 30, 30)),
+    "L": arm((-12, 130, 33), ELBOW_L, (-0.3, -0.2, 1), DOWN, (20, 30, 30, 30, 30)),
 })
-EYE_FOCUS = merge(NEUTRAL, {
-    "spine": (2, 0), "neck": (4, 0), "head": (6, 0),
-    # Right hand raised beside the right eye, index and middle up.
-    "R": arm((-12, 150, 14), (-1, -0.5, 0), (0.1, 1, 0.2), (0.3, 0, 1), TWO_UP),
+# Amaterasu: two fingers raised beside the right eye, head bowed, then a sharp look up.
+EYE_FOCUS = merge(NEUTRAL, READY_BODY, {
+    "spine": (4, 9), "neck": (6, 2), "head": (10, 3),
+    "R": arm((-12, 148, 14), (-1, -0.5, 0), (0.1, 1, 0.2), (0.3, 0, 1), TWO_UP),
 })
-DASH_STRIKE = merge(NEUTRAL, {
-    "spine": (12, -10), "neck": (-6, 8), "head": (-6, 8),
-    "R": arm((-12, 128, 52), (-1, -0.5, 0), FWD, DOWN, (30, 35, 35, 35, 35)),
-    "L": arm((22, 104, -14), (0.3, 0, 1), DOWN, RIGHT, (30, 40, 40, 40, 40)),
-})
-PALM_THRUST = merge(DASH_STRIKE, {"R": arm((-10, 125, 54), (-1, -0.5, 0), (0, 0.3, 1), FWD, (15, 20, 20, 20, 20))})
-STARE = merge(NEUTRAL, {"spine": (0, 0), "neck": (0, 0), "head": (-3, 0),
-                        "R": arm((-16, 140, 45), (-1, -0.5, -0.3), FWD, DOWN, (40, 0, 90, 90, 90))})
+EYE_BOWED = merge(EYE_FOCUS, {"neck": (10, 2), "head": (16, 3)})
+STARE = merge(NEUTRAL, READY_BODY, {"spine": (-2, 9), "neck": (-3, 2), "head": (-6, 3),
+                                    "R": arm((-16, 138, 45), (-1, -0.5, -0.3), FWD, DOWN, (40, 0, 90, 90, 90))})
+
+# The dashes: wind up, run in (two strides), then strike on a lunge.
+BACK_ARM = {"L": arm((27, 95, -26), (0.3, 0, 1), (0.2, -1, -0.4), RIGHT, (30, 40, 40, 40, 40))}
+STRIKE_ARMS = merge(BACK_ARM, {"R": arm((-8, 130, 62), (-1, -0.5, 0), FWD, DOWN, (20, 15, 15, 15, 15))})
+PALM_ARMS = merge(BACK_ARM, {"R": arm((-6, 126, 62), (-1, -0.5, 0), (0, 0.4, 1), FWD, (15, 10, 10, 10, 10))})
+RUN_TORSO = {"spine": (14, -6), "neck": (-10, 4), "head": (-10, 4)}
+LUNGE_TORSO = {"spine": (14, -14), "neck": (-8, 8), "head": (-8, 8)}
+
+
+def dash_release(hold, windup_arms, strike_arms):
+    windup = merge(hold, {"spine": (8, 26)}, windup_arms)
+    run_a = merge(NEUTRAL, RUN_A, RUN_TORSO, strike_arms)
+    run_b = merge(NEUTRAL, RUN_B, RUN_TORSO, strike_arms)
+    lunge = merge(NEUTRAL, LUNGE, LUNGE_TORSO, strike_arms)
+    return [(0.0, hold, "smooth"), (0.07, windup, "snap"), (0.16, run_a, "smooth"), (0.28, run_b, "smooth"),
+            (0.42, lunge, "back"), (0.7, merge(lunge, {"spine": (11, -12)}), "smooth")]
 
 
 # ---------------------------------------------------------------------------------------------------------------
-# Timelines: [(seconds, pose)] per phase. Charge is exactly 2.2 s (longer than the 2 s cap, so it never loops).
+# Timelines: [(seconds, pose, ease)] per phase; ease shapes the move from that key to the next.
+# Charge is exactly 2.2 s (longer than the 2 s cap, so it never loops).
 # ---------------------------------------------------------------------------------------------------------------
-def charge_keys(base, wobble, seed, step=0.2):
-    """A held pose with a small seeded tremble on the right wrist and the spine."""
+def seal_run(names, start, step=0.14, hold=0.07, body=()):
+    """Snappy seal changes: each seal is reached fast, then held."""
+    keys = []
+    t = start
+    for name in names:
+        keys.append((round(t, 3), seal(name, *body), "snap"))
+        keys.append((round(t + hold, 3), seal(name, *body), "snap"))
+        t += step
+    return keys, t
+
+
+def tremble(pose, seconds, amount, seed, step, build=None):
+    """A held pose with a seeded tremble on the right wrist and the spine; build(t 0-1) layers a slow change."""
     rng = random.Random(seed)
     keys = []
-    t = 0.0
-    while t <= 2.2 + 1e-6:
-        jitter = V((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1))) * wobble
-        pose = merge(base, {"R": {**base["R"], "wrist": base["R"]["wrist"] + jitter}})
+    count = int(round(seconds / step))
+    for i in range(count + 1):
+        t = i * seconds / count
+        base = build(t / seconds) if build else pose
+        jitter = V((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1))) * amount
+        moved = shift(base, "R", jitter)
         pitch, yaw = base.get("spine", (0, 0))
-        pose["spine"] = (pitch + rng.uniform(-0.6, 0.6), yaw)
-        keys.append((round(t, 3), pose))
-        t += step
+        moved["spine"] = (pitch + rng.uniform(-0.8, 0.8), yaw)
+        keys.append((round(t, 3), moved, "smooth"))
     return keys
 
 
-def rasengan_charge():
-    """The left hand circles over the right palm, shaping the ball."""
-    keys = []
+def lerp_pose(a, b, t):
+    """Blends the numeric parts two poses share (stance, torso, wrists); the rest comes from b."""
+    out = merge(b)
+    for key in ("spine", "neck", "head", "hips"):
+        if key in a and key in b:
+            out[key] = tuple(x + (y - x) * t for x, y in zip(a[key], b[key]))
+    for side in ("R", "L"):
+        if side in a and side in b:
+            out[side] = {**b[side], "wrist": a[side]["wrist"].lerp(b[side]["wrist"], t)}
+    return out
+
+
+def fireball():
+    seals, t = seal_run(("Snake", "Ram", "Tiger"), 0.1)
+    return {
+        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.95, seal("Tiger", INHALE), "smooth")],
+        "Charge": [(round(i * 0.55, 3), seal("Tiger", INHALE if i % 2 == 0 else INHALE_DEEP), "smooth") for i in range(5)],
+        "Release": [(0.0, seal("Tiger", INHALE), "smooth"),
+                    (0.08, seal("Tiger", INHALE_DEEP), "snap"),      # the last gulp of air
+                    (0.16, BLOW, "back"),                            # throw the body into the blow
+                    (0.45, BLOW_RECOIL, "smooth"),
+                    (0.85, merge(NEUTRAL, READY_BODY), "smooth")],
+    }
+
+
+def chidori():
+    seals, t = seal_run(("Ox", "Rabbit", "Monkey"), 0.1)
+    windup = {"R": arm((-24, 104, 4), (-0.6, 0, -1), (-0.2, -0.3, 1), DOWN, CLAW)}
+    return {
+        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.85, CHIDORI_HOLD, "smooth")],
+        "Charge": tremble(CHIDORI_HOLD, 2.2, 1.6, seed=2, step=0.1, build=lambda u: lerp_pose(CHIDORI_HOLD, CHIDORI_DEEP, u)),
+        "Release": dash_release(CHIDORI_DEEP, windup, STRIKE_ARMS),
+    }
+
+
+def rasengan():
+    seals, t = seal_run(("Ram", "Tiger"), 0.1)
     centre = RASENGAN_HOLD["L"]["wrist"]
-    for i in range(9):
-        t = i * 2.2 / 8
+
+    def charge_key(i):
         angle = i * math.pi / 2
-        offset = V((math.cos(angle) * 5, 0, math.sin(angle) * 5))
-        keys.append((round(t, 3), merge(RASENGAN_HOLD, {"L": {"wrist": centre + offset}})))
-    return keys
+        pose = merge(RASENGAN_HOLD, {"L": {"wrist": centre + V((math.cos(angle) * 6, math.sin(angle * 2) * 1.5, math.sin(angle) * 6))},
+                                     "hips": (8, -12 + math.sin(angle) * 5, 0)})
+        return (round(i * 2.2 / 12, 3), pose, "smooth")
+
+    windup = {"R": arm((-22, 106, 6), (-1, -0.4, -0.3), (0.2, 0, 1), UP, (20, 30, 30, 30, 30))}
+    return {
+        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.7, RASENGAN_HOLD, "smooth")],
+        "Charge": [charge_key(i) for i in range(13)],
+        "Release": dash_release(RASENGAN_HOLD, windup, PALM_ARMS),
+    }
 
 
-def breathing(low, high):
-    return [(t, merge(seal("Tiger"), low if i % 2 == 0 else high)) for i, t in enumerate((0.0, 0.55, 1.1, 1.65, 2.2))]
+def amaterasu():
+    seals, t = seal_run(("Tiger",), 0.12, hold=0.12)
+    return {
+        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.7, EYE_FOCUS, "smooth")],
+        "Charge": tremble(EYE_FOCUS, 2.2, 0.4, seed=4, step=0.275, build=lambda u: lerp_pose(EYE_FOCUS, EYE_BOWED, min(u * 2, 1))),
+        "Release": [(0.0, EYE_BOWED, "smooth"), (0.05, merge(EYE_BOWED, {"head": (20, 3)}), "snap"),
+                    (0.12, STARE, "back"), (0.6, merge(STARE, ARMS_READY), "smooth")],
+    }
 
 
-TIMELINES = {
-    "Fireball": {
-        "Seal": [(0.0, NEUTRAL), (0.15, seal("Snake")), (0.35, seal("Ram")), (0.55, seal("Tiger")), (0.9, seal("Tiger", LEAN_BACK))],
-        "Charge": breathing(LEAN_BACK, LEAN_BACK_DEEP),
-        "Release": [(0.0, seal("Tiger", LEAN_BACK)), (0.12, BLOW), (0.45, BLOW), (0.8, NEUTRAL)],
-    },
-    "Chidori": {
-        "Seal": [(0.0, NEUTRAL), (0.15, seal("Ox")), (0.35, seal("Rabbit")), (0.55, seal("Monkey")), (0.8, CHIDORI_HOLD)],
-        "Charge": charge_keys(CHIDORI_HOLD, 1.5, seed=2),
-        "Release": [(0.0, CHIDORI_HOLD), (0.15, DASH_STRIKE), (0.7, DASH_STRIKE)],
-    },
-    "Rasengan": {
-        "Seal": [(0.0, NEUTRAL), (0.2, seal("Ram")), (0.45, seal("Tiger")), (0.7, RASENGAN_HOLD)],
-        "Charge": rasengan_charge(),
-        "Release": [(0.0, RASENGAN_HOLD), (0.15, PALM_THRUST), (0.7, PALM_THRUST)],
-    },
-    "Amaterasu": {
-        "Seal": [(0.0, NEUTRAL), (0.25, seal("Tiger")), (0.7, EYE_FOCUS)],
-        "Charge": charge_keys(EYE_FOCUS, 0.4, seed=4, step=0.275),
-        "Release": [(0.0, EYE_FOCUS), (0.1, STARE), (0.6, merge(STARE, {"R": NEUTRAL["R"]}))],
-    },
-}
+TIMELINES = {"Fireball": fireball(), "Chidori": chidori(), "Rasengan": rasengan(), "Amaterasu": amaterasu()}
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -204,29 +281,65 @@ def basis(y, x_hint):
     return Matrix((x, y, z)).transposed()
 
 
-def set_rotation(arm_obj, name, rotation):
-    """Poses a bone to an armature-space rotation, keeping its (posed) head where it is."""
+def rest_rotation(arm_obj, name):
+    return arm_obj.data.bones[name].matrix_local.to_3x3()
+
+
+def swung(arm_obj, name, direction):
+    """The bone's rest rotation swung (no twist) so its Y axis points along direction."""
+    rest = rest_rotation(arm_obj, name)
+    return rest.col[1].rotation_difference(direction.normalized()).to_matrix() @ rest
+
+
+def set_rotation(arm_obj, name, rotation, head=None):
+    """Poses a bone to an armature-space rotation, keeping its (posed) head where it is unless head is given."""
     pb = arm_obj.pose.bones[name]
-    pb.matrix = Matrix.Translation(pb.head) @ rotation.to_4x4()
-    pb.location = (0, 0, 0)
+    pb.matrix = Matrix.Translation(head if head is not None else pb.head) @ rotation.to_4x4()
+    if head is None:
+        pb.location = (0, 0, 0)
     bpy.context.view_layer.update()
+
+
+def two_bone(root, target, l1, l2, pole):
+    """Returns (joint, end) for a two-bone chain from root reaching for target, bending towards pole."""
+    to_target = target - root
+    reach = max(min(to_target.length, (l1 + l2) * 0.995), abs(l1 - l2) + 1.0)
+    direction = to_target.normalized()
+    pole = (pole - direction * pole.dot(direction)).normalized()
+    a = (l1 * l1 - l2 * l2 + reach * reach) / (2 * reach)
+    h = math.sqrt(max(l1 * l1 - a * a, 0.0))
+    return root + direction * a + pole * h, root + direction * reach, pole
+
+
+def bone_length(arm_obj, name):
+    bone = arm_obj.data.bones[name]
+    return (bone.tail_local - bone.head_local).length
+
+
+def pose_hips(arm_obj, pose):
+    drop, yaw, pitch = pose.get("hips", (0, 0, 0))
+    name = P + "Hips"
+    rotation = Matrix.Rotation(math.radians(yaw), 3, "Y") @ Matrix.Rotation(math.radians(pitch), 3, "X") @ rest_rotation(arm_obj, name)
+    set_rotation(arm_obj, name, rotation, arm_obj.data.bones[name].head_local - V((0, drop, 0)))
+
+
+def pose_leg(arm_obj, side, foot):
+    x, z, yaw = foot
+    names = [f"{P}{side}UpLeg", f"{P}{side}Leg", f"{P}{side}Foot"]
+    hip = arm_obj.pose.bones[names[0]].head.copy()
+    # Knees bend forward and a little out, following the foot's turn.
+    pole = Matrix.Rotation(math.radians(yaw), 3, "Y") @ V((0.25 if side == "Left" else -0.25, 0, 1))
+    knee, ankle, _ = two_bone(hip, V((x, ANKLE_HEIGHT, z)), bone_length(arm_obj, names[0]), bone_length(arm_obj, names[1]), pole)
+    set_rotation(arm_obj, names[0], swung(arm_obj, names[0], knee - hip))
+    set_rotation(arm_obj, names[1], swung(arm_obj, names[1], ankle - knee))
+    # The foot stays flat, turned by its yaw.
+    set_rotation(arm_obj, names[2], Matrix.Rotation(math.radians(yaw), 3, "Y") @ rest_rotation(arm_obj, names[2]))
 
 
 def pose_arm(arm_obj, side, spec):
     names = [f"{P}{side}Arm", f"{P}{side}ForeArm", f"{P}{side}Hand"]
-    upper, fore = (arm_obj.data.bones[n] for n in names[:2])
-    l1 = (upper.tail_local - upper.head_local).length
-    l2 = (fore.tail_local - fore.head_local).length
     shoulder = arm_obj.pose.bones[names[0]].head.copy()
-    to_target = spec["wrist"] - shoulder
-    reach = max(min(to_target.length, (l1 + l2) * 0.995), abs(l1 - l2) + 1.0)
-    direction = to_target.normalized()
-    pole = spec["pole"].normalized()
-    pole = (pole - direction * pole.dot(direction)).normalized()
-    a = (l1 * l1 - l2 * l2 + reach * reach) / (2 * reach)
-    h = math.sqrt(max(l1 * l1 - a * a, 0.0))
-    elbow = shoulder + direction * a + pole * h
-    wrist = shoulder + direction * reach
+    elbow, wrist, pole = two_bone(shoulder, spec["wrist"], bone_length(arm_obj, names[0]), bone_length(arm_obj, names[1]), spec["pole"].normalized())
     # Arm bones: X points to the inside of the bend (away from the elbow's pole), as in the rest pose.
     set_rotation(arm_obj, names[0], basis(elbow - shoulder, -pole))
     set_rotation(arm_obj, names[1], basis(wrist - elbow, -pole))
@@ -259,6 +372,10 @@ def apply_pose(arm_obj, pose):
         pb.rotation_quaternion = (1, 0, 0, 0)
         pb.location = (0, 0, 0)
     bpy.context.view_layer.update()
+    pose_hips(arm_obj, pose)
+    for side, key in (("Right", "R"), ("Left", "L")):
+        if key in pose.get("feet", {}):
+            pose_leg(arm_obj, side, pose["feet"][key])
     pose_torso(arm_obj, pose)
     for side, key in (("Right", "R"), ("Left", "L")):
         if key in pose:
@@ -266,17 +383,40 @@ def apply_pose(arm_obj, pose):
     bpy.context.view_layer.update()
 
 
+EASES = {"snap": ("EXPO", "EASE_OUT"), "back": ("BACK", "EASE_OUT"), "smooth": ("BEZIER", "AUTO")}
+
+
 def build_action(arm_obj, name, keys):
     action = bpy.data.actions.new(name)
     arm_obj.animation_data_create()
     arm_obj.animation_data.action = action
-    for seconds, pose in keys:
+    eases = {}
+    for seconds, pose, ease in keys:
         frame = round(seconds * FPS)
+        eases[frame] = EASES[ease]
         apply_pose(arm_obj, pose)
         for pb in arm_obj.pose.bones:
             pb.keyframe_insert("rotation_quaternion", frame=frame)
             pb.keyframe_insert("location", frame=frame)
+    # Shape each move: the interpolation on a key governs the segment that starts at it.
+    for fcurve in action_fcurves(action):
+        for point in fcurve.keyframe_points:
+            interpolation, easing = eases.get(round(point.co.x), EASES["smooth"])
+            point.interpolation = interpolation
+            point.easing = easing
     return action, round(keys[-1][0] * FPS)
+
+
+def action_fcurves(action):
+    """F-curves of an action, for both the legacy and the layered (Blender 4.4+) action layouts."""
+    if hasattr(action, "fcurves") and len(action.fcurves):
+        return list(action.fcurves)
+    curves = []
+    for layer in getattr(action, "layers", []):
+        for strip in layer.strips:
+            for bag in strip.channelbags:
+                curves.extend(bag.fcurves)
+    return curves
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -298,27 +438,32 @@ def setup_preview_scene():
     scene.render.engine = "BLENDER_WORKBENCH"
     scene.display.shading.light = "STUDIO"
     scene.display.shading.color_type = "SINGLE"
-    scene.render.resolution_x, scene.render.resolution_y = 300, 420
-    scene.render.film_transparent = False
+    scene.display.shading.show_shadows = True
+    scene.render.resolution_x, scene.render.resolution_y = 260, 400
     scene.world = bpy.data.worlds.new("Preview")
     scene.world.color = (0.05, 0.05, 0.06)
+    floor = bpy.data.meshes.new("Floor")
+    floor.from_pydata([(-3, -3, 0), (3, -3, 0), (3, 3, 0), (-3, 3, 0)], [], [(0, 1, 2, 3)])
+    scene.collection.objects.link(bpy.data.objects.new("Floor", floor))
     cameras = {}
-    # The rig faces world -Y (its +Z forward, turned by the import's X rotation); these frame the upper body.
-    for label, location, rotation in (("front", (0, -2.6, 1.3), (math.radians(90), 0, 0)),
-                                      ("side", (-2.6, 0, 1.3), (math.radians(90), 0, math.radians(-90)))):
+    # The rig faces world -Y (its +Z forward, turned by the import's X rotation). A 3/4 view from its front right,
+    # and a side view from its right, both framing the whole body.
+    centre = V((0, 0, 0.95))
+    for label, location in (("front", V((-1.6, -2.4, 1.2))), ("side", V((-2.9, 0, 1.0)))):
         data = bpy.data.cameras.new(label)
         data.type = "ORTHO"
-        data.ortho_scale = 1.35
+        data.ortho_scale = 2.1
         cam = bpy.data.objects.new(label, data)
-        cam.location, cam.rotation_euler = location, rotation
+        cam.location = location
+        cam.rotation_euler = (centre - location).to_track_quat("-Z", "Y").to_euler()
         scene.collection.objects.link(cam)
         cameras[label] = cam
     return cameras
 
 
-def render_strip(cameras, last_frame, path):
+def render_strip(cameras, last_frame, path, columns=6):
     scene = bpy.context.scene
-    frames = [round(last_frame * i / 3) for i in range(4)]
+    frames = [round(last_frame * i / (columns - 1)) for i in range(columns)]
     tiles = []
     for label in ("front", "side"):
         scene.camera = cameras[label]
@@ -329,17 +474,18 @@ def render_strip(cameras, last_frame, path):
             scene.render.filepath = tmp
             bpy.ops.render.render(write_still=True)
             image = bpy.data.images.load(tmp)
-            row.append((list(image.pixels), image.size[0], image.size[1]))
+            row.append(list(image.pixels))
+            size = image.size[:]
             bpy.data.images.remove(image)
         tiles.append(row)
-    w, h = tiles[0][0][1], tiles[0][0][2]
-    strip = bpy.data.images.new("strip", w * 4, h * 2, alpha=True)
-    pixels = [0.0] * (w * 4 * h * 2 * 4)
+    w, h = size
+    strip = bpy.data.images.new("strip", w * columns, h * 2, alpha=True)
+    pixels = [0.0] * (w * columns * h * 2 * 4)
     for r, row in enumerate(reversed(tiles)):  # Blender images start at the bottom row: side row first
-        for c, (tile, _, _) in enumerate(row):
+        for c, tile in enumerate(row):
             for y in range(h):
                 src = y * w * 4
-                dst = ((r * h + y) * w * 4 + c * w) * 4
+                dst = ((r * h + y) * w * columns + c * w) * 4
                 pixels[dst:dst + w * 4] = tile[src:src + w * 4]
     strip.pixels = pixels
     strip.filepath_raw = path
