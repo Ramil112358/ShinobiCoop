@@ -1,17 +1,17 @@
-"""Jutsu cast animations (M2b part 2): imports the chosen Mixamo clips from SourceArt/Mixamo, retargets them onto
-Manny with the RTG_MixamoToManny retargeter that setup_chakra_pose.py built, and wraps each in a montage the
-jutsu plays from its activation (UShinobiJutsuAbility::CastMontage). Idempotent: re-running reimports,
-re-retargets (overwriting in place, so montage references survive) and re-tunes.
+"""Jutsu cast animations: imports the per-phase clips Scripts/character/build_jutsu_anims.py writes to
+SourceArt/Mixamo/Jutsu (<Jutsu>_<Seal|Charge|Release>.fbx, on the Mixamo "Power Up" skeleton), retargets them onto
+Manny with the RTG_MixamoToManny retargeter that setup_chakra_pose.py built, and wraps each in a montage,
+AM_<Jutsu>_<Phase>, which UShinobiJutsuAbility plays phase by phase (SealMontage, ChargeMontage, ReleaseMontage).
+Idempotent: re-running reimports, re-retargets (overwriting in place, so montage references survive) and re-tunes.
+One montage per phase rather than sections in one montage: UE Python can't author montage sections.
 
-Run setup_chakra_pose.py first (it creates the Mixamo skeleton/mesh and the retargeter this reuses).
-Close the GUI editor before running.
-
-To swap a clip, change JUTSU_CLIPS and re-run. Mixamo has no Naruto hand seals; these are generic spell casts.
+Run setup_chakra_pose.py first (it creates the Mixamo skeleton/mesh and the retargeter this reuses), and
+build_jutsu_anims.py after any pose change. Close the GUI editor before running.
 """
 import os
 import unreal
 
-SOURCE_DIR = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir() + "SourceArt/Mixamo")
+SOURCE_DIR = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir() + "SourceArt/Mixamo/Jutsu")
 IMPORT_DIR = "/Game/Shinobi/Mixamo/Jutsu"
 ANIM_DIR = "/Game/Shinobi/Anims"
 MIXAMO_MESH_PATH = "/Game/Shinobi/Mixamo/Power_Up_30fps.Power_Up_30fps"
@@ -19,13 +19,10 @@ MIXAMO_SKELETON_PATH = "/Game/Shinobi/Mixamo/Power_Up_30fps_Skeleton.Power_Up_30
 MANNY_MESH_PATH = "/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"
 RETARGETER_PATH = "/Game/Shinobi/Retarget/RTG_MixamoToManny.RTG_MixamoToManny"
 
-# Jutsu -> Mixamo FBX file name (without .fbx). Chosen by name; swap freely.
-JUTSU_CLIPS = {
-    "Fireball": "Fireball",
-    "Chidori": "Standing 1H Magic Attack 01",
-    "Rasengan": "Standing 2H Magic Attack 01",
-    "Amaterasu": "Standing 1H Magic Attack 03",
-}
+JUTSU = ("Fireball", "Chidori", "Rasengan", "Amaterasu")
+# Phase -> (blend in, blend out) seconds. The seals and the charge hand over to the next phase quickly; the release
+# blends back out to locomotion more slowly.
+PHASES = {"Seal": (0.1, 0.1), "Charge": (0.1, 0.1), "Release": (0.05, 0.25)}
 
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 
@@ -94,7 +91,14 @@ def retarget(source_anim, jutsu, mixamo_mesh, manny_mesh, retargeter):
     return anim
 
 
-def build_montage(jutsu, anim):
+def remove_old_single_clip(jutsu):
+    """The one-clip-per-jutsu assets this script made before the phase split."""
+    for path in (f"{ANIM_DIR}/AM_{jutsu}", f"{ANIM_DIR}/AS_{jutsu}", f"{IMPORT_DIR}/MX_{jutsu}"):
+        if unreal.EditorAssetLibrary.does_asset_exist(path) and not unreal.EditorAssetLibrary.delete_asset(path):
+            raise RuntimeError(f"could not delete {path}")
+
+
+def build_montage(jutsu, anim, blends):
     path = f"{ANIM_DIR}/AM_{jutsu}"
     if unreal.EditorAssetLibrary.does_asset_exist(path):
         montage = load(path)
@@ -104,13 +108,13 @@ def build_montage(jutsu, anim):
         montage = TOOLS.create_asset(f"AM_{jutsu}", ANIM_DIR, unreal.AnimMontage, factory)
         if montage is None:
             raise RuntimeError(f"failed to create {path}")
-    for prop, seconds in (("blend_in", 0.1), ("blend_out", 0.25)):
+    for prop, seconds in zip(("blend_in", "blend_out"), blends):
         blend = montage.get_editor_property(prop)
         blend.set_editor_property("blend_time", seconds)
         montage.set_editor_property(prop, blend)
     if not unreal.EditorAssetLibrary.save_loaded_asset(montage):
         raise RuntimeError(f"failed to save {path}")
-    unreal.log(f"[setup_jutsu_anims] {path}: {anim.get_play_length():.2f}s from {JUTSU_CLIPS[jutsu]}")
+    unreal.log(f"[setup_jutsu_anims] {path}: {anim.get_play_length():.2f}s")
 
 
 if not unreal.EditorAssetLibrary.does_directory_exist(IMPORT_DIR):
@@ -119,6 +123,9 @@ mixamo_mesh = load(MIXAMO_MESH_PATH)
 skeleton = load(MIXAMO_SKELETON_PATH)
 manny_mesh = load(MANNY_MESH_PATH)
 retargeter = load(RETARGETER_PATH)
-for jutsu, fbx_name in JUTSU_CLIPS.items():
-    source = import_clip(jutsu, fbx_name, skeleton)
-    build_montage(jutsu, retarget(source, jutsu, mixamo_mesh, manny_mesh, retargeter))
+for jutsu in JUTSU:
+    remove_old_single_clip(jutsu)
+    for phase, blends in PHASES.items():
+        name = f"{jutsu}_{phase}"
+        source = import_clip(name, name, skeleton)
+        build_montage(name, retarget(source, name, mixamo_mesh, manny_mesh, retargeter), blends)

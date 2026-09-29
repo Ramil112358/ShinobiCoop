@@ -171,7 +171,7 @@ void UShinobiFeedbackComponent::OnMontageStarted(UAnimMontage* Montage)
 	{
 		ShinobiSfx::Play(this, EShinobiSfx::Thud, Where);
 	}
-	else if (Name == TEXT("AM_Fireball") || Name == TEXT("AM_Chidori") || Name == TEXT("AM_Rasengan") || Name == TEXT("AM_Amaterasu"))
+	else if (Name.EndsWith(TEXT("_Seal"))) // a jutsu's hand seals (AM_<Jutsu>_Seal)
 	{
 		ShinobiSfx::Play(this, EShinobiSfx::Cast, Where, 0.5f);
 	}

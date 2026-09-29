@@ -17,8 +17,9 @@ UGA_Rasengan::UGA_Rasengan()
 	DashDistance = 900.f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Rasengan);
 	ActivationOwnedTags.AddTag(ShinobiTags::State_Casting_Rasengan); // hand orb (UShinobiCastFxComponent)
-	// ponytail: the old one-clip cast stands in for the seals until the per-phase montages are imported (plan Task 8)
-	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Rasengan.AM_Rasengan")));
+	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Rasengan_Seal.AM_Rasengan_Seal")));
+	ChargeMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Rasengan_Charge.AM_Rasengan_Charge")));
+	ReleaseMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Rasengan_Release.AM_Rasengan_Release")));
 }
 
 void UGA_Rasengan::Strike(AShinobiCharacterBase* Victim)

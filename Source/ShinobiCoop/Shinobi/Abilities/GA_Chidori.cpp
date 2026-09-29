@@ -16,8 +16,9 @@ UGA_Chidori::UGA_Chidori()
 	WindUp = 0.5f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Chidori);
 	ActivationOwnedTags.AddTag(ShinobiTags::State_Casting_Chidori); // hand orb (UShinobiCastFxComponent)
-	// ponytail: the old one-clip cast stands in for the seals until the per-phase montages are imported (plan Task 8)
-	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Chidori.AM_Chidori")));
+	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Chidori_Seal.AM_Chidori_Seal")));
+	ChargeMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Chidori_Charge.AM_Chidori_Charge")));
+	ReleaseMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Chidori_Release.AM_Chidori_Release")));
 }
 
 void UGA_Chidori::Strike(AShinobiCharacterBase* Victim)

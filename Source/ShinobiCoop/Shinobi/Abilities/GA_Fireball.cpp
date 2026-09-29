@@ -19,8 +19,9 @@ UGA_Fireball::UGA_Fireball()
 	ReleaseDelay = 0.1f; // the ball leaves on the blow, not at the start of the release clip
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Fireball);
 	ActivationOwnedTags.AddTag(ShinobiTags::State_Casting_Fireball); // hand orb (UShinobiCastFxComponent)
-	// ponytail: the old one-clip cast stands in for the seals until the per-phase montages are imported (plan Task 8)
-	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Fireball.AM_Fireball")));
+	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Fireball_Seal.AM_Fireball_Seal")));
+	ChargeMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Fireball_Charge.AM_Fireball_Charge")));
+	ReleaseMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Fireball_Release.AM_Fireball_Release")));
 }
 
 void UGA_Fireball::ExecuteJutsu()

@@ -16,8 +16,9 @@ UGA_Amaterasu::UGA_Amaterasu()
 	WindUp = 0.4f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Amaterasu);
 	ActivationOwnedTags.AddTag(ShinobiTags::State_Casting_Amaterasu); // hand orb (UShinobiCastFxComponent)
-	// ponytail: the old one-clip cast stands in for the seals until the per-phase montages are imported (plan Task 8)
-	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Amaterasu.AM_Amaterasu")));
+	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Amaterasu_Seal.AM_Amaterasu_Seal")));
+	ChargeMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Amaterasu_Charge.AM_Amaterasu_Charge")));
+	ReleaseMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Amaterasu_Release.AM_Amaterasu_Release")));
 }
 
 bool UGA_Amaterasu::PrepareJutsu()
