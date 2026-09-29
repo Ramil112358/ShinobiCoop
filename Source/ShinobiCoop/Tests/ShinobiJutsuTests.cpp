@@ -480,6 +480,33 @@ bool FShinobiCastFxPartsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCastFxChargeTest, "ShinobiCoop.Jutsu.CastFxChidoriRingAndRasenganAbovePalm", ShinobiTestFlags)
+bool FShinobiCastFxChargeTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	const UShinobiCastFxComponent* Fx = P->GetCastFx();
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Jutsu2);
+	W.Tick(0.3f);
+	TestFalse(TEXT("No ground ring during the seals"), Fx->IsPartVisible(EShinobiCastPart::ChidoriRing));
+	W.Tick(0.5f);
+	TestTrue(TEXT("Lightning ring on the ground while charging"), Fx->IsPartVisible(EShinobiCastPart::ChidoriRing));
+	ShinobiTest::Release(P, EShinobiAbilityInputID::Jutsu2);
+	W.Tick(0.1f);
+	TestFalse(TEXT("Ring gone at the release"), Fx->IsPartVisible(EShinobiCastPart::ChidoriRing));
+	W.Tick(1.5f);
+
+	ShinobiTest::Set(P, UShinobiAttributeSet::GetChakraAttribute(), 100.f);
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Jutsu3);
+	W.Tick(0.7f);
+	const FVector Hand = P->GetBodyMesh()->GetSocketLocation(P->GetRightHandBone());
+	const float Lift = Fx->GetOrbLocation().Z - Hand.Z;
+	TestTrue(FString::Printf(TEXT("The Rasengan sits above the palm, clear of the hand (%.1f above)"), Lift), Lift > 12.f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChargeTapTest, "ShinobiCoop.Jutsu.ChargeTapFiresUnchargedAfterSeals", ShinobiTestFlags)
 bool FShinobiChargeTapTest::RunTest(const FString& Parameters)
 {

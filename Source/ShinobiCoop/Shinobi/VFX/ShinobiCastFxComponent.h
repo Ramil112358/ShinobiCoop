@@ -19,13 +19,15 @@ enum class EShinobiCastPart : uint8
 	MouthFlame,     // flame at the mouth while a Fireball charges
 	EyeGlow,        // red eyes (Amaterasu)
 	BloodStreaks,   // blood running from the eyes (Amaterasu)
+	ChidoriRing,    // a ring of lightning on the ground while Chidori charges
 };
 
 /**
  * What a jutsu looks like on the caster while it's active (seals, charge and, for the dashes, the run-in):
  * - Fireball: a flame at the mouth while charging, growing with the charge.
- * - Chidori: a crackling white-blue orb in the right hand with lightning arcs that lengthen with the charge.
- * - Rasengan: a blue orb with two spinning shells, growing with the charge.
+ * - Chidori: a crackling blue orb in the right hand with lightning arcs that lengthen with the charge (some reach
+ *   the ground), and a ring of lightning on the ground around the caster while charging.
+ * - Rasengan: a blue orb with two spinning shells, held above the palm and growing with the charge.
  * - Amaterasu: glowing red eyes, with blood running down from them during the seals.
  * Cosmetic only. It follows the State.Casting.* tags each jutsu grants while active (plus State.Casting.Charging),
  * which GAS replicates to every machine; the charge size runs on this machine's clock from when the Charging tag
@@ -46,6 +48,9 @@ public:
 
 	bool IsPartVisible(EShinobiCastPart Part) const;
 
+	/** Centre of the hand orb (world space). */
+	FVector GetOrbLocation() const;
+
 	/** 1 + 0.8 x the charge so far (by this machine's clock since State.Casting.Charging appeared), frozen at the
 	 * release; 1 when not charging. */
 	float GetChargeVisualScale() const;
@@ -60,6 +65,7 @@ private:
 	void Refresh();
 	void UpdateHead(float ChargeScale);
 	void UpdateArcs(float ChargeScale);
+	void UpdateRing(float ChargeScale);
 	UStaticMeshComponent* MakeMesh(const TCHAR* Name, const TCHAR* MeshPath, UMaterialInstanceDynamic* Material, USceneComponent* Parent, FName Socket = NAME_None);
 
 	UPROPERTY()
@@ -76,6 +82,12 @@ private:
 
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMeshComponent>> ArcSegments;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> RingSegments;
+
+	UPROPERTY()
+	TObjectPtr<UPointLightComponent> RingLight;
 
 	UPROPERTY()
 	TObjectPtr<UStaticMeshComponent> MouthFlame;

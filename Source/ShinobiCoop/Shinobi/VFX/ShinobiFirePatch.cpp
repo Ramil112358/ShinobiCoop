@@ -13,9 +13,9 @@
 
 namespace
 {
-	constexpr int32 NumTongues = 12;
-	constexpr float FadeTime = 0.5f;
-	const FVector TongueScale(0.25f, 0.25f, 0.8f); // the engine sphere is 100 units across: a 25 x 80 tongue
+	constexpr int32 PatchTongueCount = 12;
+	constexpr float PatchFadeTime = 0.5f;
+	const FVector PatchTongueScale(0.25f, 0.25f, 0.8f); // the engine sphere is 100 units across: a 25 x 80 tongue
 }
 
 AShinobiFirePatch::AShinobiFirePatch()
@@ -76,7 +76,7 @@ void AShinobiFirePatch::BeginPlay()
 	UMaterialInstanceDynamic* Flame = ShinobiVfx::MakeFlame(this, Color, bBlack ? 3.f : 4.f, bBlack);
 	UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 	FRandomStream Random(GetUniqueID()); // cosmetic: each machine may scatter the tongues differently
-	for (int32 Index = 0; Index < NumTongues; ++Index)
+	for (int32 Index = 0; Index < PatchTongueCount; ++Index)
 	{
 		UStaticMeshComponent* Tongue = NewObject<UStaticMeshComponent>(this);
 		Tongue->SetStaticMesh(Sphere);
@@ -114,12 +114,12 @@ void AShinobiFirePatch::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	Age += DeltaSeconds;
-	// Rise in quickly, flicker, shrink away over the last FadeTime.
-	const float Life = FMath::Min(FMath::Clamp(Age / 0.2f, 0.f, 1.f), FMath::Clamp((Duration - Age) / FadeTime, 0.f, 1.f));
+	// Rise in quickly, flicker, shrink away over the last PatchFadeTime.
+	const float Life = FMath::Min(FMath::Clamp(Age / 0.2f, 0.f, 1.f), FMath::Clamp((Duration - Age) / PatchFadeTime, 0.f, 1.f));
 	for (int32 Index = 0; Index < Tongues.Num(); ++Index)
 	{
 		const float Centre = 1.f - Tongues[Index]->GetRelativeLocation().Size2D() / FMath::Max(GetRadius(), 1.f);
-		const FVector Size = TongueScale * Scale * Life * FVector(1.f, 1.f, FMath::FRandRange(0.75f, 1.25f) * (0.6f + 0.6f * Centre));
+		const FVector Size = PatchTongueScale * Scale * Life * FVector(1.f, 1.f, FMath::FRandRange(0.75f, 1.25f) * (0.6f + 0.6f * Centre));
 		Tongues[Index]->SetRelativeScale3D(Size);
 		// The engine sphere sits on its centre: lift each tongue by half its height so it stands on the ground.
 		Tongues[Index]->SetRelativeLocation(FVector(Tongues[Index]->GetRelativeLocation().X, Tongues[Index]->GetRelativeLocation().Y, Size.Z * 50.f));

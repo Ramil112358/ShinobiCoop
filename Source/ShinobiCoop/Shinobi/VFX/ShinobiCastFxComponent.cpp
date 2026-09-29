@@ -5,6 +5,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "GameFramework/Character.h"
 #include "AnimationRuntime.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Shinobi/Abilities/ShinobiJutsuAbility.h"
@@ -29,7 +30,7 @@ namespace
 	{
 		static const TArray<FCastLook> Table = {
 			{ ShinobiTags::State_Casting_Fireball, PartBit(EShinobiCastPart::MouthFlame), ShinobiVfx::Colors::Fire, 0.f },
-			{ ShinobiTags::State_Casting_Chidori, PartBit(EShinobiCastPart::HandOrb) | PartBit(EShinobiCastPart::LightningArcs), ShinobiVfx::Colors::Lightning, 0.2f },
+			{ ShinobiTags::State_Casting_Chidori, PartBit(EShinobiCastPart::HandOrb) | PartBit(EShinobiCastPart::LightningArcs) | PartBit(EShinobiCastPart::ChidoriRing), ShinobiVfx::Colors::Lightning, 0.2f },
 			{ ShinobiTags::State_Casting_Rasengan, PartBit(EShinobiCastPart::HandOrb) | PartBit(EShinobiCastPart::RasenganShells), ShinobiVfx::Colors::Chakra, 0.25f },
 			{ ShinobiTags::State_Casting_Amaterasu, PartBit(EShinobiCastPart::EyeGlow) | PartBit(EShinobiCastPart::BloodStreaks), ShinobiVfx::Colors::BlackFlame, 0.f },
 		};
@@ -39,10 +40,12 @@ namespace
 	const FLinearColor EyeRed(1.f, 0.02f, 0.02f);
 	constexpr float OrbIntensity = 6.f;
 	constexpr float OrbLightIntensity = 800.f;
-	constexpr int32 NumArcs = 8;
+	constexpr int32 NumArcs = 12;
 	constexpr int32 SegmentsPerArc = 3;
 	constexpr float ArcShuffleInterval = 0.05f;
 	constexpr float StreakGrowTime = 0.4f; // blood runs down over the seals
+	constexpr int32 RingSegmentCount = 28;
+	constexpr float RingRadius = 95.f; // uncharged; grows with the charge
 
 	// Face offsets from the head bone, in the actor's frame (forward, right, up), per body. The eye offset is the
 	// left eye; the right mirrors it.
@@ -78,8 +81,14 @@ bool UShinobiCastFxComponent::IsPartVisible(EShinobiCastPart Part) const
 	case EShinobiCastPart::MouthFlame:     Piece = MouthFlame; break;
 	case EShinobiCastPart::EyeGlow:        Piece = Eyes.Num() ? Eyes[0] : nullptr; break;
 	case EShinobiCastPart::BloodStreaks:   Piece = Streaks.Num() ? Streaks[0] : nullptr; break;
+	case EShinobiCastPart::ChidoriRing:    Piece = RingSegments.Num() ? RingSegments[0] : nullptr; break;
 	}
 	return Piece && Piece->IsVisible();
+}
+
+FVector UShinobiCastFxComponent::GetOrbLocation() const
+{
+	return Orb ? Orb->GetComponentLocation() : GetComponentLocation();
 }
 
 float UShinobiCastFxComponent::GetChargeVisualScale() const
@@ -142,11 +151,27 @@ void UShinobiCastFxComponent::BeginPlay()
 		Mesh->SetUsingAbsoluteScale(true);
 		return Mesh;
 	};
-	UMaterialInstanceDynamic* ArcMaterial = ShinobiVfx::MakeGlow(this, ShinobiVfx::Colors::Lightning, 12.f, 1.f);
+	UMaterialInstanceDynamic* ArcMaterial = ShinobiVfx::MakeGlow(this, ShinobiVfx::Colors::Lightning, 20.f, 1.f);
 	for (int32 Index = 0; Index < NumArcs * SegmentsPerArc; ++Index)
 	{
 		ArcSegments.Add(Free(MakeMesh(TEXT("CastArc"), TEXT("/Engine/BasicShapes/Cylinder.Cylinder"), ArcMaterial, this)));
 	}
+
+	// Chidori's ground ring: short glowing segments laid round the feet, re-jittered every frame.
+	UMaterialInstanceDynamic* RingMaterial = ShinobiVfx::MakeGlow(this, ShinobiVfx::Colors::Lightning, 14.f, 1.f);
+	for (int32 Index = 0; Index < RingSegmentCount; ++Index)
+	{
+		RingSegments.Add(Free(MakeMesh(TEXT("CastRing"), TEXT("/Engine/BasicShapes/Cylinder.Cylinder"), RingMaterial, this)));
+	}
+	RingLight = NewObject<UPointLightComponent>(GetOwner(), MakeUniqueObjectName(GetOwner(), UPointLightComponent::StaticClass(), TEXT("CastRingLight")));
+	RingLight->SetupAttachment(this);
+	RingLight->SetUsingAbsoluteLocation(true);
+	RingLight->SetLightColor(ShinobiVfx::Colors::Lightning);
+	RingLight->SetAttenuationRadius(350.f);
+	RingLight->SetCastShadows(false);
+	RingLight->SetSpecularScale(0.f);
+	RingLight->SetVisibility(false);
+	RingLight->RegisterComponent();
 
 	MouthFlame = Free(MakeMesh(TEXT("CastMouthFlame"), SphereMesh, ShinobiVfx::MakeFlame(this, ShinobiVfx::Colors::Fire, 4.f), this));
 	MouthLight = NewObject<UPointLightComponent>(GetOwner(), MakeUniqueObjectName(GetOwner(), UPointLightComponent::StaticClass(), TEXT("CastMouthLight")));
@@ -203,7 +228,8 @@ void UShinobiCastFxComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	};
 	Destroy(Light);
 	Destroy(MouthLight);
-	for (const TArray<TObjectPtr<UStaticMeshComponent>>* Group : { &Shells, &ArcSegments, &Eyes, &Streaks })
+	Destroy(RingLight);
+	for (const TArray<TObjectPtr<UStaticMeshComponent>>* Group : { &Shells, &ArcSegments, &RingSegments, &Eyes, &Streaks })
 	{
 		for (UStaticMeshComponent* Piece : *Group)
 		{
@@ -212,10 +238,11 @@ void UShinobiCastFxComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 	Destroy(Orb); // after the shells and the light attached to it
 	Destroy(MouthFlame);
-	Light = MouthLight = nullptr;
+	Light = MouthLight = RingLight = nullptr;
 	Orb = MouthFlame = nullptr;
 	Shells.Reset();
 	ArcSegments.Reset();
+	RingSegments.Reset();
 	Eyes.Reset();
 	Streaks.Reset();
 	OrbMaterial = nullptr;
@@ -278,6 +305,12 @@ void UShinobiCastFxComponent::Refresh()
 		Segment->SetVisibility(Has(EShinobiCastPart::LightningArcs));
 	}
 	const bool bMouth = Has(EShinobiCastPart::MouthFlame) && bCharging; // the breath burst takes over at the release
+	const bool bRing = Has(EShinobiCastPart::ChidoriRing) && bCharging;
+	for (UStaticMeshComponent* Segment : RingSegments)
+	{
+		Segment->SetVisibility(bRing);
+	}
+	RingLight->SetVisibility(bRing);
 	MouthFlame->SetVisibility(bMouth);
 	MouthLight->SetVisibility(bMouth);
 	for (UStaticMeshComponent* Eye : Eyes)
@@ -330,9 +363,17 @@ void UShinobiCastFxComponent::TickComponent(float DeltaTime, ELevelTick TickType
 		Orb->SetRelativeScale3D(FVector(Look.OrbScale * ChargeScale * Pulse));
 		if (OrbMaterial)
 		{
-			OrbMaterial->SetScalarParameterValue(TEXT("Intensity"), OrbIntensity * (bLightning ? 1.f : 1.5f) * Pulse);
+			OrbMaterial->SetScalarParameterValue(TEXT("Intensity"), OrbIntensity * (bLightning ? 1.8f : 1.5f) * Pulse);
 		}
-		Light->SetIntensity(OrbLightIntensity * ChargeScale * (bLightning ? FMath::FRandRange(0.6f, 1.5f) : Pulse));
+		Light->SetIntensity(OrbLightIntensity * ChargeScale * (bLightning ? FMath::FRandRange(1.2f, 3.f) : Pulse));
+		if (!bLightning)
+		{
+			// The Rasengan is held above the palm, clear of the hand, rather than around it.
+			const USceneComponent* Hand = Orb->GetAttachParent();
+			const FVector Palm = Hand ? Hand->GetSocketLocation(Orb->GetAttachSocketName()) : Orb->GetComponentLocation();
+			const float Radius = 50.f * Orb->GetComponentScale().X;
+			Orb->SetWorldLocation(Palm + FVector(0.f, 0.f, Radius + 6.f));
+		}
 	}
 	if (Shells.Num() == 2 && Shells[0]->IsVisible())
 	{
@@ -342,6 +383,10 @@ void UShinobiCastFxComponent::TickComponent(float DeltaTime, ELevelTick TickType
 	if (ArcSegments.Num() && ArcSegments[0]->IsVisible())
 	{
 		UpdateArcs(ChargeScale);
+	}
+	if (RingSegments.Num() && RingSegments[0]->IsVisible())
+	{
+		UpdateRing(ChargeScale);
 	}
 	UpdateHead(ChargeScale);
 }
@@ -358,9 +403,11 @@ void UShinobiCastFxComponent::UpdateArcs(float ChargeScale)
 	const FVector Origin = Orb->GetComponentLocation();
 	for (int32 Arc = 0; Arc < NumArcs; ++Arc)
 	{
-		FVector Direction = FMath::VRand();
+		// Every third arc is long and forks down towards the ground.
+		const bool bGrounding = Arc % 3 == 0;
+		FVector Direction = bGrounding ? (FMath::VRand() + FVector(0.f, 0.f, -1.5f)).GetSafeNormal() : FMath::VRand();
 		FVector Start = Origin;
-		const float SegmentLength = FMath::FRandRange(35.f, 60.f) * ChargeScale / SegmentsPerArc;
+		const float SegmentLength = FMath::FRandRange(35.f, 60.f) * (bGrounding ? 2.f : 1.f) * ChargeScale / SegmentsPerArc;
 		for (int32 Segment = 0; Segment < SegmentsPerArc; ++Segment)
 		{
 			Direction = (Direction + FMath::VRand() * 0.6f).GetSafeNormal();
@@ -372,6 +419,27 @@ void UShinobiCastFxComponent::UpdateArcs(float ChargeScale)
 			Start = End;
 		}
 	}
+}
+
+void UShinobiCastFxComponent::UpdateRing(float ChargeScale)
+{
+	// A crackling ring of lightning on the ground round the caster, turning slowly and widening with the charge.
+	const ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+	const float HalfHeight = OwnerCharacter ? OwnerCharacter->GetSimpleCollisionHalfHeight() : 90.f;
+	const FVector Centre = GetOwner()->GetActorLocation() - FVector(0.f, 0.f, HalfHeight - 3.f);
+	const float Radius = RingRadius * (0.8f + 0.25f * ChargeScale);
+	const float Step = 2.f * PI / RingSegmentCount;
+	for (int32 Index = 0; Index < RingSegmentCount; ++Index)
+	{
+		const float Angle = Index * Step + Age * 1.5f;
+		const FVector From = Centre + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * Radius * FMath::FRandRange(0.94f, 1.06f) + FVector(0.f, 0.f, FMath::FRandRange(0.f, 6.f));
+		const FVector To = Centre + FVector(FMath::Cos(Angle + Step), FMath::Sin(Angle + Step), 0.f) * Radius * FMath::FRandRange(0.94f, 1.06f) + FVector(0.f, 0.f, FMath::FRandRange(0.f, 6.f));
+		UStaticMeshComponent* Piece = RingSegments[Index];
+		Piece->SetWorldLocationAndRotation((From + To) * 0.5f, FRotationMatrix::MakeFromZ(To - From).Rotator());
+		Piece->SetWorldScale3D(FVector(FMath::FRandRange(0.02f, 0.045f), FMath::FRandRange(0.02f, 0.045f), (To - From).Size() / 100.f));
+	}
+	RingLight->SetWorldLocation(Centre + FVector(0.f, 0.f, 20.f));
+	RingLight->SetIntensity(3000.f * ChargeScale * FMath::FRandRange(0.6f, 1.4f));
 }
 
 void UShinobiCastFxComponent::UpdateHead(float ChargeScale)
