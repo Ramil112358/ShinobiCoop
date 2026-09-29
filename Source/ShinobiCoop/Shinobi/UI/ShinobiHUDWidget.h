@@ -8,15 +8,18 @@ class UAbilitySystemComponent;
 class UBorder;
 class UCanvasPanel;
 class UGameplayAbility;
+class UImage;
 class UOverlay;
 class UProgressBar;
+class UShinobiJutsuAbility;
 class USizeBox;
 class UTextBlock;
 class UVerticalBox;
 struct FGameplayTagContainer;
 
 /**
- * Health / chakra / stamina bars, Substitution pips and the four jutsu slots; the arena's wave line, teammates,
+ * Bottom-left unit frame (portrait, name, health / chakra / stamina bars, Substitution pips) and the four jutsu
+ * slots (painted icon, key, chakra cost, name); the arena's wave line, teammates,
  * banners (downed, dead, wipe, victory), revive progress and lock-on. Built in code; polled each tick.
  */
 UCLASS()
@@ -33,9 +36,13 @@ protected:
 	virtual void NativeDestruct() override;
 
 private:
-	UProgressBar* AddBar(UVerticalBox* Box, FName Name, const FLinearColor& Color, float Height);
+	void BuildUnitFrame(UCanvasPanel* Root);
+	/** A fixed-size row in Bars for one bar and its overlays (the trail, the numbers). */
+	UOverlay* AddBarRow(UVerticalBox* Bars, float Width, float Height);
+	UProgressBar* AddBar(UOverlay* Row, FName Name, const FLinearColor& Color, bool bBacked);
 	void BuildSubstitutionPips(UVerticalBox* Bars);
 	void BuildJutsuSlots(UCanvasPanel* Root);
+	UTextBlock* MakeText(int32 FontSize, const FLinearColor& Tint, bool bBold = false);
 	UTextBlock* AddLabel(UOverlay* Layers, int32 FontSize, EHorizontalAlignment HorizontalAlign, EVerticalAlignment VerticalAlign, const FLinearColor& Tint);
 	void UpdateJutsuSlots(const UAbilitySystemComponent& ASC);
 	UTextBlock* AddCanvasText(UCanvasPanel* Root, FName Name, const FAnchors& Anchors, const FVector2D& Alignment, const FVector2D& Position, int32 FontSize, ETextJustify::Type Justify);
@@ -75,7 +82,20 @@ private:
 	TObjectPtr<UTextBlock> HintText;
 
 	UPROPERTY()
+	TObjectPtr<UTextBlock> NameText;
+
+	UPROPERTY()
 	TObjectPtr<UProgressBar> HealthBar;
+
+	/** Behind the health bar: holds the pre-damage level for a moment, then drains down to the health. */
+	UPROPERTY()
+	TObjectPtr<UProgressBar> HealthTrailBar;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> HealthText;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> ChakraText;
 
 	UPROPERTY()
 	TObjectPtr<UProgressBar> ChakraBar;
@@ -90,7 +110,18 @@ private:
 	TArray<TObjectPtr<UBorder>> SlotFrames;
 
 	UPROPERTY()
-	TArray<TObjectPtr<UTextBlock>> SlotGlyphs;
+	TArray<TObjectPtr<UImage>> SlotIcons;
+
+	/** The jutsu's name inside the slot while its icon texture is missing. */
+	UPROPERTY()
+	TArray<TObjectPtr<UTextBlock>> SlotFallbacks;
+
+	/** Under each slot. */
+	UPROPERTY()
+	TArray<TObjectPtr<UTextBlock>> SlotNames;
+
+	/** The jutsu each slot shows; its icon, name and cost are set when it changes. */
+	TArray<TWeakObjectPtr<const UShinobiJutsuAbility>> SlotJutsu;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UTextBlock>> SlotCosts;
@@ -101,6 +132,10 @@ private:
 	/** Dark overlay whose height is the remaining share of the cooldown. */
 	UPROPERTY()
 	TArray<TObjectPtr<USizeBox>> SlotShades;
+
+	float HealthTrail = 1.f;
+	float LastHealthRatio = 1.f;
+	double TrailHoldUntil = 0.0;
 
 	/** World time until which each slot shows the red flash. */
 	TArray<double> SlotFlashUntil;

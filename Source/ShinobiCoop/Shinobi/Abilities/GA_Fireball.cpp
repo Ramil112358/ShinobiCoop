@@ -12,7 +12,7 @@ UGA_Fireball::UGA_Fireball()
 {
 	InputID = EShinobiAbilityInputID::Jutsu1;
 	DisplayName = INVTEXT("Fireball");
-	Glyph = INVTEXT("火"); // fire
+	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_Fireball.T_Jutsu_Fireball")));
 	ChakraCost = 20.f;
 	Cooldown = 4.f;
 	WindUp = 0.6f;

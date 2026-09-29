@@ -8,6 +8,7 @@ class UAbilitySystemComponent;
 class UAbilityTask;
 class UAbilityTask_WaitGameplayEvent;
 class UAnimMontage;
+class UTexture2D;
 
 /** What the HUD shows for one jutsu slot. */
 struct FShinobiJutsuSlotState
@@ -44,9 +45,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
 	FText DisplayName;
 
-	/** Kanji shown on the HUD slot. */
+	/** Painted icon on the HUD slot (Scripts/setup_hud.py imports it); the slot shows DisplayName while it's missing. */
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
-	FText Glyph;
+	TSoftObjectPtr<UTexture2D> Icon;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
 	float ChakraCost = 0.f;

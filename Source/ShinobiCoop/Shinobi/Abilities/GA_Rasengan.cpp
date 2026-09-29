@@ -10,7 +10,7 @@ UGA_Rasengan::UGA_Rasengan()
 {
 	InputID = EShinobiAbilityInputID::Jutsu3;
 	DisplayName = INVTEXT("Rasengan");
-	Glyph = INVTEXT("螺"); // spiral
+	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_Rasengan.T_Jutsu_Rasengan")));
 	ChakraCost = 35.f;
 	Cooldown = 10.f;
 	WindUp = 0.4f;
