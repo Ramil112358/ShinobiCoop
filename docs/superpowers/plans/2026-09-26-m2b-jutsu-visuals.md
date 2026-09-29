@@ -37,4 +37,6 @@ Mixamo has no Naruto hand seals or jutsu-specific moves, so each jutsu uses one 
 - **Playback.** `UShinobiJutsuAbility::CastMontage` plays from activation. It is sped up (capped at 1–2.5×) so that `CastReleaseFraction` (0.45) of the clip lands at the end of the wind-up. The follow-through keeps playing after the jutsu fires; a staggering interrupt stops it.
 - **Checked:** by the `-ShinobiJutsuShot` screenshots. 42/42 tests and the smoke test pass.
 
+**Superseded (2026-09-29):** the jutsu now use Blender-scripted seal/charge/release clips, see `2026-09-28-jutsu-cinematics.md`.
+
 **Real hand seals (optional later):** video-to-mocap with finger tracking (e.g. DeepMotion Animate 3D, Rokoko Vision or Move.ai) from a hand-seal reference video, retargeted the same way. Or key 3–5 seal poses on Manny's finger bones in Blender. Or a paid ninja/hand-seal pack from Fab.

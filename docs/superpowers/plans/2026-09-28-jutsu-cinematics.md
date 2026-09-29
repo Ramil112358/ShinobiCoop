@@ -460,3 +460,18 @@ TestFalse(IsBurning()); TestEqual(NumVisibleTongues(), 0); TestFalse(E->GetBlack
 - [ ] **Step 5: Commit.** Run `git commit -m "Jutsu cinematics: shot run, tuning, notes"`.
 
 - [ ] **Step 6: USER CHECKPOINT.** Show the user the final screenshots and ask them to play it: tap and hold each jutsu, and in co-op if possible (partners should see the charge and phases).
+
+## Done notes (2026-09-29)
+
+- **Blender export:** armature only, `add_leaf_bones=False`, `armature_nodetype="NULL"`, default axes and scale; every bone lands within 5 mm of the source after a round trip. Blender's importer shifts animation by one frame, so actions start at frame 0.
+- **Animation, second pass (user feedback: "more like Naruto / AAA games"):** leg IK with planted feet, a lowered and twisting pelvis, per-phase stances (ready, braced, crouch, run-in and lunge), per-key easing (seals snap and hold, strikes overshoot), and a wind-up before every release. Stances are kept moderate because the hero's proportions exaggerate the pelvis drop.
+- **Tuned in game** (`-ShinobiJutsuShot`, 1280x720):
+  - hero face offsets from the head bone: mouth (12, 0, 4), eyes (12, ±3, 10.5), in the actor frame, turned with the head bone;
+  - eye glow 3 units at intensity 8; blood streaks 1.2 × 9 units;
+  - Chidori: 8 arcs, 35–60 units, 2.5 thick;
+  - black-flame tongues 18 × 65, Erode 0.2;
+  - flame noise 0.06 per unit;
+  - lightning burst base size 1.8.
+  - The Manny offsets are untested: the player is always the hero.
+- **Shot harness:** face shots come from a spawned camera actor, and the aim is restored before each cast. Turning the player's own camera also turns the aim, and the server sees it late.
+- **Checks:** 78/78 tests pass; the smoke test passes.

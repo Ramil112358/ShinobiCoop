@@ -5,6 +5,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "AnimationRuntime.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Shinobi/Abilities/ShinobiJutsuAbility.h"
 #include "Shinobi/ShinobiCharacterBase.h"
@@ -38,7 +39,7 @@ namespace
 	const FLinearColor EyeRed(1.f, 0.02f, 0.02f);
 	constexpr float OrbIntensity = 6.f;
 	constexpr float OrbLightIntensity = 800.f;
-	constexpr int32 NumArcs = 6;
+	constexpr int32 NumArcs = 8;
 	constexpr int32 SegmentsPerArc = 3;
 	constexpr float ArcShuffleInterval = 0.05f;
 	constexpr float StreakGrowTime = 0.4f; // blood runs down over the seals
@@ -52,7 +53,7 @@ namespace
 		FVector Eye;
 	};
 	const FFaceOffsets MannyFace = { FVector(14.f, 0.f, 2.f), FVector(10.f, -3.5f, 7.f) };
-	const FFaceOffsets HeroFace = { FVector(12.f, 0.f, 4.f), FVector(9.f, -3.2f, 9.f) };
+	const FFaceOffsets HeroFace = { FVector(12.f, 0.f, 4.f), FVector(12.f, -3.f, 10.5f) }; // eyes in front of the glasses
 }
 
 UShinobiCastFxComponent::UShinobiCastFxComponent()
@@ -157,7 +158,7 @@ void UShinobiCastFxComponent::BeginPlay()
 	MouthLight->SetVisibility(false);
 	MouthLight->RegisterComponent();
 
-	UMaterialInstanceDynamic* EyeMaterial = ShinobiVfx::MakeGlow(this, EyeRed, 10.f, 1.f);
+	UMaterialInstanceDynamic* EyeMaterial = ShinobiVfx::MakeGlow(this, EyeRed, 8.f, 1.f);
 	UMaterialInstanceDynamic* BloodMaterial = ShinobiVfx::MakeStreak(this, ShinobiVfx::Colors::Blood);
 	for (int32 Side = 0; Side < 2; ++Side)
 	{
@@ -359,7 +360,7 @@ void UShinobiCastFxComponent::UpdateArcs(float ChargeScale)
 	{
 		FVector Direction = FMath::VRand();
 		FVector Start = Origin;
-		const float SegmentLength = FMath::FRandRange(25.f, 45.f) * ChargeScale / SegmentsPerArc;
+		const float SegmentLength = FMath::FRandRange(35.f, 60.f) * ChargeScale / SegmentsPerArc;
 		for (int32 Segment = 0; Segment < SegmentsPerArc; ++Segment)
 		{
 			Direction = (Direction + FMath::VRand() * 0.6f).GetSafeNormal();
@@ -367,7 +368,7 @@ void UShinobiCastFxComponent::UpdateArcs(float ChargeScale)
 			UStaticMeshComponent* Piece = ArcSegments[Arc * SegmentsPerArc + Segment];
 			// The engine cylinder is 100 units tall along Z, around its centre.
 			Piece->SetWorldLocationAndRotation((Start + End) * 0.5f, FRotationMatrix::MakeFromZ(Direction).Rotator());
-			Piece->SetWorldScale3D(FVector(0.012f, 0.012f, SegmentLength / 100.f));
+			Piece->SetWorldScale3D(FVector(0.025f, 0.025f, SegmentLength / 100.f));
 			Start = End;
 		}
 	}
@@ -384,11 +385,22 @@ void UShinobiCastFxComponent::UpdateHead(float ChargeScale)
 	}
 	const USkeletalMeshComponent* Body = OwnerCharacter->GetBodyMesh();
 	const FFaceOffsets& Face = Body == OwnerCharacter->GetMesh() ? MannyFace : HeroFace;
-	const FVector Head = Body->GetSocketLocation(OwnerCharacter->GetHeadBone());
-	const FRotator Facing = OwnerCharacter->GetActorRotation();
-	const FVector Forward = Facing.Vector();
-	const FVector Right = FRotationMatrix(Facing).GetScaledAxis(EAxis::Y);
-	auto At = [&](const FVector& Offset) { return Head + Forward * Offset.X + Right * Offset.Y + FVector::UpVector * Offset.Z; };
+	const FName HeadBone = OwnerCharacter->GetHeadBone();
+	const FVector Head = Body->GetSocketLocation(HeadBone);
+	// The offsets are measured with the head upright and facing the actor's way; turn them with the head, by how far
+	// the head bone has rotated from its reference pose, so the eyes stay on the face when it bows or turns.
+	FQuat HeadTurn = FQuat::Identity;
+	const int32 HeadIndex = Body->GetBoneIndex(HeadBone);
+	if (HeadIndex != INDEX_NONE && Body->GetSkinnedAsset())
+	{
+		const FQuat Reference = FAnimationRuntime::GetComponentSpaceTransformRefPose(Body->GetSkinnedAsset()->GetRefSkeleton(), HeadIndex).GetRotation();
+		const FQuat Current = Body->GetSocketTransform(HeadBone, RTS_Component).GetRotation();
+		const FQuat ToWorld = Body->GetComponentQuat();
+		HeadTurn = ToWorld * (Current * Reference.Inverse()) * ToWorld.Inverse();
+	}
+	const FQuat FacingQuat = HeadTurn * OwnerCharacter->GetActorQuat();
+	const FRotator Facing = FacingQuat.Rotator();
+	auto At = [&](const FVector& Offset) { return Head + FacingQuat.RotateVector(Offset); };
 
 	if (bMouth)
 	{
@@ -403,11 +415,12 @@ void UShinobiCastFxComponent::UpdateHead(float ChargeScale)
 		for (int32 Side = 0; Side < 2; ++Side)
 		{
 			const FVector Eye = At(FVector(Face.Eye.X, Side == 0 ? Face.Eye.Y : -Face.Eye.Y, Face.Eye.Z));
+			const FVector Down = -FacingQuat.GetUpVector();
 			Eyes[Side]->SetWorldLocation(Eye);
-			Eyes[Side]->SetWorldScale3D(FVector(0.025f));
+			Eyes[Side]->SetWorldScale3D(FVector(0.03f));
 			// The engine cube is 100 units around its centre: hang it from just under the eye as it grows.
-			const float Length = FMath::Max(7.f * Grown, 0.1f);
-			Streaks[Side]->SetWorldLocationAndRotation(Eye - FVector(0.f, 0.f, 1.5f + Length * 0.5f), Facing);
+			const float Length = FMath::Max(9.f * Grown, 0.1f);
+			Streaks[Side]->SetWorldLocationAndRotation(Eye + Down * (1.5f + Length * 0.5f), Facing);
 			Streaks[Side]->SetWorldScale3D(FVector(0.012f, 0.012f, Length / 100.f));
 		}
 	}

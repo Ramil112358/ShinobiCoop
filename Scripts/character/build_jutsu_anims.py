@@ -78,12 +78,13 @@ ELBOW_R, ELBOW_L = (-1, -0.6, 0.1), (1, -0.6, 0.1)  # elbows out and down, as wh
 
 # Stances. Right-handed: the right foot drops back for the ready stance and steps forward to strike.
 IDLE = {"hips": (2, 0, 0), "feet": {"R": (-11, 0, -8), "L": (11, 0, 8)}}
-READY = {"hips": (8, -12, 0), "feet": {"R": (-17, -9, -22), "L": (15, 10, 8)}}
-BRACE = {"hips": (12, -16, 0), "feet": {"R": (-21, -17, -28), "L": (18, 15, 5)}}
-CROUCH = {"hips": (20, -22, 10), "feet": {"R": (-25, -13, -28), "L": (21, 19, 8)}}
-LUNGE = {"hips": (17, 16, 12), "feet": {"R": (-19, 40, 5), "L": (21, -36, 20)}}
-RUN_A = {"hips": (9, 10, 14), "feet": {"R": (-14, 30, 0), "L": (14, -24, 10)}}
-RUN_B = {"hips": (7, -10, 14), "feet": {"R": (-14, -24, -10), "L": (14, 30, 0)}}
+# Kept moderate: on the hero's proportions a deeper Mixamo pelvis drop reads as a sumo squat.
+READY = {"hips": (4, -12, 0), "feet": {"R": (-13, -8, -20), "L": (12, 9, 8)}}
+BRACE = {"hips": (7, -16, 0), "feet": {"R": (-15, -15, -25), "L": (13, 13, 5)}}
+CROUCH = {"hips": (12, -20, 10), "feet": {"R": (-17, -12, -25), "L": (15, 16, 8)}}
+LUNGE = {"hips": (11, 16, 12), "feet": {"R": (-14, 36, 5), "L": (15, -32, 20)}}
+RUN_A = {"hips": (6, 10, 14), "feet": {"R": (-12, 28, 0), "L": (12, -22, 10)}}
+RUN_B = {"hips": (5, -10, 14), "feet": {"R": (-12, -22, -10), "L": (12, 28, 0)}}
 
 ARMS_DOWN = {
     "R": arm((-21, 93, 3), (0, 0, -1), DOWN, LEFT, (15, 15, 20, 25, 30)),
@@ -128,8 +129,8 @@ def seal(name, *body):
 # (as Sasuke does), which keeps the mouth clear for the fire.
 INHALE = merge(BRACE, {"spine": (-8, 9), "neck": (-7, 2), "head": (-10, 3)})
 INHALE_DEEP = merge(INHALE, {"spine": (-10, 9), "head": (-13, 3)})
-BLOW = seal("Tiger", BRACE, {"hips": (13, -16, 8), "spine": (7, 9), "neck": (10, 2), "head": (-24, 3)})  # neck thrust, face level (spine pitch is per bone, x3)
-BLOW_RECOIL = seal("Tiger", BRACE, {"hips": (12, -16, 3), "spine": (4, 9), "neck": (5, 2), "head": (-12, 3)})
+BLOW = seal("Tiger", BRACE, {"hips": (8, -16, 8), "spine": (7, 9), "neck": (10, 2), "head": (-24, 3)})  # neck thrust, face level (spine pitch is per bone, x3)
+BLOW_RECOIL = seal("Tiger", BRACE, {"hips": (7, -16, 3), "spine": (4, 9), "neck": (5, 2), "head": (-12, 3)})
 
 # Chidori: crouched low, right hand down and forward in a claw, the left hand gripping the right wrist.
 CHIDORI_HOLD = merge(NEUTRAL, CROUCH, {
@@ -137,7 +138,7 @@ CHIDORI_HOLD = merge(NEUTRAL, CROUCH, {
     "R": arm((-26, 84, 38), (-0.6, 0, -1), (-0.2, -0.3, 1), DOWN, CLAW),
     "L": arm((-18, 90, 33), ELBOW_L, (-1, -0.2, 0.2), BACK, (40, 60, 60, 60, 60)),
 })
-CHIDORI_DEEP = merge(CHIDORI_HOLD, {"hips": (26, -24, 14), "spine": (13, 14)})
+CHIDORI_DEEP = merge(CHIDORI_HOLD, {"hips": (16, -22, 14), "spine": (13, 14)})
 # Rasengan: right palm up in front of the belly, the left hand shaping the ball above it.
 RASENGAN_HOLD = merge(NEUTRAL, READY, {
     "spine": (6, 4), "neck": (-2, 3), "head": (-4, 3),

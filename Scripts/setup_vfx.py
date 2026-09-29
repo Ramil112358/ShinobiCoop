@@ -205,7 +205,7 @@ def build_flame(name, dark):
     moved = node(m, unreal.MaterialExpressionSubtract, -900, 300)
     link(world_pos, moved, "A")
     link(offset, moved, "B")
-    scaled = node(m, unreal.MaterialExpressionMultiply, -750, 300, const_b=0.025)
+    scaled = node(m, unreal.MaterialExpressionMultiply, -750, 300, const_b=0.06)
     link(moved, scaled, "A")
     noise = node(m, unreal.MaterialExpressionNoise, -600, 300, scale=1.0, levels=3, output_min=0.0, output_max=1.0)
     link(scaled, noise, "World Position")

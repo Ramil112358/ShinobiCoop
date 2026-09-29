@@ -1,4 +1,6 @@
 #include "Shinobi/ShinobiPlayerController.h"
+#include "Camera/CameraActor.h"
+#include "Camera/CameraComponent.h"
 #include "RHI.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "AbilitySystemComponent.h"
@@ -126,6 +128,25 @@ void AShinobiPlayerController::ShinobiCast(int32 JutsuSlot)
 	const int32 Input = static_cast<int32>(EShinobiAbilityInputID::Jutsu1) + JutsuSlot - 1;
 	Shinobi->GetAbilitySystemComponent()->AbilityLocalInputPressed(Input);
 	Shinobi->GetAbilitySystemComponent()->AbilityLocalInputReleased(Input);
+}
+
+void AShinobiPlayerController::ShinobiCastHold(int32 JutsuSlot, float Seconds)
+{
+	AShinobiCharacterBase* Shinobi = GetPawn<AShinobiCharacterBase>();
+	if (!Shinobi || JutsuSlot < 1 || JutsuSlot > 4)
+	{
+		return;
+	}
+	const int32 Input = static_cast<int32>(EShinobiAbilityInputID::Jutsu1) + JutsuSlot - 1;
+	Shinobi->GetAbilitySystemComponent()->AbilityLocalInputPressed(Input);
+	FTimerHandle Handle;
+	GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, [this, Input]()
+	{
+		if (const AShinobiCharacterBase* Held = GetPawn<AShinobiCharacterBase>())
+		{
+			Held->GetAbilitySystemComponent()->AbilityLocalInputReleased(Input);
+		}
+	}), FMath::Max(Seconds, 0.01f), false);
 }
 
 void AShinobiPlayerController::ApplyToOwnPawn(TSubclassOf<UGameplayEffect> EffectClass, const FGameplayTag& DataTag, float Magnitude)
@@ -372,25 +393,56 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	{
 		FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Name), false, false);
 	};
-	auto CastJutsu = [this](int32 JutsuSlot)
+	// Each cast is held: the seals, then HoldSeconds minus the seals of charge, then the release.
+	auto CastJutsu = [this](int32 JutsuSlot, float HoldSeconds)
 	{
 		ShinobiDrainChakra(-100.f); // refill first, so every jutsu in the sequence is affordable
-		ShinobiCast(JutsuSlot);
+		ShinobiCastHold(JutsuSlot, HoldSeconds);
 	};
-	At(2.f, [this]() { SetControlRotation(FRotator(-8.f, GetControlRotation().Yaw, 0.f)); }); // the dummies stand lower
-	At(3.f, [CastJutsu]() { CastJutsu(1); }); // Fireball
-	At(3.25f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_01_FireballWindUp")); });
-	At(3.55f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_03_FireballImpact")); });
-	At(4.6f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_04_Burn")); });
-	At(5.f, [CastJutsu]() { CastJutsu(4); }); // Amaterasu
-	At(6.f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_05_BlackFlame")); });
-	At(6.5f, [CastJutsu]() { CastJutsu(2); }); // Chidori
-	At(6.9f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_06_ChidoriWindUp")); });
-	At(7.35f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_07_ChidoriHit")); });
-	At(9.f, [CastJutsu]() { CastJutsu(3); }); // Rasengan; the black flame is still burning, so Firestorm goes off
-	At(9.5f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_08_RasenganWindUp")); });
-	At(9.95f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_09_Firestorm")); });
-	At(10.5f, [this]()
+	// The aim at the dummies, set once and restored well before each later cast (the server sees the client's camera
+	// with some lag, so a restore right at the cast can miss): the dashes and the face shots can leave it turned.
+	TSharedRef<FRotator> Aim = MakeShared<FRotator>();
+	At(2.f, [this, Aim]() { *Aim = FRotator(-8.f, GetControlRotation().Yaw, 0.f); SetControlRotation(*Aim); }); // the dummies stand lower
+	auto RestoreAim = [this, Aim]() { SetControlRotation(*Aim); };
+	At(5.7f, RestoreAim);
+	At(8.7f, RestoreAim);
+	At(12.7f, RestoreAim);
+	At(3.f, [CastJutsu]() { CastJutsu(1, 2.1f); }); // Fireball: 0.6 s seals, 1.5 s charge, released at 5.1
+	At(3.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_01_FireballSeal")); });
+	// Face shots come from a separate camera in front of the character: turning the player's own camera would also
+	// turn the aim, which reaches the server late and throws off the next jutsu.
+	auto FaceCamera = [this](float FieldOfView)
+	{
+		const APawn* Shinobi = GetPawn();
+		if (!Shinobi)
+		{
+			return;
+		}
+		const FVector Head = Shinobi->GetActorLocation() + FVector(0.f, 0.f, 70.f); // the capsule centre is at the hips
+		const FVector Eye = Head + Shinobi->GetActorForwardVector() * 260.f + FVector(0.f, 0.f, 10.f);
+		ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Head - Eye).Rotation());
+		Camera->GetCameraComponent()->SetFieldOfView(FieldOfView);
+		Camera->SetLifeSpan(1.f);
+		SetViewTarget(Camera);
+	};
+	auto BackToPlayer = [this]() { SetViewTarget(GetPawn()); };
+	At(4.6f, [FaceCamera]() { FaceCamera(60.f); });
+	At(4.9f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_02_FireballCharge")); });
+	At(5.f, BackToPlayer);
+	At(5.25f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_03_FireballBreath")); });
+	At(5.45f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_04_FireballImpact")); });
+	At(6.5f, [CastJutsu]() { CastJutsu(4, 1.5f); }); // Amaterasu: 0.4 s seals, released at 8.0
+	At(6.7f, [FaceCamera]() { FaceCamera(25.f); }); // zoomed in on the eyes
+	At(7.f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_05_AmaterasuEyes")); });
+	At(7.2f, BackToPlayer);
+	At(8.8f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_06_BlackFlame")); });
+	At(9.5f, [CastJutsu]() { CastJutsu(2, 2.f); }); // Chidori: 0.5 s seals, released at 11.5
+	At(11.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_07_ChidoriCharge")); });
+	At(11.75f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_08_ChidoriHit")); });
+	At(13.5f, [CastJutsu]() { CastJutsu(3, 1.9f); }); // Rasengan, released at 15.4; the black flame still burns: Firestorm
+	At(15.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_09_RasenganCharge")); });
+	At(15.65f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_10_RasenganHit")); });
+	At(16.5f, [this]()
 	{
 		if (const APawn* Shinobi = GetPawn())
 		{
@@ -398,6 +450,6 @@ void AShinobiPlayerController::RunJutsuShotTest()
 			AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::Fire, Shinobi->GetActorLocation() + Shinobi->GetActorForwardVector() * 250.f + Shinobi->GetActorRightVector() * 250.f);
 		}
 	});
-	At(10.7f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_10_Substitution")); });
-	At(11.5f, [this]() { ConsoleCommand(TEXT("quit")); });
+	At(16.7f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_11_Substitution")); });
+	At(17.5f, [this]() { ConsoleCommand(TEXT("quit")); });
 }

@@ -28,6 +28,10 @@ public:
 	UFUNCTION(Exec)
 	void ShinobiCast(int32 JutsuSlot);
 
+	/** Console: ShinobiCastHold 1..4 Seconds -- holds that jutsu's key for Seconds (seals, then charge), then releases. */
+	UFUNCTION(Exec)
+	void ShinobiCastHold(int32 JutsuSlot, float Seconds);
+
 	/** Console: ShinobiDumpStats -- logs every character's attributes (and whether it's burning) as this machine sees them. */
 	UFUNCTION(Exec)
 	void ShinobiDumpStats();

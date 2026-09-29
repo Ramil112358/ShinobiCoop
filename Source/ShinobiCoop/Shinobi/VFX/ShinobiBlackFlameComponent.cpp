@@ -15,7 +15,7 @@ namespace
 	/** Where the tongues burn: the same ten bones on Manny and on a Mixamo-rigged hero. */
 	const TCHAR* const MannyBones[] = { TEXT("spine_01"), TEXT("spine_03"), TEXT("upperarm_l"), TEXT("upperarm_r"), TEXT("lowerarm_l"), TEXT("lowerarm_r"), TEXT("thigh_l"), TEXT("thigh_r"), TEXT("calf_l"), TEXT("calf_r") };
 	const TCHAR* const MixamoBones[] = { TEXT("Spine"), TEXT("Spine2"), TEXT("LeftArm"), TEXT("RightArm"), TEXT("LeftForeArm"), TEXT("RightForeArm"), TEXT("LeftUpLeg"), TEXT("RightUpLeg"), TEXT("LeftLeg"), TEXT("RightLeg") };
-	const FVector TongueScale(0.12f, 0.12f, 0.45f); // the engine sphere is 100 units across: a 12 x 45 tongue
+	const FVector TongueScale(0.18f, 0.18f, 0.65f); // the engine sphere is 100 units across: an 18 x 65 tongue
 }
 
 UShinobiBlackFlameComponent::UShinobiBlackFlameComponent()
@@ -48,6 +48,10 @@ void UShinobiBlackFlameComponent::BeginPlay()
 		const bool bManny = Body && Body->GetBoneIndex(MannyBones[0]) != INDEX_NONE;
 		UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 		UMaterialInstanceDynamic* Flame = ShinobiVfx::MakeFlame(this, ShinobiVfx::Colors::BlackFlame, 3.f, true);
+		if (Flame)
+		{
+			Flame->SetScalarParameterValue(TEXT("Erode"), 0.2f); // fuller tongues than the default, to read at range
+		}
 		for (int32 Index = 0; Index < UE_ARRAY_COUNT(MannyBones); ++Index)
 		{
 			UStaticMeshComponent* Tongue = NewObject<UStaticMeshComponent>(GetOwner(), MakeUniqueObjectName(GetOwner(), UStaticMeshComponent::StaticClass(), TEXT("BlackFlameTongue")));
