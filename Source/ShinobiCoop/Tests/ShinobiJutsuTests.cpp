@@ -5,7 +5,7 @@
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiProjectile.h"
-#include "Shinobi/VFX/ShinobiBlackFlameComponent.h"
+#include "Shinobi/VFX/ShinobiBodyFlameComponent.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
 #include "Shinobi/VFX/ShinobiFirePatch.h"
 #include "Engine/StaticMeshActor.h"
@@ -662,17 +662,27 @@ bool FShinobiFlameMaterialsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlackFlameClusterTest, "ShinobiCoop.Jutsu.BlackFlameClusterFollowsTag", ShinobiTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlackFlameClusterTest, "ShinobiCoop.Jutsu.BodyFlamesFollowBurningTags", ShinobiTestFlags)
 bool FShinobiBlackFlameClusterTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
 	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>();
-	const UShinobiBlackFlameComponent* Flames = E->GetBlackFlame();
-	TestFalse(TEXT("No flames before the black flame"), Flames->IsBurning());
+	const UShinobiBodyFlameComponent* Flames = E->GetBodyFlames();
+	TestFalse(TEXT("No flames before any burn"), Flames->IsBurning());
+
+	// A normal burn shows fire tongues too.
+	ShinobiTest::ApplySetByCaller(E, UGE_Burn::StaticClass(), ShinobiTags::Data_Damage, UGE_Burn::DamagePerTick);
+	W.Tick(0.1f);
+	TestTrue(TEXT("Burning"), Flames->IsBurning());
+	TestFalse(TEXT("Fire, not black flame"), Flames->IsBlack());
+	TestEqual(TEXT("Fire tongues"), Flames->NumVisibleTongues(), 10);
+	E->GetAbilitySystemComponent()->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_Burning_Normal));
+	W.Tick(0.1f);
+	TestFalse(TEXT("Burn over"), Flames->IsBurning());
 
 	ShinobiTest::ApplySetByCaller(E, UGE_BlackFlame::StaticClass(), ShinobiTags::Data_Damage, UGE_BlackFlame::DamagePerTick);
 	W.Tick(0.1f);
-	TestTrue(TEXT("Burning black"), Flames->IsBurning());
+	TestTrue(TEXT("Burning black"), Flames->IsBurning() && Flames->IsBlack());
 	TestEqual(TEXT("Ten flame tongues"), Flames->NumVisibleTongues(), 10);
 
 	E->GetAbilitySystemComponent()->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_Burning_Black));

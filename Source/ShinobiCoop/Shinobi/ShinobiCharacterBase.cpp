@@ -13,7 +13,7 @@
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
-#include "Shinobi/VFX/ShinobiBlackFlameComponent.h"
+#include "Shinobi/VFX/ShinobiBodyFlameComponent.h"
 #include "Shinobi/VFX/ShinobiCastFxComponent.h"
 #include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
 #include "Shinobi/VFX/ShinobiFeedbackComponent.h"
@@ -33,8 +33,8 @@ AShinobiCharacterBase::AShinobiCharacterBase(const FObjectInitializer& ObjectIni
 	ChakraAura->SetupAttachment(RootComponent);
 	CastFx = CreateDefaultSubobject<UShinobiCastFxComponent>(TEXT("CastFx"));
 	CastFx->SetupAttachment(RootComponent);
-	BlackFlame = CreateDefaultSubobject<UShinobiBlackFlameComponent>(TEXT("BlackFlame"));
-	BlackFlame->SetupAttachment(RootComponent);
+	BodyFlames = CreateDefaultSubobject<UShinobiBodyFlameComponent>(TEXT("BodyFlames"));
+	BodyFlames->SetupAttachment(RootComponent);
 	Feedback = CreateDefaultSubobject<UShinobiFeedbackComponent>(TEXT("Feedback"));
 
 	StartupEffects = { UGE_ChakraRegen::StaticClass(), UGE_StaminaRegen::StaticClass() };
