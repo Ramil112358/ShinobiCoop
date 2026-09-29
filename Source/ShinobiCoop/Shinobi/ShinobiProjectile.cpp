@@ -10,6 +10,7 @@
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
+#include "Shinobi/VFX/ShinobiFirePatch.h"
 #include "Shinobi/VFX/ShinobiVfx.h"
 
 AShinobiProjectile::AShinobiProjectile()
@@ -123,7 +124,11 @@ void AShinobiProjectile::Explode(AShinobiCharacterBase* DirectTarget, const FVec
 		AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::Fire, Location, Scale);
 	}
 
-	const AShinobiCharacterBase* Caster = Cast<AShinobiCharacterBase>(GetInstigator());
+	AShinobiCharacterBase* Caster = Cast<AShinobiCharacterBase>(GetInstigator());
+	if (bGroundFire)
+	{
+		AShinobiFirePatch::Spawn(GetWorld(), EShinobiFirePatch::Fire, Location, Caster, Scale, StatusDamagePerTick);
+	}
 	if (UAbilitySystemComponent* Source = Caster ? Caster->GetAbilitySystemComponent() : nullptr)
 	{
 		if (DirectTarget && ShinobiCombat::ApplyDamage(Source, DirectTarget, DirectDamage) && StatusEffect)
@@ -147,6 +152,7 @@ AShinobiKunai::AShinobiKunai()
 	GlowIntensity = 0.6f;
 	bBurstOnImpact = false;
 	bFlameShell = false;
+	bGroundFire = false;
 	Collision->SetSphereRadius(12.f);
 	Movement->InitialSpeed = 3000.f;
 	Movement->MaxSpeed = 3000.f;

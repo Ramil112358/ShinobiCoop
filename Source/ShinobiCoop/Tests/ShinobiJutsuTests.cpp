@@ -7,6 +7,10 @@
 #include "Shinobi/ShinobiProjectile.h"
 #include "Shinobi/VFX/ShinobiBlackFlameComponent.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
+#include "Shinobi/VFX/ShinobiFirePatch.h"
+#include "Engine/StaticMeshActor.h"
+#include "Engine/StaticMesh.h"
+#include "Components/StaticMeshComponent.h"
 #include "Shinobi/VFX/ShinobiCastFxComponent.h"
 #include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
 #include "Shinobi/VFX/ShinobiVfx.h"
@@ -194,7 +198,7 @@ bool FShinobiAmaterasuTest::RunTest(const FString& Parameters)
 	P->GetAbilitySystemComponent()->AbilityFailedCallbacks.AddLambda([&Failures](const UGameplayAbility*, const FGameplayTagContainer&) { ++Failures; });
 
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
-	TestFalse(TEXT("No enemy under the crosshair within 3000: fails"), ShinobiTest::IsActive(P, UGA_Amaterasu::StaticClass()));
+	TestFalse(TEXT("Nothing under the crosshair within 3000 (no enemy, no ground): fails"), ShinobiTest::IsActive(P, UGA_Amaterasu::StaticClass()));
 	TestEqual(TEXT("Failed cast costs nothing"), ShinobiTest::Get(P, Chakra), 100.f);
 	TestEqual(TEXT("Failure reported (HUD flash)"), Failures, 1);
 	TestFalse(TEXT("No cooldown after a failed cast"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Amaterasu));
@@ -686,6 +690,89 @@ bool FShinobiBlackFlameClusterTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Still carries the effect"), ShinobiTest::HasTag(E, ShinobiTags::State_Burning_Black));
 	TestEqual(TEXT("No tongues on the dead"), Flames->NumVisibleTongues(), 0);
 	TestFalse(TEXT("Dead: stops ticking"), Flames->IsComponentTickEnabled());
+	return true;
+}
+
+namespace
+{
+	/** A 100-unit cube scaled into a wall or floor, for aim traces to hit (the test world is empty). */
+	AStaticMeshActor* SpawnBlock(FShinobiTestWorld& W, const FVector& Location, const FVector& Scale)
+	{
+		AStaticMeshActor* Block = W.World->SpawnActor<AStaticMeshActor>(Location, FRotator::ZeroRotator);
+		Block->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+		Block->GetStaticMeshComponent()->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")));
+		Block->GetStaticMeshComponent()->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+		Block->SetActorScale3D(Scale);
+		return Block;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiFirePatchTest, "ShinobiCoop.Jutsu.FirePatchBurnsHostilesInsideThenGoesOut", ShinobiTestFlags)
+bool FShinobiFirePatchTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-2000.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Ally = W.Spawn<AShinobiPlayerCharacter>(FVector(-100.f, 0.f, 0.f));
+	AShinobiCharacterBase* Inside = W.Spawn<AShinobiCharacterBase>(FVector(100.f, 0.f, 0.f));
+	AShinobiCharacterBase* Outside = W.Spawn<AShinobiCharacterBase>(FVector(600.f, 0.f, 0.f));
+	for (AShinobiCharacterBase* Character : TArray<AShinobiCharacterBase*>{ Caster, Ally, Inside, Outside })
+	{
+		ShinobiTest::Hover(Character);
+	}
+
+	AShinobiFirePatch::Spawn(W.World, EShinobiFirePatch::Fire, FVector::ZeroVector, Caster, 1.f, UGE_Burn::DamagePerTick);
+	TestEqual(TEXT("A patch is burning"), ShinobiTest::CountActors<AShinobiFirePatch>(W), 1);
+	W.Tick(0.6f);
+	TestTrue(TEXT("Enemy standing in it catches fire"), ShinobiTest::HasTag(Inside, ShinobiTags::State_Burning_Normal));
+	TestFalse(TEXT("Ally unharmed"), ShinobiTest::HasTag(Ally, ShinobiTags::State_Burning_Normal));
+	TestFalse(TEXT("Enemy outside the radius unharmed"), ShinobiTest::HasTag(Outside, ShinobiTags::State_Burning_Normal));
+	W.Tick(2.8f);
+	TestEqual(TEXT("Goes out after 3 s"), ShinobiTest::CountActors<AShinobiFirePatch>(W), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiFireballGroundFireTest, "ShinobiCoop.Jutsu.FireballLeavesGroundFire", ShinobiTestFlags)
+bool FShinobiFireballGroundFireTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(600.f, 0.f, 0.f));
+	ShinobiTest::Hover(P);
+	ShinobiTest::Hover(E);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(1.2f); // thrown at ~0.8, lands at ~1.0
+	const AShinobiFirePatch* Patch = FirstActor<AShinobiFirePatch>(W);
+	TestNotNull(TEXT("Ground fire where the ball landed"), Patch);
+	TestTrue(TEXT("Fire, not black flame"), Patch && Patch->GetKind() == EShinobiFirePatch::Fire);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiAmaterasuNoEnemyTest, "ShinobiCoop.Jutsu.AmaterasuWithoutEnemyIgnitesAimPoint", ShinobiTestFlags)
+bool FShinobiAmaterasuNoEnemyTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>(); // aims along +X
+	SpawnBlock(W, FVector(1500.f, 0.f, 0.f), FVector(1.f, 10.f, 10.f)); // a wall 1450 ahead
+	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
+	TestTrue(TEXT("Casts with no enemy"), ShinobiTest::IsActive(P, UGA_Amaterasu::StaticClass()));
+	TestEqual(TEXT("Cost 50"), ShinobiTest::Get(P, Chakra), 50.f);
+	W.Tick(0.6f);
+	const AShinobiFirePatch* Patch = FirstActor<AShinobiFirePatch>(W);
+	TestNotNull(TEXT("Black flames on the wall"), Patch);
+	if (!Patch)
+	{
+		return true;
+	}
+	TestTrue(TEXT("Black flame kind"), Patch->GetKind() == EShinobiFirePatch::BlackFlame);
+	TestTrue(FString::Printf(TEXT("At the wall (X = %.0f)"), Patch->GetActorLocation().X), FMath::IsNearlyEqual(Patch->GetActorLocation().X, 1450.f, 40.f));
+	TestTrue(TEXT("Cooldown started"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Amaterasu));
+
+	AShinobiCharacterBase* WalksIn = W.Spawn<AShinobiCharacterBase>(Patch->GetActorLocation() - FVector(60.f, 0.f, 0.f));
+	ShinobiTest::Hover(WalksIn);
+	W.Tick(0.6f);
+	TestTrue(TEXT("An enemy walking in catches the black flame"), ShinobiTest::HasTag(WalksIn, ShinobiTags::State_Burning_Black));
 	return true;
 }
 

@@ -58,6 +58,8 @@ protected:
 	bool bBurstOnImpact = true;
 	/** A flickering M_Flame shell around the glowing core (the Fireball). */
 	bool bFlameShell = true;
+	/** Leaves a burning patch where it lands (AShinobiFirePatch, catching enemies with StatusEffect's burn). */
+	bool bGroundFire = true;
 
 private:
 	UFUNCTION()

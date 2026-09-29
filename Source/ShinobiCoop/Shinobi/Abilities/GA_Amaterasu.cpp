@@ -5,6 +5,7 @@
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
+#include "Shinobi/VFX/ShinobiFirePatch.h"
 
 UGA_Amaterasu::UGA_Amaterasu()
 {
@@ -25,25 +26,51 @@ bool UGA_Amaterasu::PrepareJutsu()
 {
 	Target = nullptr;
 	const AShinobiCharacterBase* Self = GetShinobiCharacter();
+	if (!Self)
+	{
+		return false;
+	}
 	FHitResult Hit;
-	if (Self && TraceAim(Range, AimRadius, Hit))
+	if (TraceAim(Range, AimRadius, Hit))
 	{
 		AShinobiCharacterBase* Candidate = Cast<AShinobiCharacterBase>(Hit.GetActor());
 		if (Self->IsHostileTo(Candidate) && FVector::Dist(Self->GetActorLocation(), Candidate->GetActorLocation()) <= Range)
 		{
 			Target = Candidate;
+			return true;
 		}
+		AimPoint = Hit.ImpactPoint; // a wall, the ground, a building
+		return true;
 	}
-	return Target.IsValid();
+	// Aimed above everything: burn the ground below the end of the aim, if there is ground within reach.
+	FVector ViewLocation;
+	FRotator ViewRotation;
+	GetAimViewPoint(ViewLocation, ViewRotation);
+	const FVector End = Self->GetActorLocation() + ViewRotation.Vector() * Range;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(ShinobiAmaterasuGround), false, Self);
+	if (Self->GetWorld()->LineTraceSingleByChannel(Hit, End, End - FVector(0.f, 0.f, Range), ECC_WorldStatic, Params))
+	{
+		AimPoint = Hit.ImpactPoint;
+		return true;
+	}
+	return false;
 }
 
 void UGA_Amaterasu::ExecuteJutsu()
 {
-	if (Target.IsValid() && HasAuthority(&CurrentActivationInfo))
+	if (HasAuthority(&CurrentActivationInfo))
 	{
-		if (ShinobiCombat::ApplyStatus(GetAbilitySystemComponentFromActorInfo(), Target.Get(), UGE_BlackFlame::StaticClass(), UGE_BlackFlame::DamagePerTick * GetDamageScale()))
+		AShinobiCharacterBase* Victim = Target.Get();
+		if (Victim && Victim->IsAlive() && ShinobiCombat::ApplyStatus(GetAbilitySystemComponentFromActorInfo(), Victim, UGE_BlackFlame::StaticClass(), UGE_BlackFlame::DamagePerTick * GetDamageScale()))
 		{
-			AShinobiBurst::Spawn(Target->GetWorld(), EShinobiBurst::BlackFlameIgnite, Target->GetActorLocation(), GetVisualScale());
+			AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::BlackFlameIgnite, Victim->GetActorLocation(), GetVisualScale());
+		}
+		else
+		{
+			// No enemy, or it died (or dodged) during the charge: the flames catch on the spot instead.
+			const FVector Spot = Victim ? Victim->GetActorLocation() - FVector(0.f, 0.f, Victim->GetSimpleCollisionHalfHeight()) : AimPoint;
+			AShinobiFirePatch::Spawn(GetWorld(), EShinobiFirePatch::BlackFlame, Spot, GetShinobiCharacter(), GetVisualScale(), UGE_BlackFlame::DamagePerTick * GetDamageScale());
+			AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::BlackFlameIgnite, Spot, GetVisualScale());
 		}
 	}
 	EndJutsu();
