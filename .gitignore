@@ -33,6 +33,8 @@ __pycache__/
 /SourceArt/Character/Mesh/*
 !/SourceArt/Character/Mesh/hero_rigged.fbx
 !/SourceArt/Character/Mesh/hero_rigged.png
+# Roster characters: the VRoid .vrm sources stay local; their converted <Id>/<Id>.fbx + PNGs are committed
+/SourceArt/Character/VRoid/*.vrm
 
 # Sub-project #3: generated terrain maps and downloaded asset packs (rebuilt by Scripts/world)
 /SourceArt/World/

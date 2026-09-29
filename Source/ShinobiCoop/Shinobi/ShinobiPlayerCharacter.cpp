@@ -1,4 +1,5 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
+#include "ShinobiCoop.h"
 #include "AbilitySystemComponent.h"
 #include "Animation/AnimMontage.h"
 #include "Camera/CameraComponent.h"
@@ -29,6 +30,7 @@
 #include "Shinobi/UI/ShinobiOverheadTextComponent.h"
 #include "GameFramework/PlayerState.h"
 #include "HAL/IConsoleManager.h"
+#include "Net/UnrealNetwork.h"
 #include "Retargeter/IKRetargeter.h"
 
 namespace
@@ -85,17 +87,68 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 	NameTag->SetupAttachment(RootComponent);
 }
 
+int32 AShinobiPlayerCharacter::FindRosterIndex(const FString& Name)
+{
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Roster); ++Index)
+	{
+		if (Name.Equals(Roster[Index].Name, ESearchCase::IgnoreCase))
+		{
+			return Index;
+		}
+	}
+	return INDEX_NONE;
+}
+
+void AShinobiPlayerCharacter::SetCharacterIndex(uint8 Index)
+{
+	CharacterIndex = Index;
+	ApplyCharacter();
+}
+
+bool AShinobiPlayerCharacter::ApplyCharacter()
+{
+	if (!HeroMesh)
+	{
+		return false;
+	}
+	for (const int32 Index : {int32(CharacterIndex), 0}) // the pick, else the hero
+	{
+		if (Index >= UE_ARRAY_COUNT(Roster))
+		{
+			continue;
+		}
+		// Quiet: a roster entry whose model isn't made yet is expected.
+		USkeletalMesh* Body = LoadObject<USkeletalMesh>(nullptr, Roster[Index].Mesh, nullptr, LOAD_NoWarn | LOAD_Quiet);
+		UIKRetargeter* Found = Body ? LoadObject<UIKRetargeter>(nullptr, Roster[Index].Retargeter, nullptr, LOAD_NoWarn | LOAD_Quiet) : nullptr;
+		if (Found)
+		{
+			// Retargeter first: setting the mesh re-initialises the anim instance, which reads it.
+			Retargeter = Found;
+			HeroMesh->SetSkeletalMeshAsset(Body);
+			// Scripts/smoke_m4.ps1 reads this on both machines to check the picks replicate.
+			UE_LOG(LogShinobiCoop, Log, TEXT("%s plays %s%s"), *GetName(),
+				CharacterIndex < UE_ARRAY_COUNT(Roster) ? Roster[CharacterIndex].Name : TEXT("an unknown pick"),
+				Index == CharacterIndex ? TEXT("") : TEXT(" (not imported: shown as the hero)"));
+			return true;
+		}
+	}
+	return false;
+}
+
+void AShinobiPlayerCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AShinobiPlayerCharacter, CharacterIndex);
+}
+
 void AShinobiPlayerCharacter::ApplyHero()
 {
-	USkeletalMesh* Hero = CVarHero.GetValueOnGameThread() ? LoadObject<USkeletalMesh>(nullptr, HeroMeshPath) : nullptr;
-	const UIKRetargeter* Retargeter = Hero ? LoadObject<UIKRetargeter>(nullptr, UShinobiRetargetAnimInstance::RetargeterPath) : nullptr;
-	if (!Hero || !Retargeter)
+	if (!CVarHero.GetValueOnGameThread() || !ApplyCharacter())
 	{
 		HeroMesh->DestroyComponent();
 		HeroMesh = nullptr;
 		return;
 	}
-	HeroMesh->SetSkeletalMeshAsset(Hero);
 	HeroMesh->SetAnimInstanceClass(UShinobiRetargetAnimInstance::StaticClass());
 	// The Manny keeps running every gameplay animation, unseen; the hero copies its pose.
 	GetMesh()->SetVisibility(false);

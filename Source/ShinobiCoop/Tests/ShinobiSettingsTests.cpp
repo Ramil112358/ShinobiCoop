@@ -4,6 +4,7 @@
 
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/GameUserSettings.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Shinobi/ShinobiLook.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/UI/ShinobiSettings.h"
@@ -15,7 +16,18 @@ bool FShinobiSettingsCycleTest::RunTest(const FString& Parameters)
 	const int32 OldQuality = Settings->GetOverallScalabilityLevel();
 	const float OldCap = Settings->GetFrameRateLimit();
 	const bool bOldOutline = ShinobiLook::IsOutlineEnabled();
+	const TCHAR* Section = TEXT("/Script/ShinobiCoop.ShinobiSettings");
+	FString OldCharacter;
+	GConfig->GetString(Section, TEXT("Character"), OldCharacter, GGameUserSettingsIni);
 	FShinobiTestWorld W;
+
+	GConfig->SetString(Section, TEXT("Character"), TEXT("Hero"), GGameUserSettingsIni);
+	ShinobiSettings::Cycle(ShinobiSettings::ERow::Character, W.World);
+	const FString Second = AShinobiPlayerCharacter::Roster[1].Name;
+	TestEqual(TEXT("Character Hero -> the next roster entry"), ShinobiSettings::GetSavedCharacter(), Second);
+	TestTrue(TEXT("Character label"), ShinobiSettings::Label(ShinobiSettings::ERow::Character).Contains(Second));
+	GConfig->SetString(Section, TEXT("Character"), TEXT("NoSuchNinja"), GGameUserSettingsIni);
+	TestEqual(TEXT("An unknown saved name reads as the hero"), ShinobiSettings::GetSavedCharacter(), FString(TEXT("Hero")));
 
 	Settings->SetOverallScalabilityLevel(0);
 	ShinobiSettings::Cycle(ShinobiSettings::ERow::Quality, W.World);
@@ -49,6 +61,8 @@ bool FShinobiSettingsCycleTest::RunTest(const FString& Parameters)
 	Settings->ApplyNonResolutionSettings();
 	Settings->SaveSettings();
 	ShinobiLook::SetOutlineEnabled(W.World, bOldOutline);
+	GConfig->SetString(Section, TEXT("Character"), *OldCharacter, GGameUserSettingsIni);
+	GConfig->Flush(false, GGameUserSettingsIni);
 	return true;
 }
 

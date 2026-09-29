@@ -36,12 +36,19 @@ public:
 	UFUNCTION(Exec)
 	void ShinobiDumpStats();
 
+	/** Console: ShinobiCharacter Naruto -- play as that roster character (AShinobiPlayerCharacter::Roster). The settings
+	 * menu's Character row calls this after saving the pick; on its own it lasts for this session only. */
+	UFUNCTION(Exec)
+	void ShinobiCharacter(const FString& Name);
+
 	/** Local: open or close the pause menu (Esc / Start). */
 	void TogglePauseMenu();
 
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
+	/** Server: the new pawn plays the character this player picked (so the pick survives respawns). */
+	virtual void OnPossess(APawn* InPawn) override;
 
 private:
 	UFUNCTION(Server, Reliable)
@@ -49,6 +56,12 @@ private:
 
 	UFUNCTION(Server, Reliable)
 	void ServerDrainChakra(float Amount);
+
+	UFUNCTION(Server, Reliable)
+	void ServerPickCharacter(uint8 Index);
+
+	/** Server: this player's roster pick, given to every pawn it possesses. */
+	uint8 PickedCharacter = 0;
 
 	/** Server only: applies an instant SetByCaller effect to this controller's own pawn. */
 	void ApplyToOwnPawn(TSubclassOf<UGameplayEffect> EffectClass, const FGameplayTag& DataTag, float Magnitude);

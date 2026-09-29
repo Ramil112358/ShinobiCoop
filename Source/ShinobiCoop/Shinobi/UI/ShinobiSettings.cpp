@@ -1,7 +1,11 @@
 #include "Shinobi/UI/ShinobiSettings.h"
 #include "Engine/Engine.h"
+#include "Engine/World.h"
 #include "GameFramework/GameUserSettings.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Shinobi/ShinobiLook.h"
+#include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/ShinobiPlayerController.h"
 
 namespace
 {
@@ -9,6 +13,9 @@ namespace
 	const float RenderScales[] = { 50.f, 67.f, 75.f, 100.f };
 	const float FrameCaps[] = { 30.f, 60.f, 120.f, 144.f, 0.f }; // 0 = unlimited
 	const EWindowMode::Type WindowModes[] = { EWindowMode::Fullscreen, EWindowMode::WindowedFullscreen, EWindowMode::Windowed };
+
+	const TCHAR* ConfigSection = TEXT("/Script/ShinobiCoop.ShinobiSettings");
+	const TCHAR* CharacterKey = TEXT("Character");
 
 	UGameUserSettings* Settings()
 	{
@@ -30,6 +37,13 @@ namespace
 	}
 }
 
+FString ShinobiSettings::GetSavedCharacter()
+{
+	FString Name;
+	GConfig->GetString(ConfigSection, CharacterKey, Name, GGameUserSettingsIni);
+	return AShinobiPlayerCharacter::FindRosterIndex(Name) == INDEX_NONE ? FString(AShinobiPlayerCharacter::Roster[0].Name) : Name;
+}
+
 float ShinobiSettings::GetRenderScale()
 {
 	float Current = 100.f, Min = 0.f, Max = 0.f, Default = 100.f;
@@ -47,6 +61,8 @@ FString ShinobiSettings::Label(ERow Row)
 	UGameUserSettings* S = Settings();
 	switch (Row)
 	{
+	case ERow::Character:
+		return FString::Printf(TEXT("Character: %s"), *GetSavedCharacter());
 	case ERow::Quality:
 	{
 		const int32 Level = S->GetOverallScalabilityLevel();
@@ -79,6 +95,19 @@ void ShinobiSettings::Cycle(ERow Row, UWorld* World)
 	UGameUserSettings* S = Settings();
 	switch (Row)
 	{
+	case ERow::Character:
+	{
+		const int32 Next = (AShinobiPlayerCharacter::FindRosterIndex(GetSavedCharacter()) + 1) % UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster);
+		const FString Name = AShinobiPlayerCharacter::Roster[Next].Name;
+		GConfig->SetString(ConfigSection, CharacterKey, *Name, GGameUserSettingsIni);
+		GConfig->Flush(false, GGameUserSettingsIni);
+		// In a game (not the main menu), switch now too.
+		if (AShinobiPlayerController* PC = World ? World->GetFirstPlayerController<AShinobiPlayerController>() : nullptr)
+		{
+			PC->ShinobiCharacter(Name);
+		}
+		return;
+	}
 	case ERow::Quality:
 		S->SetOverallScalabilityLevel((FMath::Max(S->GetOverallScalabilityLevel(), -1) + 1) % UE_ARRAY_COUNT(QualityNames));
 		break;

@@ -1,6 +1,7 @@
 # Menu and session smoke test over LAN (-nosteam: the Null subsystem): a host process hosts from the main menu, a
 # client process finds that game and joins it through the menu; then the host quits and the client must land back
-# on the main menu with a "lost the connection" message.
+# on the main menu with a "lost the connection" message. On the way, each player's roster pick (host Sasuke, client
+# Itachi; saved picks are overridden on the command line) must show on both machines.
 $ErrorActionPreference = "Stop"
 $UE = "C:\Program Files\Epic Games\UE_5.8"
 $Editor = "$UE\Engine\Binaries\Win64\UnrealEditor.exe"
@@ -17,6 +18,7 @@ Get-CimInstance Win32_Process -Filter "Name = 'UnrealEditor.exe'" | Where-Object
 }
 Remove-Item -LiteralPath $HostLog, $ClientLog -ErrorAction SilentlyContinue
 $Common = "`"$Project`" /Game/Shinobi/Maps/Lvl_MainMenu -game -nullrhi -nosound -unattended -nosplash -nosteam -ShinobiMenuSmoke"
+function Pick($Name) { "`"-ini:GameUserSettings:[/Script/ShinobiCoop.ShinobiSettings]:Character=$Name`"" }
 
 function Wait-Log($Log, $Pattern, $Seconds, $What) {
     $deadline = (Get-Date).AddSeconds($Seconds)
@@ -27,14 +29,17 @@ function Wait-Log($Log, $Pattern, $Seconds, $What) {
     Write-Host "ok: $What"
 }
 
-$hostProc = Start-Process $Editor -PassThru -ArgumentList "$Common -ShinobiAutoHost -abslog=`"$HostLog`""
+$hostProc = Start-Process $Editor -PassThru -ArgumentList "$Common $(Pick Sasuke) -ShinobiAutoHost -abslog=`"$HostLog`""
 $client = $null
 try {
     Wait-Log $HostLog "Online subsystem: Null" 240 "host fell back to LAN mode"
     Wait-Log $HostLog "Bringing World /Game/Shinobi/Maps/Lvl_HiddenLeafValley.* up for play" 180 "host created the game and opened Hidden Leaf Valley"
-    $client = Start-Process $Editor -PassThru -ArgumentList "$Common -ShinobiAutoJoin -abslog=`"$ClientLog`""
+    $client = Start-Process $Editor -PassThru -ArgumentList "$Common $(Pick Itachi) -ShinobiAutoJoin -abslog=`"$ClientLog`""
     Wait-Log $ClientLog "Welcomed by server" 240 "client found and joined the game from the menu"
     Wait-Log $HostLog "Join succeeded" 30 "host accepted the client"
+    Wait-Log $HostLog "plays Itachi" 30 "host sees the client's pick"
+    Wait-Log $ClientLog "plays Sasuke" 30 "client sees the host's pick"
+    Wait-Log $ClientLog "plays Itachi" 30 "client sees its own pick"
     Start-Sleep -Seconds 3
     Stop-Process $hostProc -Force
     Wait-Log $ClientLog "Session: Lost the connection" 90 "client noticed the host leaving"

@@ -20,6 +20,8 @@
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
 #include "Shinobi/ShinobiInputConfig.h"
+#include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/UI/ShinobiSettings.h"
 #include "Shinobi/UI/ShinobiHUDWidget.h"
 #include "Shinobi/UI/ShinobiMenuWidgets.h"
 #include "EnhancedInputComponent.h"
@@ -32,6 +34,7 @@ void AShinobiPlayerController::BeginPlay()
 	{
 		return;
 	}
+	ShinobiCharacter(ShinobiSettings::GetSavedCharacter());
 	// The main menu left the viewport in UI-only mode with a cursor (input mode outlives the travel).
 	SetInputMode(FInputModeGameOnly());
 	SetShowMouseCursor(false);
@@ -96,6 +99,35 @@ void AShinobiPlayerController::TogglePauseMenu()
 	Mode.SetHideCursorDuringCapture(false);
 	SetInputMode(Mode);
 	SetShowMouseCursor(true);
+}
+
+void AShinobiPlayerController::OnPossess(APawn* InPawn)
+{
+	Super::OnPossess(InPawn);
+	if (AShinobiPlayerCharacter* Body = Cast<AShinobiPlayerCharacter>(InPawn))
+	{
+		Body->SetCharacterIndex(PickedCharacter);
+	}
+}
+
+void AShinobiPlayerController::ShinobiCharacter(const FString& Name)
+{
+	const int32 Index = AShinobiPlayerCharacter::FindRosterIndex(Name);
+	if (Index == INDEX_NONE)
+	{
+		UE_LOG(LogShinobiCoop, Warning, TEXT("ShinobiCharacter: no roster character named '%s'"), *Name);
+		return;
+	}
+	ServerPickCharacter(uint8(Index));
+}
+
+void AShinobiPlayerController::ServerPickCharacter_Implementation(uint8 Index)
+{
+	PickedCharacter = Index < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster) ? Index : 0; // a client's value: clamp it
+	if (AShinobiPlayerCharacter* Body = GetPawn<AShinobiPlayerCharacter>())
+	{
+		Body->SetCharacterIndex(PickedCharacter);
+	}
 }
 
 void AShinobiPlayerController::ShinobiDamageSelf(float Amount)

@@ -30,7 +30,7 @@ private:
 
 /**
  * Copies the pose of the skeletal mesh this component is attached to (the player's hidden Manny, which runs every
- * gameplay animation) onto the hero mesh through RTG_MannyToHero, every frame, on every machine. The native C++
+ * gameplay animation) onto the hero mesh through the character's retargeter (RTG_MannyTo<Character>), every frame, on every machine. The native C++
  * equivalent of an Animation Blueprint holding one "Retarget Pose From Mesh" node, modelled on the engine's own
  * IKRetargetAnimInstance, so no Animation Blueprint asset is needed.
  */
@@ -42,7 +42,8 @@ class SHINOBICOOP_API UShinobiRetargetAnimInstance : public UAnimInstance
 public:
 	UShinobiRetargetAnimInstance();
 
-	static constexpr const TCHAR* RetargeterPath = TEXT("/Game/Shinobi/Hero/RTG_MannyToHero.RTG_MannyToHero");
+	/** The retargeter in use: the owning player's (AShinobiPlayerCharacter::GetRetargeter) as of the last (re)initialise. */
+	const UIKRetargeter* GetRetargeter() const { return RetargetNode.IKRetargeterAsset; }
 
 protected:
 	virtual FAnimInstanceProxy* CreateAnimInstanceProxy() override;
