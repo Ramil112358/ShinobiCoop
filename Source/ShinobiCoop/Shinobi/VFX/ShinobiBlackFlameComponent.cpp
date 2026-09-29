@@ -86,9 +86,11 @@ void UShinobiBlackFlameComponent::BeginPlay()
 	}
 	if (UAbilitySystemComponent* ASC = AbilitySystem.Get())
 	{
-		TagHandle = ASC->RegisterGameplayTagEvent(ShinobiTags::State_Burning_Black, EGameplayTagEventType::NewOrRemoved)
-			.AddUObject(this, &UShinobiBlackFlameComponent::OnBurningTagChanged);
-		SetBurning(ASC->HasMatchingGameplayTag(ShinobiTags::State_Burning_Black));
+		BurningHandle = ASC->RegisterGameplayTagEvent(ShinobiTags::State_Burning_Black, EGameplayTagEventType::NewOrRemoved)
+			.AddUObject(this, &UShinobiBlackFlameComponent::OnTagChanged);
+		DeadHandle = ASC->RegisterGameplayTagEvent(ShinobiTags::State_Dead, EGameplayTagEventType::NewOrRemoved)
+			.AddUObject(this, &UShinobiBlackFlameComponent::OnTagChanged);
+		Refresh();
 	}
 }
 
@@ -96,7 +98,8 @@ void UShinobiBlackFlameComponent::EndPlay(const EEndPlayReason::Type EndPlayReas
 {
 	if (UAbilitySystemComponent* ASC = AbilitySystem.Get())
 	{
-		ASC->UnregisterGameplayTagEvent(TagHandle, ShinobiTags::State_Burning_Black, EGameplayTagEventType::NewOrRemoved);
+		ASC->UnregisterGameplayTagEvent(BurningHandle, ShinobiTags::State_Burning_Black, EGameplayTagEventType::NewOrRemoved);
+		ASC->UnregisterGameplayTagEvent(DeadHandle, ShinobiTags::State_Dead, EGameplayTagEventType::NewOrRemoved);
 	}
 	for (UStaticMeshComponent* Tongue : Tongues)
 	{
@@ -111,13 +114,15 @@ void UShinobiBlackFlameComponent::EndPlay(const EEndPlayReason::Type EndPlayReas
 	Super::EndPlay(EndPlayReason);
 }
 
-void UShinobiBlackFlameComponent::OnBurningTagChanged(const FGameplayTag Tag, int32 NewCount)
+void UShinobiBlackFlameComponent::OnTagChanged(const FGameplayTag Tag, int32 NewCount)
 {
-	SetBurning(NewCount > 0);
+	Refresh();
 }
 
-void UShinobiBlackFlameComponent::SetBurning(bool bOn)
+void UShinobiBlackFlameComponent::Refresh()
 {
+	const UAbilitySystemComponent* ASC = AbilitySystem.Get();
+	const bool bOn = ASC && ASC->HasMatchingGameplayTag(ShinobiTags::State_Burning_Black) && !ASC->HasMatchingGameplayTag(ShinobiTags::State_Dead);
 	bBurning = bOn;
 	for (UStaticMeshComponent* Tongue : Tongues)
 	{

@@ -142,6 +142,9 @@ private:
 	UPROPERTY()
 	TObjectPtr<UAbilityTask> ChargeTicker;
 
+	/** Remote owner only: the server's "chakra ran out, release" signal. */
+	FDelegateHandle ServerReleaseHandle;
+
 	EPhase Phase = EPhase::Seal;
 	bool bReleaseRequested = false;
 	bool bChargingTagAdded = false;

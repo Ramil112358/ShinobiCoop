@@ -10,8 +10,8 @@ class UPointLightComponent;
 class UStaticMeshComponent;
 
 /**
- * Amaterasu's black flames on whoever carries State.Burning.Black: ten flickering flame tongues (M_FlameDark) on the
- * body's spine and limbs, plus a dark purple light. Cosmetic only; the tag replicates, so every machine shows it. A
+ * Amaterasu's black flames on whoever carries State.Burning.Black and isn't dead (the effect outlasts a death): ten
+ * flickering flame tongues (M_FlameDark) on the body's spine and limbs, plus a dark purple light. Cosmetic only; the tag replicates, so every machine shows it. A
  * fixed size: GAS replicates tags to every client but not effect magnitudes, so the charge shows in the ignition
  * burst instead.
  */
@@ -33,8 +33,8 @@ protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
-	void OnBurningTagChanged(const FGameplayTag Tag, int32 NewCount);
-	void SetBurning(bool bOn);
+	void OnTagChanged(const FGameplayTag Tag, int32 NewCount);
+	void Refresh();
 
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMeshComponent>> Tongues;
@@ -43,6 +43,7 @@ private:
 	TObjectPtr<UPointLightComponent> Light;
 
 	TWeakObjectPtr<UAbilitySystemComponent> AbilitySystem;
-	FDelegateHandle TagHandle;
+	FDelegateHandle BurningHandle;
+	FDelegateHandle DeadHandle;
 	bool bBurning = false;
 };

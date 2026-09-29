@@ -91,6 +91,15 @@ void UShinobiJutsuAbility::OnSealsFinished()
 	ChargeStartTime = LastDrainTime = GetWorld()->GetTimeSeconds();
 	SetChargingTag(true);
 	PlayPhaseMontage(ChargeMontage, 1.f);
+	if (!HasAuthority(&CurrentActivationInfo))
+	{
+		// Running out of chakra is decided on the server, which drains it; it tells the owning client to release.
+		UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
+		const FPredictionKey Key = CurrentActivationInfo.GetActivationPredictionKey();
+		ServerReleaseHandle = ASC->AbilityReplicatedEventDelegate(EAbilityGenericReplicatedEvent::GenericSignalFromServer, CurrentSpecHandle, Key)
+			.AddUObject(this, &UShinobiJutsuAbility::Release);
+		ASC->CallReplicatedEventDelegateIfSet(EAbilityGenericReplicatedEvent::GenericSignalFromServer, CurrentSpecHandle, Key);
+	}
 	UAbilityTask_Repeat* Ticker = UAbilityTask_Repeat::RepeatAction(this, 0.1f, MAX_int32);
 	Ticker->OnPerformAction.AddDynamic(this, &UShinobiJutsuAbility::OnChargeTick);
 	ChargeTicker = Ticker;
@@ -108,11 +117,17 @@ void UShinobiJutsuAbility::OnInputReleased(float TimeHeld)
 
 void UShinobiJutsuAbility::OnChargeTick(int32 ActionNumber)
 {
-	// Both sides stop at the cap. Only the server drains, but both see chakra run out (the attribute replicates).
-	const bool bHasChakra = HasAuthority(&CurrentActivationInfo)
-		? DrainCharge()
-		: GetAbilitySystemComponentFromActorInfo()->GetNumericAttribute(UShinobiAttributeSet::GetChakraAttribute()) > KINDA_SMALL_NUMBER;
-	if (!bHasChakra || GetChargeTime() >= MaxChargeTime)
+	// Both sides stop at the cap on their own clocks. Only the server drains; when chakra runs out it releases and
+	// signals a remote owner to release too (polling the replicated chakra would miss it: regen refills it at once).
+	if (HasAuthority(&CurrentActivationInfo) && !DrainCharge())
+	{
+		if (!IsLocallyControlled())
+		{
+			GetAbilitySystemComponentFromActorInfo()->ClientSetReplicatedEvent(EAbilityGenericReplicatedEvent::GenericSignalFromServer, CurrentSpecHandle, CurrentActivationInfo.GetActivationPredictionKey());
+		}
+		Release();
+	}
+	else if (GetChargeTime() >= MaxChargeTime)
 	{
 		Release();
 	}
@@ -226,6 +241,12 @@ void UShinobiJutsuAbility::EndAbility(const FGameplayAbilitySpecHandle Handle, c
 	if (IsActive())
 	{
 		SetChargingTag(false); // cancelled mid-charge (interrupt, dodge)
+		if (ServerReleaseHandle.IsValid())
+		{
+			GetAbilitySystemComponentFromActorInfo()->AbilityReplicatedEventDelegate(EAbilityGenericReplicatedEvent::GenericSignalFromServer, CurrentSpecHandle, CurrentActivationInfo.GetActivationPredictionKey())
+				.Remove(ServerReleaseHandle);
+			ServerReleaseHandle.Reset();
+		}
 	}
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }

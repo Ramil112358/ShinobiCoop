@@ -676,6 +676,16 @@ bool FShinobiBlackFlameClusterTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Flames out with the effect"), Flames->IsBurning());
 	TestEqual(TEXT("No tongues left"), Flames->NumVisibleTongues(), 0);
 	TestFalse(TEXT("Stops ticking"), Flames->IsComponentTickEnabled());
+
+	// Dying doesn't remove the 10 s black flame, but a corpse shouldn't keep burning.
+	ShinobiTest::ApplySetByCaller(E, UGE_BlackFlame::StaticClass(), ShinobiTags::Data_Damage, UGE_BlackFlame::DamagePerTick);
+	W.Tick(0.1f);
+	TestTrue(TEXT("Burning again"), Flames->IsBurning());
+	ShinobiTest::ApplyEffect(E, UGE_Dead::StaticClass());
+	W.Tick(0.1f);
+	TestTrue(TEXT("Still carries the effect"), ShinobiTest::HasTag(E, ShinobiTags::State_Burning_Black));
+	TestEqual(TEXT("No tongues on the dead"), Flames->NumVisibleTongues(), 0);
+	TestFalse(TEXT("Dead: stops ticking"), Flames->IsComponentTickEnabled());
 	return true;
 }
 
