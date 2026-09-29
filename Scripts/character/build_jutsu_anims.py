@@ -81,7 +81,7 @@ IDLE = {"hips": (2, 0, 0), "feet": {"R": (-11, 0, -8), "L": (11, 0, 8)}}
 # Kept moderate: on the hero's proportions a deeper Mixamo pelvis drop reads as a sumo squat.
 READY = {"hips": (4, -12, 0), "feet": {"R": (-13, -8, -20), "L": (12, 9, 8)}}
 BRACE = {"hips": (7, -16, 0), "feet": {"R": (-15, -15, -25), "L": (13, 13, 5)}}
-CROUCH = {"hips": (12, -20, 10), "feet": {"R": (-17, -12, -25), "L": (15, 16, 8)}}
+CROUCH = {"hips": (18, -20, 10), "feet": {"R": (-21, -13, -25), "L": (19, 17, 8)}}
 LUNGE = {"hips": (11, 16, 12), "feet": {"R": (-14, 36, 5), "L": (15, -32, 20)}}
 RUN_A = {"hips": (6, 10, 14), "feet": {"R": (-12, 28, 0), "L": (12, -22, 10)}}
 RUN_B = {"hips": (5, -10, 14), "feet": {"R": (-12, -22, -10), "L": (12, 28, 0)}}
@@ -132,18 +132,21 @@ INHALE_DEEP = merge(INHALE, {"spine": (-10, 9), "head": (-13, 3)})
 BLOW = seal("Tiger", BRACE, {"hips": (8, -16, 8), "spine": (7, 9), "neck": (10, 2), "head": (-24, 3)})  # neck thrust, face level (spine pitch is per bone, x3)
 BLOW_RECOIL = seal("Tiger", BRACE, {"hips": (7, -16, 3), "spine": (4, 9), "neck": (5, 2), "head": (-12, 3)})
 
-# Chidori: crouched low, right hand down and forward in a claw, the left hand gripping the right wrist.
+# Chidori: squatting low, right hand down, forward and out in a claw; the left hand grips the right forearm just
+# behind the wrist ("grip": placed after the right arm is solved, so it holds whatever the body does).
+GRIP = {"grip": True, "curl": (45, 70, 75, 80, 85)}
 CHIDORI_HOLD = merge(NEUTRAL, CROUCH, {
-    "spine": (10, 14), "neck": (-8, 4), "head": (-8, 6),
-    "R": arm((-26, 84, 38), (-0.6, 0, -1), (-0.2, -0.3, 1), DOWN, CLAW),
-    "L": arm((-18, 90, 33), ELBOW_L, (-1, -0.2, 0.2), BACK, (40, 60, 60, 60, 60)),
+    "spine": (11, 14), "neck": (-9, 4), "head": (-9, 6),
+    "R": arm((-30, 76, 36), (-0.6, 0, -1), (-0.2, -0.3, 1), DOWN, CLAW),
+    "L": {**ARMS_DOWN["L"], **GRIP},
 })
-CHIDORI_DEEP = merge(CHIDORI_HOLD, {"hips": (16, -22, 14), "spine": (13, 14)})
-# Rasengan: right palm up in front of the belly, the left hand shaping the ball above it.
+CHIDORI_DEEP = merge(CHIDORI_HOLD, {"hips": (23, -22, 14), "spine": (14, 14)})
+# Rasengan: right arm held out forward and to the side, palm up, so the ball above it stays clear of the body; the
+# left hand frames the ball from the side.
 RASENGAN_HOLD = merge(NEUTRAL, READY, {
     "spine": (6, 4), "neck": (-2, 3), "head": (-4, 3),
-    "R": arm((-17, 110, 33), (-1, -0.4, -0.3), (0.2, 0, 1), UP, (20, 30, 30, 30, 30)),
-    "L": arm((-12, 130, 33), ELBOW_L, (-0.3, -0.2, 1), DOWN, (20, 30, 30, 30, 30)),
+    "R": arm((-32, 118, 40), (-1, -0.4, -0.3), (0.2, 0, 1), UP, (20, 30, 30, 30, 30)),
+    "L": arm((-20, 138, 38), ELBOW_L, (-0.2, 0.3, 1), RIGHT, (20, 30, 30, 30, 30)),
 })
 # Amaterasu: two fingers raised beside the right eye, head bowed, then a sharp look up.
 EYE_FOCUS = merge(NEUTRAL, READY_BODY, {
@@ -356,6 +359,22 @@ def pose_arm(arm_obj, side, spec):
             pb.rotation_quaternion = Matrix.Rotation(angle, 3, "X").to_quaternion()
 
 
+def grip_spec(arm_obj, spec):
+    """The left hand closed over the top of the right forearm, just behind the wrist (the right arm is posed)."""
+    elbow = arm_obj.pose.bones[P + "RightForeArm"].head
+    wrist = arm_obj.pose.bones[P + "RightHand"].head
+    along = (wrist - elbow).normalized()
+    grip = elbow.lerp(wrist, 0.78)
+    # Fingers wrap across the forearm towards the character's right and down; the palm faces the forearm.
+    across = along.cross(UP).normalized()
+    if across.x > 0:
+        across = -across
+    fingers = (across * 0.7 + DOWN * 0.7).normalized()
+    palm = DOWN
+    wrist_target = grip + UP * 5 - fingers * 6
+    return {**spec, "wrist": wrist_target, "pole": V(ELBOW_L), "fingers": fingers, "palm": palm}
+
+
 def pose_torso(arm_obj, pose):
     pitch, yaw = pose.get("spine", (0, 0))
     for name in ("Spine", "Spine1", "Spine2"):
@@ -380,7 +399,10 @@ def apply_pose(arm_obj, pose):
     pose_torso(arm_obj, pose)
     for side, key in (("Right", "R"), ("Left", "L")):
         if key in pose:
-            pose_arm(arm_obj, side, pose[key])
+            spec = pose[key]
+            if spec.get("grip"):
+                spec = grip_spec(arm_obj, spec)
+            pose_arm(arm_obj, side, spec)
     bpy.context.view_layer.update()
 
 

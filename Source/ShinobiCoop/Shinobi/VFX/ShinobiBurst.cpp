@@ -105,7 +105,7 @@ void AShinobiBurst::BeginPlay()
 	case EShinobiBurst::Lightning:    Color = ShinobiVfx::Colors::Lightning; Duration = 0.3f; MaxScale = 1.8f; Intensity = 4.f;   LightIntensity = 30000.f; break;
 	case EShinobiBurst::Spiral:       Color = ShinobiVfx::Colors::Chakra;    Duration = 0.4f; MaxScale = 3.f;  Intensity = 4.f;   LightIntensity = 20000.f; break;
 	case EShinobiBurst::Substitution: Color = ShinobiVfx::Colors::Smoke;     Duration = 0.5f; MaxScale = 2.2f; Intensity = 0.8f;  LightIntensity = 0.f;     Core = 0.6f; break;
-	case EShinobiBurst::FireBreath:   Color = ShinobiVfx::Colors::Fire;      Duration = 0.3f; MaxScale = 2.2f; Intensity = 4.f;   LightIntensity = 15000.f; break;
+	case EShinobiBurst::FireBreath:   Color = ShinobiVfx::Colors::Fire;      Duration = 0.4f; MaxScale = 2.2f; Intensity = 5.f;   LightIntensity = 15000.f; break;
 	case EShinobiBurst::BlackFlameIgnite: Color = ShinobiVfx::Colors::BlackFlame; Duration = 0.5f; MaxScale = 2.5f; Intensity = 3.f; LightIntensity = 15000.f; Core = 0.5f; break;
 	}
 	MaxScale *= Scale;
@@ -153,9 +153,10 @@ void AShinobiBurst::Tick(float DeltaSeconds)
 	}
 	else
 	{
-		// The engine cone is 100 units long around its centre: shift it half its length forward so the tip stays put.
-		const float Length = FMath::Lerp(0.3f, 1.f, Grow) * MaxScale;
-		const float Width = 0.35f * FMath::Lerp(0.5f, 1.f, Grow) * MaxScale;
+		// A stream from the mouth chasing the ball (2500 u/s) for a moment, widening as it goes, then fading. The engine
+		// cone is 100 units long around its centre: shift it half its length forward so the tip stays at the mouth.
+		const float Length = (30.f + FMath::Min(Age * 2500.f, 450.f * Scale)) / 100.f;
+		const float Width = (0.15f + 0.12f * Length) * Scale;
 		Cone->SetWorldScale3D(FVector(Width, Width, Length));
 		Cone->SetRelativeLocation(FVector(50.f * Length, 0.f, 0.f));
 	}

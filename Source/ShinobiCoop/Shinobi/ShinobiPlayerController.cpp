@@ -411,7 +411,8 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(3.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_01_FireballSeal")); });
 	// Face shots come from a separate camera in front of the character: turning the player's own camera would also
 	// turn the aim, which reaches the server late and throws off the next jutsu.
-	auto FaceCamera = [this](float FieldOfView)
+	// Yaw 0 looks at the face from the front; 90 watches from the side, aimed LookAhead in front of the character.
+	auto FaceCamera = [this](float FieldOfView, float Yaw = 0.f, float LookAhead = 0.f, float Distance = 260.f)
 	{
 		const APawn* Shinobi = GetPawn();
 		if (!Shinobi)
@@ -419,8 +420,9 @@ void AShinobiPlayerController::RunJutsuShotTest()
 			return;
 		}
 		const FVector Head = Shinobi->GetActorLocation() + FVector(0.f, 0.f, 70.f); // the capsule centre is at the hips
-		const FVector Eye = Head + Shinobi->GetActorForwardVector() * 260.f + FVector(0.f, 0.f, 10.f);
-		ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Head - Eye).Rotation());
+		const FVector Target = Head + Shinobi->GetActorForwardVector() * LookAhead;
+		const FVector Eye = Target + Shinobi->GetActorForwardVector().RotateAngleAxis(Yaw, FVector::UpVector) * Distance + FVector(0.f, 0.f, 10.f);
+		ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Target - Eye).Rotation());
 		Camera->GetCameraComponent()->SetFieldOfView(FieldOfView);
 		Camera->SetLifeSpan(1.f);
 		SetViewTarget(Camera);
@@ -429,8 +431,11 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(4.6f, [FaceCamera]() { FaceCamera(60.f); });
 	At(4.9f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_02_FireballCharge")); });
 	At(5.f, BackToPlayer);
-	At(5.25f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_03_FireballBreath")); });
+	At(5.27f, [FaceCamera]() { FaceCamera(70.f, 90.f, 250.f, 520.f); }); // after the launch: the aim follows the view
+	At(5.33f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_03_FireballBreath")); });
+	At(5.4f, BackToPlayer);
 	At(5.45f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_04_FireballImpact")); });
+	At(6.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_04b_GroundFire")); }); // the patch burning where the ball landed
 	At(6.5f, [CastJutsu]() { CastJutsu(4, 1.5f); }); // Amaterasu: 0.4 s seals, released at 8.0
 	At(6.7f, [FaceCamera]() { FaceCamera(25.f); }); // zoomed in on the eyes
 	At(7.f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_05_AmaterasuEyes")); });

@@ -151,14 +151,14 @@ void UShinobiCastFxComponent::BeginPlay()
 		Mesh->SetUsingAbsoluteScale(true);
 		return Mesh;
 	};
-	UMaterialInstanceDynamic* ArcMaterial = ShinobiVfx::MakeGlow(this, ShinobiVfx::Colors::Lightning, 20.f, 1.f);
+	UMaterialInstanceDynamic* ArcMaterial = ShinobiVfx::MakeGlow(this, ShinobiVfx::Colors::Lightning, 3.f, 1.f); // bright but still blue under bloom
 	for (int32 Index = 0; Index < NumArcs * SegmentsPerArc; ++Index)
 	{
 		ArcSegments.Add(Free(MakeMesh(TEXT("CastArc"), TEXT("/Engine/BasicShapes/Cylinder.Cylinder"), ArcMaterial, this)));
 	}
 
 	// Chidori's ground ring: short glowing segments laid round the feet, re-jittered every frame.
-	UMaterialInstanceDynamic* RingMaterial = ShinobiVfx::MakeGlow(this, ShinobiVfx::Colors::Lightning, 14.f, 1.f);
+	UMaterialInstanceDynamic* RingMaterial = ShinobiVfx::MakeGlow(this, ShinobiVfx::Colors::Lightning, 3.f, 1.f);
 	for (int32 Index = 0; Index < RingSegmentCount; ++Index)
 	{
 		RingSegments.Add(Free(MakeMesh(TEXT("CastRing"), TEXT("/Engine/BasicShapes/Cylinder.Cylinder"), RingMaterial, this)));
@@ -363,7 +363,7 @@ void UShinobiCastFxComponent::TickComponent(float DeltaTime, ELevelTick TickType
 		Orb->SetRelativeScale3D(FVector(Look.OrbScale * ChargeScale * Pulse));
 		if (OrbMaterial)
 		{
-			OrbMaterial->SetScalarParameterValue(TEXT("Intensity"), OrbIntensity * (bLightning ? 1.8f : 1.5f) * Pulse);
+			OrbMaterial->SetScalarParameterValue(TEXT("Intensity"), OrbIntensity * (bLightning ? 1.2f : 1.5f) * Pulse);
 		}
 		Light->SetIntensity(OrbLightIntensity * ChargeScale * (bLightning ? FMath::FRandRange(1.2f, 3.f) : Pulse));
 		if (!bLightning)

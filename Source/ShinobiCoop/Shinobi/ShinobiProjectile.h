@@ -51,6 +51,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
 
 	/** Look, set per class in constructors (clients spawn the same class, so nothing extra replicates). */
 	FLinearColor GlowColor;
@@ -86,6 +87,14 @@ protected:
 
 private:
 	bool bExploded = false;
+
+	/** The Fireball's flame trail: puffs dropped behind the ball that shrink away (cosmetic, each machine its own). */
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> TrailPuffs;
+
+	TArray<float> TrailAges;
+	int32 NextPuff = 0;
+	float SinceLastPuff = 0.f;
 };
 
 /** Enemy kunai: a small grey blade, faster, no light or fire burst. Set DirectDamage only. */

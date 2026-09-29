@@ -13,7 +13,7 @@ namespace ShinobiVfx
 		const FLinearColor Chakra(0.1f, 0.45f, 1.f);
 		const FLinearColor Fire(1.f, 0.22f, 0.02f);
 		const FLinearColor BlackFlame(0.35f, 0.02f, 0.6f);
-		const FLinearColor Lightning(0.3f, 0.62f, 1.f); // Chidori blue
+		const FLinearColor Lightning(0.05f, 0.3f, 1.f); // Chidori blue (keep R and G under 1 at glow intensities, or it reads white)
 		const FLinearColor Smoke(0.6f, 0.6f, 0.6f);
 		const FLinearColor BlackFlameCore(0.01f, 0.f, 0.015f);
 		const FLinearColor Blood(0.35f, 0.f, 0.f);

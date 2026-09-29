@@ -53,6 +53,9 @@ AShinobiProjectile::AShinobiProjectile()
 	Light->SetAttenuationRadius(400.f);
 	Light->SetCastShadows(false);
 
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = false; // only the Fireball's trail ticks
+
 	Movement = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("Movement"));
 	Movement->InitialSpeed = 2500.f;
 	Movement->MaxSpeed = 2500.f;
@@ -82,6 +85,49 @@ void AShinobiProjectile::BeginPlay()
 			Shell->SetupAttachment(Mesh);
 			Shell->SetRelativeScale3D(FVector(1.3f));
 			Shell->RegisterComponent();
+
+			UMaterialInstanceDynamic* PuffMaterial = ShinobiVfx::MakeFlame(this, GlowColor, 4.f);
+			for (int32 Index = 0; Index < 16; ++Index)
+			{
+				UStaticMeshComponent* Puff = NewObject<UStaticMeshComponent>(this);
+				Puff->SetStaticMesh(Mesh->GetStaticMesh());
+				Puff->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+				Puff->SetCastShadow(false);
+				Puff->SetMaterial(0, PuffMaterial);
+				Puff->SetupAttachment(Collision);
+				Puff->SetUsingAbsoluteLocation(true); // dropped in the world, left behind as the ball flies on
+				Puff->SetUsingAbsoluteScale(true);
+				Puff->SetVisibility(false);
+				Puff->RegisterComponent();
+				TrailPuffs.Add(Puff);
+				TrailAges.Add(1.f);
+			}
+			SetActorTickEnabled(true);
+		}
+	}
+}
+
+void AShinobiProjectile::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	constexpr float PuffLife = 0.45f;
+	constexpr float PuffInterval = 0.03f;
+	SinceLastPuff += DeltaSeconds;
+	if (SinceLastPuff >= PuffInterval && TrailPuffs.Num())
+	{
+		SinceLastPuff = 0.f;
+		TrailPuffs[NextPuff]->SetWorldLocation(GetActorLocation() + FMath::VRand() * 6.f * Scale);
+		TrailAges[NextPuff] = 0.f;
+		NextPuff = (NextPuff + 1) % TrailPuffs.Num();
+	}
+	for (int32 Index = 0; Index < TrailPuffs.Num(); ++Index)
+	{
+		TrailAges[Index] += DeltaSeconds;
+		const float Left = 1.f - TrailAges[Index] / PuffLife;
+		TrailPuffs[Index]->SetVisibility(Left > 0.f);
+		if (Left > 0.f)
+		{
+			TrailPuffs[Index]->SetWorldScale3D(FVector(0.6f * Scale * Left));
 		}
 	}
 }
