@@ -41,6 +41,11 @@ public:
 	UFUNCTION(Exec)
 	void ShinobiCharacter(const FString& Name);
 
+	/** Console: ShinobiOutfit Hokage -- wear that outfit (AShinobiPlayerCharacter::Outfits; None takes it off). The settings
+	 * menu's Outfit row calls this after saving the pick; on its own it lasts for this session only. */
+	UFUNCTION(Exec)
+	void ShinobiOutfit(const FString& Name);
+
 	/** Local: open or close the pause menu (Esc / Start). */
 	void TogglePauseMenu();
 
@@ -60,8 +65,14 @@ private:
 	UFUNCTION(Server, Reliable)
 	void ServerPickCharacter(uint8 Index);
 
+	UFUNCTION(Server, Reliable)
+	void ServerPickOutfit(uint8 Index);
+
 	/** Server: this player's roster pick, given to every pawn it possesses. */
 	uint8 PickedCharacter = 0;
+
+	/** Server: this player's outfit pick, likewise. */
+	uint8 PickedOutfit = 0;
 
 	/** Server only: applies an instant SetByCaller effect to this controller's own pawn. */
 	void ApplyToOwnPawn(TSubclassOf<UGameplayEffect> EffectClass, const FGameplayTag& DataTag, float Magnitude);

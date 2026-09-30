@@ -19,6 +19,14 @@ struct FShinobiRosterEntry
 	const TCHAR* Retargeter;
 };
 
+/** A wearable outfit: a cloak (skeletal mesh skinned to the Mixamo skeleton) that follows the worn body's pose, so one mesh
+ * fits every roster character. Mesh is null for "no outfit". */
+struct FShinobiOutfitEntry
+{
+	const TCHAR* Name;
+	const TCHAR* Mesh;
+};
+
 /** Player-controlled shinobi: third-person camera, input bound to abilities. */
 UCLASS()
 class SHINOBICOOP_API AShinobiPlayerCharacter : public AShinobiCharacterBase
@@ -55,6 +63,10 @@ public:
 	 * fallback for a pick whose assets aren't imported. */
 	static constexpr FShinobiRosterEntry Roster[] = {
 		{TEXT("Hero"), TEXT("/Game/Shinobi/Hero/SK_Hero.SK_Hero"), TEXT("/Game/Shinobi/Hero/RTG_MannyToHero.RTG_MannyToHero")},
+		{TEXT("Bika"), TEXT("/Game/Shinobi/Characters/Bika/SK_Bika.SK_Bika"), TEXT("/Game/Shinobi/Characters/Bika/RTG_MannyToBika.RTG_MannyToBika")},
+		{TEXT("Cat"), TEXT("/Game/Shinobi/Characters/Cat/SK_Cat.SK_Cat"), TEXT("/Game/Shinobi/Characters/Cat/RTG_MannyToCat.RTG_MannyToCat")},
+		{TEXT("Misha"), TEXT("/Game/Shinobi/Characters/Misha/SK_Misha.SK_Misha"), TEXT("/Game/Shinobi/Characters/Misha/RTG_MannyToMisha.RTG_MannyToMisha")},
+		{TEXT("Pabu"), TEXT("/Game/Shinobi/Characters/Pabu/SK_Pabu.SK_Pabu"), TEXT("/Game/Shinobi/Characters/Pabu/RTG_MannyToPabu.RTG_MannyToPabu")},
 	};
 
 	/** Roster index of Name (case-insensitive), or INDEX_NONE. */
@@ -63,6 +75,24 @@ public:
 	/** Server: play as Roster[Index] (replicated; out of range or not imported = the hero). */
 	void SetCharacterIndex(uint8 Index);
 	uint8 GetCharacterIndex() const { return CharacterIndex; }
+
+	/** Every outfit a player can wear over any roster character (Scripts/setup_hero.py imports them from
+	 * SourceArt/Character/Outfits; docs/character/outfit-steps.md). Entry 0 is "no outfit" and the fallback. */
+	static constexpr FShinobiOutfitEntry Outfits[] = {
+		{TEXT("None"), nullptr},
+		{TEXT("Hokage"), TEXT("/Game/Shinobi/Outfits/Hokage/SK_Hokage.SK_Hokage")},
+		{TEXT("Akatsuki"), TEXT("/Game/Shinobi/Outfits/Akatsuki/SK_Akatsuki.SK_Akatsuki")},
+	};
+
+	/** Outfits index of Name (case-insensitive), or INDEX_NONE. */
+	static int32 FindOutfitIndex(const FString& Name);
+
+	/** Server: wear Outfits[Index] (replicated; out of range or not imported = no outfit). */
+	void SetOutfitIndex(uint8 Index);
+	uint8 GetOutfitIndex() const { return OutfitIndex; }
+
+	/** The outfit mesh; it shows a mesh only while an outfit is worn. Null when the hero isn't in use. */
+	USkeletalMeshComponent* GetOutfitMesh() const { return OutfitMesh; }
 
 	/** The hero mesh when the hero is in use (Shinobi.Hero 1 and its assets exist), else GetMesh(). */
 	virtual USkeletalMeshComponent* GetBodyMesh() const override { return HeroMesh ? HeroMesh.Get() : GetMesh(); }
@@ -106,13 +136,27 @@ private:
 	UFUNCTION()
 	void OnRep_CharacterIndex() { ApplyCharacter(); }
 
+	/** Puts the picked outfit on OutfitMesh, following HeroMesh's pose (after every body change). */
+	void ApplyOutfit();
+
+	UFUNCTION()
+	void OnRep_OutfitIndex() { ApplyOutfit(); }
+
 	/** Roster index of the body shown; the server sets it from the owning controller's pick. */
 	UPROPERTY(ReplicatedUsing = OnRep_CharacterIndex)
 	uint8 CharacterIndex = 0;
 
+	/** Outfits index worn over the body; set from the owning controller's pick like CharacterIndex. */
+	UPROPERTY(ReplicatedUsing = OnRep_OutfitIndex)
+	uint8 OutfitIndex = 0;
+
 	/** The visible hero body, pose-driven from GetMesh(). */
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UShinobiBodyComponent> HeroMesh;
+
+	/** The worn outfit: follows HeroMesh's pose through leader-pose (bones match by name), so it needs no animation of its own. */
+	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
+	TObjectPtr<USkeletalMeshComponent> OutfitMesh;
 
 	/** Teammates' names above their heads; hidden on your own character. */
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")

@@ -1,6 +1,7 @@
 """Hero character assets (sub-project #2). Idempotent (re-imports and re-configures in place); close the GUI editor.
 
-Source: SourceArt/Character/Mesh/hero_rigged.fbx (the Mixamo-rigged hero) when it exists, else the stand-in
+Source: SourceArt/Character/Models/Hero/Hero_rigged.fbx (the cloakless Mixamo-rigged hero, made like the other characters
+so outfits can be worn over it), else SourceArt/Character/Mesh/hero_rigged.fbx (the first hero, Akatsuki cloak baked in), else the stand-in
 SourceArt/Mixamo/Power_Up_30fps.fbx (a Mixamo mannequin), so the runtime side can be built before the real hero.
 
 Builds:
@@ -21,6 +22,9 @@ and AShinobiVillager::Bodies; all worn through UShinobiBodyComponent), from two 
 Each becomes /Game/Shinobi/Characters/<Id>/: SK_<Id> (+ skeleton, physics asset), T_/MI_<Id>_<Texture> on the shared
 M_Character (masked by the texture alpha: eyelashes, brows, hair edges; two-sided: hair and cloth cards), IK_<Id> and
 RTG_MannyTo<Id>, built exactly like the hero's.
+Last, the outfits (SourceArt/Character/Outfits/<Id>/<Id>_outfit.fbx + .png from Scripts/character/skin_outfit.py): each becomes
+/Game/Shinobi/Outfits/<Id>/SK_<Id> (+ skeleton, MI_<Id>_<Id>_outfit on M_Character), worn over any character through
+leader-pose (AShinobiPlayerCharacter::Outfits, docs/character/outfit-steps.md). No retargeter: its bones are the body's by name.
 Retargeter setup follows setup_chakra_pose.py's reasoning (exact chain mapping, auto-align the target chain to chain,
 Run IK Rig op off). Root Motion op off too: the hero's root IS its pelvis (Hips), so "copy source root" would pin the
 hips to Manny's floor-level root bone; the character moves by its capsule, not root motion.
@@ -34,12 +38,16 @@ import unreal
 HERO_DIR = "/Game/Shinobi/Hero"
 IK_MANNY_PATH = "/Game/Shinobi/Retarget/IK_Manny"
 PROJECT = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
-HERO_FBX = os.path.join(PROJECT, "SourceArt", "Character", "Mesh", "hero_rigged.fbx")
+MODELS_DIR = os.path.join(PROJECT, "SourceArt", "Character", "Models")
+OUTFITS_DIR = os.path.join(PROJECT, "SourceArt", "Character", "Outfits")
+FIRST_HERO_FBX = os.path.join(PROJECT, "SourceArt", "Character", "Mesh", "hero_rigged.fbx")
+CLOAKLESS_HERO_FBX = os.path.join(MODELS_DIR, "Hero", "Hero_rigged.fbx")
+HERO_FBX = CLOAKLESS_HERO_FBX if os.path.exists(CLOAKLESS_HERO_FBX) else FIRST_HERO_FBX
 HERO_TEXTURE = os.path.splitext(HERO_FBX)[0] + ".png"
 STAND_IN_FBX = os.path.join(PROJECT, "SourceArt", "Mixamo", "Power_Up_30fps.fbx")
 VROID_DIR = os.path.join(PROJECT, "SourceArt", "Character", "VRoid")
-MODELS_DIR = os.path.join(PROJECT, "SourceArt", "Character", "Models")
 CHARACTERS_DIR = "/Game/Shinobi/Characters"
+OUTFITS_GAME_DIR = "/Game/Shinobi/Outfits"
 BLENDER = "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe"
 MEL = unreal.MaterialEditingLibrary
 # Every body chain a gameplay animation moves must reach the hero (fingers are optional: Mixamo's "Standard" skeleton
@@ -52,12 +60,12 @@ def log(message):
     unreal.log(f"[setup_hero] {message}")
 
 
-def import_hero(fbx, dest=HERO_DIR, name="SK_Hero", materials=True):
+def import_hero(fbx, dest=HERO_DIR, name="SK_Hero", materials=True, physics=True):
     options = unreal.FbxImportUI()
     options.import_mesh = True
     options.import_as_skeletal = True
     options.mesh_type_to_import = unreal.FBXImportType.FBXIT_SKELETAL_MESH
-    options.create_physics_asset = True
+    options.create_physics_asset = physics
     options.import_animations = False
     options.import_materials = materials
     options.import_textures = materials
@@ -73,7 +81,7 @@ def import_hero(fbx, dest=HERO_DIR, name="SK_Hero", materials=True):
     mesh = next((o for o in task.get_objects() if isinstance(o, unreal.SkeletalMesh)), None)
     if mesh is None:
         raise RuntimeError(f"import of {fbx} produced no skeletal mesh: {[o.get_path_name() for o in task.get_objects()]}")
-    if mesh.get_editor_property("physics_asset") is None:
+    if physics and mesh.get_editor_property("physics_asset") is None:
         # The automated FBX import skips create_physics_asset; build one from the mesh's bones instead.
         unreal.SkeletalMeshEditorSubsystem.create_physics_asset(mesh, True)
         if mesh.get_editor_property("physics_asset") is None:
@@ -213,10 +221,19 @@ def convert_vrms():
         log(f"converted {vrm}")
 
 
+_character_material = None
+
+
 def build_character_material():
-    """M_Character: the hero's lit Substrate recipe, masked by the texture's alpha and two-sided (VRoid eyelashes,
+    """(Built once per run.) M_Character: the hero's lit Substrate recipe, masked by the texture's alpha and two-sided (VRoid eyelashes,
     brows, hair and cloth cards; an opaque texture shows whole); characters use instances of it."""
+    global _character_material
+    if _character_material is not None:
+        return _character_material
     path = f"{CHARACTERS_DIR}/M_Character"
+    if os.environ.get("SETUP_HERO_ONLY") == "outfits" and unreal.EditorAssetLibrary.does_asset_exist(path):
+        _character_material = unreal.load_asset(path)  # the bodies' instances stay on it
+        return _character_material
     if unreal.EditorAssetLibrary.does_asset_exist(path):
         unreal.EditorAssetLibrary.delete_asset(path)
     material = TOOLS.create_asset("M_Character", CHARACTERS_DIR, unreal.Material, unreal.MaterialFactoryNew())
@@ -241,6 +258,7 @@ def build_character_material():
     if errors:
         raise RuntimeError(f"M_Character failed to compile: {errors}")
     unreal.EditorAssetLibrary.save_loaded_asset(material)
+    _character_material = material
     return material
 
 
@@ -303,7 +321,8 @@ def build_characters(ik_manny):
             found.append((character, fbx_path, lambda slot, d=os.path.dirname(fbx_path): os.path.join(d, f"{slot}.png")))
     for fbx_path in sorted(glob.glob(os.path.join(MODELS_DIR, "*", "*_rigged.fbx"))):
         character = os.path.basename(os.path.dirname(fbx_path))
-        if os.path.basename(fbx_path) == f"{character}_rigged.fbx":
+        # Models/Hero/Hero_rigged.fbx is the hero itself (imported above), not a second roster character.
+        if os.path.basename(fbx_path) == f"{character}_rigged.fbx" and os.path.abspath(fbx_path) != os.path.abspath(HERO_FBX):
             png = mixamo_texture(fbx_path)
             found.append((character, fbx_path, lambda slot, p=png: p))
     if not found:
@@ -324,16 +343,43 @@ def build_characters(ik_manny):
         build_retargeter(ik_manny, build_ik_rig(mesh, dest, f"IK_{character}"), dest, f"RTG_MannyTo{character}")
 
 
-fbx = HERO_FBX if os.path.exists(HERO_FBX) else STAND_IN_FBX
-log(f"source: {'hero' if fbx == HERO_FBX else 'STAND-IN'} {fbx}")
-ik_manny = unreal.load_asset(IK_MANNY_PATH)
-if ik_manny is None:
-    raise RuntimeError(f"missing {IK_MANNY_PATH} (run Scripts/setup_chakra_pose.py first)")
-if not unreal.EditorAssetLibrary.does_directory_exist(HERO_DIR):
-    unreal.EditorAssetLibrary.make_directory(HERO_DIR)
-hero_mesh = import_hero(fbx)
-if fbx == HERO_FBX:
-    use_material(hero_mesh, build_material(import_texture()))
-build_retargeter(ik_manny, build_ik_rig(hero_mesh))
-remove_strays()
-build_characters(ik_manny)
+def build_outfits():
+    """Every Outfits/<Id>/<Id>_outfit.fbx (+ <Id>_outfit.png) -> /Game/Shinobi/Outfits/<Id>/SK_<Id> on M_Character."""
+    found = sorted(glob.glob(os.path.join(OUTFITS_DIR, "*", "*_outfit.fbx")))
+    if not found:
+        log(f"no outfits in {OUTFITS_DIR}")
+        return
+    parent = build_character_material()
+    for outfit_fbx in found:
+        outfit = os.path.basename(os.path.dirname(outfit_fbx))
+        if os.path.basename(outfit_fbx) != f"{outfit}_outfit.fbx":
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9_]+", outfit):
+            raise RuntimeError(f"outfit name {outfit!r}: use letters, digits and _ only (it becomes asset names)")
+        dest = f"{OUTFITS_GAME_DIR}/{outfit}"
+        for stale in (f"SK_{outfit}", f"SK_{outfit}_Skeleton"):
+            if unreal.EditorAssetLibrary.does_asset_exist(f"{dest}/{stale}"):
+                unreal.EditorAssetLibrary.delete_asset(f"{dest}/{stale}")
+        mesh = import_hero(outfit_fbx, dest, f"SK_{outfit}", materials=False, physics=False)
+        png = os.path.splitext(outfit_fbx)[0] + ".png"
+        use_materials(mesh, outfit, dest, lambda slot, p=png: p, parent)
+
+
+if os.environ.get("SETUP_HERO_ONLY") == "outfits":
+    # Re-imports just the outfits (set SETUP_HERO_ONLY=outfits before Scripts/run_python.ps1), leaving every body alone.
+    build_outfits()
+else:
+    fbx = HERO_FBX if os.path.exists(HERO_FBX) else STAND_IN_FBX
+    log(f"source: {'hero' if fbx == HERO_FBX else 'STAND-IN'} {fbx}")
+    ik_manny = unreal.load_asset(IK_MANNY_PATH)
+    if ik_manny is None:
+        raise RuntimeError(f"missing {IK_MANNY_PATH} (run Scripts/setup_chakra_pose.py first)")
+    if not unreal.EditorAssetLibrary.does_directory_exist(HERO_DIR):
+        unreal.EditorAssetLibrary.make_directory(HERO_DIR)
+    hero_mesh = import_hero(fbx)
+    if fbx == HERO_FBX:
+        use_material(hero_mesh, build_material(import_texture()))
+    build_retargeter(ik_manny, build_ik_rig(hero_mesh))
+    remove_strays()
+    build_characters(ik_manny)
+    build_outfits()

@@ -19,6 +19,8 @@ bool FShinobiSettingsCycleTest::RunTest(const FString& Parameters)
 	const TCHAR* Section = TEXT("/Script/ShinobiCoop.ShinobiSettings");
 	FString OldCharacter;
 	GConfig->GetString(Section, TEXT("Character"), OldCharacter, GGameUserSettingsIni);
+	FString OldOutfit;
+	GConfig->GetString(Section, TEXT("Outfit"), OldOutfit, GGameUserSettingsIni);
 	FShinobiTestWorld W;
 
 	GConfig->SetString(Section, TEXT("Character"), TEXT("Hero"), GGameUserSettingsIni);
@@ -28,6 +30,14 @@ bool FShinobiSettingsCycleTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Character label"), ShinobiSettings::Label(ShinobiSettings::ERow::Character).Contains(Second));
 	GConfig->SetString(Section, TEXT("Character"), TEXT("NoSuchNinja"), GGameUserSettingsIni);
 	TestEqual(TEXT("An unknown saved name reads as the hero"), ShinobiSettings::GetSavedCharacter(), FString(TEXT("Hero")));
+
+	GConfig->SetString(Section, TEXT("Outfit"), AShinobiPlayerCharacter::Outfits[0].Name, GGameUserSettingsIni);
+	ShinobiSettings::Cycle(ShinobiSettings::ERow::Outfit, W.World);
+	const FString NextOutfit = AShinobiPlayerCharacter::Outfits[1 % UE_ARRAY_COUNT(AShinobiPlayerCharacter::Outfits)].Name;
+	TestEqual(TEXT("Outfit None -> the next outfit (wrapping)"), ShinobiSettings::GetSavedOutfit(), NextOutfit);
+	TestTrue(TEXT("Outfit label"), ShinobiSettings::Label(ShinobiSettings::ERow::Outfit).Contains(NextOutfit));
+	GConfig->SetString(Section, TEXT("Outfit"), TEXT("NoSuchCloak"), GGameUserSettingsIni);
+	TestEqual(TEXT("An unknown saved outfit reads as none"), ShinobiSettings::GetSavedOutfit(), FString(AShinobiPlayerCharacter::Outfits[0].Name));
 
 	Settings->SetOverallScalabilityLevel(0);
 	ShinobiSettings::Cycle(ShinobiSettings::ERow::Quality, W.World);
@@ -62,6 +72,7 @@ bool FShinobiSettingsCycleTest::RunTest(const FString& Parameters)
 	Settings->SaveSettings();
 	ShinobiLook::SetOutlineEnabled(W.World, bOldOutline);
 	GConfig->SetString(Section, TEXT("Character"), *OldCharacter, GGameUserSettingsIni);
+	GConfig->SetString(Section, TEXT("Outfit"), *OldOutfit, GGameUserSettingsIni);
 	GConfig->Flush(false, GGameUserSettingsIni);
 	return true;
 }

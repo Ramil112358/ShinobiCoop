@@ -1,6 +1,6 @@
 # Adding a roster character from VRoid Studio
 
-The player roster (`AShinobiPlayerCharacter::Roster`) is just the Hero for now; heroes made from reference photos join it later. Each player picks one under **Settings → Character**. A VRoid model can also be an enemy or villager: give it a name from an enemy type's `BodyPool` or `AShinobiVillager::Bodies` (see [model-steps.md](model-steps.md)).
+The player roster (`AShinobiPlayerCharacter::Roster`) holds the characters made from photos (see [model-steps.md](model-steps.md)); a VRoid character can join it too. Each player picks one under **Settings → Character**. A VRoid model can also be an enemy or villager: give it a name from an enemy type's `BodyPool` or `AShinobiVillager::Bodies` (see [model-steps.md](model-steps.md)).
 
 You need VRoid Studio (free, from vroid.com).
 

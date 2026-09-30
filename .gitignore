@@ -40,6 +40,11 @@ __pycache__/
 !/SourceArt/Character/Models/*/*_rigged.fbx
 !/SourceArt/Character/Models/*/*_rigged.png
 
+# Outfits (docs/character/outfit-steps.md): only the skinned FBX and its texture are committed
+/SourceArt/Character/Outfits/*/*
+!/SourceArt/Character/Outfits/*/*_outfit.fbx
+!/SourceArt/Character/Outfits/*/*_outfit.png
+
 # Sub-project #3: generated terrain maps and downloaded asset packs (rebuilt by Scripts/world)
 /SourceArt/World/
 

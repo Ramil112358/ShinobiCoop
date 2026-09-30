@@ -12,7 +12,7 @@ Enemies and villagers wear characters generated with Hyper3D Rodin. Each one is 
 
 Each spawned enemy wears a random character from its type's pool. Each villager wears one character, chosen by its `Variant`; the valley has 6 routes and 5 villager characters, so the 6th repeats Goro.
 
-Two more are planned but not made yet: Kaito (a third Rogue Ninja) and Sen (an elder). Rodin's text-only output for them either couldn't be rigged (arms fused to the body, a staff fused to the hand) or ignored the brief. Make them from a front-view concept image instead, using Rodin's image reference. No character appears on both sides; `ShinobiCoop.Cast.NoFaceOnTwoSides` checks this. The player roster (`AShinobiPlayerCharacter::Roster`) is separate. Until a character is rigged and imported, its NPC stays the tinted mannequin.
+Two more are planned but not made yet: Kaito (a third Rogue Ninja) and Sen (an elder). Rodin's text-only output for them either couldn't be rigged (arms fused to the body, a staff fused to the hand) or ignored the brief. Make them from a front-view concept image instead, using Rodin's image reference. No character appears on both sides; `ShinobiCoop.Cast.NoFaceOnTwoSides` checks this. The player roster (`AShinobiPlayerCharacter::Roster`) is separate; see "Player characters from photos" below. Until a character is rigged and imported, its NPC stays the tinted mannequin.
 
 Each character's files live in `SourceArt/Character/Models/<Name>/`: `<Name>.glb` (the Rodin output), `<Name>_prep.fbx` and `preview_front.png`.
 
@@ -39,3 +39,14 @@ Generate a model (a full-body, symmetric A-pose with empty hands works best), th
 2. Run `blender -b -P Scripts/character/prep_mesh.py -- <Name>.glb <Name>_prep.fbx` in that folder.
 3. Rig it as above.
 4. Add `<Name>` to an enemy `BodyPool` or to `AShinobiVillager::Bodies`, and rebuild.
+
+## Player characters from photos (the roster)
+
+The roster characters (Hero, Bika, Cat, Misha, Pabu) are made from real photos, but not straight from them: Hyper3D Rodin copies the pose of a photo (a seated cat stays a seated cat, an arm behind the back stays fused to the body), and Mixamo can't rig that. They go through an A-pose reference first, like the original hero:
+
+1. **Reference images.** In one ChatGPT chat per character, attach the photos and ask for the character as a full-body anime design in a strict symmetric A-pose (arms about 45° down, open hands, legs apart with a clear gap, nothing held), wearing the same plain dark shinobi outfit (black top, dark trousers, shin bandages, blue sandals, no cloak: outfits are worn over it, see [outfit-steps.md](outfit-steps.md)). An animal becomes an upright humanoid with the animal's head, fur and colours. Then ask for the side and back views of "this exact character, same outfit, same scale, same pose". Save `<Name>_base_front.png`, `_side.png`, `_back.png` in `SourceArt/Character/Reference/` (not committed). If the side sheet shows two profiles, use one.
+2. **3D model.** Upload the three views to Rodin in that order (Gen-2.5 Medium, Raw, 50k polygons, GLB) with a prompt like "one 3D character from three views of the same character: front, side, back, anime cel-shaded, strict symmetric A-pose, plain dark shinobi outfit, no cloak, no props". Save it as `SourceArt/Character/Models/<Name>/<Name>.glb`.
+3. **Prep, rig, import.** `Scripts/character/prep_mesh.py` and the Mixamo steps are the same as for the NPC cast above. `SourceArt/Character/Models/Hero/Hero_rigged.fbx` is the hero itself (`/Game/Shinobi/Hero`, used before any other roster character); every other `<Name>_rigged.fbx` imports to `/Game/Shinobi/Characters/<Name>/`.
+4. **Roster.** Add a line to `AShinobiPlayerCharacter::Roster` (`{TEXT("<Name>"), TEXT("/Game/Shinobi/Characters/<Name>/SK_<Name>.SK_<Name>"), TEXT("/Game/Shinobi/Characters/<Name>/RTG_MannyTo<Name>.RTG_MannyTo<Name>")}`) and rebuild. `ShinobiCoop.Hero.PickSwapsBody` checks every imported entry.
+
+Animal characters keep their tails: Mixamo skins a tail to the hips and legs, so it swings stiffly. Cloaks leave the tail outside.

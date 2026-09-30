@@ -157,6 +157,78 @@ bool FShinobiPickSurvivesRespawnTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOutfitWornTest, "ShinobiCoop.Hero.OutfitFollowsBodyAndComesOff", ShinobiTestFlags)
+bool FShinobiOutfitWornTest::RunTest(const FString& Parameters)
+{
+	// Every imported outfit (Scripts/setup_hero.py) over every imported roster character.
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	if (!TestNotNull(TEXT("HeroMesh in use"), P->GetHeroMesh()) || !TestNotNull(TEXT("OutfitMesh exists"), P->GetOutfitMesh()))
+	{
+		return false;
+	}
+	TestFalse(TEXT("No outfit by default"), P->GetOutfitMesh()->IsVisible());
+	int32 Checked = 0;
+	for (int32 Outfit = 1; Outfit < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Outfits); ++Outfit)
+	{
+		const USkeletalMesh* Cloth = LoadObject<USkeletalMesh>(nullptr, AShinobiPlayerCharacter::Outfits[Outfit].Mesh, nullptr, LOAD_NoWarn | LOAD_Quiet);
+		if (!Cloth)
+		{
+			continue;
+		}
+		for (int32 Index = 0; Index < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster); ++Index)
+		{
+			if (!LoadObject<USkeletalMesh>(nullptr, AShinobiPlayerCharacter::Roster[Index].Mesh, nullptr, LOAD_NoWarn | LOAD_Quiet))
+			{
+				continue;
+			}
+			P->SetCharacterIndex(uint8(Index));
+			P->SetOutfitIndex(uint8(Outfit));
+			W.Tick(0.1f);
+			const FString Who = FString::Printf(TEXT("%s in %s"), AShinobiPlayerCharacter::Outfits[Outfit].Name, AShinobiPlayerCharacter::Roster[Index].Name);
+			const USkeletalMeshComponent* Worn = P->GetOutfitMesh();
+			TestTrue(Who + TEXT(" shows the outfit mesh"), Worn->GetSkeletalMeshAsset() == Cloth && Worn->IsVisible());
+			TestTrue(Who + TEXT(" follows the body's pose"), Worn->LeaderPoseComponent.Get() == P->GetHeroMesh());
+			// The collar sits at the head, the hem above the knees: the cloth hangs within the body's height, centred on it
+			// (asset bounds moved by the component's offset: the component's own bounds follow the body's).
+			const FBox Cloth2 = Cloth->GetBounds().GetBox().ShiftBy(Worn->GetRelativeLocation());
+			const FBox BodyBox = P->GetHeroMesh()->GetSkeletalMeshAsset()->GetBounds().GetBox();
+			TestTrue(FString::Printf(TEXT("%s spans %.0f-%.0f cm above the feet"), *Who, Cloth2.Min.Z, Cloth2.Max.Z),
+				Cloth2.Min.Z > 20.f && Cloth2.Max.Z < 190.f && Cloth2.Max.Z > 120.f);
+			const FVector Off = Cloth2.GetCenter() - BodyBox.GetCenter();
+			AddInfo(FString::Printf(TEXT("%s: outfit centre is (%.1f, %.1f) cm from the body's in X/Y"), *Who, Off.X, Off.Y));
+			// Y is front-to-back: a tail (Cat, Misha) pulls the body's bounds centre backwards, so it gets more room.
+			TestTrue(Who + TEXT(" is centred on the body"), FMath::Abs(Off.X) < 10.f && FMath::Abs(Off.Y) < 15.f);
+			++Checked;
+		}
+	}
+	AddInfo(FString::Printf(TEXT("Checked %d imported outfit/character pair(s)"), Checked));
+	P->SetOutfitIndex(0);
+	TestFalse(TEXT("None takes it off"), P->GetOutfitMesh()->IsVisible());
+	P->SetOutfitIndex(200);
+	TestFalse(TEXT("An out-of-range pick wears nothing"), P->GetOutfitMesh()->IsVisible());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOutfitSurvivesRespawnTest, "ShinobiCoop.Hero.OutfitPickSurvivesRespawn", ShinobiTestFlags)
+bool FShinobiOutfitSurvivesRespawnTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerController* PC = W.World->SpawnActor<AShinobiPlayerController>();
+	AShinobiPlayerCharacter* First = W.Spawn<AShinobiPlayerCharacter>();
+	PC->Possess(First);
+	const int32 Pick = UE_ARRAY_COUNT(AShinobiPlayerCharacter::Outfits) - 1;
+	PC->ShinobiOutfit(FString(AShinobiPlayerCharacter::Outfits[Pick].Name).ToLower());
+	TestEqual(TEXT("The pick reaches the pawn"), int32(First->GetOutfitIndex()), Pick);
+	PC->UnPossess();
+	First->Destroy();
+	W.Tick(0.1f);
+	AShinobiPlayerCharacter* Second = W.Spawn<AShinobiPlayerCharacter>();
+	PC->Possess(Second);
+	TestEqual(TEXT("The respawned pawn keeps it"), int32(Second->GetOutfitIndex()), Pick);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiNameTagTest, "ShinobiCoop.Hero.NameTagOnlyOnTeammates", ShinobiTestFlags)
 bool FShinobiNameTagTest::RunTest(const FString& Parameters)
 {

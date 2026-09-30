@@ -2,6 +2,7 @@
 #include "ShinobiCoop.h"
 #include "AbilitySystemComponent.h"
 #include "Animation/AnimMontage.h"
+#include "AnimationRuntime.h"
 #include "Camera/CameraComponent.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -13,6 +14,8 @@
 #include "GameFramework/SpringArmComponent.h"
 #include "InputActionValue.h"
 #include "Shinobi/ShinobiInputConfig.h"
+#include "Shinobi/ShinobiLook.h"
+#include "Engine/SkeletalMesh.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/GA_Amaterasu.h"
 #include "Shinobi/Abilities/GA_ChakraCharge.h"
@@ -80,6 +83,11 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 	HeroMesh = CreateDefaultSubobject<UShinobiBodyComponent>(TEXT("HeroMesh"));
 	HeroMesh->SetupAttachment(GetMesh());
 
+	OutfitMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("OutfitMesh"));
+	OutfitMesh->SetupAttachment(HeroMesh);
+	OutfitMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	OutfitMesh->SetVisibility(false);
+
 	NameTag = CreateDefaultSubobject<UShinobiOverheadTextComponent>(TEXT("NameTag"));
 	NameTag->SetupAttachment(RootComponent);
 }
@@ -102,6 +110,70 @@ void AShinobiPlayerCharacter::SetCharacterIndex(uint8 Index)
 	ApplyCharacter();
 }
 
+int32 AShinobiPlayerCharacter::FindOutfitIndex(const FString& Name)
+{
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Outfits); ++Index)
+	{
+		if (Name.Equals(Outfits[Index].Name, ESearchCase::IgnoreCase))
+		{
+			return Index;
+		}
+	}
+	return INDEX_NONE;
+}
+
+void AShinobiPlayerCharacter::SetOutfitIndex(uint8 Index)
+{
+	OutfitIndex = Index;
+	ApplyOutfit();
+}
+
+namespace
+{
+	/** Where the Hips bone sits in the mesh's reference pose (component space); zero for a skeleton without one. */
+	FVector RefHipsLocation(const USkeletalMesh* Mesh)
+	{
+		const FReferenceSkeleton& Ref = Mesh->GetRefSkeleton();
+		for (int32 Bone = 0; Bone < Ref.GetNum(); ++Bone)
+		{
+			if (Ref.GetBoneName(Bone).ToString().EndsWith(TEXT("Hips")))
+			{
+				return FAnimationRuntime::GetComponentSpaceTransformRefPose(Ref, Bone).GetLocation();
+			}
+		}
+		return FVector::ZeroVector;
+	}
+}
+
+void AShinobiPlayerCharacter::ApplyOutfit()
+{
+	if (!HeroMesh || !OutfitMesh)
+	{
+		return;
+	}
+	USkeletalMesh* Cloth = nullptr;
+	if (OutfitIndex < UE_ARRAY_COUNT(Outfits) && Outfits[OutfitIndex].Mesh)
+	{
+		// Quiet: an outfit that isn't imported yet is expected.
+		Cloth = LoadObject<USkeletalMesh>(nullptr, Outfits[OutfitIndex].Mesh, nullptr, LOAD_NoWarn | LOAD_Quiet);
+	}
+	const USkeletalMesh* Body = HeroMesh->GetSkeletalMeshAsset();
+	OutfitMesh->SetSkeletalMeshAsset(Cloth);
+	OutfitMesh->SetVisibility(Cloth != nullptr);
+	if (!Cloth || !Body)
+	{
+		OutfitMesh->SetLeaderPoseComponent(nullptr);
+		return;
+	}
+	// The outfit's bones take the body's component-space pose, so a body whose skeleton sits elsewhere in its FBX than the
+	// outfit's would carry the outfit off by the difference: shift it back by the two hips' reference-pose offset.
+	OutfitMesh->SetRelativeLocation(RefHipsLocation(Cloth) - RefHipsLocation(Body));
+	OutfitMesh->SetLeaderPoseComponent(HeroMesh);
+	ShinobiLook::EnableOutline(OutfitMesh, Team == EShinobiTeam::Enemies ? ShinobiLook::StencilEnemy : ShinobiLook::StencilFriendly);
+	// Scripts/smoke_m4.ps1 style check: both machines log what they see.
+	UE_LOG(LogShinobiCoop, Log, TEXT("%s wears %s"), *GetName(), Outfits[OutfitIndex].Name);
+}
+
 bool AShinobiPlayerCharacter::ApplyCharacter()
 {
 	if (!HeroMesh)
@@ -116,6 +188,7 @@ bool AShinobiPlayerCharacter::ApplyCharacter()
 			UE_LOG(LogShinobiCoop, Log, TEXT("%s plays %s%s"), *GetName(),
 				CharacterIndex < UE_ARRAY_COUNT(Roster) ? Roster[CharacterIndex].Name : TEXT("an unknown pick"),
 				Index == CharacterIndex ? TEXT("") : TEXT(" (not imported: shown as the hero)"));
+			ApplyOutfit(); // the new body's skeleton: re-bind the outfit to it
 			return true;
 		}
 	}
@@ -126,12 +199,15 @@ void AShinobiPlayerCharacter::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AShinobiPlayerCharacter, CharacterIndex);
+	DOREPLIFETIME(AShinobiPlayerCharacter, OutfitIndex);
 }
 
 void AShinobiPlayerCharacter::ApplyHero()
 {
 	if (!CVarHero.GetValueOnGameThread() || !ApplyCharacter())
 	{
+		OutfitMesh->DestroyComponent();
+		OutfitMesh = nullptr;
 		HeroMesh->DestroyComponent();
 		HeroMesh = nullptr;
 		return;

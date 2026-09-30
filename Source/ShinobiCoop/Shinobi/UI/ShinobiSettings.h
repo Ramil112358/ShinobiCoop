@@ -5,12 +5,12 @@
 class UWorld;
 
 /**
- * The player's character pick and graphics settings (settings menu): each row cycles through fixed values, applies at once and is saved
+ * The player's character and outfit picks and graphics settings (settings menu): each row cycles through fixed values, applies at once and is saved
  * per machine (UGameUserSettings, GameUserSettings.ini). A client's settings never affect the host.
  */
 namespace ShinobiSettings
 {
-	enum class ERow : uint8 { Character, Quality, RenderScale, WindowMode, FrameCap, VSync, Outline, Num };
+	enum class ERow : uint8 { Character, Outfit, Quality, RenderScale, WindowMode, FrameCap, VSync, Outline, Num };
 
 	/** "Graphics quality: High" etc. */
 	SHINOBICOOP_API FString Label(ERow Row);
@@ -19,6 +19,8 @@ namespace ShinobiSettings
 
 	/** The roster character this machine's player plays (saved by the Character row; the hero by default). */
 	SHINOBICOOP_API FString GetSavedCharacter();
+	/** The outfit this machine's player wears (saved by the Outfit row; None by default). */
+	SHINOBICOOP_API FString GetSavedOutfit();
 
 	SHINOBICOOP_API float GetRenderScale();
 	SHINOBICOOP_API void SetRenderScale(float Percent);

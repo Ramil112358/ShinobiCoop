@@ -35,6 +35,7 @@ void AShinobiPlayerController::BeginPlay()
 		return;
 	}
 	ShinobiCharacter(ShinobiSettings::GetSavedCharacter());
+	ShinobiOutfit(ShinobiSettings::GetSavedOutfit());
 	// The main menu left the viewport in UI-only mode with a cursor (input mode outlives the travel).
 	SetInputMode(FInputModeGameOnly());
 	SetShowMouseCursor(false);
@@ -107,6 +108,7 @@ void AShinobiPlayerController::OnPossess(APawn* InPawn)
 	if (AShinobiPlayerCharacter* Body = Cast<AShinobiPlayerCharacter>(InPawn))
 	{
 		Body->SetCharacterIndex(PickedCharacter);
+		Body->SetOutfitIndex(PickedOutfit);
 	}
 }
 
@@ -127,6 +129,26 @@ void AShinobiPlayerController::ServerPickCharacter_Implementation(uint8 Index)
 	if (AShinobiPlayerCharacter* Body = GetPawn<AShinobiPlayerCharacter>())
 	{
 		Body->SetCharacterIndex(PickedCharacter);
+	}
+}
+
+void AShinobiPlayerController::ShinobiOutfit(const FString& Name)
+{
+	const int32 Index = AShinobiPlayerCharacter::FindOutfitIndex(Name);
+	if (Index == INDEX_NONE)
+	{
+		UE_LOG(LogShinobiCoop, Warning, TEXT("ShinobiOutfit: no outfit named '%s'"), *Name);
+		return;
+	}
+	ServerPickOutfit(uint8(Index));
+}
+
+void AShinobiPlayerController::ServerPickOutfit_Implementation(uint8 Index)
+{
+	PickedOutfit = Index < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Outfits) ? Index : 0; // a client's value: clamp it
+	if (AShinobiPlayerCharacter* Body = GetPawn<AShinobiPlayerCharacter>())
+	{
+		Body->SetOutfitIndex(PickedOutfit);
 	}
 }
 

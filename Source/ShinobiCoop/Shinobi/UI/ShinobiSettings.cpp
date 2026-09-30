@@ -16,6 +16,7 @@ namespace
 
 	const TCHAR* ConfigSection = TEXT("/Script/ShinobiCoop.ShinobiSettings");
 	const TCHAR* CharacterKey = TEXT("Character");
+	const TCHAR* OutfitKey = TEXT("Outfit");
 
 	UGameUserSettings* Settings()
 	{
@@ -44,6 +45,13 @@ FString ShinobiSettings::GetSavedCharacter()
 	return AShinobiPlayerCharacter::FindRosterIndex(Name) == INDEX_NONE ? FString(AShinobiPlayerCharacter::Roster[0].Name) : Name;
 }
 
+FString ShinobiSettings::GetSavedOutfit()
+{
+	FString Name;
+	GConfig->GetString(ConfigSection, OutfitKey, Name, GGameUserSettingsIni);
+	return AShinobiPlayerCharacter::FindOutfitIndex(Name) == INDEX_NONE ? FString(AShinobiPlayerCharacter::Outfits[0].Name) : Name;
+}
+
 float ShinobiSettings::GetRenderScale()
 {
 	float Current = 100.f, Min = 0.f, Max = 0.f, Default = 100.f;
@@ -63,6 +71,8 @@ FString ShinobiSettings::Label(ERow Row)
 	{
 	case ERow::Character:
 		return FString::Printf(TEXT("Character: %s"), *GetSavedCharacter());
+	case ERow::Outfit:
+		return FString::Printf(TEXT("Outfit: %s"), *GetSavedOutfit());
 	case ERow::Quality:
 	{
 		const int32 Level = S->GetOverallScalabilityLevel();
@@ -105,6 +115,18 @@ void ShinobiSettings::Cycle(ERow Row, UWorld* World)
 		if (AShinobiPlayerController* PC = World ? World->GetFirstPlayerController<AShinobiPlayerController>() : nullptr)
 		{
 			PC->ShinobiCharacter(Name);
+		}
+		return;
+	}
+	case ERow::Outfit:
+	{
+		const int32 Next = (AShinobiPlayerCharacter::FindOutfitIndex(GetSavedOutfit()) + 1) % UE_ARRAY_COUNT(AShinobiPlayerCharacter::Outfits);
+		const FString Name = AShinobiPlayerCharacter::Outfits[Next].Name;
+		GConfig->SetString(ConfigSection, OutfitKey, *Name, GGameUserSettingsIni);
+		GConfig->Flush(false, GGameUserSettingsIni);
+		if (AShinobiPlayerController* PC = World ? World->GetFirstPlayerController<AShinobiPlayerController>() : nullptr)
+		{
+			PC->ShinobiOutfit(Name);
 		}
 		return;
 	}
