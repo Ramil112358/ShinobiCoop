@@ -58,6 +58,8 @@ AShinobiVillager::AShinobiVillager(const FObjectInitializer& ObjectInitializer)
 	}
 	GetMesh()->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -92.f), FRotator(0.f, -90.f, 0.f));
 	GetMesh()->SetRelativeScale3D(FVector(0.95f));
+	Body = CreateDefaultSubobject<UShinobiBodyComponent>(TEXT("Body"));
+	Body->SetupAttachment(GetMesh());
 
 	BarkText = CreateDefaultSubobject<UShinobiOverheadTextComponent>(TEXT("BarkText"));
 	BarkText->SetupAttachment(RootComponent);
@@ -75,9 +77,15 @@ void AShinobiVillager::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 void AShinobiVillager::BeginPlay()
 {
 	Super::BeginPlay();
-	if (!IsNetMode(NM_DedicatedServer))
+	if (Body->WearCharacter(Bodies[FMath::Abs(Variant) % UE_ARRAY_COUNT(Bodies)]))
 	{
-		for (int32 Slot = 0; Slot < GetMesh()->GetNumMaterials(); ++Slot)
+		Body->HideDriver();
+	}
+	else
+	{
+		Body->DestroyComponent();
+		Body = nullptr;
+		for (int32 Slot = 0; Slot < GetMesh()->GetNumMaterials() && !IsNetMode(NM_DedicatedServer); ++Slot)
 		{
 			if (UMaterialInstanceDynamic* Material = GetMesh()->CreateDynamicMaterialInstance(Slot))
 			{
@@ -85,7 +93,7 @@ void AShinobiVillager::BeginPlay()
 			}
 		}
 	}
-	ShinobiLook::EnableOutline(GetMesh(), ShinobiLook::StencilFriendly);
+	ShinobiLook::EnableOutline(GetBodyMesh(), ShinobiLook::StencilFriendly);
 	TalkCount = Variant;
 	IdleTime = 1.f + (Variant % 4);
 }

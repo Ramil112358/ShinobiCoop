@@ -1,7 +1,8 @@
 # Menu and session smoke test over LAN (-nosteam: the Null subsystem): a host process hosts from the main menu, a
 # client process finds that game and joins it through the menu; then the host quits and the client must land back
-# on the main menu with a "lost the connection" message. On the way, each player's roster pick (host Sasuke, client
-# Itachi; saved picks are overridden on the command line) must show on both machines.
+# on the main menu with a "lost the connection" message. On the way, each player's roster pick (saved picks are
+# overridden on the command line) must show on both machines. ponytail: the roster is only the hero until the
+# photo-based heroes join; then give host and client different picks here.
 $ErrorActionPreference = "Stop"
 $UE = "C:\Program Files\Epic Games\UE_5.8"
 $Editor = "$UE\Engine\Binaries\Win64\UnrealEditor.exe"
@@ -29,17 +30,17 @@ function Wait-Log($Log, $Pattern, $Seconds, $What) {
     Write-Host "ok: $What"
 }
 
-$hostProc = Start-Process $Editor -PassThru -ArgumentList "$Common $(Pick Sasuke) -ShinobiAutoHost -abslog=`"$HostLog`""
+$hostProc = Start-Process $Editor -PassThru -ArgumentList "$Common $(Pick Hero) -ShinobiAutoHost -abslog=`"$HostLog`""
 $client = $null
 try {
     Wait-Log $HostLog "Online subsystem: Null" 240 "host fell back to LAN mode"
     Wait-Log $HostLog "Bringing World /Game/Shinobi/Maps/Lvl_HiddenLeafValley.* up for play" 180 "host created the game and opened Hidden Leaf Valley"
-    $client = Start-Process $Editor -PassThru -ArgumentList "$Common $(Pick Itachi) -ShinobiAutoJoin -abslog=`"$ClientLog`""
+    $client = Start-Process $Editor -PassThru -ArgumentList "$Common $(Pick Hero) -ShinobiAutoJoin -abslog=`"$ClientLog`""
     Wait-Log $ClientLog "Welcomed by server" 240 "client found and joined the game from the menu"
     Wait-Log $HostLog "Join succeeded" 30 "host accepted the client"
-    Wait-Log $HostLog "plays Itachi" 30 "host sees the client's pick"
-    Wait-Log $ClientLog "plays Sasuke" 30 "client sees the host's pick"
-    Wait-Log $ClientLog "plays Itachi" 30 "client sees its own pick"
+    Wait-Log $HostLog "plays Hero" 30 "host sees the client's pick"
+    Wait-Log $ClientLog "plays Hero" 30 "client sees the host's pick"
+    Wait-Log $ClientLog "plays Hero" 30 "client sees its own pick"
     Start-Sleep -Seconds 3
     Stop-Process $hostProc -Force
     Wait-Log $ClientLog "Session: Lost the connection" 90 "client noticed the host leaving"

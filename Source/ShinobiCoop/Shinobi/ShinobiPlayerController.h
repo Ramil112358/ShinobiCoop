@@ -36,7 +36,7 @@ public:
 	UFUNCTION(Exec)
 	void ShinobiDumpStats();
 
-	/** Console: ShinobiCharacter Naruto -- play as that roster character (AShinobiPlayerCharacter::Roster). The settings
+	/** Console: ShinobiCharacter Hero -- play as that roster character (AShinobiPlayerCharacter::Roster). The settings
 	 * menu's Character row calls this after saving the pick; on its own it lasts for this session only. */
 	UFUNCTION(Exec)
 	void ShinobiCharacter(const FString& Name);

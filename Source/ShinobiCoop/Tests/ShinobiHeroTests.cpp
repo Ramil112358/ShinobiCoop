@@ -144,15 +144,16 @@ bool FShinobiPickSurvivesRespawnTest::RunTest(const FString& Parameters)
 	AShinobiPlayerController* PC = W.World->SpawnActor<AShinobiPlayerController>();
 	AShinobiPlayerCharacter* First = W.Spawn<AShinobiPlayerCharacter>();
 	PC->Possess(First);
-	PC->ShinobiCharacter(TEXT("sasuke"));
-	const int32 Sasuke = AShinobiPlayerCharacter::FindRosterIndex(TEXT("Sasuke"));
-	TestEqual(TEXT("The pick reaches the pawn"), int32(First->GetCharacterIndex()), Sasuke);
+	// The last roster entry (just the hero until photo-based heroes join; then this checks a real pick).
+	const int32 Pick = UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster) - 1;
+	PC->ShinobiCharacter(FString(AShinobiPlayerCharacter::Roster[Pick].Name).ToLower());
+	TestEqual(TEXT("The pick reaches the pawn"), int32(First->GetCharacterIndex()), Pick);
 	PC->UnPossess();
 	First->Destroy();
 	W.Tick(0.1f);
 	AShinobiPlayerCharacter* Second = W.Spawn<AShinobiPlayerCharacter>();
 	PC->Possess(Second);
-	TestEqual(TEXT("The respawned pawn keeps it"), int32(Second->GetCharacterIndex()), Sasuke);
+	TestEqual(TEXT("The respawned pawn keeps it"), int32(Second->GetCharacterIndex()), Pick);
 	return true;
 }
 

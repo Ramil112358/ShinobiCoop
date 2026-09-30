@@ -23,7 +23,7 @@ bool FShinobiOutlineStencilTest::RunTest(const FString& Parameters)
 	};
 	Outlined(Player->GetBodyMesh(), ShinobiLook::StencilFriendly, TEXT("Player's visible body"));
 	Outlined(Ninja->GetBodyMesh(), ShinobiLook::StencilEnemy, TEXT("Enemy"));
-	Outlined(Villager->GetMesh(), ShinobiLook::StencilFriendly, TEXT("Villager"));
+	Outlined(Villager->GetBodyMesh(), ShinobiLook::StencilFriendly, TEXT("Villager's visible body"));
 	if (Player->GetHeroMesh())
 	{
 		// The hidden Manny that drives the hero's animation must not draw an outline of its own.

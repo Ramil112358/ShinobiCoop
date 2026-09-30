@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "ShinobiVillager.generated.h"
 
 class UNavigationInvokerComponent;
@@ -37,12 +38,23 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Villager")
 	TArray<FVector> Route;
 
-	/** Which of the look / voice variations this villager uses (tint, first bark); replicated. */
+	/** Which of the look / voice variations this villager uses (its character, first bark); replicated. */
 	UPROPERTY(Replicated, EditAnywhere, Category = "Villager")
 	int32 Variant = 0;
 
+	/** The villagers' characters (built by Scripts/setup_hero.py at /Game/Shinobi/Characters/<Name>), by Variant modulo
+	 * the count: townsfolk first (so the valley's 6th route repeats Goro, not a guard), then the village guards. Never
+	 * shared with an enemy type's BodyPool. */
+	static constexpr const TCHAR* Bodies[] = { TEXT("Goro"), TEXT("Hana"), TEXT("Mika"), TEXT("Jin"), TEXT("Suzu") };
+
+	/** The visible mesh: the character over the hidden Quinn, or the kimono-tinted Quinn when it isn't imported. */
+	USkeletalMeshComponent* GetBodyMesh() const { return Body ? Body.Get() : GetMesh(); }
+
 private:
 	void HideBark();
+
+	UPROPERTY(VisibleAnywhere, Category = "Villager")
+	TObjectPtr<UShinobiBodyComponent> Body;
 
 	UPROPERTY(VisibleAnywhere, Category = "Villager")
 	TObjectPtr<UShinobiOverheadTextComponent> BarkText;

@@ -3,10 +3,10 @@
 #include "CoreMinimal.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
+#include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "ShinobiPlayerCharacter.generated.h"
 
 class UCameraComponent;
-class UIKRetargeter;
 class UShinobiOverheadTextComponent;
 class USpringArmComponent;
 struct FInputActionValue;
@@ -50,16 +50,11 @@ public:
 
 	virtual void Tick(float DeltaSeconds) override;
 
-	/** Every character a player can pick (Scripts/setup_hero.py builds them; VRoid ones from SourceArt/Character/VRoid).
-	 * Entry 0 is the default hero and the fallback for a pick whose assets aren't imported. */
+	/** Every character a player can pick (Scripts/setup_hero.py builds them; heroes from photos or VRoid get added here,
+	 * the generated NPC cast lives on the enemy types and AShinobiVillager instead). Entry 0 is the default hero and the
+	 * fallback for a pick whose assets aren't imported. */
 	static constexpr FShinobiRosterEntry Roster[] = {
 		{TEXT("Hero"), TEXT("/Game/Shinobi/Hero/SK_Hero.SK_Hero"), TEXT("/Game/Shinobi/Hero/RTG_MannyToHero.RTG_MannyToHero")},
-		{TEXT("Naruto"), TEXT("/Game/Shinobi/Characters/Naruto/SK_Naruto.SK_Naruto"), TEXT("/Game/Shinobi/Characters/Naruto/RTG_MannyToNaruto.RTG_MannyToNaruto")},
-		{TEXT("Sasuke"), TEXT("/Game/Shinobi/Characters/Sasuke/SK_Sasuke.SK_Sasuke"), TEXT("/Game/Shinobi/Characters/Sasuke/RTG_MannyToSasuke.RTG_MannyToSasuke")},
-		{TEXT("Itachi"), TEXT("/Game/Shinobi/Characters/Itachi/SK_Itachi.SK_Itachi"), TEXT("/Game/Shinobi/Characters/Itachi/RTG_MannyToItachi.RTG_MannyToItachi")},
-		{TEXT("Minato"), TEXT("/Game/Shinobi/Characters/Minato/SK_Minato.SK_Minato"), TEXT("/Game/Shinobi/Characters/Minato/RTG_MannyToMinato.RTG_MannyToMinato")},
-		{TEXT("Obito"), TEXT("/Game/Shinobi/Characters/Obito/SK_Obito.SK_Obito"), TEXT("/Game/Shinobi/Characters/Obito/RTG_MannyToObito.RTG_MannyToObito")},
-		{TEXT("Madara"), TEXT("/Game/Shinobi/Characters/Madara/SK_Madara.SK_Madara"), TEXT("/Game/Shinobi/Characters/Madara/RTG_MannyToMadara.RTG_MannyToMadara")},
 	};
 
 	/** Roster index of Name (case-insensitive), or INDEX_NONE. */
@@ -68,9 +63,6 @@ public:
 	/** Server: play as Roster[Index] (replicated; out of range or not imported = the hero). */
 	void SetCharacterIndex(uint8 Index);
 	uint8 GetCharacterIndex() const { return CharacterIndex; }
-
-	/** The retargeter for the body in use; UShinobiRetargetAnimInstance reads it. */
-	UIKRetargeter* GetRetargeter() const { return Retargeter; }
 
 	/** The hero mesh when the hero is in use (Shinobi.Hero 1 and its assets exist), else GetMesh(). */
 	virtual USkeletalMeshComponent* GetBodyMesh() const override { return HeroMesh ? HeroMesh.Get() : GetMesh(); }
@@ -118,12 +110,9 @@ private:
 	UPROPERTY(ReplicatedUsing = OnRep_CharacterIndex)
 	uint8 CharacterIndex = 0;
 
-	UPROPERTY(Transient)
-	TObjectPtr<UIKRetargeter> Retargeter;
-
-	/** The visible hero body, pose-driven from GetMesh() by UShinobiRetargetAnimInstance. */
+	/** The visible hero body, pose-driven from GetMesh(). */
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
-	TObjectPtr<USkeletalMeshComponent> HeroMesh;
+	TObjectPtr<UShinobiBodyComponent> HeroMesh;
 
 	/** Teammates' names above their heads; hidden on your own character. */
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")

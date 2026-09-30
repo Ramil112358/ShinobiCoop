@@ -12,11 +12,15 @@ Builds:
   IK_Hero          auto-characterised IK rig (Mixamo template: chains Spine, Neck, Head, LeftArm, ... as on IK_Manny)
   RTG_MannyToHero  source IK_Manny (from Scripts/setup_chakra_pose.py) -> target IK_Hero, used at runtime by
                    UShinobiRetargetAnimInstance to copy the hidden Manny's pose onto the hero every frame.
-Then the roster characters (AShinobiPlayerCharacter::Roster), one per SourceArt/Character/VRoid/<Id>.vrm made in VRoid
-Studio (docs/character/vroid-steps.md): Scripts/character/vroid_to_fbx.py turns each into <Id>/<Id>.fbx + one PNG per
-material (re-run when the .vrm is newer), and each FBX becomes /Game/Shinobi/Characters/<Id>/: SK_<Id> (+ skeleton,
-physics asset), T_/MI_<Id>_<Slot> per material slot on the shared M_VRoid (masked by the texture alpha: eyelashes,
-brows, hair edges; two-sided: hair and cloth cards), IK_<Id> and RTG_MannyTo<Id>, built exactly like the hero's.
+Then every other character (players' roster picks, AShinobiPlayerCharacter::Roster; the NPC cast, enemy types' BodyPool
+and AShinobiVillager::Bodies; all worn through UShinobiBodyComponent), from two sources:
+  - SourceArt/Character/Models/<Id>/<Id>_rigged.fbx: a Mixamo-rigged model, like the hero (docs/character/model-steps.md);
+    its texture comes from <Id>_rigged.png (extracted like the hero's when missing).
+  - SourceArt/Character/VRoid/<Id>.vrm made in VRoid Studio (docs/character/vroid-steps.md):
+    Scripts/character/vroid_to_fbx.py turns each into <Id>/<Id>.fbx + one PNG per material (re-run when the .vrm is newer).
+Each becomes /Game/Shinobi/Characters/<Id>/: SK_<Id> (+ skeleton, physics asset), T_/MI_<Id>_<Texture> on the shared
+M_Character (masked by the texture alpha: eyelashes, brows, hair edges; two-sided: hair and cloth cards), IK_<Id> and
+RTG_MannyTo<Id>, built exactly like the hero's.
 Retargeter setup follows setup_chakra_pose.py's reasoning (exact chain mapping, auto-align the target chain to chain,
 Run IK Rig op off). Root Motion op off too: the hero's root IS its pelvis (Hips), so "copy source root" would pin the
 hips to Manny's floor-level root bone; the character moves by its capsule, not root motion.
@@ -34,6 +38,7 @@ HERO_FBX = os.path.join(PROJECT, "SourceArt", "Character", "Mesh", "hero_rigged.
 HERO_TEXTURE = os.path.splitext(HERO_FBX)[0] + ".png"
 STAND_IN_FBX = os.path.join(PROJECT, "SourceArt", "Mixamo", "Power_Up_30fps.fbx")
 VROID_DIR = os.path.join(PROJECT, "SourceArt", "Character", "VRoid")
+MODELS_DIR = os.path.join(PROJECT, "SourceArt", "Character", "Models")
 CHARACTERS_DIR = "/Game/Shinobi/Characters"
 BLENDER = "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe"
 MEL = unreal.MaterialEditingLibrary
@@ -208,12 +213,13 @@ def convert_vrms():
         log(f"converted {vrm}")
 
 
-def build_vroid_material():
-    """M_VRoid: the hero's lit Substrate recipe, masked by the texture's alpha and two-sided; one instance per slot."""
-    path = f"{CHARACTERS_DIR}/M_VRoid"
+def build_character_material():
+    """M_Character: the hero's lit Substrate recipe, masked by the texture's alpha and two-sided (VRoid eyelashes,
+    brows, hair and cloth cards; an opaque texture shows whole); characters use instances of it."""
+    path = f"{CHARACTERS_DIR}/M_Character"
     if unreal.EditorAssetLibrary.does_asset_exist(path):
         unreal.EditorAssetLibrary.delete_asset(path)
-    material = TOOLS.create_asset("M_VRoid", CHARACTERS_DIR, unreal.Material, unreal.MaterialFactoryNew())
+    material = TOOLS.create_asset("M_Character", CHARACTERS_DIR, unreal.Material, unreal.MaterialFactoryNew())
     material.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MASKED)
     material.set_editor_property("two_sided", True)
     sample = MEL.create_material_expression(material, unreal.MaterialExpressionTextureSampleParameter2D, -500, 0)
@@ -226,14 +232,14 @@ def build_vroid_material():
     shading = MEL.create_material_expression(material, unreal.MaterialExpressionSubstrateShadingModels, -200, 0)
     for src, pin in ((sample, "BaseColor"), (rough, "Roughness"), (spec, "Specular")):
         if not MEL.connect_material_expressions(src, "RGB" if src is sample else "", shading, pin):
-            raise RuntimeError(f"M_VRoid: could not connect {pin}")
+            raise RuntimeError(f"M_Character: could not connect {pin}")
     MEL.connect_material_property(shading, "", unreal.MaterialProperty.MP_FRONT_MATERIAL)
     if not MEL.connect_material_property(sample, "A", unreal.MaterialProperty.MP_OPACITY_MASK):
-        raise RuntimeError("M_VRoid: could not connect the opacity mask")
+        raise RuntimeError("M_Character: could not connect the opacity mask")
     MEL.set_base_material_usage(material, unreal.MaterialUsage.MATUSAGE_SKELETAL_MESH, True)
     errors = MEL.recompile_material(material)
     if errors:
-        raise RuntimeError(f"M_VRoid failed to compile: {errors}")
+        raise RuntimeError(f"M_Character failed to compile: {errors}")
     unreal.EditorAssetLibrary.save_loaded_asset(material)
     return material
 
@@ -253,38 +259,58 @@ def import_texture_file(png, dest, name):
     return texture
 
 
-def use_vroid_materials(mesh, character, dest, png_dir, parent):
-    """One MI_<Id>_<Slot> per material slot, its BaseColor the <Slot>.png vroid_to_fbx.py wrote."""
-    slots = []
+def use_materials(mesh, character, dest, png_for_slot, parent):
+    """One MI_<Id>_<Png> per base-colour PNG (VRoid: one per slot, <Slot>.png; Mixamo: one texture for every slot)."""
+    slots, instances = [], {}
     for slot in mesh.get_editor_property("materials"):
         slot_name = str(slot.get_editor_property("material_slot_name"))
-        png = os.path.join(png_dir, f"{slot_name}.png")
+        png = png_for_slot(slot_name)
         if not os.path.exists(png):
-            pngs = sorted(os.path.basename(p) for p in glob.glob(os.path.join(png_dir, "*.png")))
-            raise RuntimeError(f"SK_{character}: slot {slot_name} has no {slot_name}.png (have {pngs})")
-        texture = import_texture_file(png, dest, f"T_{character}_{slot_name}")
-        instance_name = f"MI_{character}_{slot_name}"
-        instance = load_or_create(instance_name, lambda: TOOLS.create_asset(instance_name, dest, unreal.MaterialInstanceConstant,
-                                                                             unreal.MaterialInstanceConstantFactoryNew()), dest)
-        MEL.set_material_instance_parent(instance, parent)
-        MEL.set_material_instance_texture_parameter_value(instance, "BaseColor", texture)
-        unreal.EditorAssetLibrary.save_loaded_asset(instance)
-        slots.append(unreal.SkeletalMaterial(material_interface=instance, material_slot_name=slot_name))
+            pngs = sorted(os.path.basename(p) for p in glob.glob(os.path.join(os.path.dirname(png), "*.png")))
+            raise RuntimeError(f"SK_{character}: slot {slot_name} has no {os.path.basename(png)} (have {pngs})")
+        stem = os.path.splitext(os.path.basename(png))[0]
+        if stem not in instances:
+            texture = import_texture_file(png, dest, f"T_{character}_{stem}")
+            instance_name = f"MI_{character}_{stem}"
+            instance = load_or_create(instance_name, lambda: TOOLS.create_asset(instance_name, dest, unreal.MaterialInstanceConstant,
+                                                                                 unreal.MaterialInstanceConstantFactoryNew()), dest)
+            MEL.set_material_instance_parent(instance, parent)
+            MEL.set_material_instance_texture_parameter_value(instance, "BaseColor", texture)
+            unreal.EditorAssetLibrary.save_loaded_asset(instance)
+            instances[stem] = instance
+        slots.append(unreal.SkeletalMaterial(material_interface=instances[stem], material_slot_name=slot_name))
     mesh.set_editor_property("materials", slots)
     unreal.EditorAssetLibrary.save_loaded_asset(mesh)
-    log(f"SK_{character}: {len(slots)} material slot(s) on M_VRoid")
+    log(f"SK_{character}: {len(slots)} material slot(s) on M_Character")
+
+
+def mixamo_texture(fbx_path):
+    """<Id>_rigged.png next to the FBX, extracted when missing (Mixamo packs it where UE's importer can't read it)."""
+    png = os.path.splitext(fbx_path)[0] + ".png"
+    if not os.path.exists(png):
+        script = os.path.join(PROJECT, "Scripts", "character", "extract_textures.py")
+        subprocess.run([BLENDER, "-b", "-P", script, "--", fbx_path, png], check=True, capture_output=True)
+    return png
 
 
 def build_characters(ik_manny):
     convert_vrms()
-    fbxs = sorted(glob.glob(os.path.join(VROID_DIR, "*", "*.fbx")))
-    fbxs = [f for f in fbxs if os.path.splitext(os.path.basename(f))[0] == os.path.basename(os.path.dirname(f))]
-    if not fbxs:
-        log(f"no VRoid characters in {VROID_DIR}")
+    # (character, fbx, slot -> base-colour PNG): VRoid conversions, then Mixamo-rigged models (Rodin meshes etc.).
+    found = []
+    for fbx_path in sorted(glob.glob(os.path.join(VROID_DIR, "*", "*.fbx"))):
+        character = os.path.basename(os.path.dirname(fbx_path))
+        if os.path.splitext(os.path.basename(fbx_path))[0] == character:
+            found.append((character, fbx_path, lambda slot, d=os.path.dirname(fbx_path): os.path.join(d, f"{slot}.png")))
+    for fbx_path in sorted(glob.glob(os.path.join(MODELS_DIR, "*", "*_rigged.fbx"))):
+        character = os.path.basename(os.path.dirname(fbx_path))
+        if os.path.basename(fbx_path) == f"{character}_rigged.fbx":
+            png = mixamo_texture(fbx_path)
+            found.append((character, fbx_path, lambda slot, p=png: p))
+    if not found:
+        log(f"no characters in {VROID_DIR} or {MODELS_DIR}")
         return
-    parent = build_vroid_material()
-    for character_fbx in fbxs:
-        character = os.path.basename(os.path.dirname(character_fbx))
+    parent = build_character_material()
+    for character, character_fbx, png_for_slot in found:
         if not re.fullmatch(r"[A-Za-z0-9_]+", character):
             raise RuntimeError(f"character name {character!r}: use letters, digits and _ only (it becomes asset names)")
         dest = f"{CHARACTERS_DIR}/{character}"
@@ -294,7 +320,7 @@ def build_characters(ik_manny):
             if unreal.EditorAssetLibrary.does_asset_exist(f"{dest}/{stale}"):
                 unreal.EditorAssetLibrary.delete_asset(f"{dest}/{stale}")
         mesh = import_hero(character_fbx, dest, f"SK_{character}", materials=False)
-        use_vroid_materials(mesh, character, dest, os.path.dirname(character_fbx), parent)
+        use_materials(mesh, character, dest, png_for_slot, parent)
         build_retargeter(ik_manny, build_ik_rig(mesh, dest, f"IK_{character}"), dest, f"RTG_MannyTo{character}")
 
 

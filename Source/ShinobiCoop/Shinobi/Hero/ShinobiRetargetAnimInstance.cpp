@@ -1,6 +1,6 @@
 #include "Shinobi/Hero/ShinobiRetargetAnimInstance.h"
 #include "Retargeter/IKRetargeter.h"
-#include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/Hero/ShinobiBodyComponent.h"
 
 FShinobiRetargetAnimInstanceProxy::FShinobiRetargetAnimInstanceProxy(UAnimInstance* InAnimInstance, FAnimNode_RetargetPoseFromMesh* InRetargetNode)
 	: FAnimInstanceProxy(InAnimInstance)
@@ -52,9 +52,9 @@ void UShinobiRetargetAnimInstance::NativeInitializeAnimation()
 {
 	Super::NativeInitializeAnimation();
 	RetargetNode.RetargetFrom = ERetargetSourceMode::ParentSkeletalMeshComponent;
-	// Runs again when the owner swaps characters (a new mesh re-initialises the anim instance).
-	if (const AShinobiPlayerCharacter* Owner = Cast<AShinobiPlayerCharacter>(GetOwningActor()))
+	// Runs again when the body swaps characters (a new mesh re-initialises the anim instance).
+	if (const UShinobiBodyComponent* Body = Cast<UShinobiBodyComponent>(GetSkelMeshComponent()))
 	{
-		RetargetNode.IKRetargeterAsset = Owner->GetRetargeter();
+		RetargetNode.IKRetargeterAsset = Body->GetRetargeter();
 	}
 }

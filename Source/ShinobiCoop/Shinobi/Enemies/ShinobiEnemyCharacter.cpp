@@ -4,6 +4,8 @@
 #include "NavigationInvokerComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Net/UnrealNetwork.h"
+#include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiEffects.h"
@@ -31,6 +33,14 @@ AShinobiEnemyCharacter::AShinobiEnemyCharacter(const FObjectInitializer& ObjectI
 	HealthText->SetupAttachment(RootComponent);
 	NavInvoker = CreateDefaultSubobject<UNavigationInvokerComponent>(TEXT("NavInvoker"));
 	NavInvoker->SetGenerationRadii(5000.f, 6000.f);
+	Body = CreateDefaultSubobject<UShinobiBodyComponent>(TEXT("Body"));
+	Body->SetupAttachment(GetMesh());
+}
+
+void AShinobiEnemyCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME_CONDITION(AShinobiEnemyCharacter, BodyPick, COND_InitialOnly);
 }
 
 void AShinobiEnemyCharacter::BeginPlay()
@@ -40,7 +50,26 @@ void AShinobiEnemyCharacter::BeginPlay()
 		AbilitySystem->SetNumericAttributeBase(UShinobiAttributeSet::GetMaxHealthAttribute(), BaseHealth * HealthScale);
 		AbilitySystem->SetNumericAttributeBase(UShinobiAttributeSet::GetHealthAttribute(), BaseHealth * HealthScale);
 	}
-	if (!IsNetMode(NM_DedicatedServer))
+	if (HasAuthority() && BodyPool.Num() > 0)
+	{
+		BodyPick = uint8(FMath::RandHelper(BodyPool.Num()));
+	}
+	// The pick, else the next imported one in the pool.
+	for (int32 Offset = 0; Offset < BodyPool.Num() && BodyName.IsEmpty(); ++Offset)
+	{
+		const FString& Name = BodyPool[(BodyPick + Offset) % BodyPool.Num()];
+		BodyName = Body->WearCharacter(Name) ? Name : FString();
+	}
+	if (!BodyName.IsEmpty())
+	{
+		Body->HideDriver();
+	}
+	else
+	{
+		Body->DestroyComponent();
+		Body = nullptr;
+	}
+	if (!Body && !IsNetMode(NM_DedicatedServer))
 	{
 		for (int32 Slot = 0; Slot < GetMesh()->GetNumMaterials(); ++Slot)
 		{
@@ -85,6 +114,7 @@ AShinobiRogueNinja::AShinobiRogueNinja(const FObjectInitializer& ObjectInitializ
 	AttackDamage = 25.f;
 	AttackAbility = UGA_EnemyMelee::StaticClass();
 	StartupAbilities = { AttackAbility };
+	BodyPool = { TEXT("Haru"), TEXT("Kuro") };
 	UseMannequinMesh();
 }
 
@@ -99,6 +129,7 @@ AShinobiKunaiThrower::AShinobiKunaiThrower(const FObjectInitializer& ObjectIniti
 	AttackAbility = UGA_EnemyKunai::StaticClass();
 	BodyTint = FLinearColor(0.35f, 0.08f, 0.55f);
 	StartupAbilities = { AttackAbility };
+	BodyPool = { TEXT("Akane"), TEXT("Ryo") };
 	GetCharacterMovement()->MaxWalkSpeed = 400.f;
 	UseMannequinMesh(true);
 }
@@ -115,7 +146,8 @@ AShinobiRogueJonin::AShinobiRogueJonin(const FObjectInitializer& ObjectInitializ
 	AttackAbility = UGA_EnemyMelee::StaticClass();
 	SpecialAbility = UGA_EnemyFireball::StaticClass();
 	StartupAbilities = { AttackAbility, SpecialAbility };
+	BodyPool = { TEXT("Tetsuo") };
 	GetCharacterMovement()->MaxWalkSpeed = 500.f;
 	UseMannequinMesh();
-	GetCapsuleComponent()->SetRelativeScale3D(FVector(1.3f)); // ponytail: a bigger Manny reads as "boss" until M5's models
+	GetCapsuleComponent()->SetRelativeScale3D(FVector(1.3f)); // the boss stands a head taller than the grunts
 }

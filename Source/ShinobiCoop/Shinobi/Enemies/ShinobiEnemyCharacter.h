@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Shinobi/ShinobiCharacterBase.h"
+#include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "ShinobiEnemyCharacter.generated.h"
 
 class AShinobiEnemyCharacter;
@@ -58,16 +59,36 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Enemy")
 	float SpecialRange = 1500.f;
 
-	/** The mannequin's "Paint Tint" (panels), so each enemy type reads apart from the players at a glance. */
+	/** The characters this type wears (built by Scripts/setup_hero.py at /Game/Shinobi/Characters/<Name>); the server
+	 * picks one per spawn. Never shared with AShinobiVillager::Bodies. */
+	TArray<FString> BodyPool;
+
+	/** Fallback look, when none of BodyPool is imported: the mannequin's "Paint Tint" (panels), one colour per type. */
 	UPROPERTY(EditDefaultsOnly, Category = "Enemy")
 	FLinearColor BodyTint = FLinearColor(0.6f, 0.05f, 0.04f);
+
+	/** The character worn, or empty for the tinted mannequin. */
+	const FString& GetBodyName() const { return BodyName; }
+
+	virtual USkeletalMeshComponent* GetBodyMesh() const override { return Body ? Body.Get() : GetMesh(); }
 
 	/** True while any ability runs (the AI holds still). */
 	bool IsBusy() const;
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void HandleOutOfHealth() override;
+
+	/** Visible body over the hidden mannequin; removed when none of BodyPool is imported. */
+	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
+	TObjectPtr<UShinobiBodyComponent> Body;
+
+	/** Index into BodyPool, picked by the server at spawn; replicated with the spawn so every machine wears the same. */
+	UPROPERTY(Replicated)
+	uint8 BodyPick = 0;
+
+	FString BodyName;
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UShinobiOverheadTextComponent> HealthText;

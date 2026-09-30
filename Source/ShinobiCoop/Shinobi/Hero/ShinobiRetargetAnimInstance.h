@@ -42,7 +42,7 @@ class SHINOBICOOP_API UShinobiRetargetAnimInstance : public UAnimInstance
 public:
 	UShinobiRetargetAnimInstance();
 
-	/** The retargeter in use: the owning player's (AShinobiPlayerCharacter::GetRetargeter) as of the last (re)initialise. */
+	/** The retargeter in use: its UShinobiBodyComponent's, as of the last (re)initialise. */
 	const UIKRetargeter* GetRetargeter() const { return RetargetNode.IKRetargeterAsset; }
 
 protected:

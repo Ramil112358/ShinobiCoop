@@ -1,12 +1,12 @@
 # Adding a roster character from VRoid Studio
 
-The roster is Hero, Naruto, Sasuke, Itachi, Minato, Obito and Madara (`AShinobiPlayerCharacter::Roster`). Each player picks one under **Settings → Character**. Until a character's model is imported, picking it shows the Hero.
+The player roster (`AShinobiPlayerCharacter::Roster`) is just the Hero for now; heroes made from reference photos join it later. Each player picks one under **Settings → Character**. A VRoid model can also be an enemy or villager: give it a name from an enemy type's `BodyPool` or `AShinobiVillager::Bodies` (see [model-steps.md](model-steps.md)).
 
 You need VRoid Studio (free, from vroid.com).
 
 1. Make the character in VRoid Studio: hair, face, outfit. Keep the default body proportions. The game scales every character to 180 cm, like the other players.
 2. Click **Export → Export as VRM**. Choose **VRM 1.0**; 0.x also works. Fill in the title and author, then export.
-3. Save the file as `SourceArt/Character/VRoid/<Name>.vrm`, where `<Name>` is exactly one of `Naruto`, `Sasuke`, `Itachi`, `Minato`, `Obito`, `Madara`. Replace any older file.
+3. Save the file as `SourceArt/Character/VRoid/<Name>.vrm`, where `<Name>` is exactly a character name used in the code (a VRoid model and a Mixamo one for the same name would both import to the same place, so use one or the other). Replace any older file.
 4. Close the Unreal Editor and run:
    ```
    Scripts/run_python.ps1 -Script Scripts/setup_hero.py
