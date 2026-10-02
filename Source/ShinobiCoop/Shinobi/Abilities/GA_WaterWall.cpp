@@ -13,6 +13,8 @@ UGA_WaterWall::UGA_WaterWall()
 	Cooldown = 9.f;
 	WindUp = 0.4f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_WaterWall);
+	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_WaterWall_Seal.AM_WaterWall_Seal")));
+	ReleaseMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_WaterWall_Release.AM_WaterWall_Release")));
 }
 
 void UGA_WaterWall::ExecuteJutsu()

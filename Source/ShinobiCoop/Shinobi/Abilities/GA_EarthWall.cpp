@@ -13,6 +13,8 @@ UGA_EarthWall::UGA_EarthWall()
 	Cooldown = 14.f;
 	WindUp = 0.5f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_EarthWall);
+	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_EarthWall_Seal.AM_EarthWall_Seal")));
+	ReleaseMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_EarthWall_Release.AM_EarthWall_Release")));
 }
 
 void UGA_EarthWall::ExecuteJutsu()

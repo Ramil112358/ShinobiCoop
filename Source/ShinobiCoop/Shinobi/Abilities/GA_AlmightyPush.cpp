@@ -17,6 +17,9 @@ UGA_AlmightyPush::UGA_AlmightyPush()
 	WindUp = 0.5f;
 	ReleaseDelay = 0.15f; // the wave leaves on the palm thrust, not at the start of the release clip
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_AlmightyPush);
+	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_AlmightyPush_Seal.AM_AlmightyPush_Seal")));
+	ChargeMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_AlmightyPush_Charge.AM_AlmightyPush_Charge")));
+	ReleaseMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_AlmightyPush_Release.AM_AlmightyPush_Release")));
 }
 
 void UGA_AlmightyPush::ExecuteJutsu()

@@ -20,6 +20,8 @@ UGA_Teleport::UGA_Teleport()
 	Cooldown = 10.f;
 	WindUp = 0.4f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Teleport);
+	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Teleport_Seal.AM_Teleport_Seal")));
+	ReleaseMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Teleport_Release.AM_Teleport_Release")));
 	ActivationBlockedTags.AddTag(ShinobiTags::State_TeleportMarked); // the key belongs to UGA_TeleportJump while a window is open
 }
 

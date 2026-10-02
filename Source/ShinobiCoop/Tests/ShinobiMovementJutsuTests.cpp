@@ -13,7 +13,13 @@
 #include "Shinobi/Abilities/GA_Teleport.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/Abilities/GA_Fireball.h"
+#include "Animation/AnimMontage.h"
+#include "Engine/Texture2D.h"
+#include "Shinobi/Abilities/GA_AlmightyPush.h"
+#include "Shinobi/Abilities/GA_EarthWall.h"
+#include "Shinobi/Abilities/GA_Kamui.h"
 #include "Shinobi/Abilities/GA_Melee.h"
+#include "Shinobi/Abilities/GA_WaterWall.h"
 #include "Shinobi/Enemies/GA_EnemyAttacks.h"
 #include "Shinobi/ShinobiBarrier.h"
 #include "Shinobi/ShinobiProjectile.h"
@@ -455,6 +461,29 @@ bool FShinobiTeleportThrowTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("The jump window is open"), ShinobiTest::HasTag(P, ShinobiTags::State_TeleportMarked));
 	TestTrue(TEXT("Cooldown started at the throw"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Teleport));
 	TestFalse(TEXT("The jutsu itself is over"), ShinobiTest::IsActive(P, UGA_Teleport::StaticClass()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiNewJutsuAssetsTest, "ShinobiCoop.JutsuPages.NewJutsuHaveAnimationsAndIcons", ShinobiTestFlags)
+bool FShinobiNewJutsuAssetsTest::RunTest(const FString& Parameters)
+{
+	// (run Scripts/setup_jutsu_anims.py and Scripts/setup_hud.py if an asset is missing)
+	const auto Check = [this](const UShinobiJutsuAbility* Jutsu, bool bCharge)
+	{
+		const FString Name = Jutsu->DisplayName.ToString();
+		TestNotNull(*(Name + TEXT(" seal montage")), Jutsu->SealMontage.LoadSynchronous());
+		TestNotNull(*(Name + TEXT(" release montage")), Jutsu->ReleaseMontage.LoadSynchronous());
+		if (bCharge)
+		{
+			TestNotNull(*(Name + TEXT(" charge montage")), Jutsu->ChargeMontage.LoadSynchronous());
+		}
+		TestNotNull(*(Name + TEXT(" icon")), Jutsu->Icon.LoadSynchronous());
+	};
+	Check(GetDefault<UGA_Teleport>(), false);
+	Check(GetDefault<UGA_Kamui>(), false);
+	Check(GetDefault<UGA_AlmightyPush>(), true);
+	Check(GetDefault<UGA_EarthWall>(), false);
+	Check(GetDefault<UGA_WaterWall>(), false);
 	return true;
 }
 

@@ -15,6 +15,8 @@ UGA_Kamui::UGA_Kamui()
 	Cooldown = 12.f;
 	WindUp = 0.3f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Kamui);
+	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Kamui_Seal.AM_Kamui_Seal")));
+	ReleaseMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Kamui_Release.AM_Kamui_Release")));
 }
 
 void UGA_Kamui::ExecuteJutsu()
