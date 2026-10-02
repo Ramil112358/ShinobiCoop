@@ -26,12 +26,12 @@ bool FShinobiOffPageJutsuTest::RunTest(const FString& Parameters)
 	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
 
 	TestTrue(TEXT("Starts on page 1"), ShinobiTest::HasTag(P, ShinobiTags::JutsuPage(1)));
-	P->ApplyJutsuPage(2);
+	P->ApplyJutsuPage(4); // empty: nothing lives there
 	TestFalse(TEXT("Page 1 tag removed"), ShinobiTest::HasTag(P, ShinobiTags::JutsuPage(1)));
-	TestEqual(TEXT("On page 2"), P->GetJutsuPage(), 2);
+	TestEqual(TEXT("On page 4"), P->GetJutsuPage(), 4);
 
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
-	TestFalse(TEXT("Fireball is on page 1: key 1 does nothing on page 2"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
+	TestFalse(TEXT("Fireball is on page 1: key 1 does nothing on page 4"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
 	TestEqual(TEXT("Nothing spent"), ShinobiTest::Get(P, Chakra), 100.f);
 
 	P->ApplyJutsuPage(1);
