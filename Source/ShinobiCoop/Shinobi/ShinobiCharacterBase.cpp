@@ -56,6 +56,7 @@ void AShinobiCharacterBase::BeginPlay()
 	}
 	AbilitySystem->InitAbilityActorInfo(this, this);
 	AbilitySystem->RegisterGameplayTagEvent(ShinobiTags::State_Dead).AddUObject(this, &AShinobiCharacterBase::OnDeadTagChanged);
+	AbilitySystem->RegisterGameplayTagEvent(ShinobiTags::State_Phased).AddUObject(this, &AShinobiCharacterBase::OnPhasedTagChanged);
 	if (HasAuthority())
 	{
 		Attributes->OnOutOfHealth.AddUObject(this, &AShinobiCharacterBase::HandleOutOfHealth);
@@ -83,6 +84,31 @@ void AShinobiCharacterBase::HandleOutOfHealth()
 bool AShinobiCharacterBase::IsAlive() const
 {
 	return !AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Downed) && !AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Dead);
+}
+
+bool AShinobiCharacterBase::IsPhased() const
+{
+	return AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Phased);
+}
+
+void AShinobiCharacterBase::OnPhasedTagChanged(const FGameplayTag Tag, int32 Count)
+{
+	UCapsuleComponent* Capsule = GetCapsuleComponent();
+	if (Count > 0)
+	{
+		PrePhasePawnResponse = Capsule->GetCollisionResponseToChannel(ECC_Pawn);
+		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+		return;
+	}
+	Capsule->SetCollisionResponseToChannel(ECC_Pawn, PrePhasePawnResponse);
+	if (HasAuthority())
+	{
+		FVector Spot = GetActorLocation();
+		if (GetWorld()->FindTeleportSpot(this, Spot, GetActorRotation()))
+		{
+			SetActorLocation(Spot); // out of the enemy it ended inside; clients get the correction
+		}
+	}
 }
 
 void AShinobiCharacterBase::OnDeadTagChanged(const FGameplayTag Tag, int32 Count)

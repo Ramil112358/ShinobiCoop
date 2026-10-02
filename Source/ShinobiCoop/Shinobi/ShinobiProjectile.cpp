@@ -153,7 +153,7 @@ void AShinobiProjectile::OnOverlap(UPrimitiveComponent* OverlappedComponent, AAc
 		return;
 	}
 	AShinobiCharacterBase* Target = Cast<AShinobiCharacterBase>(OtherActor);
-	if (HasAuthority() && Caster && Caster->IsHostileTo(Target))
+	if (HasAuthority() && Caster && Caster->IsHostileTo(Target) && !Target->IsPhased()) // Kamui: shots fly through
 	{
 		// A sweep overlap reports the point of first contact; GetActorLocation() is the end of the move, up to
 		// 125 units past it.

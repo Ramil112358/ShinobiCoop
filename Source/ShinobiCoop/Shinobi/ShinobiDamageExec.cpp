@@ -30,6 +30,10 @@ void UShinobiDamageExec::Execute_Implementation(const FGameplayEffectCustomExecu
 	{
 		return; // already out of the fight
 	}
+	if (Target->HasMatchingGameplayTag(ShinobiTags::State_Phased))
+	{
+		return; // Kamui: nothing touches them, burning included, and it is no dodge (no Substitution)
+	}
 
 	// Only direct hits send events. They come from instant effects, whose spec is the applier's own copy, so a
 	// listener that removes effects from the target (e.g. chakra charge ending) can't invalidate it mid-execution.

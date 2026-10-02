@@ -11,7 +11,8 @@ namespace ShinobiCombat
 	{
 		bool IsInvulnerable(const AShinobiCharacterBase* Target)
 		{
-			return Target->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Invulnerable);
+			const UAbilitySystemComponent* ASC = Target->GetAbilitySystemComponent();
+			return ASC->HasMatchingGameplayTag(ShinobiTags::State_Invulnerable) || ASC->HasMatchingGameplayTag(ShinobiTags::State_Phased);
 		}
 
 		void Apply(UAbilitySystemComponent* Source, const AShinobiCharacterBase* Target, TSubclassOf<UGameplayEffect> Effect, float Damage)

@@ -20,6 +20,7 @@ UShinobiJutsuAbility::UShinobiJutsuAbility()
 	SetAssetTags(FGameplayTagContainer(ShinobiTags::Ability_Jutsu));
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Dodging);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_ChakraCharging);
+	ActivationBlockedTags.AddTag(ShinobiTags::State_Phased); // Kamui: no attacking from the other side
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Melee); // a jutsu can finish a combo
 	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_Jutsu);

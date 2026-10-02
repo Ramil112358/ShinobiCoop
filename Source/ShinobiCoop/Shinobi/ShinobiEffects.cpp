@@ -201,6 +201,13 @@ UGE_Stagger::UGE_Stagger()
 	UseSingleRefreshingStack();
 }
 
+UGE_Kamui::UGE_Kamui()
+{
+	SetDuration(Seconds);
+	GrantTag(ShinobiTags::State_Phased);
+	UseSingleRefreshingStack();
+}
+
 UGE_JutsuCooldown::UGE_JutsuCooldown()
 {
 	DurationPolicy = EGameplayEffectDurationType::HasDuration;

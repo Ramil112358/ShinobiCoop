@@ -2,8 +2,11 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "Components/CapsuleComponent.h"
+#include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/Abilities/GA_Fireball.h"
+#include "Shinobi/Abilities/GA_Melee.h"
 #include "Shinobi/Enemies/GA_EnemyAttacks.h"
 #include "Shinobi/ShinobiBarrier.h"
 #include "Shinobi/ShinobiProjectile.h"
@@ -269,6 +272,109 @@ bool FShinobiPushTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Ally untouched"), ShinobiTest::Get(Ally, Health), 500.f);
 	TestEqual(TEXT("and not moved"), Ally->GetActorLocation().Y, 300.0);
 	TestEqual(TEXT("Caster not moved"), P->GetActorLocation().X, 0.0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiKamuiDamageTest, "ShinobiCoop.Kamui.IgnoresAllDamageThenExpires", ShinobiTestFlags)
+bool FShinobiKamuiDamageTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(600.f, 0.f, 0.f));
+	ShinobiTest::Hover(P);
+	ShinobiTest::Hover(E);
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+	ShinobiTest::FEventCounter Substitutions(P, ShinobiTags::Event_Substitution);
+
+	ShinobiTest::ApplyEffect(P, UGE_Kamui::StaticClass());
+	TestTrue(TEXT("Phased"), ShinobiTest::HasTag(P, ShinobiTags::State_Phased));
+	ShinobiTest::Damage(P, 50.f);
+	TestEqual(TEXT("A direct hit does nothing"), ShinobiTest::Get(P, Health), 500.f);
+	TestFalse(TEXT("and does not count as landing"), ShinobiCombat::ApplyDamage(E->GetAbilitySystemComponent(), P, 50.f));
+	TestEqual(TEXT("Phasing is not a dodge: no Substitution is asked for"), Substitutions.Count, 0);
+	ShinobiTest::ApplySetByCaller(P, UGE_BlackFlame::StaticClass(), ShinobiTags::Data_Damage, 15.f);
+	W.Tick(2.5f);
+	TestEqual(TEXT("Burning damage over time does nothing either"), ShinobiTest::Get(P, Health), 500.f);
+
+	P->GetAbilitySystemComponent()->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_Burning_Black));
+	W.Tick(1.0f);
+	TestFalse(TEXT("Over after 3 s"), ShinobiTest::HasTag(P, ShinobiTags::State_Phased));
+	ShinobiTest::Damage(P, 50.f);
+	TestEqual(TEXT("Hurt again"), ShinobiTest::Get(P, Health), 450.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiKamuiBodyTest, "ShinobiCoop.Kamui.PassesEnemiesBlocksCastingAndIsNotTargetable", ShinobiTestFlags)
+bool FShinobiKamuiBodyTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	const ECollisionResponse Before = P->GetCapsuleComponent()->GetCollisionResponseToChannel(ECC_Pawn);
+
+	ShinobiTest::ApplyEffect(P, UGE_Kamui::StaticClass());
+	TestEqual(TEXT("Walks through pawns"), P->GetCapsuleComponent()->GetCollisionResponseToChannel(ECC_Pawn), ECR_Ignore);
+	TestFalse(TEXT("The AI cannot target it"), P->IsTargetable());
+	TestTrue(TEXT("Phased"), P->IsPhased());
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	TestFalse(TEXT("No jutsu while phased"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Melee);
+	TestFalse(TEXT("No melee while phased"), ShinobiTest::IsActive(P, UGA_Melee::StaticClass()));
+
+	W.Tick(3.2f);
+	TestEqual(TEXT("Collision restored"), P->GetCapsuleComponent()->GetCollisionResponseToChannel(ECC_Pawn), Before);
+	TestTrue(TEXT("Targetable again"), P->IsTargetable());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiKamuiCastTest, "ShinobiCoop.Kamui.CastThenExitEarly", ShinobiTestFlags)
+bool FShinobiKamuiCastTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(2);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
+	TestEqual(TEXT("Cost 30 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 70.f);
+	W.Tick(0.6f);
+	TestTrue(TEXT("Phased after the seals"), ShinobiTest::HasTag(P, ShinobiTags::State_Phased));
+	TestTrue(TEXT("Cooldown running"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Kamui));
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
+	W.Tick(0.2f);
+	TestFalse(TEXT("The same key steps back out"), ShinobiTest::HasTag(P, ShinobiTags::State_Phased));
+	TestTrue(TEXT("The cooldown still runs"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Kamui));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiKamuiNudgeTest, "ShinobiCoop.Kamui.EndingInsideAnEnemyNudgesOut", ShinobiTestFlags)
+bool FShinobiKamuiNudgeTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>();
+	ShinobiTest::Hover(P);
+	ShinobiTest::Hover(E);
+	ShinobiTest::ApplyEffect(P, UGE_Kamui::StaticClass());
+	W.Tick(3.3f);
+	TestTrue(FString::Printf(TEXT("Not left inside the enemy (%.0f apart)"), FVector::Dist2D(P->GetActorLocation(), E->GetActorLocation())),
+		FVector::Dist2D(P->GetActorLocation(), E->GetActorLocation()) > 20.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiKamuiProjectileTest, "ShinobiCoop.Kamui.ProjectileFliesThroughPhasedPlayer", ShinobiTestFlags)
+bool FShinobiKamuiProjectileTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>(FVector(300.f, 0.f, 0.f));
+	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(1000.f, 0.f, 0.f));
+	ShinobiTest::Hover(P);
+	ShinobiTest::Hover(E);
+	ShinobiTest::ApplyEffect(P, UGE_Kamui::StaticClass());
+	const TWeakObjectPtr<AShinobiProjectile> Kunai(Throw(W, AShinobiKunai::StaticClass(), E, FVector(900.f, 0.f, 40.f), FRotator(0.f, 180.f, 0.f), 30.f));
+
+	W.Tick(0.5f); // 3000 u/s: through P's spot at 300 after ~0.2 s
+	TestTrue(TEXT("The kunai passed through instead of bursting"), Kunai.IsValid());
+	TestEqual(TEXT("Unhurt"), ShinobiTest::Get(P, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
 	return true;
 }
 

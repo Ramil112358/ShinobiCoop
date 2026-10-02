@@ -14,6 +14,7 @@ UGA_Melee::UGA_Melee()
 	SetAssetTags(FGameplayTagContainer(ShinobiTags::Ability_Melee));
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Dodging);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_ChakraCharging);
+	ActivationBlockedTags.AddTag(ShinobiTags::State_Phased);
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);
 	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_ChakraCharge);
 	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);

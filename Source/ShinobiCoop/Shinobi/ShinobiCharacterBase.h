@@ -55,6 +55,12 @@ public:
 	/** False once downed or dead: out of the fight, so not a target. */
 	bool IsAlive() const;
 
+	/** Kamui: untouchable and unseen by the AI. */
+	bool IsPhased() const;
+
+	/** What the AI may aim at: alive and not phased. */
+	bool IsTargetable() const { return IsAlive() && !IsPhased(); }
+
 	/** Stuns (Shock) last this many times their normal duration (the boss shrugs them off faster). */
 	float GetStunMultiplier() const { return StunMultiplier; }
 
@@ -105,5 +111,10 @@ private:
 
 	/** Every machine: State.Dead turns the body into a ragdoll with no capsule collision or movement. */
 	void OnDeadTagChanged(const FGameplayTag Tag, int32 Count);
+
+	/** Every machine: Kamui makes the capsule ignore pawns (walk through enemies); on the server, ending it nudges the
+	 * character out of anything it overlaps. */
+	void OnPhasedTagChanged(const FGameplayTag Tag, int32 Count);
+	ECollisionResponse PrePhasePawnResponse = ECR_Block;
 	bool bStartupGranted = false;
 };
