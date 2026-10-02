@@ -1,4 +1,4 @@
-"""Jutsu VFX materials. Idempotent: rebuilds M_ChakraBodyAura, M_Flame, M_FlameDark and M_Streak from scratch each run.
+"""Jutsu VFX materials. Idempotent: rebuilds M_ChakraBodyAura, M_Flame, M_FlameDark, M_Streak and M_Phased from scratch each run.
 
 Close the GUI editor before running: an editor that has this material loaded would silently
 overwrite the regenerated asset on its next Save All.
@@ -262,9 +262,38 @@ def build_streak():
     finish(m, color)
 
 
+def build_phased():
+    """M_Phased: Kamui's ghost. Translucent unlit chakra-blue; a see-through body with a brighter rim, swapped onto
+    every visible body mesh while State.Phased is on. Params: Color, Intensity, Opacity (0 = gone, 1 = a solid blue figure)."""
+    m = fresh_material("M_Phased", two_sided=False, blend=unreal.BlendMode.BLEND_TRANSLUCENT)
+    color = node(m, unreal.MaterialExpressionVectorParameter, -800, -300,
+                 parameter_name="Color", default_value=unreal.LinearColor(0.35, 0.7, 1.0, 1.0))
+    intensity = node(m, unreal.MaterialExpressionScalarParameter, -800, -150, parameter_name="Intensity", default_value=1.2)
+    opacity = node(m, unreal.MaterialExpressionScalarParameter, -800, 0, parameter_name="Opacity", default_value=0.3)
+    rim = node(m, unreal.MaterialExpressionFresnel, -800, 150, exponent=2.0, base_reflect_fraction=0.0)
+    half_rim = node(m, unreal.MaterialExpressionMultiply, -600, 150, const_b=0.5)
+    link(rim, half_rim, "A")
+    body = node(m, unreal.MaterialExpressionAdd, -450, 150, const_b=0.5)  # 0.5 in the middle, 1 at the silhouette
+    link(half_rim, body, "A")
+    coverage = node(m, unreal.MaterialExpressionMultiply, -300, 50)
+    link(opacity, coverage, "A")
+    link(body, coverage, "B")
+    glow = node(m, unreal.MaterialExpressionMultiply, -600, -250)
+    link(color, glow, "A")
+    link(intensity, glow, "B")
+    emissive = node(m, unreal.MaterialExpressionMultiply, -300, -200)
+    link(glow, emissive, "A")
+    link(body, emissive, "B")
+    transmittance = node(m, unreal.MaterialExpressionOneMinus, -150, 50)
+    link(coverage, transmittance, "")
+    require_skeletal_mesh_usage(m)
+    finish(m, emissive, transmittance)
+
+
 remove_if_exists(f"{VFX_DIR}/M_ChakraAura")
 remove_if_exists(f"{VFX_DIR}/M_ChakraRing")
 build_body_aura()
 build_flame("M_Flame", dark=False)
 build_flame("M_FlameDark", dark=True)
 build_streak()
+build_phased()

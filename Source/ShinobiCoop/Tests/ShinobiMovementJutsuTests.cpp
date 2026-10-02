@@ -7,6 +7,7 @@
 #include "Engine/CollisionProfile.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiMarkerKunai.h"
 #include "Shinobi/Abilities/GA_Teleport.h"
@@ -529,6 +530,29 @@ bool FShinobiTeleportForeignTest::RunTest(const FString& Parameters)
 	W.Tick(0.2f);
 	TestEqual(TEXT("P1 did not jump to P2's kunai"), P1->GetActorLocation().X, 0.0);
 	TestEqual(TEXT("and P2's kunai are all still there"), ShinobiTest::CountActors<AShinobiMarkerKunai>(W), 3);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiKamuiGhostTest, "ShinobiCoop.Kamui.GhostMaterialSwapsAndRestores", ShinobiTestFlags)
+bool FShinobiKamuiGhostTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	USkeletalMeshComponent* Body = P->GetBodyMesh();
+	UMaterialInterface* Original = Body->GetMaterial(0);
+
+	ShinobiTest::ApplyEffect(P, UGE_Kamui::StaticClass());
+	W.Tick(0.1f);
+	const UMaterialInstanceDynamic* Ghost = Cast<UMaterialInstanceDynamic>(Body->GetMaterial(0));
+	if (TestNotNull(TEXT("A ghost material while phased (run Scripts/setup_vfx.py if M_Phased is missing)"), Ghost))
+	{
+		float Opacity = 0.f;
+		Ghost->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Opacity")), Opacity);
+		TestEqual(TEXT("at 30% opacity"), Opacity, 0.3f);
+	}
+
+	W.Tick(3.2f);
+	TestTrue(TEXT("The body's own material is back"), Body->GetMaterial(0) == Original);
 	return true;
 }
 

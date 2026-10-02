@@ -14,6 +14,7 @@ class UShinobiBodyFlameComponent;
 class UShinobiCastFxComponent;
 class UShinobiChakraAuraComponent;
 class UShinobiFeedbackComponent;
+class UShinobiPhaseFxComponent;
 
 UENUM(BlueprintType)
 enum class EShinobiTeam : uint8
@@ -96,6 +97,10 @@ protected:
 	/** Damage numbers, hit-stop, camera shake and sounds (cosmetic, every machine that renders). */
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UShinobiFeedbackComponent> Feedback;
+
+	/** Kamui's ghost look (cosmetic, every machine that renders). */
+	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
+	TObjectPtr<UShinobiPhaseFxComponent> PhaseFx;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	EShinobiTeam Team = EShinobiTeam::Enemies;

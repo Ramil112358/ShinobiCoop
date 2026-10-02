@@ -225,6 +225,13 @@ bool AShinobiBurst::BuildCards()
 			AddCard(Plane, ESprite::Flame, White, 1.3f, GetActorForwardVector() * Along, FVector2D(110.f + 28.f * Index, 220.f + 56.f * Index) * S, 0.f, false, true, Along / 2500.f);
 		}
 		break;
+	case EShinobiBurst::Swirl:
+		// Kamui: a spiral turning on the ground and a soft flash, in chakra blue.
+		Duration = 0.7f;
+		AddCard(Plane, ESprite::Vortex, FLinearColor(0.4f, 0.7f, 1.f), 2.f, FVector::ZeroVector, FVector2D(520.f, 520.f) * S, 0.f, true, false, 0.f);
+		Cards.Last().Spin = 360.f;
+		AddCard(Plane, ESprite::Burst, FLinearColor(0.5f, 0.8f, 1.f), 1.2f, FVector(0.f, 0.f, 90.f), FVector2D(380.f, 380.f) * S);
+		break;
 	default:
 		return false;
 	}
