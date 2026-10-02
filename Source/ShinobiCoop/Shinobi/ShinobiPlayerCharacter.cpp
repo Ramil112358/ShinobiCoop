@@ -17,6 +17,7 @@
 #include "Shinobi/ShinobiLook.h"
 #include "Engine/SkeletalMesh.h"
 #include "Shinobi/ShinobiTags.h"
+#include "Shinobi/Abilities/GA_AlmightyPush.h"
 #include "Shinobi/Abilities/GA_Amaterasu.h"
 #include "Shinobi/Abilities/GA_ChakraCharge.h"
 #include "Shinobi/Abilities/GA_Chidori.h"
@@ -54,7 +55,7 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 		UGA_Melee::StaticClass(), UGA_Dodge::StaticClass(), UGA_Sprint::StaticClass(), UGA_ChakraCharge::StaticClass(),
 		UGA_Fireball::StaticClass(), UGA_Chidori::StaticClass(), UGA_Rasengan::StaticClass(), UGA_Amaterasu::StaticClass(),
 		UGA_Substitution::StaticClass(), UGA_Revive::StaticClass(),
-		UGA_EarthWall::StaticClass(), UGA_WaterWall::StaticClass(),
+		UGA_AlmightyPush::StaticClass(), UGA_EarthWall::StaticClass(), UGA_WaterWall::StaticClass(),
 	};
 	StartupEffects.Add(UGE_SubstitutionRegen::StaticClass());
 

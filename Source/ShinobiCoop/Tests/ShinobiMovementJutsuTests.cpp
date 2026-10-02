@@ -242,4 +242,34 @@ bool FShinobiPageCycleTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPushTest, "ShinobiCoop.Push.LaunchesOnlyHostilesInRadius", ShinobiTestFlags)
+bool FShinobiPushTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* Near = W.Spawn<AShinobiCharacterBase>(FVector(300.f, 0.f, 0.f));
+	AShinobiCharacterBase* Far = W.Spawn<AShinobiCharacterBase>(FVector(0.f, 900.f, 0.f));
+	AShinobiPlayerCharacter* Ally = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, 300.f, 0.f));
+	for (AShinobiCharacterBase* Each : { static_cast<AShinobiCharacterBase*>(P), Near, Far, static_cast<AShinobiCharacterBase*>(Ally) })
+	{
+		ShinobiTest::Hover(Each);
+	}
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+
+	P->ApplyJutsuPage(2);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
+	TestEqual(TEXT("Cost 30 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 70.f);
+	W.Tick(0.9f);
+	W.Tick(0.3f);
+
+	TestEqual(TEXT("Enemy in range takes 25"), ShinobiTest::Get(Near, Health), 475.f);
+	TestTrue(FString::Printf(TEXT("and is thrown away from the caster (X=%.0f)"), Near->GetActorLocation().X), Near->GetActorLocation().X > 400.f);
+	TestEqual(TEXT("Enemy out of range untouched"), ShinobiTest::Get(Far, Health), 500.f);
+	TestEqual(TEXT("and not moved"), Far->GetActorLocation().Y, 900.0);
+	TestEqual(TEXT("Ally untouched"), ShinobiTest::Get(Ally, Health), 500.f);
+	TestEqual(TEXT("and not moved"), Ally->GetActorLocation().Y, 300.0);
+	TestEqual(TEXT("Caster not moved"), P->GetActorLocation().X, 0.0);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
