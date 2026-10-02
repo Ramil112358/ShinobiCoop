@@ -69,6 +69,10 @@ namespace ShinobiVfx
 	 */
 	SHINOBICOOP_API void SpawnScorch(UWorld* World, const FVector& Location, float Radius, const FLinearColor& Tint, float Linger);
 
+	/** The Water Wall's flowing-water material (M_WaterWall, built by Scripts/setup_vfx.py) tinted Color: the Water Dragon's body.
+	 * Null, with an ensure, if the asset is missing. */
+	SHINOBICOOP_API UMaterialInstanceDynamic* MakeWater(UObject* Outer, const FLinearColor& Color, float Intensity);
+
 	/** Kamui's see-through chakra-blue ghost (M_Phased, built by Scripts/setup_vfx.py) at Opacity 0-1. Null, with an ensure, if the asset is missing. */
 	SHINOBICOOP_API UMaterialInstanceDynamic* MakePhased(UObject* Outer, float Opacity);
 

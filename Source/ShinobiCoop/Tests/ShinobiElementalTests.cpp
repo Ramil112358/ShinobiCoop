@@ -7,11 +7,13 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Shinobi/ShinobiMeteor.h"
+#include "Shinobi/ShinobiWaterDragon.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiTelegraph.h"
 #include "Shinobi/Abilities/GA_FireMeteor.h"
 #include "Shinobi/Abilities/GA_IceMeteor.h"
+#include "Shinobi/Abilities/GA_WaterDragon.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
 #include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
 #include "Shinobi/VFX/ShinobiFirePatch.h"
@@ -189,6 +191,60 @@ bool FShinobiIceShowerTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("An ally inside it is untouched"), ShinobiTest::Get(Ally, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
 	TestFalse(TEXT("and not chilled"), ShinobiTest::HasTag(Ally, ShinobiTags::State_Chilled));
 	TestTrue(TEXT("Cooldown running"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_IceMeteor));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiWaterDragonTest, "ShinobiCoop.Dragon.HitsEachEnemyOnceAndSkipsAllies", ShinobiTestFlags)
+bool FShinobiWaterDragonTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>(); // aims along +X
+	AShinobiCharacterBase* First = W.Spawn<AShinobiCharacterBase>(FVector(700.f, 0.f, 0.f));
+	AShinobiCharacterBase* Second = W.Spawn<AShinobiCharacterBase>(FVector(1300.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Ally = W.Spawn<AShinobiPlayerCharacter>(FVector(1000.f, 0.f, 0.f)); // in its path
+	AShinobiCharacterBase* Aside = W.Spawn<AShinobiCharacterBase>(FVector(700.f, 600.f, 0.f));
+	for (AShinobiCharacterBase* Each : { static_cast<AShinobiCharacterBase*>(P), First, Second, static_cast<AShinobiCharacterBase*>(Ally), Aside })
+	{
+		ShinobiTest::Hover(Each);
+	}
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+
+	P->ApplyJutsuPage(3);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
+	TestEqual(TEXT("Cost 40 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 60.f);
+	W.Tick(0.9f);
+	TestEqual(TEXT("The dragon is flying after the seals"), ShinobiTest::CountActors<AShinobiWaterDragon>(W), 1);
+
+	W.Tick(1.5f);
+	TestEqual(TEXT("and is gone when its time is up"), ShinobiTest::CountActors<AShinobiWaterDragon>(W), 0);
+	TestEqual(TEXT("The first enemy took 55, once"), ShinobiTest::Get(First, Health), 445.f);
+	TestEqual(TEXT("The second took 55, once"), ShinobiTest::Get(Second, Health), 445.f);
+	TestTrue(TEXT("and both were thrown on down its path"), First->GetActorLocation().X > 700.0 && Second->GetActorLocation().X > 1300.0);
+	TestEqual(TEXT("The ally in its path is unharmed"), ShinobiTest::Get(Ally, Health), 500.f);
+	TestEqual(TEXT("and was not moved"), Ally->GetActorLocation().X, 1000.0);
+	TestEqual(TEXT("An enemy off to the side is untouched"), ShinobiTest::Get(Aside, Health), 500.f);
+	TestTrue(TEXT("Cooldown running"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_WaterDragon));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiWaterDragonWallTest, "ShinobiCoop.Dragon.BreaksOnAWall", ShinobiTestFlags)
+bool FShinobiWaterDragonWallTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	SpawnMeteorWall(W, FVector(1050.f, 0.f, 0.f), FVector(1.f, 10.f, 10.f)); // its face is at X = 1000
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* Before = W.Spawn<AShinobiCharacterBase>(FVector(600.f, 0.f, 0.f));
+	AShinobiCharacterBase* Behind = W.Spawn<AShinobiCharacterBase>(FVector(1300.f, 0.f, 0.f));
+	for (AShinobiCharacterBase* Each : { static_cast<AShinobiCharacterBase*>(P), Before, Behind })
+	{
+		ShinobiTest::Hover(Each);
+	}
+	P->ApplyJutsuPage(3);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
+	W.Tick(2.4f);
+	TestEqual(TEXT("The enemy before the wall is hit"), ShinobiTest::Get(Before, UShinobiAttributeSet::GetHealthAttribute()), 445.f);
+	TestEqual(TEXT("The one behind it is not"), ShinobiTest::Get(Behind, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
+	TestEqual(TEXT("The dragon is gone"), ShinobiTest::CountActors<AShinobiWaterDragon>(W), 0);
 	return true;
 }
 

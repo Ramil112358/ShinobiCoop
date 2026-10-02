@@ -291,6 +291,17 @@ bool AShinobiBurst::BuildCards()
 			AddCard(Plane, ESprite::Smoke, FLinearColor(0.75f, 0.9f, 1.f), 1.f, Around(Random.FRandRange(20.f, 80.f) * S, Random.FRandRange(0.f, 2.f * PI)), FVector2D(160.f, 200.f) * S, 60.f * S);
 		}
 		break;
+	case EShinobiBurst::DragonSplash:
+		// The Water Dragon breaking: a wide ring, a burst of spray and a crown of mist.
+		Duration = 0.8f;
+		AddCard(Plane, ESprite::Ring, FLinearColor(0.4f, 0.7f, 1.f), 1.6f, FVector::ZeroVector, FVector2D(900.f, 900.f) * S, 0.f, true);
+		AddCard(Plane, ESprite::Burst, FLinearColor(0.5f, 0.8f, 1.f), 1.4f, FVector(0.f, 0.f, 60.f), FVector2D(520.f, 520.f) * S);
+		for (int32 Index = 0; Index < 4; ++Index)
+		{
+			AddCard(Plane, ESprite::Smoke, FLinearColor(0.8f, 0.92f, 1.f), 1.f, Around(Random.FRandRange(60.f, 200.f) * S, Random.FRandRange(0.f, 2.f * PI)), FVector2D(280.f, 340.f) * S, 140.f * S);
+		}
+		AddCard(Plane, ESprite::Ember, FLinearColor(0.55f, 0.8f, 1.f), 1.5f, FVector::ZeroVector, FVector2D(300.f, 520.f) * S, 120.f * S, false, true);
+		break;
 	case EShinobiBurst::Swirl:
 		// Kamui: a spiral turning on the ground and a soft flash, in chakra blue.
 		Duration = 0.7f;
