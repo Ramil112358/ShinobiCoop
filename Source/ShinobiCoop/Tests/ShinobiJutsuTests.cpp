@@ -195,7 +195,8 @@ bool FShinobiAmaterasuTest::RunTest(const FString& Parameters)
 	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
 	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
 	int32 Failures = 0;
-	P->GetAbilitySystemComponent()->AbilityFailedCallbacks.AddLambda([&Failures](const UGameplayAbility*, const FGameplayTagContainer&) { ++Failures; });
+	// Only Amaterasu's own failure: other pages' jutsu share key 4 and fail off-page by design (the HUD filters those).
+	P->GetAbilitySystemComponent()->AbilityFailedCallbacks.AddLambda([&Failures](const UGameplayAbility* Ability, const FGameplayTagContainer&) { Failures += Ability->IsA<UGA_Amaterasu>() ? 1 : 0; });
 
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
 	TestFalse(TEXT("Nothing under the crosshair within 3000 (no enemy, no ground): fails"), ShinobiTest::IsActive(P, UGA_Amaterasu::StaticClass()));
