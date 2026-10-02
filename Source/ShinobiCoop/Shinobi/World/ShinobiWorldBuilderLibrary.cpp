@@ -15,6 +15,10 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "GameFramework/Actor.h"
+#include "EngineUtils.h"
+#include "NavigationSystem.h"
+#include "NavigationData.h"
+#include "NavMesh/RecastNavMesh.h"
 #endif
 #include "ShinobiCoop.h"
 
@@ -320,5 +324,62 @@ UStaticMesh* UShinobiWorldBuilderLibrary::BakeSkeletalToStatic(UWorld* World, US
 	return Static;
 #else
 	return nullptr;
+#endif
+}
+
+AActor* UShinobiWorldBuilderLibrary::EnsureNavMesh(UWorld* World)
+{
+#if WITH_EDITOR
+	if (!World)
+	{
+		return nullptr;
+	}
+	for (TActorIterator<ARecastNavMesh> It(World); It; ++It)  // not ANavigationData: AbstractNavData always exists
+	{
+		UE_LOG(LogShinobiCoop, Log, TEXT("World builder: navigation data %s already there"), *It->GetName());
+		return *It;
+	}
+	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	if (!Nav)
+	{
+		FNavigationSystem::AddNavigationSystemToWorld(*World, FNavigationSystemRunMode::EditorMode);
+		Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	}
+	ANavigationData* Data = Nav ? Nav->GetDefaultNavDataInstance(FNavigationSystem::Create) : nullptr;
+	if (!Data || !Data->IsA<ARecastNavMesh>())
+	{
+		UE_LOG(LogShinobiCoop, Error, TEXT("World builder: could not create navigation data"));
+		return nullptr;
+	}
+	Data->SetIsSpatiallyLoaded(false);
+	Data->MarkPackageDirty();
+	UE_LOG(LogShinobiCoop, Log, TEXT("World builder: created %s"), *Data->GetName());
+	return Data;
+#else
+	return nullptr;
+#endif
+}
+
+bool UShinobiWorldBuilderLibrary::SetDistanceFieldSettings(UStaticMesh* Mesh, float Scale, UStaticMesh* Replacement)
+{
+#if WITH_EDITOR
+	if (!Mesh || Mesh->GetNumSourceModels() == 0)
+	{
+		return false;
+	}
+	FMeshBuildSettings& Settings = Mesh->GetSourceModel(0).BuildSettings;
+	if (FMath::IsNearlyEqual(Settings.DistanceFieldResolutionScale, Scale) && Settings.DistanceFieldReplacementMesh == Replacement)
+	{
+		return true;
+	}
+	Mesh->Modify();
+	Settings.DistanceFieldResolutionScale = Scale;
+	Settings.DistanceFieldReplacementMesh = Replacement;
+	Mesh->Build(true);
+	Mesh->PostEditChange();
+	Mesh->MarkPackageDirty();
+	return true;
+#else
+	return false;
 #endif
 }

@@ -55,4 +55,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|World")
 	static UStaticMesh* BakeSkeletalToStatic(UWorld* World, USkeletalMesh* Skeletal, const FString& PackageName);
 
+	/**
+	 * Makes sure World has its default navigation data actor (RecastNavMesh), always loaded: the editor creates it when
+	 * a NavMeshBoundsVolume is placed by hand, the Python commandlet doesn't, and without it AI can't path at runtime.
+	 * Returns the nav data actor, null on failure.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Shinobi|World")
+	static AActor* EnsureNavMesh(UWorld* World);
+
+	/**
+	 * Sets LOD0's distance field build settings and rebuilds the mesh (Python can't write these on Nanite meshes).
+	 * A tiny Replacement mesh plus a small Scale makes the distance field near-free to build: for meshes that don't
+	 * need one (far backdrop, water, hidden walls). Returns false on failure.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Shinobi|World")
+	static bool SetDistanceFieldSettings(UStaticMesh* Mesh, float Scale, UStaticMesh* Replacement);
+
 };

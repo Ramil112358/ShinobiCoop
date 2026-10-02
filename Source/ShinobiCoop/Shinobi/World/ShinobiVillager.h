@@ -5,6 +5,7 @@
 #include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "ShinobiVillager.generated.h"
 
+class UAnimSequence;
 class UNavigationInvokerComponent;
 class UShinobiOverheadTextComponent;
 
@@ -25,12 +26,13 @@ public:
 	static constexpr float BarkSeconds = 3.f;
 
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	/** One of the lines, picked deterministically from Seed. */
-	static FText PickBark(int32 Seed);
-	static int32 NumBarks();
+	/** One of the lines (the valley's, or London's), picked deterministically from Seed. */
+	static FText PickBark(int32 Seed, bool bLondonLines = false);
+	static int32 NumBarks(bool bLondonLines = false);
 
 	/** Local: shows a bark (the next line for this villager) over its head for BarkSeconds. Returns the line. */
 	FText Talk();
@@ -42,6 +44,24 @@ public:
 	UPROPERTY(Replicated, EditAnywhere, Category = "Villager")
 	int32 Variant = 0;
 
+	/** A Londoner (marker tag Barks:London): speaks London's lines instead of the valley's; replicated. */
+	UPROPERTY(Replicated, EditAnywhere, Category = "Villager")
+	bool bLondon = false;
+
+	/** A city pedestrian (marker tag Look:Crowd): wears a City Sample crowd character (CrowdLookClass) instead of the
+	 * villager body, its gender, build, face, outfit and hair picked from Variant, so every machine dresses it alike. */
+	UPROPERTY(Replicated, EditAnywhere, Category = "Villager")
+	bool bCrowd = false;
+
+	/** Crowd characters draw only this near a camera (cm); their hair (grooms) nearer still. */
+	static constexpr float CrowdDrawDistance = 7000.f;
+	static constexpr float CrowdHairDrawDistance = 2000.f;
+
+	static constexpr const TCHAR* CrowdLookClass = TEXT("/Game/CitySampleCrowd/Blueprints/BP_CrowdCharacter.BP_CrowdCharacter_C");
+
+	/** The crowd character actor while bCrowd (local, cosmetic: never replicated). */
+	AActor* GetCrowdLook() const { return CrowdLook; }
+
 	/** The villagers' characters (built by Scripts/setup_hero.py at /Game/Shinobi/Characters/<Name>), by Variant modulo
 	 * the count: townsfolk first (so the valley's 6th route repeats Goro, not a guard), then the village guards. Never
 	 * shared with an enemy type's BodyPool. */
@@ -52,6 +72,21 @@ public:
 
 private:
 	void HideBark();
+	bool WearCrowdLook();
+
+	UPROPERTY(Transient)
+	TObjectPtr<AActor> CrowdLook;
+
+	UPROPERTY(Transient)
+	TObjectPtr<USkeletalMeshComponent> CrowdRoot;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimSequence> CrowdIdle;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimSequence> CrowdWalk;
+
+	bool bCrowdWalking = false;
 
 	UPROPERTY(VisibleAnywhere, Category = "Villager")
 	TObjectPtr<UShinobiBodyComponent> Body;

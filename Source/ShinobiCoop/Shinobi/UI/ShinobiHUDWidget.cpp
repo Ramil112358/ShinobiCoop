@@ -432,7 +432,7 @@ void UShinobiHUDWidget::UpdateCompass()
 		Mark(0.f, TEXT("E"), FLinearColor(0.8f, 0.8f, 0.8f));
 		Mark(-90.f, TEXT("S"), FLinearColor(0.8f, 0.8f, 0.8f));
 		Mark(180.f, TEXT("W"), FLinearColor(0.8f, 0.8f, 0.8f));
-		MarkAt(State->VillageLocation, TEXT("Village"), FLinearColor(0.95f, 0.9f, 0.7f));
+		MarkAt(State->VillageLocation, State->HubName, FLinearColor(0.95f, 0.9f, 0.7f));
 		for (TActorIterator<AShinobiCamp> It(GetWorld()); It; ++It)
 		{
 			const bool bCleared = It->GetState() == EShinobiCampState::Cleared;
@@ -480,7 +480,7 @@ void UShinobiHUDWidget::UpdateArena(const AShinobiPlayerCharacter* Player)
 			Banner = FString::Printf(TEXT("WIPED OUT\nWave restarting in %d"), Countdown);
 			break;
 		case EShinobiArenaPhase::Victory:
-			Banner = State->NumCamps > 0 ? TEXT("VALLEY CLEARED") : TEXT("VICTORY");
+			Banner = State->NumCamps > 0 ? State->VictoryText : TEXT("VICTORY");
 			break;
 		case EShinobiArenaPhase::OpenWorld:
 			Wave = FString::Printf(TEXT("Camps cleared %d / %d"), State->CampsCleared, State->NumCamps);

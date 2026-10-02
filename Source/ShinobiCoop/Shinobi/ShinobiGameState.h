@@ -58,4 +58,12 @@ public:
 	/** Open world: where the village is, for the compass. */
 	UPROPERTY(Replicated)
 	FVector VillageLocation = FVector::ZeroVector;
+
+	/** Open world: the hub's compass label (the PlayerStart's Hub:<name> tag; London: "Leicester Square"). */
+	UPROPERTY(Replicated)
+	FString HubName = TEXT("Village");
+
+	/** Open world: the banner when the boss camp falls (the boss marker's Victory:<text> tag). */
+	UPROPERTY(Replicated)
+	FString VictoryText = TEXT("VALLEY CLEARED");
 };
