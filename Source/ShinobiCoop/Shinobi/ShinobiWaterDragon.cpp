@@ -72,7 +72,7 @@ void AShinobiWaterDragon::BeginPlay()
 	// A head (with two horns) and a tapering body of spheres in flowing water; the shapes are the engine's.
 	UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 	UStaticMesh* Cone = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cone.Cone"));
-	UMaterialInstanceDynamic* Water = ShinobiVfx::MakeWater(this, FLinearColor(0.2f, 0.55f, 1.f), 1.8f);
+	UMaterialInstanceDynamic* Water = ShinobiVfx::MakeWater(this, FLinearColor(0.06f, 0.35f, 1.f), 1.1f);
 	for (int32 Index = 0; Index <= DragonBodyParts; ++Index)
 	{
 		UStaticMeshComponent* Part = NewObject<UStaticMeshComponent>(this);

@@ -19,6 +19,7 @@
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiMarkerKunai.h"
+#include "Shinobi/ShinobiMeteor.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
 #include "Shinobi/ShinobiInputConfig.h"
@@ -242,7 +243,7 @@ void AShinobiPlayerController::ShinobiDumpStats()
 			It->IsPhased() ? 1 : 0);
 	}
 	// What the replicated jutsu actors look like from this machine (the co-op check compares both sides).
-	int32 Barriers = 0, Kunai = 0;
+	int32 Barriers = 0, Kunai = 0, Meteors = 0;
 	for (TActorIterator<AShinobiBarrier> It(GetWorld()); It; ++It)
 	{
 		++Barriers;
@@ -251,8 +252,12 @@ void AShinobiPlayerController::ShinobiDumpStats()
 	{
 		++Kunai;
 	}
+	for (TActorIterator<AShinobiMeteor> It(GetWorld()); It; ++It)
+	{
+		++Meteors;
+	}
 	const AShinobiPlayerCharacter* Me = GetPawn<AShinobiPlayerCharacter>();
-	UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiJutsuWorld Page=%d Barriers=%d Kunai=%d"), Me ? Me->GetJutsuPage() : 0, Barriers, Kunai);
+	UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiJutsuWorld Page=%d Barriers=%d Kunai=%d Meteors=%d"), Me ? Me->GetJutsuPage() : 0, Barriers, Kunai, Meteors);
 }
 
 void AShinobiPlayerController::RunSmokeTest()
@@ -281,15 +286,17 @@ void AShinobiPlayerController::RunSmokeTest()
 		FTimerHandle Handle;
 		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
 	};
-	At(6.3f, [this]() { ShinobiPage(2); });
-	At(6.5f, [this]() { ShinobiCast(4); });
-	At(7.4f, [this]() { ShinobiCast(2); });
+	At(6.3f, [this]() { ShinobiPage(3); });
+	At(6.5f, [this]() { ShinobiCast(4); }); // Ice Meteors: the shards are queued from about 7.0 s and land over the next 4.5 s
+	At(7.2f, [this]() { ShinobiDrainChakra(-100.f); ShinobiPage(2); });
+	At(7.5f, [this]() { ShinobiCast(4); }); // Earth Wall
+	At(8.3f, [this]() { ShinobiCast(2); }); // Kamui
 	FTimerHandle DumpTimer;
 	GetWorldTimerManager().SetTimer(DumpTimer, FTimerDelegate::CreateWeakLambda(this, [this]()
 	{
 		ShinobiDumpStats();
 		ConsoleCommand(TEXT("quit"));
-	}), 9.f, false);
+	}), 9.5f, false);
 }
 
 void AShinobiPlayerController::RunShotTest()
@@ -642,12 +649,30 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(26.8f, [FaceCamera]() { FaceCamera(55.f, 90.f, 0.f, 320.f); }); // from the side: the water wall stands 350 ahead
 	At(26.95f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_17_Kamui")); });
 	At(27.1f, BackToPlayer);
-	At(29.6f, RestoreAim);
-	At(29.8f, [CastJutsu]() { CastJutsu(1, 0.6f); }); // Teleport: 0.4 s seals, the kunai fly at 30.3
-	At(30.45f, [FaceCamera]() { FaceCamera(70.f, 90.f, 250.f, 520.f); });
-	At(30.55f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_18_TeleportKunai")); });
-	At(30.7f, BackToPlayer);
-	At(31.4f, [this]() { ShinobiCast(1); }); // the same key jumps to a kunai
-	At(31.9f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_19_TeleportArrival")); });
-	At(32.6f, [this]() { ConsoleCommand(TEXT("quit")); });
+	// Page 3's elemental jutsu once Kamui has worn off (it blocks casting): Fire Meteor, Ice Meteors, Water Dragon.
+	At(29.7f, [this, RestoreAim]() { ShinobiPage(3); RestoreAim(); });
+	At(29.9f, [CastJutsu]() { CastJutsu(3, 0.8f); }); // Fire Meteor: 0.6 s seals, the ring and the meteor appear at 30.7
+	At(31.1f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_20_FireMeteorRing")); });
+	At(32.25f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_21_FireMeteorImpact")); }); // lands about 32.1
+	At(34.0f, RestoreAim);
+	At(34.2f, [CastJutsu]() { CastJutsu(4, 0.7f); }); // Ice Meteors: 0.5 s seals, shards fall from 34.9 for about 4.5 s
+	At(36.0f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_22_IceShower")); });
+	At(37.4f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_22b_IceShower")); });
+	At(39.8f, RestoreAim);
+	At(40.0f, [CastJutsu]() { CastJutsu(2, 0.9f); }); // Water Dragon: 0.6 s seals, flies from 40.9
+	At(41.0f, [FaceCamera]() { FaceCamera(70.f, 90.f, 250.f, 520.f); }); // from the side, just after it leaves
+	At(41.1f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_23_WaterDragon")); });
+	At(41.2f, BackToPlayer);
+	At(41.5f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_23b_WaterDragon")); });
+	At(42.6f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_24_HudPage3Full")); });
+
+	// Back to page 2 for Teleport.
+	At(43.2f, [this, RestoreAim]() { ShinobiPage(2); RestoreAim(); });
+	At(43.4f, [CastJutsu]() { CastJutsu(1, 0.6f); }); // Teleport: 0.4 s seals, the kunai fly at 43.9
+	At(44.05f, [FaceCamera]() { FaceCamera(70.f, 90.f, 250.f, 520.f); });
+	At(44.15f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_18_TeleportKunai")); });
+	At(44.3f, BackToPlayer);
+	At(45.0f, [this]() { ShinobiCast(1); }); // the same key jumps to a kunai
+	At(45.5f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_19_TeleportArrival")); });
+	At(46.2f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
