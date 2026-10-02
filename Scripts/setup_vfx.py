@@ -263,31 +263,30 @@ def build_streak():
 
 
 def build_phased():
-    """M_Phased: Kamui's ghost. Translucent unlit chakra-blue; a see-through body with a brighter rim, swapped onto
-    every visible body mesh while State.Phased is on. Params: Color, Intensity, Opacity (0 = gone, 1 = a solid blue figure)."""
-    m = fresh_material("M_Phased", two_sided=False, blend=unreal.BlendMode.BLEND_TRANSLUCENT)
+    """M_Phased: Kamui's ghost. Additive and unlit: a glowing chakra-blue figure, brighter at the silhouette, swapped onto
+    every visible body mesh while State.Phased is on. (A translucent material is nearly invisible at low coverage: Substrate
+    scales its glow by the coverage.) Params: Color, Intensity, Opacity (0 = gone; the glow scales with it)."""
+    m = fresh_material("M_Phased", two_sided=False)
     color = node(m, unreal.MaterialExpressionVectorParameter, -800, -300,
                  parameter_name="Color", default_value=unreal.LinearColor(0.35, 0.7, 1.0, 1.0))
-    intensity = node(m, unreal.MaterialExpressionScalarParameter, -800, -150, parameter_name="Intensity", default_value=1.2)
+    intensity = node(m, unreal.MaterialExpressionScalarParameter, -800, -150, parameter_name="Intensity", default_value=3.0)
     opacity = node(m, unreal.MaterialExpressionScalarParameter, -800, 0, parameter_name="Opacity", default_value=0.3)
     rim = node(m, unreal.MaterialExpressionFresnel, -800, 150, exponent=2.0, base_reflect_fraction=0.0)
-    half_rim = node(m, unreal.MaterialExpressionMultiply, -600, 150, const_b=0.5)
-    link(rim, half_rim, "A")
-    body = node(m, unreal.MaterialExpressionAdd, -450, 150, const_b=0.5)  # 0.5 in the middle, 1 at the silhouette
-    link(half_rim, body, "A")
-    coverage = node(m, unreal.MaterialExpressionMultiply, -300, 50)
-    link(opacity, coverage, "A")
-    link(body, coverage, "B")
+    rim_part = node(m, unreal.MaterialExpressionMultiply, -600, 150, const_b=0.6)
+    link(rim, rim_part, "A")
+    body = node(m, unreal.MaterialExpressionAdd, -450, 150, const_b=0.4)  # 0.4 in the middle, 1 at the silhouette
+    link(rim_part, body, "A")
     glow = node(m, unreal.MaterialExpressionMultiply, -600, -250)
     link(color, glow, "A")
     link(intensity, glow, "B")
-    emissive = node(m, unreal.MaterialExpressionMultiply, -300, -200)
-    link(glow, emissive, "A")
+    scaled = node(m, unreal.MaterialExpressionMultiply, -400, -150)
+    link(glow, scaled, "A")
+    link(opacity, scaled, "B")
+    emissive = node(m, unreal.MaterialExpressionMultiply, -200, -50)
+    link(scaled, emissive, "A")
     link(body, emissive, "B")
-    transmittance = node(m, unreal.MaterialExpressionOneMinus, -150, 50)
-    link(coverage, transmittance, "")
     require_skeletal_mesh_usage(m)
-    finish(m, emissive, transmittance)
+    finish(m, emissive)
 
 
 def build_water_wall():

@@ -15,8 +15,10 @@
 #include "UnrealClient.h"
 #include "ShinobiCoop.h"
 #include "Shinobi/ShinobiAttributeSet.h"
+#include "Shinobi/ShinobiBarrier.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiEffects.h"
+#include "Shinobi/ShinobiMarkerKunai.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
 #include "Shinobi/ShinobiInputConfig.h"
@@ -234,10 +236,23 @@ void AShinobiPlayerController::ShinobiDumpStats()
 	for (TActorIterator<AShinobiCharacterBase> It(GetWorld()); It; ++It)
 	{
 		const UShinobiAttributeSet* Stats = It->GetAttributes();
-		UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiStats %s local=%d H=%.1f C=%.1f S=%.1f Burn=%d"),
+		UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiStats %s local=%d H=%.1f C=%.1f S=%.1f Burn=%d Phased=%d"),
 			*It->GetName(), It->IsLocallyControlled() ? 1 : 0, Stats->GetHealth(), Stats->GetChakra(), Stats->GetStamina(),
-			It->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Burning) ? 1 : 0);
+			It->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Burning) ? 1 : 0,
+			It->IsPhased() ? 1 : 0);
 	}
+	// What the replicated jutsu actors look like from this machine (the co-op check compares both sides).
+	int32 Barriers = 0, Kunai = 0;
+	for (TActorIterator<AShinobiBarrier> It(GetWorld()); It; ++It)
+	{
+		++Barriers;
+	}
+	for (TActorIterator<AShinobiMarkerKunai> It(GetWorld()); It; ++It)
+	{
+		++Kunai;
+	}
+	const AShinobiPlayerCharacter* Me = GetPawn<AShinobiPlayerCharacter>();
+	UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiJutsuWorld Page=%d Barriers=%d Kunai=%d"), Me ? Me->GetJutsuPage() : 0, Barriers, Kunai);
 }
 
 void AShinobiPlayerController::RunSmokeTest()
@@ -260,6 +275,15 @@ void AShinobiPlayerController::RunSmokeTest()
 	}), 1.f, false);
 	FTimerHandle CastTimer;
 	GetWorldTimerManager().SetTimer(CastTimer, FTimerDelegate::CreateUObject(this, &AShinobiPlayerController::ShinobiCast, 1), 5.5f, false);
+	// The movement/defense jutsu over the wire: page 2, an Earth Wall (a replicated actor), then Kamui (a replicated tag).
+	auto At = [this](float Seconds, TFunction<void()> Fn)
+	{
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
+	};
+	At(6.3f, [this]() { ShinobiPage(2); });
+	At(6.5f, [this]() { ShinobiCast(4); });
+	At(7.4f, [this]() { ShinobiCast(2); });
 	FTimerHandle DumpTimer;
 	GetWorldTimerManager().SetTimer(DumpTimer, FTimerDelegate::CreateWeakLambda(this, [this]()
 	{
@@ -594,5 +618,36 @@ void AShinobiPlayerController::RunJutsuShotTest()
 		}
 	});
 	At(16.7f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_11_Substitution")); });
-	At(17.5f, [this]() { ConsoleCommand(TEXT("quit")); });
+
+	// Page 2 (Almighty Push, Earth Wall, Kamui, Teleport), then page 3 (Water Wall), each with the HUD showing its page.
+	// Teleport goes last: it leaves the caster standing against the scene's pillar, in the way of the walls.
+	auto ShotUI = [](const TCHAR* Name)
+	{
+		FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Name), true, false);
+	};
+	At(17.2f, [this, RestoreAim]() { ShinobiPage(2); RestoreAim(); });
+	At(17.6f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_12_HudPage2")); }); // after the icons have streamed in
+	At(17.8f, [CastJutsu]() { CastJutsu(3, 1.2f); }); // Almighty Push: 0.5 s seals, released at 19.0, the wave 0.15 s later
+	At(19.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_13_Push")); });
+	At(19.6f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_13b_Push")); });
+	At(20.4f, RestoreAim);
+	At(20.6f, [CastJutsu]() { CastJutsu(4, 0.8f); }); // Earth Wall: 0.5 s seals, the wall rises at 21.4
+	At(22.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_14_EarthWall")); });
+	At(23.0f, [this, RestoreAim]() { ShinobiPage(3); RestoreAim(); });
+	At(23.2f, [CastJutsu]() { CastJutsu(1, 0.7f); }); // Water Wall: 0.4 s seals, the wall rises at 23.9 (replaces the earth wall: one per caster)
+	At(24.8f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_15_WaterWall")); });
+	At(25.0f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_16_HudPage3")); });
+	At(25.8f, [this, RestoreAim]() { ShinobiPage(2); RestoreAim(); });
+	At(26.0f, [CastJutsu]() { CastJutsu(2, 0.5f); }); // Kamui: 0.3 s seals, phased from 26.5
+	At(26.8f, [FaceCamera]() { FaceCamera(55.f, 90.f, 0.f, 320.f); }); // from the side: the water wall stands 350 ahead
+	At(26.95f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_17_Kamui")); });
+	At(27.1f, BackToPlayer);
+	At(29.6f, RestoreAim);
+	At(29.8f, [CastJutsu]() { CastJutsu(1, 0.6f); }); // Teleport: 0.4 s seals, the kunai fly at 30.3
+	At(30.45f, [FaceCamera]() { FaceCamera(70.f, 90.f, 250.f, 520.f); });
+	At(30.55f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_18_TeleportKunai")); });
+	At(30.7f, BackToPlayer);
+	At(31.4f, [this]() { ShinobiCast(1); }); // the same key jumps to a kunai
+	At(31.9f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_19_TeleportArrival")); });
+	At(32.6f, [this]() { ConsoleCommand(TEXT("quit")); });
 }

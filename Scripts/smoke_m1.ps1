@@ -1,5 +1,6 @@
 # Starts a listen server and a client as separate -game processes (no rendering). The client damages itself through a
-# server RPC and throws a Fireball at the dummy ahead; asserts the client sees both through replication.
+# server RPC and throws a Fireball at the dummy ahead, then switches to jutsu page 2 and casts an Earth Wall and Kamui;
+# asserts the client sees all of it through replication (its health, the burning dummy, the wall actor, its own phase).
 $ErrorActionPreference = "Stop"
 $UE = "C:\Program Files\Epic Games\UE_5.8"
 $Editor = "$UE\Engine\Binaries\Win64\UnrealEditor.exe"
@@ -48,11 +49,19 @@ $hit = Select-String -LiteralPath $ClientLog -Pattern "ShinobiStats .* local=1 H
 # The Fireball (cast at 5.5 s) hit the middle dummy: 60 direct plus burn ticks, and it's still burning at 9 s.
 $burned = Select-String -LiteralPath $ClientLog -Pattern "ShinobiStats ShinobiTrainingDummy\S* local=0 H=(\d+)\.\d .*Burn=1" |
     Where-Object { [double]$_.Matches[0].Groups[1].Value -le 440 }
-if ($hit -and $burned) {
+# Earth Wall (7.1 s) and Kamui (7.75 s, three seconds): at 9 s the client sees the wall and its own phase.
+$wall = Select-String -LiteralPath $ClientLog -Pattern "ShinobiJutsuWorld Page=2 Barriers=1"
+$phased = Select-String -LiteralPath $ClientLog -Pattern "ShinobiStats \S+ local=1 .* Phased=1"
+if ($hit -and $burned -and $wall -and $phased) {
     Write-Host "SMOKE PASS: $($hit.Line)"
     Write-Host "SMOKE PASS: $($burned[0].Line)"
+    Write-Host "SMOKE PASS: $($wall[0].Line)"
+    Write-Host "SMOKE PASS: $($phased[0].Line)"
 } else {
     Select-String -LiteralPath $ClientLog -Pattern "ShinobiStats|Error" | Select-Object -Last 20 | ForEach-Object { Write-Host $_.Line }
+    Select-String -LiteralPath $ClientLog -Pattern "ShinobiJutsuWorld" | Select-Object -Last 3 | ForEach-Object { Write-Host $_.Line }
+    if (-not $wall) { throw "SMOKE FAIL: client never saw the replicated Earth Wall (page 2, one barrier)" }
+    if (-not $phased) { throw "SMOKE FAIL: client never saw its own Kamui phase" }
     if (-not $hit) { throw "SMOKE FAIL: client never saw its replicated Health drop to 450" }
     throw "SMOKE FAIL: client never saw a fireballed (H <= 440), burning dummy"
 }

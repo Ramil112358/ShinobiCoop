@@ -186,3 +186,25 @@ Ordered roughly by visible gain per effort.
 - Components that hold materials need null guards: `MakeSprite` is null if the asset is missing, and the automation tests
   run without every asset in some configurations.
 - `ShinobiBurst` kinds are an enum replicated as a byte and an index into `Sounds[]`: append, never insert.
+
+## 7. Jutsu pages and the movement/defense jutsu (2026-10-02)
+
+The player has five **jutsu pages**; keys 1-4 fire the current page's jutsu (Q / wheel / RB + D-pad switch, `ShinobiPage N` on the
+console). Each `UShinobiJutsuAbility` sets `Page`; the current page is a loose tag `State.JutsuPage.N`. Page 2 is Teleport,
+Kamui, Almighty Push, Earth Wall; page 3 starts with Water Wall. Specs and plan: `docs/superpowers/specs|plans/2026-10-02-jutsu-pages-and-movement-defense*`.
+
+New effects and where their look lives:
+
+| Effect | Where | Notes |
+|---|---|---|
+| Push shockwave (`EShinobiBurst::Shockwave`) | `ShinobiBurst.cpp` `BuildCards` | flat `Ring` card plus five `Smoke` cards |
+| Teleport arrival (`TeleportFlash`) | same | `Burst` + yellow `Ring` + three `Lightning` cards |
+| Kamui swirl (`Swirl`) | same | spinning `Vortex` card + a `Burst` |
+| Wall breaking (`Crumble` earth, `Splash` water) | same; spawned by `AShinobiBarrier::EndPlay` (half size when it runs out) | |
+| Kamui ghost | `M_Phased` (`Scripts/setup_vfx.py`), swapped on by `UShinobiPhaseFxComponent` | additive on purpose: a translucent material scales its glow by its coverage and vanishes at 30% opacity |
+| Earth Wall | `MI_PBR_rock_face` (the world library's Poly Haven rock) on the barrier's cube | the first run in a cold DDC shows the checker placeholder while its 4K textures encode |
+| Water Wall | `M_WaterWall` (`Scripts/setup_vfx.py`) | translucent, flowing noise; the river's single-layer-water material was not used on a vertical slab |
+| Marker kunai | `SM_MarkerKunai` (`Scripts/character/make_marker_kunai.py` -> `Scripts/setup_marker_kunai.py`) | built procedurally; two Rodin tries were rejected. The cone stands in until it is imported |
+
+Checking them: `powershell -File Scripts/shot_chakra.ps1 -Jutsu` casts everything (pages 2 and 3 are shots 12-19) and
+`Scripts/smoke_m1.ps1` checks the wall, the phase and the page over a listen-server + client pair.

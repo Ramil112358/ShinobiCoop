@@ -112,10 +112,10 @@ void AShinobiBarrier::BeginPlay()
 		SetActorTickEnabled(false);
 		return;
 	}
-	// Earth: Poly Haven's rock_09 PBR material on the slab (stretched with the cube's UVs). Water: M_WaterWall (Scripts/setup_vfx.py).
+	// Earth: the world library's Poly Haven rock_face PBR material on the slab (rock_09's own mesh material only works on its mesh). Water: M_WaterWall (Scripts/setup_vfx.py).
 	// Either missing: the engine's basic shape material, tinted.
 	const TCHAR* LookPath = Kind == EShinobiBarrierKind::Earth
-		? TEXT("/Game/Shinobi/World/Library/PH_Rock/rock_09/rock_09_2k/Materials/rock_09.rock_09")
+		? TEXT("/Game/Shinobi/World/Library/Materials/MI_PBR_rock_face.MI_PBR_rock_face")
 		: TEXT("/Game/Shinobi/VFX/M_WaterWall.M_WaterWall");
 	if (UMaterialInterface* Look = LoadObject<UMaterialInterface>(nullptr, LookPath, nullptr, LOAD_NoWarn | LOAD_Quiet))
 	{
