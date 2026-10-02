@@ -1,5 +1,9 @@
 #include "Shinobi/ShinobiMovementComponent.h"
+#include "AbilitySystemComponent.h"
 #include "GameFramework/Character.h"
+#include "Shinobi/ShinobiCharacterBase.h"
+#include "Shinobi/ShinobiEffects.h"
+#include "Shinobi/ShinobiTags.h"
 
 namespace
 {
@@ -79,11 +83,13 @@ UShinobiMovementComponent::UShinobiMovementComponent()
 
 float UShinobiMovementComponent::GetMaxSpeed() const
 {
-	if (bWantsToSprint && MovementMode == MOVE_Walking)
+	float Speed = (bWantsToSprint && MovementMode == MOVE_Walking) ? SprintSpeed : Super::GetMaxSpeed();
+	const AShinobiCharacterBase* Character = Cast<AShinobiCharacterBase>(GetOwner());
+	if (Character && Character->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Chilled))
 	{
-		return SprintSpeed;
+		Speed *= UGE_Chill::SpeedScale;
 	}
-	return Super::GetMaxSpeed();
+	return Speed;
 }
 
 void UShinobiMovementComponent::UpdateFromCompressedFlags(uint8 Flags)

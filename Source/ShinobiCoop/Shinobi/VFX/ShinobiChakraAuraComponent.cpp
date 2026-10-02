@@ -29,6 +29,7 @@ namespace
 			{ ShinobiTags::State_Burning_Normal, ShinobiVfx::Colors::Fire, 2.5f, false },
 			{ ShinobiTags::State_Shocked, ShinobiVfx::Colors::Lightning, 4.f, true },
 			{ ShinobiTags::State_ChakraCharging, ShinobiVfx::Colors::Chakra, 2.5f, false },
+			{ ShinobiTags::State_Chilled, ShinobiVfx::Colors::Ice, 2.f, false },
 		};
 		return Table;
 	}
