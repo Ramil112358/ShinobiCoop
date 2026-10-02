@@ -45,7 +45,10 @@ private:
 	void BuildJutsuSlots(UCanvasPanel* Root);
 	UTextBlock* MakeText(int32 FontSize, const FLinearColor& Tint, bool bBold = false);
 	UTextBlock* AddLabel(UOverlay* Layers, int32 FontSize, EHorizontalAlignment HorizontalAlign, EVerticalAlignment VerticalAlign, const FLinearColor& Tint);
-	void UpdateJutsuSlots(const UAbilitySystemComponent& ASC);
+	/** The slots show the jutsu on Page (the player's current jutsu page); slots with none on it are hidden. */
+	void UpdateJutsuSlots(const UAbilitySystemComponent& ASC, int32 Page, const class AShinobiPlayerCharacter* Player);
+	/** One small diamond per jutsu page under the slots; the current page is lit. */
+	void BuildPagePips(UCanvasPanel* Root);
 	UTextBlock* AddCanvasText(UCanvasPanel* Root, FName Name, const FAnchors& Anchors, const FVector2D& Alignment, const FVector2D& Position, int32 FontSize, ETextJustify::Type Justify);
 	void UpdateArena(const class AShinobiPlayerCharacter* Player);
 	/** Open world: the compass strip (cardinal points, village, camps, boss) around the camera's yaw. */
@@ -134,6 +137,13 @@ private:
 	/** Under each slot. */
 	UPROPERTY()
 	TArray<TObjectPtr<UTextBlock>> SlotNames;
+
+	/** Each slot's column (frame + name): hidden when the current page has no jutsu there. */
+	UPROPERTY()
+	TArray<TObjectPtr<UVerticalBox>> SlotColumns;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UBorder>> PagePips;
 
 	/** The jutsu each slot shows; its icon, name and cost are set when it changes. */
 	TArray<TWeakObjectPtr<const UShinobiJutsuAbility>> SlotJutsu;

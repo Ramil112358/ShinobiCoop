@@ -189,6 +189,14 @@ void AShinobiPlayerController::ShinobiCast(int32 JutsuSlot)
 	Shinobi->GetAbilitySystemComponent()->AbilityLocalInputReleased(Input);
 }
 
+void AShinobiPlayerController::ShinobiPage(int32 Page)
+{
+	if (AShinobiPlayerCharacter* Shinobi = GetPawn<AShinobiPlayerCharacter>())
+	{
+		Shinobi->SetJutsuPage(Page);
+	}
+}
+
 void AShinobiPlayerController::ShinobiCastHold(int32 JutsuSlot, float Seconds)
 {
 	AShinobiCharacterBase* Shinobi = GetPawn<AShinobiCharacterBase>();

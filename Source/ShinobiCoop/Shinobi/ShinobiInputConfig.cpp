@@ -108,6 +108,15 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 	AddJutsu(EShinobiAbilityInputID::Jutsu3, TEXT("IA_Jutsu3"), EKeys::Three, EKeys::Gamepad_FaceButton_Left);
 	AddJutsu(EShinobiAbilityInputID::Jutsu4, TEXT("IA_Jutsu4"), EKeys::Four, EKeys::Gamepad_FaceButton_Top);
 
+	// Jutsu pages: Q or the wheel on the keyboard, the D-pad while RB is held.
+	Config->JutsuPageNext = MakeAction(Config, TEXT("IA_JutsuPageNext"), EInputActionValueType::Boolean);
+	Ctx->MapKey(Config->JutsuPageNext, EKeys::Q);
+	Ctx->MapKey(Config->JutsuPageNext, EKeys::MouseScrollUp);
+	JutsuCtx->MapKey(Config->JutsuPageNext, EKeys::Gamepad_DPad_Right);
+	Config->JutsuPagePrev = MakeAction(Config, TEXT("IA_JutsuPagePrev"), EInputActionValueType::Boolean);
+	Ctx->MapKey(Config->JutsuPagePrev, EKeys::MouseScrollDown);
+	JutsuCtx->MapKey(Config->JutsuPagePrev, EKeys::Gamepad_DPad_Left);
+
 	return Config;
 }
 

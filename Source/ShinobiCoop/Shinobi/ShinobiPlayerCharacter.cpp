@@ -501,6 +501,8 @@ void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 		Input->BindAction(Pair.Value, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::AbilityInputPressed, Pair.Key);
 		Input->BindAction(Pair.Value, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::AbilityInputReleased, Pair.Key);
 	}
+	Input->BindAction(InputConfig.JutsuPageNext, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::CycleJutsuPage, 1);
+	Input->BindAction(InputConfig.JutsuPagePrev, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::CycleJutsuPage, -1);
 	Input->BindAction(InputConfig.LockOn, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::ToggleLockOn);
 	Input->BindAction(InputConfig.JutsuModifier, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::SetJutsuModifier, true);
 	Input->BindAction(InputConfig.JutsuModifier, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::SetJutsuModifier, false);

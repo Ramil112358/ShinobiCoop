@@ -141,6 +141,7 @@ private:
 	void JumpPressed();
 	void AbilityInputPressed(EShinobiAbilityInputID InputID);
 	void AbilityInputReleased(EShinobiAbilityInputID InputID);
+	void CycleJutsuPage(int32 Direction) { TryCycleJutsuPage(Direction); }
 	/** RB held: adds IMC_ShinobiJutsu (A/B/X/Y cast jutsu); released: removes it. */
 	void SetJutsuModifier(bool bHeld);
 	TWeakObjectPtr<AShinobiCharacterBase> LockTarget;
