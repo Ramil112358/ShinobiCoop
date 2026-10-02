@@ -21,3 +21,15 @@ Every third-party asset used in the open world (sub-project #3), with its licenc
   - models: `pine_tree_01`, `fir_tree_01`, `fir_sapling`, `fir_sapling_medium`, `pine_sapling_small`, `dead_tree_trunk`, `dead_tree_trunk_02`, `tree_stump_01`, `tree_stump_02`, `root_cluster_01`, `root_cluster_02`, `shrub_01`, `shrub_02`, `shrub_03`, `shrub_04`, `fern_02`, `moss_01`, `nettle_plant`, `periwinkle_plant`, `dandelion_01`, `weed_plant_02`, `flower_heliophila`, `flower_gazania`, `grass_medium_01`, `grass_medium_02`, `grass_bermuda_01`, `rock_moss_set_01`, `rock_moss_set_02`, `boulder_01`, `namaqualand_boulder_02`, `namaqualand_boulder_03`, `namaqualand_boulder_04`, `namaqualand_boulder_05`, `namaqualand_boulder_06`, `stone_01`, `rock_07`, `rock_09`, `coastal_cliff_02`, `coastal_cliff_04`, `rock_face_01`, `rock_face_02`, `stone_fire_pit`;
   - texture sets: `leafy_grass`, `grass_ground`, `forest_leaves_02`, `forest_ground_04`, `stony_dirt_path`, `rocky_trail`, `rocky_terrain`, `rock_face`, `river_small_rocks`, `dry_riverbed_rock`, `japanese_stone_wall`, `clay_roof_tiles`, `grey_roof_tiles`, `white_plaster_rough_01`, `wood_planks_grey`, `oak_wood_planks`, `reed_roof_03`, `thatch_roof_angled`.
 - **Quixel Megaplants on Fab**, Fab Standard License (free, use in UE projects, no raw redistribution): Japanese Cypress, Norway Maple, Japanese Medlar (added by the user through Fab).
+
+## SpriteCook visuals pass (2026-10-01)
+
+Generated with the SpriteCook MCP (project "ShinobiCoop"; account-owned, original art, no third-party licence). Prompts, asset ids and the HUD UI-kit id are in `SourceArt/SpriteCook/spritecook-assets.json`.
+
+| Art | Source | Imported by | Used for |
+|---|---|---|---|
+| Flame / smoke+ember / energy sheets (4 x 2 atlases on black) | `SourceArt/SpriteCook/VFX/*_sheet.png` | `Scripts/setup_sprite_vfx.py` -> `M_Sprite`, `M_SpriteDark`, `M_SpriteSmoke` | Fire patches, body flames, impact bursts (`ShinobiVfx::MakeSprite`); Amaterasu's black flame is the same flame sheet read as coverage |
+| Scorch mark | `SourceArt/SpriteCook/VFX/scorch_rgba.png` | same script -> `M_SpriteScorch` | Lingering ground mark under fire patches (`ShinobiVfx::SpawnScorch`) |
+| HUD kit (portrait ring, bar frame and fill, slot frame, key badge, pips, compass) and four status medallions | `SourceArt/SpriteCook/UI/hud_final/` | `Scripts/setup_sprite_hud.py` -> `/Game/Shinobi/UI/Hud/T_Hud_*` | `UShinobiHUDWidget`; each piece falls back to the old drawn look while its texture is missing |
+
+Not wired: the generated forest-floor terrain textures (`SourceArt/SpriteCook/World/`). They are albedo only and the tile seams smear, so they are below the Poly Haven PBR sets used by `M_LandscapeReal`.

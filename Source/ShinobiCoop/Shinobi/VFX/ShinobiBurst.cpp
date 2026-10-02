@@ -2,7 +2,9 @@
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Camera/PlayerCameraManager.h"
 #include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Net/UnrealNetwork.h"
@@ -124,6 +126,11 @@ void AShinobiBurst::BeginPlay()
 	{
 		Sphere->SetRelativeScale3D(FVector(0.2f * MaxScale));
 	}
+	if (BuildCards())
+	{
+		Sphere->SetVisibility(false, false);
+		Cone->SetVisibility(false);
+	}
 	Light->SetLightColor(Color);
 	Light->SetAttenuationRadius(60.f * MaxScale);
 	Light->SetVisibility(LightIntensity > 0.f);
@@ -139,6 +146,109 @@ void AShinobiBurst::BeginPlay()
 		}
 		Log->SetVisibility(true);
 	}
+}
+
+bool AShinobiBurst::BuildCards()
+{
+	using ShinobiVfx::ESprite;
+	UStaticMesh* Plane = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
+	if (!Plane || Kind == EShinobiBurst::Substitution)
+	{
+		return false;
+	}
+	FRandomStream Random(GetUniqueID()); // cosmetic: each machine may scatter the cards differently
+	const FLinearColor White = FLinearColor::White;
+	const float S = Scale;
+	// Offsets are on the ground plane around the burst; Size is width x height of the quad.
+	const auto Around = [&](float Radius, float Angle) { return FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * Radius; };
+	switch (Kind)
+	{
+	case EShinobiBurst::Fire:
+		Duration = 0.7f;
+		for (int32 Index = 0; Index < 7; ++Index)
+		{
+			AddCard(Plane, ESprite::Flame, White, 1.2f, Around(Random.FRandRange(0.f, 80.f * S), Random.FRandRange(0.f, 2.f * PI)), FVector2D(130.f, 260.f) * S, 60.f * S, false, true);
+		}
+		AddCard(Plane, ESprite::Burst, FLinearColor(1.f, 0.7f, 0.3f), 1.5f, FVector::ZeroVector, FVector2D(420.f, 420.f) * S);
+		AddCard(Plane, ESprite::Ember, White, 2.f, FVector::ZeroVector, FVector2D(260.f, 520.f) * S, 80.f * S);
+		break;
+	case EShinobiBurst::Firestorm:
+		Duration = 0.9f;
+		for (int32 Index = 0; Index < 14; ++Index)
+		{
+			AddCard(Plane, ESprite::Flame, White, 1.2f, Around(Random.FRandRange(60.f, 380.f) * S, Random.FRandRange(0.f, 2.f * PI)), FVector2D(320.f, 640.f) * S, 150.f * S, false, true);
+		}
+		AddCard(Plane, ESprite::Ring, FLinearColor(1.f, 0.55f, 0.2f), 1.5f, FVector::ZeroVector, FVector2D(1100.f, 1100.f) * S, 0.f, true);
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			AddCard(Plane, ESprite::Ember, White, 2.f, Around(150.f * S, Index * 2.1f), FVector2D(500.f, 1000.f) * S, 200.f * S, false, true);
+		}
+		break;
+	case EShinobiBurst::Lightning:
+		Duration = 0.45f;
+		for (int32 Index = 0; Index < 5; ++Index)
+		{
+			AddCard(Plane, ESprite::Lightning, White, 2.5f, Around(Random.FRandRange(0.f, 70.f * S), Random.FRandRange(0.f, 2.f * PI)), FVector2D(170.f, 400.f) * S, 0.f, false, true);
+		}
+		AddCard(Plane, ESprite::Burst, FLinearColor(0.5f, 0.6f, 1.f), 1.5f, FVector::ZeroVector, FVector2D(380.f, 380.f) * S);
+		AddCard(Plane, ESprite::Ring, FLinearColor(0.5f, 0.6f, 1.f), 1.5f, FVector::ZeroVector, FVector2D(520.f, 520.f) * S, 0.f, true);
+		break;
+	case EShinobiBurst::Spiral:
+		Duration = 0.55f;
+		AddCard(Plane, ESprite::Vortex, White, 2.f, FVector::ZeroVector, FVector2D(420.f, 420.f) * S, 0.f, true);
+		AddCard(Plane, ESprite::Ring, FLinearColor(0.5f, 0.85f, 1.f), 1.8f, FVector::ZeroVector, FVector2D(640.f, 640.f) * S, 0.f, true);
+		AddCard(Plane, ESprite::Burst, FLinearColor(0.6f, 0.9f, 1.f), 1.5f, FVector::ZeroVector, FVector2D(460.f, 460.f) * S);
+		for (int32 Index = 0; Index < 4; ++Index)
+		{
+			AddCard(Plane, ESprite::Lightning, FLinearColor(0.5f, 0.85f, 1.f), 2.f, Around(Random.FRandRange(20.f, 90.f) * S, Random.FRandRange(0.f, 2.f * PI)), FVector2D(110.f, 260.f) * S, 0.f, false, true);
+		}
+		break;
+	case EShinobiBurst::BlackFlameIgnite:
+		Duration = 0.7f;
+		for (int32 Index = 0; Index < 5; ++Index)
+		{
+			AddCard(Plane, ESprite::BlackFlame, ShinobiVfx::Colors::BlackFlame, 4.f, Around(Random.FRandRange(0.f, 60.f * S), Random.FRandRange(0.f, 2.f * PI)), FVector2D(130.f, 260.f) * S, 50.f * S, false, true);
+		}
+		break;
+	case EShinobiBurst::FireBreath:
+		// A stream of flame from the mouth along the burst's forward, chasing the ball (2500 u/s): the far cards show later.
+		for (int32 Index = 0; Index < 7; ++Index)
+		{
+			const float Along = (40.f + Index * 70.f) * S;
+			AddCard(Plane, ESprite::Flame, White, 1.3f, GetActorForwardVector() * Along, FVector2D(110.f + 28.f * Index, 220.f + 56.f * Index) * S, 0.f, false, true, Along / 2500.f);
+		}
+		break;
+	default:
+		return false;
+	}
+	return Cards.Num() > 0;
+}
+
+void AShinobiBurst::AddCard(UStaticMesh* Plane, ShinobiVfx::ESprite Sprite, const FLinearColor& Tint, float Glow, const FVector& Offset, const FVector2D& Size, float Rise, bool bFlat, bool bFlicker, float Delay)
+{
+	FCard Card;
+	Card.Variant = FMath::RandRange(0, 7);
+	Card.Material = ShinobiVfx::MakeSprite(this, Sprite, Card.Variant, Tint, Glow);
+	Card.Mesh = NewObject<UStaticMeshComponent>(this);
+	Card.Mesh->SetStaticMesh(Plane);
+	Card.Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Card.Mesh->SetCastShadow(false);
+	Card.Mesh->SetMaterial(0, Card.Material);
+	Card.Mesh->SetVisibility(false);
+	Card.Mesh->SetupAttachment(RootComponent);
+	Card.Mesh->SetUsingAbsoluteLocation(true); // the glow sphere under it grows; the cards are sized and placed in Tick
+	Card.Mesh->SetUsingAbsoluteRotation(true);
+	Card.Mesh->SetUsingAbsoluteScale(true);
+	Card.Mesh->RegisterComponent();
+	Card.Sprite = static_cast<uint8>(Sprite);
+	Card.Offset = Offset;
+	Card.Size = Size;
+	Card.Rise = Rise;
+	Card.Delay = Delay;
+	Card.bFlat = bFlat;
+	Card.bFlicker = bFlicker;
+	Card.Spin = bFlat ? 240.f : 0.f;
+	Cards.Add(Card);
 }
 
 void AShinobiBurst::Tick(float DeltaSeconds)
@@ -164,11 +274,57 @@ void AShinobiBurst::Tick(float DeltaSeconds)
 	{
 		SphereMaterial->SetScalarParameterValue(TEXT("Fade"), 1.f - T);
 	}
+	if (Cards.Num() > 0)
+	{
+		const APlayerCameraManager* Camera = UGameplayStatics::GetPlayerCameraManager(this, 0);
+		const FVector CameraAt = Camera ? Camera->GetCameraLocation() : GetActorLocation() + FVector(-1000.f, 0.f, 0.f);
+		for (FCard& Card : Cards)
+		{
+			const float Local = FMath::Clamp((Age - Card.Delay) / FMath::Max(Duration - Card.Delay, 0.05f), 0.f, 1.f);
+			const bool bShown = Age >= Card.Delay && Local < 1.f;
+			Card.Mesh->SetVisibility(bShown);
+			if (!bShown)
+			{
+				continue;
+			}
+			const float CardGrow = 1.f - FMath::Square(1.f - Local);
+			const FVector2D Size = Card.Size * FMath::Lerp(0.35f, 1.f, CardGrow);
+			const FVector Origin = GetActorLocation() + Card.Offset;
+			if (Card.bFlat)
+			{
+				Card.Mesh->SetWorldLocation(Origin + FVector(0.f, 0.f, 8.f));
+				Card.Mesh->SetWorldRotation(FRotator(0.f, Card.Spin * Age, 0.f));
+				Card.Mesh->SetWorldScale3D(FVector(Size.X / 100.f, Size.Y / 100.f, 1.f));
+			}
+			else
+			{
+				const float FaceYaw = FMath::RadiansToDegrees(FMath::Atan2(CameraAt.Y - Origin.Y, CameraAt.X - Origin.X)) - 90.f;
+				Card.Mesh->SetWorldLocation(Origin + FVector(0.f, 0.f, Size.Y * 0.5f + Card.Rise * Local));
+				Card.Mesh->SetWorldRotation(FRotator(0.f, FaceYaw, 90.f));
+				Card.Mesh->SetWorldScale3D(FVector(Size.X / 100.f, Size.Y / 100.f, 1.f));
+			}
+			if (Card.bFlicker && Age >= Card.NextSwap)
+			{
+				const ShinobiVfx::ESprite Sprite = static_cast<ShinobiVfx::ESprite>(Card.Sprite);
+				Card.Variant = (Card.Variant + 1 + FMath::RandRange(0, 2)) % ShinobiVfx::SpriteVariants(Sprite);
+				ShinobiVfx::SetSpriteVariant(Card.Material, Sprite, Card.Variant);
+				Card.NextSwap = Age + 0.06f * FMath::FRandRange(0.7f, 1.3f);
+			}
+			if (Card.Material)
+			{
+				Card.Material->SetScalarParameterValue(TEXT("Fade"), FMath::Min(Local * 10.f, 1.f) * FMath::Square(1.f - Local));
+			}
+		}
+	}
 	Light->SetIntensity(LightIntensity * (1.f - T));
 	if (T >= 1.f)
 	{
 		Sphere->SetVisibility(false); // the log (a child with absolute scale) keeps its own visibility
 		Cone->SetVisibility(false);
+		for (FCard& Card : Cards)
+		{
+			Card.Mesh->SetVisibility(false);
+		}
 		Light->SetVisibility(false);
 		SetActorTickEnabled(false);
 	}

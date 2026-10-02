@@ -1,0 +1,15 @@
+{
+  "project_id": "8a75e6e9-7a2b-44d9-b60a-62b0c17d8751",
+  "note": "All sheets are 1024x1024 RGB on pure black (additive-blend VFX) unless stated. Generated 2026-10-01, gpt-image-2 medium 1K unless stated.",
+  "assets": [
+    {"asset_id": "625dcc45-ed91-41c2-a518-cce57eca8e85", "file": "VFX/flames_sheet.png", "label": "flames 4x2 realistic fire tongues"},
+    {"asset_id": "83abcae9-925a-4a69-b698-edf2836ff99a", "file": "VFX/smoke_embers_sheet.png", "label": "smoke (top row) + embers (bottom row) 4x2"},
+    {"asset_id": "cde44acf-65bd-4213-bd18-0ce1f4119cf7", "file": "VFX/energy_sheet.png", "label": "lightning x4, ring, vortex, slash, burst 4x2"},
+    {"asset_id": "786cce56-6d11-4a0c-a2c6-355e876c572d", "file": "UI/status_icons_sheet.png", "label": "status medallions: burn, black flame, shock, stagger 2x2"},
+    {"asset_id": "8bc2c6bf-de58-4665-8dc4-3282f96190dc", "file": "World/forest_path.png", "label": "terrain v1 forest path (washed out, rejected)"},
+    {"asset_id": "a4e6a82b-9fd2-48c0-8981-afff7329856c", "file": "World/forest_path_v2.png", "label": "terrain v2 forest path (gemini-3.1-flash, detailed, smeared seams)"}
+  ],
+  "ui_kits": [
+    {"ui_kit_id": "9b4146da-7bb2-489d-a6ca-65bcee0ef703", "name": "Shinobi HUD"}
+  ]
+}

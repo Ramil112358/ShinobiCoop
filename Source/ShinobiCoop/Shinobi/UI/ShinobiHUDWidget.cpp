@@ -31,8 +31,8 @@
 
 namespace
 {
-	const FLinearColor HealthColor(0.06f, 0.55f, 0.12f);
-	const FLinearColor LowHealthColor(0.9f, 0.15f, 0.1f);
+	const FLinearColor HealthColor(0.72f, 0.06f, 0.06f); // tints the grey fill of the SpriteCook bar
+	const FLinearColor LowHealthColor(1.f, 0.3f, 0.05f);
 	const FLinearColor TrailColor(1.f, 0.85f, 0.6f, 0.9f);
 	const FLinearColor ChakraColor(0.04f, 0.3f, 1.f);
 	const FLinearColor StaminaColor(1.f, 0.6f, 0.05f);
@@ -52,9 +52,11 @@ namespace
 	const FLinearColor KeyColor(0.9f, 0.9f, 0.9f);
 	const FLinearColor CostColor(0.45f, 0.7f, 1.f);
 	const FLinearColor NoChakraColor(1.f, 0.3f, 0.25f);
-	constexpr float SlotSize = 80.f;
-	constexpr float SlotBorder = 3.f;
-	constexpr float PortraitSize = 112.f;
+	constexpr float SlotSize = 88.f;
+	constexpr float SlotBorder = 10.f; // the ornate frame art
+	constexpr float PortraitSize = 124.f;
+	constexpr float PipSize = 22.f;
+	constexpr float StatusSize = 30.f;
 	constexpr double FlashSeconds = 0.3;
 	constexpr double TrailHoldSeconds = 0.5;
 	constexpr float TrailDrainPerSecond = 0.6f;
@@ -62,6 +64,23 @@ namespace
 	constexpr float CompassHalfWidth = 220.f;
 	// Scripts/setup_hud.py imports SourceArt/UI/portrait.png here.
 	const TCHAR* PortraitPath = TEXT("/Game/Shinobi/UI/T_Portrait.T_Portrait");
+
+	/** A SpriteCook HUD texture (Scripts/setup_sprite_hud.py), or null while it hasn't been imported. */
+	UTexture2D* HudTexture(const TCHAR* Name)
+	{
+		const FString Path = FString::Printf(TEXT("/Game/Shinobi/UI/Hud/T_Hud_%s.T_Hud_%s"), Name, Name);
+		return LoadObject<UTexture2D>(nullptr, *Path, nullptr, LOAD_NoWarn);
+	}
+
+	FSlateBrush ArtBrush(UTexture2D* Texture, const FVector2D& Size, const FLinearColor& Tint = FLinearColor::White)
+	{
+		FSlateBrush Brush;
+		Brush.DrawAs = ESlateBrushDrawType::Image;
+		Brush.TintColor = Tint;
+		Brush.ImageSize = Size;
+		Brush.SetResourceObject(Texture);
+		return Brush;
+	}
 
 	int32 JutsuSlotIndex(EShinobiAbilityInputID InputID)
 	{
@@ -99,12 +118,19 @@ TSharedRef<SWidget> UShinobiHUDWidget::RebuildWidget()
 		WaveText = AddCanvasText(Root, TEXT("WaveText"), FAnchors(0.5f, 0.f), FVector2D(0.5f, 0.f), FVector2D(0.f, 24.f), 22, ETextJustify::Center);
 		RootCanvas = Root;
 		CompassBar = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("CompassBar"));
-		CompassBar->SetBrushColor(FLinearColor(0.f, 0.f, 0.f, 0.35f));
+		if (UTexture2D* CompassArt = HudTexture(TEXT("Compass")))
+		{
+			CompassBar->SetBrush(ArtBrush(CompassArt, FVector2D(520.f, 32.f), FLinearColor(1.f, 1.f, 1.f, 0.9f)));
+		}
+		else
+		{
+			CompassBar->SetBrushColor(FLinearColor(0.f, 0.f, 0.f, 0.35f));
+		}
 		UCanvasPanelSlot* BarSlot = Root->AddChildToCanvas(CompassBar);
 		BarSlot->SetAnchors(FAnchors(0.5f, 0.f));
 		BarSlot->SetAlignment(FVector2D(0.5f, 0.f));
 		BarSlot->SetPosition(FVector2D(0.f, 58.f));
-		BarSlot->SetSize(FVector2D(CompassHalfWidth * 2.f + 40.f, 26.f));
+		BarSlot->SetSize(FVector2D(CompassHalfWidth * 2.f + 40.f, 32.f));
 		CompassBar->SetVisibility(ESlateVisibility::Collapsed);
 		TeamText = AddCanvasText(Root, TEXT("TeamText"), FAnchors(0.f, 0.f), FVector2D(0.f, 0.f), FVector2D(40.f, 24.f), 14, ETextJustify::Left);
 		BannerText = AddCanvasText(Root, TEXT("BannerText"), FAnchors(0.5f, 0.35f), FVector2D(0.5f, 0.5f), FVector2D::ZeroVector, 40, ETextJustify::Center);
@@ -118,7 +144,9 @@ void UShinobiHUDWidget::BuildUnitFrame(UCanvasPanel* Root)
 	// A capsule-shaped ink plate: the round portrait at its left end, the name and bars sweeping right, each bar
 	// shorter than the one above.
 	UBorder* Plate = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("UnitFrame"));
-	Plate->SetBrush(RoundedBrush(InkColor, -1.f, TrimColor, 1.5f));
+	const bool bBarArt = HudTexture(TEXT("BarFrame")) != nullptr;
+	// With the SpriteCook frames the bars carry their own trim: the plate is only a soft shade behind them.
+	Plate->SetBrush(bBarArt ? RoundedBrush(FLinearColor(0.f, 0.f, 0.f, 0.3f), 16.f) : RoundedBrush(InkColor, -1.f, TrimColor, 1.5f));
 	Plate->SetPadding(FMargin(6.f, 6.f, 32.f, 6.f));
 	UCanvasPanelSlot* PlateSlot = Root->AddChildToCanvas(Plate);
 	PlateSlot->SetAnchors(FAnchors(0.f, 1.f));
@@ -133,8 +161,9 @@ void UShinobiHUDWidget::BuildUnitFrame(UCanvasPanel* Root)
 	PortraitBox->SetWidthOverride(PortraitSize);
 	PortraitBox->SetHeightOverride(PortraitSize);
 	UBorder* Ring = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
-	Ring->SetBrush(RoundedBrush(TrimColor, -1.f));
-	Ring->SetPadding(FMargin(3.f));
+	UTexture2D* RingArt = HudTexture(TEXT("PortraitRing"));
+	Ring->SetBrush(RoundedBrush(RingArt ? FLinearColor::Transparent : TrimColor, -1.f));
+	Ring->SetPadding(RingArt ? FMargin(0.f) : FMargin(3.f));
 	PortraitBox->AddChild(Ring);
 	UOverlay* Face = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass());
 	Ring->SetContent(Face);
@@ -144,6 +173,15 @@ void UShinobiHUDWidget::BuildUnitFrame(UCanvasPanel* Root)
 	UOverlaySlot* PhotoSlot = Face->AddChildToOverlay(Photo);
 	PhotoSlot->SetHorizontalAlignment(HAlign_Fill);
 	PhotoSlot->SetVerticalAlignment(VAlign_Fill);
+	if (RingArt)
+	{
+		PhotoSlot->SetPadding(FMargin(PortraitSize * 0.085f)); // the photo sits inside the ring
+		UImage* RingImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("PortraitRing"));
+		RingImage->SetBrush(ArtBrush(RingArt, FVector2D(PortraitSize, PortraitSize)));
+		UOverlaySlot* RingSlot = Face->AddChildToOverlay(RingImage);
+		RingSlot->SetHorizontalAlignment(HAlign_Fill);
+		RingSlot->SetVerticalAlignment(VAlign_Fill);
+	}
 	if (!PhotoTexture)
 	{
 		AddLabel(Face, 44, HAlign_Center, VAlign_Center, TrimColor)->SetText(INVTEXT("忍")); // shinobi
@@ -158,17 +196,18 @@ void UShinobiHUDWidget::BuildUnitFrame(UCanvasPanel* Root)
 	NameText = MakeText(15, NameColor, true);
 	Bars->AddChildToVerticalBox(NameText)->SetPadding(FMargin(2.f, 0.f, 0.f, 2.f));
 
-	UOverlay* HealthRow = AddBarRow(Bars, 340.f, 22.f);
+	UOverlay* HealthRow = AddBarRow(Bars, 340.f, 26.f);
 	HealthTrailBar = AddBar(HealthRow, TEXT("HealthTrailBar"), TrailColor, true);
 	HealthBar = AddBar(HealthRow, TEXT("HealthBar"), HealthColor, false);
 	HealthText = AddLabel(HealthRow, 10, HAlign_Center, VAlign_Center, FLinearColor::White);
 
-	UOverlay* ChakraRow = AddBarRow(Bars, 300.f, 16.f);
+	UOverlay* ChakraRow = AddBarRow(Bars, 300.f, 20.f);
 	ChakraBar = AddBar(ChakraRow, TEXT("ChakraBar"), ChakraColor, true);
 	ChakraText = AddLabel(ChakraRow, 9, HAlign_Center, VAlign_Center, FLinearColor::White);
 
-	StaminaBar = AddBar(AddBarRow(Bars, 260.f, 11.f), TEXT("StaminaBar"), StaminaColor, true);
+	StaminaBar = AddBar(AddBarRow(Bars, 260.f, 16.f), TEXT("StaminaBar"), StaminaColor, true);
 	BuildSubstitutionPips(Bars);
+	BuildStatusIcons(Bars);
 }
 
 UOverlay* UShinobiHUDWidget::AddBarRow(UVerticalBox* Bars, float Width, float Height)
@@ -190,10 +229,23 @@ UProgressBar* UShinobiHUDWidget::AddBar(UOverlay* Row, FName Name, const FLinear
 	UProgressBar* Bar = WidgetTree->ConstructWidget<UProgressBar>(UProgressBar::StaticClass(), Name);
 	FProgressBarStyle Style;
 	// An unbacked bar sits on top of a backed one in the same row (health over its trail).
-	Style.SetBackgroundImage(bBacked ? RoundedBrush(BarBackColor, -1.f, TrimColor, 1.f) : RoundedBrush(FLinearColor::Transparent, -1.f));
-	Style.SetFillImage(RoundedBrush(FLinearColor::White, -1.f));
-	Bar->SetWidgetStyle(Style);
-	Bar->SetBorderPadding(FVector2D(2.f, 2.f));
+	UTexture2D* FrameArt = HudTexture(TEXT("BarFrame"));
+	UTexture2D* FillArt = HudTexture(TEXT("BarFill"));
+	if (FrameArt && FillArt)
+	{
+		// SpriteCook frame under a grey fill that the bar's colour tints; the fill sits inside the frame's trim.
+		Style.SetBackgroundImage(bBacked ? ArtBrush(FrameArt, FVector2D(256.f, 24.f)) : RoundedBrush(FLinearColor::Transparent, -1.f));
+		Style.SetFillImage(ArtBrush(FillArt, FVector2D(256.f, 16.f)));
+		Bar->SetWidgetStyle(Style);
+		Bar->SetBorderPadding(FVector2D(11.f, 4.f));
+	}
+	else
+	{
+		Style.SetBackgroundImage(bBacked ? RoundedBrush(BarBackColor, -1.f, TrimColor, 1.f) : RoundedBrush(FLinearColor::Transparent, -1.f));
+		Style.SetFillImage(RoundedBrush(FLinearColor::White, -1.f));
+		Bar->SetWidgetStyle(Style);
+		Bar->SetBorderPadding(FVector2D(2.f, 2.f));
+	}
 	Bar->SetFillColorAndOpacity(Color);
 	UOverlaySlot* BarSlot = Row->AddChildToOverlay(Bar);
 	BarSlot->SetHorizontalAlignment(HAlign_Fill);
@@ -205,18 +257,48 @@ void UShinobiHUDWidget::BuildSubstitutionPips(UVerticalBox* Bars)
 {
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("SubstitutionPips"));
 	Bars->AddChildToVerticalBox(Row)->SetPadding(FMargin(4.f, 6.f, 0.f, 0.f));
+	UTexture2D* OnArt = HudTexture(TEXT("PipOn"));
+	UTexture2D* OffArt = HudTexture(TEXT("PipOff"));
+	const bool bArt = OnArt && OffArt;
+	PipOnBrush = ArtBrush(OnArt, FVector2D(PipSize, PipSize));
+	PipOffBrush = ArtBrush(OffArt, FVector2D(PipSize, PipSize));
 	for (int32 Index = 0; Index < NumPips; ++Index)
 	{
-		// A gold-trimmed square turned 45 degrees: a diamond.
 		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		Box->SetWidthOverride(11.f);
-		Box->SetHeightOverride(11.f);
-		Box->SetRenderTransformAngle(45.f);
 		UBorder* Pip = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
-		Pip->SetBrush(RoundedBrush(PipOffColor, 2.f, TrimColor, 1.f));
+		if (bArt)
+		{
+			Box->SetWidthOverride(PipSize);
+			Box->SetHeightOverride(PipSize);
+			Pip->SetBrush(PipOffBrush);
+		}
+		else
+		{
+			// A gold-trimmed square turned 45 degrees: a diamond.
+			Box->SetWidthOverride(11.f);
+			Box->SetHeightOverride(11.f);
+			Box->SetRenderTransformAngle(45.f);
+			Pip->SetBrush(RoundedBrush(PipOffColor, 2.f, TrimColor, 1.f));
+		}
 		Box->AddChild(Pip);
-		Row->AddChildToHorizontalBox(Box)->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f));
+		Row->AddChildToHorizontalBox(Box)->SetPadding(FMargin(0.f, 0.f, bArt ? 6.f : 10.f, 0.f));
 		SubstitutionPips.Add(Pip);
+	}
+}
+
+void UShinobiHUDWidget::BuildStatusIcons(UVerticalBox* Bars)
+{
+	// Burn, black flame, shock, stagger: shown only while the player carries that state (see NativeTick).
+	static const TCHAR* Names[] = { TEXT("StatusBurn"), TEXT("StatusBlackflame"), TEXT("StatusShock"), TEXT("StatusStagger") };
+	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("StatusIcons"));
+	Bars->AddChildToVerticalBox(Row)->SetPadding(FMargin(2.f, 6.f, 0.f, 0.f));
+	for (const TCHAR* Name : Names)
+	{
+		UImage* Icon = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
+		Icon->SetBrush(ArtBrush(HudTexture(Name), FVector2D(StatusSize, StatusSize)));
+		Icon->SetVisibility(ESlateVisibility::Collapsed);
+		Row->AddChildToHorizontalBox(Icon)->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
+		StatusIcons.Add(Icon);
 	}
 }
 
@@ -239,8 +321,10 @@ void UShinobiHUDWidget::BuildJutsuSlots(UCanvasPanel* Root)
 		Box->SetHeightOverride(SlotSize);
 		Column->AddChildToVerticalBox(Box);
 		UBorder* Frame = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
-		Frame->SetBrush(RoundedBrush(SlotColor, 9.f, TrimColor, 2.f));
-		Frame->SetPadding(FMargin(SlotBorder));
+		UTexture2D* FrameArt = HudTexture(TEXT("SlotFrame"));
+		bFrameArt = FrameArt != nullptr;
+		Frame->SetBrush(FrameArt ? ArtBrush(FrameArt, FVector2D(SlotSize, SlotSize)) : RoundedBrush(SlotColor, 9.f, TrimColor, 2.f));
+		Frame->SetPadding(FMargin(FrameArt ? SlotBorder : 3.f));
 		Box->AddChild(Frame);
 		UOverlay* Layers = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass());
 		Frame->SetContent(Layers);
@@ -263,10 +347,11 @@ void UShinobiHUDWidget::BuildJutsuSlots(UCanvasPanel* Root)
 		UTextBlock* CooldownText = AddLabel(Layers, 24, HAlign_Center, VAlign_Center, FLinearColor::White);
 
 		USizeBox* KeyBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		KeyBox->SetWidthOverride(20.f);
-		KeyBox->SetHeightOverride(20.f);
+		KeyBox->SetWidthOverride(24.f);
+		KeyBox->SetHeightOverride(24.f);
 		UBorder* KeyBadge = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
-		KeyBadge->SetBrush(RoundedBrush(InkColor, -1.f, TrimColor, 1.f));
+		UTexture2D* BadgeArt = HudTexture(TEXT("KeyBadge"));
+		KeyBadge->SetBrush(BadgeArt ? ArtBrush(BadgeArt, FVector2D(24.f, 24.f)) : RoundedBrush(InkColor, -1.f, TrimColor, 1.f));
 		KeyBadge->SetPadding(FMargin(0.f));
 		KeyBadge->SetHorizontalAlignment(HAlign_Center);
 		KeyBadge->SetVerticalAlignment(VAlign_Center);
@@ -277,7 +362,7 @@ void UShinobiHUDWidget::BuildJutsuSlots(UCanvasPanel* Root)
 		UOverlaySlot* KeySlot = Layers->AddChildToOverlay(KeyBox);
 		KeySlot->SetHorizontalAlignment(HAlign_Left);
 		KeySlot->SetVerticalAlignment(VAlign_Top);
-		KeySlot->SetPadding(FMargin(2.f));
+		KeySlot->SetPadding(FMargin(bFrameArt ? 0.f : 2.f)); // the art frame has its own margin
 		UTextBlock* CostText = AddLabel(Layers, 12, HAlign_Right, VAlign_Bottom, CostColor);
 
 		UTextBlock* Name = MakeText(12, NameColor, true);
@@ -379,7 +464,20 @@ void UShinobiHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	const int32 Charges = FMath::RoundToInt(Stats->GetSubstitutionCharges());
 	for (int32 Index = 0; Index < SubstitutionPips.Num(); ++Index)
 	{
-		SubstitutionPips[Index]->SetBrushColor(Index < Charges ? PipOnColor : PipOffColor);
+		if (PipOnBrush.GetResourceObject())
+		{
+			SubstitutionPips[Index]->SetBrush(Index < Charges ? PipOnBrush : PipOffBrush);
+		}
+		else
+		{
+			SubstitutionPips[Index]->SetBrushColor(Index < Charges ? PipOnColor : PipOffColor);
+		}
+	}
+	const FGameplayTag StatusTags[] = { ShinobiTags::State_Burning_Normal, ShinobiTags::State_Burning_Black, ShinobiTags::State_Shocked, ShinobiTags::State_Staggered };
+	for (int32 Index = 0; Index < StatusIcons.Num(); ++Index)
+	{
+		const bool bOn = ASC->HasMatchingGameplayTag(StatusTags[Index]);
+		StatusIcons[Index]->SetVisibility(bOn && StatusIcons[Index]->GetBrush().GetResourceObject() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
 	UpdateJutsuSlots(*ASC);
 	UpdateArena(Cast<AShinobiPlayerCharacter>(Pawn));
@@ -432,7 +530,7 @@ void UShinobiHUDWidget::UpdateCompass()
 		Mark(0.f, TEXT("E"), FLinearColor(0.8f, 0.8f, 0.8f));
 		Mark(-90.f, TEXT("S"), FLinearColor(0.8f, 0.8f, 0.8f));
 		Mark(180.f, TEXT("W"), FLinearColor(0.8f, 0.8f, 0.8f));
-		MarkAt(State->VillageLocation, TEXT("Village"), FLinearColor(0.95f, 0.9f, 0.7f));
+		MarkAt(State->VillageLocation, State->HubName, FLinearColor(0.95f, 0.9f, 0.7f));
 		for (TActorIterator<AShinobiCamp> It(GetWorld()); It; ++It)
 		{
 			const bool bCleared = It->GetState() == EShinobiCampState::Cleared;
@@ -480,7 +578,7 @@ void UShinobiHUDWidget::UpdateArena(const AShinobiPlayerCharacter* Player)
 			Banner = FString::Printf(TEXT("WIPED OUT\nWave restarting in %d"), Countdown);
 			break;
 		case EShinobiArenaPhase::Victory:
-			Banner = State->NumCamps > 0 ? TEXT("VALLEY CLEARED") : TEXT("VICTORY");
+			Banner = State->NumCamps > 0 ? State->VictoryText : TEXT("VICTORY");
 			break;
 		case EShinobiArenaPhase::OpenWorld:
 			Wave = FString::Printf(TEXT("Camps cleared %d / %d"), State->CampsCleared, State->NumCamps);
@@ -569,7 +667,14 @@ void UShinobiHUDWidget::UpdateJutsuSlots(const UAbilitySystemComponent& ASC)
 		SlotCosts[Index]->SetColorAndOpacity(FSlateColor(State.bAffordable ? CostColor : NoChakraColor));
 		SlotCooldownTexts[Index]->SetText(bCooling ? FText::AsNumber(FMath::CeilToInt(State.CooldownRemaining)) : FText::GetEmpty());
 		SlotShades[Index]->SetHeightOverride(bCooling ? (SlotSize - 2.f * SlotBorder) * State.CooldownRemaining / State.CooldownDuration : 0.f);
-		SlotFrames[Index]->SetBrush(RoundedBrush(SlotColor, 9.f, Now < SlotFlashUntil[Index] ? SlotFlashColor : TrimColor, 2.f));
+		if (bFrameArt)
+		{
+			SlotFrames[Index]->SetBrushColor(Now < SlotFlashUntil[Index] ? SlotFlashColor : FLinearColor::White);
+		}
+		else
+		{
+			SlotFrames[Index]->SetBrush(RoundedBrush(SlotColor, 9.f, Now < SlotFlashUntil[Index] ? SlotFlashColor : TrimColor, 2.f));
+		}
 	}
 }
 

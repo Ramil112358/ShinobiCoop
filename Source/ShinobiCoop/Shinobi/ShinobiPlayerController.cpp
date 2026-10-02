@@ -26,6 +26,7 @@
 #include "Shinobi/UI/ShinobiMenuWidgets.h"
 #include "EnhancedInputComponent.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
+#include "Shinobi/VFX/ShinobiFirePatch.h"
 
 void AShinobiPlayerController::BeginPlay()
 {
@@ -59,6 +60,10 @@ void AShinobiPlayerController::BeginPlay()
 	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiJutsuShot")))
 	{
 		RunJutsuShotTest();
+	}
+	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiFireShot")))
+	{
+		RunFireShotTest();
 	}
 	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiLookShot")))
 	{
@@ -433,6 +438,65 @@ void AShinobiPlayerController::RunWorldTourTest()
 	FTimerHandle Quit;
 	GetWorldTimerManager().SetTimer(Quit, FTimerDelegate::CreateWeakLambda(this, [this]() { ConsoleCommand(TEXT("quit")); }),
 		FirstAt + Points.Num() * Step + 1.f, false);
+}
+
+void AShinobiPlayerController::RunFireShotTest()
+{
+	// A fire patch and a black-flame patch side by side, filmed from a camera 6 m away at dusk-free daylight: close-ups of the cards.
+	auto At = [this](float Seconds, TFunction<void()> Fn)
+	{
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
+	};
+	At(1.5f, [this]()
+	{
+		const APawn* Shinobi = GetPawn();
+		if (!Shinobi)
+		{
+			return;
+		}
+		const FVector Forward = Shinobi->GetActorForwardVector();
+		const FVector Right = Shinobi->GetActorRightVector();
+		const FVector Ground = Shinobi->GetActorLocation() - FVector(0.f, 0.f, 90.f);
+		AShinobiFirePatch::Spawn(GetWorld(), EShinobiFirePatch::Fire, Ground + Forward * 500.f - Right * 170.f, nullptr, 1.f, 0.f);
+		AShinobiFirePatch::Spawn(GetWorld(), EShinobiFirePatch::BlackFlame, Ground + Forward * 500.f + Right * 170.f, nullptr, 1.f, 0.f);
+		const FVector Target = Ground + Forward * 500.f + FVector(0.f, 0.f, 90.f);
+		const FVector Eye = Ground - Forward * 250.f + FVector(0.f, 0.f, 160.f); // behind the pawn, not inside its cloak
+		ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Target - Eye).Rotation());
+		Camera->GetCameraComponent()->SetFieldOfView(50.f);
+		Camera->SetLifeSpan(20.f);
+		SetViewTarget(Camera);
+	});
+	for (int32 Index = 0; Index < 3; ++Index)
+	{
+		const FString Name = FString::Printf(TEXT("ShinobiFireShot_%d"), Index);
+		At(2.2f + Index * 0.7f, [Name]() { FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Name), false, false); });
+	}
+	// The one-shot bursts, each spawned at a fixed spot ahead and filmed 0.12 s after (a late shot misses the effect).
+	struct FBurstShot { EShinobiBurst Kind; const TCHAR* Name; float Right; float Scale; };
+	static const FBurstShot Bursts[] = {
+		{ EShinobiBurst::FireBreath, TEXT("ShinobiFireShot_Breath"), 0.f, 1.f },
+		{ EShinobiBurst::Fire, TEXT("ShinobiFireShot_Impact"), 0.f, 1.f },
+		{ EShinobiBurst::Lightning, TEXT("ShinobiFireShot_Chidori"), -150.f, 1.f },
+		{ EShinobiBurst::Spiral, TEXT("ShinobiFireShot_Rasengan"), 150.f, 1.f },
+		{ EShinobiBurst::BlackFlameIgnite, TEXT("ShinobiFireShot_Ignite"), 0.f, 1.f },
+		{ EShinobiBurst::Firestorm, TEXT("ShinobiFireShot_Firestorm"), 0.f, 1.f },
+	};
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Bursts); ++Index)
+	{
+		const float When = 4.5f + Index * 1.2f;
+		At(When, [this, Index]()
+		{
+			const APawn* Shinobi = GetPawn();
+			if (Shinobi)
+			{
+				const FVector At = Shinobi->GetActorLocation() - FVector(0.f, 0.f, 90.f) + Shinobi->GetActorForwardVector() * 500.f + Shinobi->GetActorRightVector() * Bursts[Index].Right + FVector(0.f, 0.f, 80.f);
+				AShinobiBurst::Spawn(GetWorld(), Bursts[Index].Kind, At, Bursts[Index].Scale, Shinobi->GetActorRotation());
+			}
+		});
+		At(When + 0.12f, [Index]() { FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Bursts[Index].Name), false, false); });
+	}
+	At(4.5f + UE_ARRAY_COUNT(Bursts) * 1.2f + 0.5f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
 
 void AShinobiPlayerController::RunJutsuShotTest()

@@ -41,6 +41,7 @@ private:
 	UOverlay* AddBarRow(UVerticalBox* Bars, float Width, float Height);
 	UProgressBar* AddBar(UOverlay* Row, FName Name, const FLinearColor& Color, bool bBacked);
 	void BuildSubstitutionPips(UVerticalBox* Bars);
+	void BuildStatusIcons(UVerticalBox* Bars);
 	void BuildJutsuSlots(UCanvasPanel* Root);
 	UTextBlock* MakeText(int32 FontSize, const FLinearColor& Tint, bool bBold = false);
 	UTextBlock* AddLabel(UOverlay* Layers, int32 FontSize, EHorizontalAlignment HorizontalAlign, EVerticalAlignment VerticalAlign, const FLinearColor& Tint);
@@ -105,6 +106,20 @@ private:
 
 	UPROPERTY()
 	TArray<TObjectPtr<UBorder>> SubstitutionPips;
+
+	/** The SpriteCook pip art (T_Hud_PipOn / PipOff); the pips fall back to tinted diamonds while it's missing. */
+	UPROPERTY()
+	FSlateBrush PipOnBrush;
+
+	UPROPERTY()
+	FSlateBrush PipOffBrush;
+
+	/** Status medallions under the pips (burn, black flame, shock, stagger), shown while the player carries that state. */
+	UPROPERTY()
+	TArray<TObjectPtr<UImage>> StatusIcons;
+
+	/** True once the SpriteCook slot frame texture is loaded: the frames then flash by tint instead of a redrawn outline. */
+	bool bFrameArt = false;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UBorder>> SlotFrames;

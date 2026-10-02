@@ -11,9 +11,9 @@ class UPointLightComponent;
 class UStaticMeshComponent;
 
 /**
- * Flames on a burning body: ten flickering flame tongues on the spine and limbs, plus a light, while its owner carries
- * State.Burning.* and isn't dead (the effects outlast a death). Amaterasu's black flame (M_FlameDark, dark purple
- * light) wins over a normal burn (M_Flame, orange). Cosmetic only; the tags replicate, so every machine shows it. A
+ * Flames on a burning body: ten flickering flame cards (SpriteCook flame sprites, camera-facing) on the spine and limbs, plus a light, while its owner carries
+ * State.Burning.* and isn't dead (the effects outlast a death). Amaterasu's black flame (dark with a violet rim, dark purple
+ * light) wins over a normal burn (orange). Cosmetic only; the tags replicate, so every machine shows it. A
  * fixed size: GAS replicates tags to every client but not effect magnitudes.
  */
 UCLASS(ClassGroup = (Shinobi), meta = (BlueprintSpawnableComponent))
@@ -44,11 +44,16 @@ private:
 	UPROPERTY()
 	TObjectPtr<UPointLightComponent> Light;
 
+	/** One material per tongue and kind, so each flickers through the flame sprites on its own. */
 	UPROPERTY()
-	TObjectPtr<UMaterialInstanceDynamic> FireMaterial;
+	TArray<TObjectPtr<UMaterialInstanceDynamic>> FireMaterials;
 
 	UPROPERTY()
-	TObjectPtr<UMaterialInstanceDynamic> BlackMaterial;
+	TArray<TObjectPtr<UMaterialInstanceDynamic>> BlackMaterials;
+
+	TArray<float> NextSwap;
+	TArray<int32> Variants;
+	float Age = 0.f;
 
 	TWeakObjectPtr<UAbilitySystemComponent> AbilitySystem;
 	FDelegateHandle BurningHandle;

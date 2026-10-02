@@ -1,0 +1,188 @@
+# Sprite VFX, HUD kit and how to add a jutsu that uses them
+
+What the 2026-10-01 SpriteCook visuals pass added, how it works, how to reuse it for a new jutsu (the worked example is a
+meteor shower: flames, impact bursts and scorch marks), and where the existing effects can still be improved.
+Asset ids, prompts and the UI-kit id are in `SourceArt/SpriteCook/spritecook-assets.json`; licences and credits are in
+`docs/world/asset-credits.md`.
+
+## 1. What exists
+
+### Art (generated with SpriteCook, original, no third-party licence)
+
+| File (SourceArt/SpriteCook/) | What it is | Imported as |
+|---|---|---|
+| `VFX/flames_sheet.png` | 8 realistic fire tongues, 4 x 2 atlas on pure black | `/Game/Shinobi/VFX/T_Flames` |
+| `VFX/smoke_embers_sheet.png` | top row 4 smoke plumes, bottom row 4 ember sprays | `T_SmokeEmbers` |
+| `VFX/energy_sheet.png` | top row 4 lightning bolts; bottom row ring, vortex, slash, burst | `T_Energy` |
+| `VFX/scorch_rgba.png` | charred ground mark, alpha cut from `scorch.png` (which was on white) | `T_Scorch` |
+| `UI/hud_final/*.png` | HUD kit pieces cropped from the UI-kit sheet, plus four status medallions | `/Game/Shinobi/UI/Hud/T_Hud_*` |
+| `World/forest_path*.png` | terrain candidates, **not used** (albedo only, smeared seams) | - |
+
+Atlas cell index (0-7, row-major, 256 x 512 px each): `CellU = index % 4`, `CellV = index / 4`.
+
+### Materials (built by `Scripts/setup_sprite_vfx.py`, re-runnable, close the GUI editor first)
+
+| Material | Blend | Use | Parameters |
+|---|---|---|---|
+| `M_Sprite` | additive, unlit | fire, embers, lightning, rings, bursts. Black in the sheet is "nothing", so no alpha is needed | `Atlas`, `CellU`, `CellV`, `Tint`, `Intensity`, `Fade` |
+| `M_SpriteDark` | translucent | Amaterasu's black flame: sheet luminance is coverage, only the dim outer edge glows in `Tint` | same |
+| `M_SpriteSmoke` | translucent | smoke: luminance is coverage, `Tint` is the smoke colour | same plus `Gain` |
+| `M_SpriteScorch` | translucent | ground mark that fades itself in and out from the world clock, so it can outlive its actor | `Tint`, `Start`, `Linger` |
+
+All of them render after the toon post-process (`MTP_AFTER_DOF`), like every other jutsu effect.
+
+### C++ API (`Source/ShinobiCoop/Shinobi/VFX/ShinobiVfx.h`)
+
+```cpp
+using ShinobiVfx::ESprite;   // Flame, BlackFlame, Smoke, Ember, Lightning, Ring, Vortex, Slash, Burst
+
+UMaterialInstanceDynamic* MakeSprite(Outer, ESprite, Variant, Tint, Intensity);  // one quad material
+void SetSpriteVariant(Material, ESprite, Variant);                               // flipbook-style flicker
+int32 SpriteVariants(ESprite);                                                   // 8 flame, 4 smoke/ember/lightning, 1 for the rest
+void SpawnScorch(World, Location, Radius, Tint, Linger);                         // local, cosmetic, traces to the floor
+```
+
+`Tint` white keeps the sheet's own colours (right for fire). Use it to recolour the others (blue lightning, violet black
+flame). `Intensity` ~1 for fire (more blows out under bloom), 2-4 for lightning, rings and bursts.
+
+### Where it is used
+
+| Effect | File | How |
+|---|---|---|
+| Lasting fire after Fireball, Amaterasu with no target | `VFX/ShinobiFirePatch.cpp` | 10 flame cards, 3 smoke plumes (fire only), 2 ember cards, point light, scorch under it |
+| Flames on burning bodies | `VFX/ShinobiBodyFlameComponent.cpp` | 10 flame cards attached to bones, one material pair per card |
+| Impact bursts: Fire, Firestorm, Lightning, Spiral, BlackFlameIgnite, FireBreath | `VFX/ShinobiBurst.cpp` (`BuildCards`) | cards instead of the glow sphere |
+| HUD frames, bars, slots, pips, compass, status icons | `UI/ShinobiHUDWidget.cpp` | image brushes from `T_Hud_*`; falls back to the drawn look if a texture is missing |
+
+## 2. How a sprite effect is built
+
+1. **Quad:** `/Engine/BasicShapes/Plane` (100 x 100 units, lies flat). Standing cards are rolled 90 degrees and turned about
+   the vertical to face the camera each tick: `SetWorldRotation(FRotator(0, FaceYaw, 90))` with
+   `FaceYaw = atan2(CamY - Y, CamX - X) - 90`. Size with `SetWorldScale3D(Width/100, Height/100, 1)`. A flame fills about 40% of
+   its card's width, so a card of 110 x 220 is a 45 x 220 flame. Flat cards (rings, vortexes, scorch) keep the plane's own
+   orientation and spin with yaw only.
+2. **Material:** `MakeSprite`, one per card when cards should flicker independently.
+3. **Flicker:** every ~0.1 s `SetSpriteVariant` with a random next shape (`Variant + 1 + rand(0..2)`). Eight different
+   flames cycling look like animation without a flipbook.
+4. **Life:** drive `Fade` (0-1) from the effect's age. Rise in quickly (`min(Age*10, 1)`), fall off with `(1 - T)^2`.
+5. **Light:** a point light per effect carries the glow (the sprites are unlit); scale its intensity by the same life value.
+6. **Never on a dedicated server:** create components only when `!IsNetMode(NM_DedicatedServer)`. Effects are cosmetic;
+   gameplay (damage, status) stays on the server and stays out of the sprite code.
+7. **Null-safe:** `MakeSprite` returns null (with an ensure) if an asset is missing. Guard `Material->Set...` calls.
+
+## 3. Recipe: add a jutsu that needs flames and scorch (example: Meteor Shower)
+
+Gameplay shape: the jutsu picks N impact points around the aim point, drops a meteor on each over a few seconds, and each
+impact bursts, burns enemies and leaves ground fire.
+
+**a) Jutsu ability.** Copy an existing one (`Abilities/GA_Fireball.cpp` for projectile plus ground fire,
+`Abilities/GA_Amaterasu.cpp` for "effect at a spot"). Register tags, the input slot, an icon (`T_Jutsu_<Name>`, see
+`Scripts/setup_hud.py`) and a chakra cost, as the others do. Put the server logic (timers that spawn each meteor) in
+`ExecuteJutsu()`, guarded by `HasAuthority`.
+
+**b) Ground fire and scorch: no new VFX code.** At each impact point call, on the server:
+
+```cpp
+AShinobiFirePatch::Spawn(GetWorld(), EShinobiFirePatch::Fire, ImpactPoint, GetShinobiCharacter(),
+                         Scale /*radius = 150 * Scale*/, UGE_Burn::DamagePerTick * GetDamageScale());
+```
+
+The patch replicates, plays its flame cards, smoke, embers and light, burns enemies of the caster standing in it (every
+0.5 s), and each machine spawns its own scorch under it that outlives the fire (9 s, 14 s for black flame). For many small
+fires use a small `Scale` (0.5 gives a 75-unit radius); the flame cards scale with it. Cap the number of simultaneous
+patches (each is ~15 components): 6-8 is fine, 20+ will show in the frame time.
+
+**c) A custom impact look.** Add a burst kind:
+
+1. `ShinobiBurst.h`: add `MeteorImpact` to `EShinobiBurst` **at the end** (the enum is replicated as a byte and indexes the
+   `Sounds[]` array in `BeginPlay`).
+2. `ShinobiBurst.cpp`: add a sound to `Sounds[]` in the same position, a line in the `switch` that sets
+   `Duration`, `MaxScale`, `Intensity`, `LightIntensity`, and a `case` in `BuildCards()`:
+
+```cpp
+case EShinobiBurst::MeteorImpact:
+    Duration = 0.8f;
+    AddCard(Plane, ESprite::Burst, FLinearColor(1.f, 0.7f, 0.3f), 1.5f, FVector::ZeroVector, FVector2D(500.f, 500.f) * S);   // flash
+    AddCard(Plane, ESprite::Ring,  FLinearColor(1.f, 0.55f, 0.2f), 1.5f, FVector::ZeroVector, FVector2D(900.f, 900.f) * S, 0.f, true); // ground ring
+    for (int32 i = 0; i < 6; ++i)   // flames
+        AddCard(Plane, ESprite::Flame, White, 1.2f, Around(Random.FRandRange(0.f, 120.f * S), Random.FRandRange(0.f, 2.f * PI)), FVector2D(160.f, 320.f) * S, 80.f * S, false, true);
+    AddCard(Plane, ESprite::Ember, White, 2.f, FVector::ZeroVector, FVector2D(300.f, 600.f) * S, 120.f * S);
+    break;
+```
+
+   `AddCard` arguments: sprite, tint, glow intensity, offset, size (width x height), rise (units climbed over the effect),
+   flat (lies on the ground), flicker (swap variants), delay (seconds before it appears).
+3. Spawn it with `AShinobiBurst::Spawn(World, EShinobiBurst::MeteorImpact, Point, Scale)` on the server.
+
+**d) The falling meteor itself.** The existing `AShinobiProjectile` uses sphere shells (see section 5). For a meteor, a
+`Flame` card stretched along the fall direction plus an `Ember` trail reads well; build it like a burst card but attached
+to a moving actor and facing the camera.
+
+**e) Tests.** Add one in `Tests/ShinobiJutsuTests.cpp`, patterned on `FireballLeavesGroundFire` and
+`FirePatchBurnsHostilesInsideThenGoesOut`: cast, tick, assert a patch exists, enemies inside are burning, and the patch is gone
+after its duration. Patch actors must stay destroyed after `Duration` (the scorch is a separate local actor, so this holds).
+
+**f) Look at it.** `Scripts/shot_chakra.ps1 -Fire` spawns a fire patch, a black-flame patch and every burst kind at fixed
+spots and screenshots them (add your burst to the `Bursts[]` table in `RunFireShotTest`). `-Jutsu` casts every jutsu at the
+training dummies. Screenshots land in `Saved/Screenshots/WindowsEditor`. Take shots 0.1 s after a burst spawns; a late
+shot misses a 0.4 s effect.
+
+## 4. Generating new sprites with SpriteCook
+
+- **Credits first** (`get_credit_balance`). On the free tier `gpt-image-2` medium 1K is 9 credits per image, a UI-kit concept
+  7 and sheet 9, `gemini-3.1-flash-image` 12. A sheet of 8 sprites is one image, so always generate sheets, not single sprites.
+- **VFX sheet prompt pattern:** "VFX texture sheet, 4 columns by 2 rows, N different photorealistic X, each isolated in its
+  own cell, ... on a pure solid black background (#000000), no ground, no text, no borders." Use `bg_mode="include"`,
+  `pixel=false`, `smart_crop=false`. Black background means additive blending needs no alpha.
+- **Marks that darken the ground** (scorch, ash, blood): generate on pure white, then convert to RGBA locally
+  (alpha from the darkest channel with a floor of about 0.10 so near-white haze becomes fully transparent, fade the outer 8%
+  of the quad to zero, neutral colour where alpha is under 0.05). Skipping the floor gave a visible blue-tinted square.
+- **Adding a sheet to the game:** put the PNG in `SourceArt/SpriteCook/VFX/`, add it to `SHEETS` in
+  `Scripts/setup_sprite_vfx.py`, add an `ESprite` value and a row in the `Info()` table in `ShinobiVfx.cpp`
+  (material, atlas, first cell, variant count), run the script, rebuild.
+- **Record it:** add the asset id and file to `SourceArt/SpriteCook/spritecook-assets.json`.
+- **Not worth it:** AI "seamless" terrain textures (hazy or smeared seams, albedo only; Poly Haven PBR is better), and
+  regenerating the four painted jutsu icons.
+- **New HUD pieces:** crop from the UI-kit sheet with PIL, resize near on-screen size into `UI/hud_final/`, run
+  `Scripts/setup_sprite_hud.py`. A grayscale fill texture lets existing colour tints still apply.
+
+## 5. How to improve the existing VFX and jutsu
+
+Ordered roughly by visible gain per effort.
+
+1. **Fireball projectile, mouth flame, hand orbs** (`ShinobiProjectile.cpp`, `ShinobiCastFxComponent.cpp`) still use
+   sphere shells and procedural `M_Flame`. Replace the `Shell` and `Puff` spheres with 2-3 flame cards (add a helper that
+   makes a camera-facing card on a moving actor; `ShinobiBurst::AddCard` and `ShinobiFirePatch::MakeCard` are the patterns).
+2. **Fire breath** is now a row of flame cards along the burst's forward. It could follow the caster's mouth bone for the
+   whole duration instead of a fixed offset, and use `Smoke` cards at the far end.
+3. **Chidori arcs and Rasengan orb** (`ShinobiCastFxComponent.cpp`) use `MakeGlow` spheres and arc meshes. Use `Lightning`
+   cards for the arcs on the hand and a `Vortex` card (flat or camera-facing) around the orb.
+4. **Black flame on bodies** blends fire and black flame when both statuses are on, giving orange with a violet rim. Show
+   only the black flame when `State.Burning.Black` is present (the tags are separate).
+5. **Scorch** is a flat quad 3 units above the floor found by a downward trace. On steep slopes it can float or clip. A real
+   deferred decal would conform; it needs a Substrate-compatible decal material.
+6. **Smoke for Amaterasu** (dark ash plume) is missing: reuse `M_SpriteSmoke` with a purple-grey `Tint`.
+7. **Sprites are unlit.** The point light supplies the glow. Add subtle light on the ground (a second, wider, dimmer light) or
+   a light function if flames look pasted on at night.
+8. **Real flipbooks.** `animate_game_art` can turn one flame into 8-24 frames (credits per animation). The variant-swap
+   flicker is cheap and good, but a true loop would remove the random jumps.
+9. **Performance.** Each patch builds ~15 components and ~15 dynamic materials; each burst up to 14. If a scene has many,
+   pool the materials or share one material per kind and move the variant into per-instance custom data.
+10. **HUD:** the main menu and settings screens (`ShinobiMenuWidgets.cpp`) still use the drawn look. Reuse the kit:
+    panel (`ornate_square_panel`), long panels as buttons (states are in the kit sheet), track as a slider. Generate a
+    menu concept with `create_ui_kit(screen_type="main-menu", style_asset_ids=[hud concept])` to match.
+11. **Status icons** exist for burn, black flame, shock and stagger only. Add downed, reviving and the shock-bonus state
+    to `BuildStatusIcons` and the tag list in `NativeTick`.
+
+## 6. Pitfalls found while building this
+
+- Close the Unreal Editor before `run_python.ps1`, `build.ps1` and the screenshot scripts; they fight over assets and DLLs.
+- An actor spawned with `SpawnActor` and then given a root component starts that root at the world origin: set the
+  component's world transform explicitly (`SpawnScorch` does).
+- Rotator order: roll 90 first stands the plane up, then yaw turns it. Pitch/yaw alone lies flat.
+- Additive sprites blow out under bloom; start at `Intensity` 1 for fire and raise only if it looks dim in daylight.
+- `M_SpriteDark` needs the threshold values (rim `* 5`, coverage gain `* 5`): lower values turn the whole flame into a pink
+  haze.
+- Components that hold materials need null guards: `MakeSprite` is null if the asset is missing, and the automation tests
+  run without every asset in some configurations.
+- `ShinobiBurst` kinds are an enum replicated as a byte and an index into `Sounds[]`: append, never insert.

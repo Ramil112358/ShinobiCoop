@@ -6,7 +6,10 @@
 
 class UMaterialInstanceDynamic;
 class UPointLightComponent;
+class UStaticMesh;
 class UStaticMeshComponent;
+
+namespace ShinobiVfx { enum class ESprite : uint8; }
 
 UENUM()
 enum class EShinobiBurst : uint8
@@ -69,6 +72,29 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> SphereMaterial;
+
+	/** One SpriteCook sprite on a quad (flames, lightning, a ring, a flash). The components belong to the actor. */
+	struct FCard
+	{
+		UStaticMeshComponent* Mesh = nullptr;
+		UMaterialInstanceDynamic* Material = nullptr;
+		uint8 Sprite = 0;        // ShinobiVfx::ESprite
+		FVector Offset = FVector::ZeroVector;
+		FVector2D Size = FVector2D::ZeroVector; // full size in world units
+		float Rise = 0.f;        // units it climbs over the effect
+		float Delay = 0.f;       // seconds before it appears (a stream of flame reaches its far cards later)
+		bool bFlat = false;      // lies on the ground (rings, vortexes) instead of facing the camera
+		bool bFlicker = false;   // switches variant every few frames (lightning, flame)
+		float Spin = 0.f;        // degrees per second, flat cards only
+		float NextSwap = 0.f;
+		int32 Variant = 0;
+	};
+
+	/** Replace the glow sphere with sprite cards for this kind; false if the kind keeps the sphere (Substitution). */
+	bool BuildCards();
+	void AddCard(UStaticMesh* Plane, ShinobiVfx::ESprite Sprite, const FLinearColor& Tint, float Glow, const FVector& Offset, const FVector2D& Size, float Rise = 0.f, bool bFlat = false, bool bFlicker = false, float Delay = 0.f);
+
+	TArray<FCard> Cards;
 
 	float Age = 0.f;
 	float Duration = 0.4f;

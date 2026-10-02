@@ -5,6 +5,7 @@
 #include "ShinobiFirePatch.generated.h"
 
 class AShinobiCharacterBase;
+class UMaterialInstanceDynamic;
 class UPointLightComponent;
 class UStaticMeshComponent;
 
@@ -53,8 +54,21 @@ private:
 	UPROPERTY(Replicated)
 	float Scale = 1.f;
 
-	UPROPERTY()
-	TArray<TObjectPtr<UStaticMeshComponent>> Tongues;
+	/** One camera-facing quad showing a SpriteCook sprite (flame, smoke or embers). The components belong to the actor. */
+	struct FCard
+	{
+		UStaticMeshComponent* Mesh = nullptr;
+		UMaterialInstanceDynamic* Material = nullptr;
+		float Phase = 0.f;    // 0-1, desynchronises the cards
+		float NextSwap = 0.f; // Age at which a flame or ember card switches to another variant
+		int32 Variant = 0;
+	};
+
+	FCard MakeCard(UStaticMesh* Plane, UMaterialInstanceDynamic* Material, const FVector& Where, float Phase, int32 Variant);
+
+	TArray<FCard> Flames;
+	TArray<FCard> Smokes;
+	TArray<FCard> Embers;
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UPointLightComponent> Light;

@@ -87,6 +87,7 @@ private:
 	/** With -ShinobiJutsuShot: casts each jutsu at the dummy ahead and screenshots every effect, then quits.
 	 * Used by `Scripts/shot_chakra.ps1 -Jutsu`. */
 	void RunJutsuShotTest();
+	void RunFireShotTest();
 
 	/** With -ShinobiLookShot (arena mode): screenshots of the map, the character and the first wave closing in, fighting
 	 * the nearest enemy, then quits. Used by `Scripts/shot_chakra.ps1 -Look`. */
