@@ -281,6 +281,16 @@ bool AShinobiBurst::BuildCards()
 			AddCard(Plane, ESprite::Ember, White, 2.f, Around(120.f * S, Index * 2.1f), FVector2D(420.f, 840.f) * S, 180.f * S, false, true);
 		}
 		break;
+	case EShinobiBurst::FrostImpact:
+		// An ice shard landing: a pale flash, a small ring and a puff of frost.
+		Duration = 0.6f;
+		AddCard(Plane, ESprite::Burst, FLinearColor(0.7f, 0.9f, 1.f), 1.6f, FVector(0.f, 0.f, 20.f), FVector2D(300.f, 300.f) * S);
+		AddCard(Plane, ESprite::Ring, FLinearColor(0.6f, 0.85f, 1.f), 1.6f, FVector::ZeroVector, FVector2D(420.f, 420.f) * S, 0.f, true);
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			AddCard(Plane, ESprite::Smoke, FLinearColor(0.75f, 0.9f, 1.f), 1.f, Around(Random.FRandRange(20.f, 80.f) * S, Random.FRandRange(0.f, 2.f * PI)), FVector2D(160.f, 200.f) * S, 60.f * S);
+		}
+		break;
 	case EShinobiBurst::Swirl:
 		// Kamui: a spiral turning on the ground and a soft flash, in chakra blue.
 		Duration = 0.7f;

@@ -11,6 +11,7 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiTelegraph.h"
 #include "Shinobi/Abilities/GA_FireMeteor.h"
+#include "Shinobi/Abilities/GA_IceMeteor.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
 #include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
 #include "Shinobi/VFX/ShinobiFirePatch.h"
@@ -121,6 +122,73 @@ bool FShinobiFireMeteorSkyTest::RunTest(const FString& Parameters)
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	TestFalse(TEXT("The cast fails"), ShinobiTest::IsActive(P, UGA_FireMeteor::StaticClass()));
 	TestEqual(TEXT("for free"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 100.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiIceShardTest, "ShinobiCoop.Meteor.IceShardHurtsChillsAndWaitsForItsDelay", ShinobiTestFlags)
+bool FShinobiIceShardTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* Hit = W.Spawn<AShinobiCharacterBase>(FVector(800.f, 0.f, 0.f));
+	AShinobiCharacterBase* Beside = W.Spawn<AShinobiCharacterBase>(FVector(800.f, 300.f, 0.f));
+	for (AShinobiCharacterBase* Each : { static_cast<AShinobiCharacterBase*>(P), Hit, Beside })
+	{
+		ShinobiTest::Hover(Each);
+	}
+	FShinobiMeteorImpact Impact;
+	Impact.Damage = 12.f;
+	Impact.Radius = 140.f;
+	Impact.Status = UGE_Chill::StaticClass();
+	AShinobiMeteor::Spawn(W.World, P, EShinobiMeteor::Ice, FVector(800.f, 0.f, 0.f), 0.5f, 1.f, Impact, 1.0f);
+
+	W.Tick(0.9f); // 0.4 s into the fall, which only starts after the 1 s delay
+	TestEqual(TEXT("Still waiting in the sky: nobody hurt"), ShinobiTest::Get(Hit, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
+	W.Tick(1.0f);
+	TestEqual(TEXT("Landed"), ShinobiTest::CountActors<AShinobiMeteor>(W), 0);
+	TestEqual(TEXT("The enemy under it took 12"), ShinobiTest::Get(Hit, UShinobiAttributeSet::GetHealthAttribute()), 488.f);
+	TestTrue(TEXT("and is chilled"), ShinobiTest::HasTag(Hit, ShinobiTags::State_Chilled));
+	TestEqual(TEXT("The one beside it is untouched"), ShinobiTest::Get(Beside, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
+	TestFalse(TEXT("and not chilled"), ShinobiTest::HasTag(Beside, ShinobiTags::State_Chilled));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiIceShowerTest, "ShinobiCoop.Meteor.IceShowerScattersShardsOverFourSeconds", ShinobiTestFlags)
+bool FShinobiIceShowerTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	SpawnMeteorWall(W, FVector(1500.f, 0.f, 0.f), FVector(1.f, 10.f, 10.f)); // the aim lands on its face at X = 1450
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* Far = W.Spawn<AShinobiCharacterBase>(FVector(1400.f, 1500.f, 0.f)); // well outside the circle
+	AShinobiPlayerCharacter* Ally = W.Spawn<AShinobiPlayerCharacter>(FVector(1400.f, 100.f, 0.f));
+	for (AShinobiCharacterBase* Each : { static_cast<AShinobiCharacterBase*>(P), Far, static_cast<AShinobiCharacterBase*>(Ally) })
+	{
+		ShinobiTest::Hover(Each);
+	}
+
+	P->ApplyJutsuPage(3);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
+	TestEqual(TEXT("Cost 45 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 55.f);
+	W.Tick(0.9f);
+	TestEqual(TEXT("A ring marks the area"), ShinobiTest::CountActors<AShinobiTelegraph>(W), 1);
+	TestEqual(TEXT("Fourteen shards are queued"), ShinobiTest::CountActors<AShinobiMeteor>(W), 14);
+	for (TActorIterator<AShinobiMeteor> It(W.World); It; ++It)
+	{
+		TestTrue(FString::Printf(TEXT("every shard lands inside the 500 circle (%.0f from the centre)"), FVector::Dist2D(It->GetImpactPoint(), FVector(1450.f, 0.f, 0.f))),
+			FVector::Dist2D(It->GetImpactPoint(), FVector(1450.f, 0.f, 0.f)) <= 500.5f);
+		TestTrue(TEXT("and is an ice shard"), It->GetKind() == EShinobiMeteor::Ice);
+	}
+
+	W.Tick(2.0f);
+	const int32 Midway = ShinobiTest::CountActors<AShinobiMeteor>(W);
+	TestTrue(FString::Printf(TEXT("Some have landed, some still fall (%d left)"), Midway), Midway > 0 && Midway < 14);
+	W.Tick(3.0f);
+	TestEqual(TEXT("All have landed after about 4.5 s"), ShinobiTest::CountActors<AShinobiMeteor>(W), 0);
+	TestEqual(TEXT("The ring is gone"), ShinobiTest::CountActors<AShinobiTelegraph>(W), 0);
+	TestEqual(TEXT("An enemy outside the circle is untouched"), ShinobiTest::Get(Far, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
+	TestEqual(TEXT("An ally inside it is untouched"), ShinobiTest::Get(Ally, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
+	TestFalse(TEXT("and not chilled"), ShinobiTest::HasTag(Ally, ShinobiTags::State_Chilled));
+	TestTrue(TEXT("Cooldown running"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_IceMeteor));
 	return true;
 }
 

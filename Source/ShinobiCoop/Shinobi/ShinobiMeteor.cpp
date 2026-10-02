@@ -14,8 +14,8 @@
 
 namespace
 {
-	constexpr float DropHeight = 2600.f;
-	constexpr float DropSideways = 500.f; // they come in at a slant, from the same side for everyone
+	constexpr float MeteorDropHeight = 2600.f;
+	constexpr float MeteorDropSideways = 500.f; // they come in at a slant, from the same side for everyone
 }
 
 AShinobiMeteor::AShinobiMeteor()
@@ -45,13 +45,13 @@ AShinobiMeteor::AShinobiMeteor()
 	Light->SetSpecularScale(0.f);
 }
 
-AShinobiMeteor* AShinobiMeteor::Spawn(UWorld* World, AShinobiCharacterBase* Caster, EShinobiMeteor Kind, const FVector& ImpactPoint, float FallSeconds, float VisualScale, const FShinobiMeteorImpact& Impact)
+AShinobiMeteor* AShinobiMeteor::Spawn(UWorld* World, AShinobiCharacterBase* Caster, EShinobiMeteor Kind, const FVector& ImpactPoint, float FallSeconds, float VisualScale, const FShinobiMeteorImpact& Impact, float StartDelay)
 {
 	if (!World || World->GetNetMode() == NM_Client)
 	{
 		return nullptr;
 	}
-	const FVector Start = ImpactPoint + FVector(-DropSideways, DropSideways * 0.5f, DropHeight);
+	const FVector Start = ImpactPoint + FVector(-MeteorDropSideways, MeteorDropSideways * 0.5f, MeteorDropHeight);
 	const FTransform At((ImpactPoint - Start).Rotation(), Start);
 	AShinobiMeteor* Meteor = World->SpawnActorDeferred<AShinobiMeteor>(StaticClass(), At, Caster, Caster, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 	if (Meteor)
@@ -61,6 +61,7 @@ AShinobiMeteor* AShinobiMeteor::Spawn(UWorld* World, AShinobiCharacterBase* Cast
 		Meteor->ImpactPoint = ImpactPoint;
 		Meteor->FallSeconds = FMath::Max(FallSeconds, 0.1f);
 		Meteor->VisualScale = VisualScale;
+		Meteor->StartDelay = FMath::Max(StartDelay, 0.f);
 		Meteor->Impact = Impact;
 		Meteor->Caster = Caster;
 		Meteor->FinishSpawning(At);
@@ -76,6 +77,7 @@ void AShinobiMeteor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME_CONDITION(AShinobiMeteor, ImpactPoint, COND_InitialOnly);
 	DOREPLIFETIME_CONDITION(AShinobiMeteor, FallSeconds, COND_InitialOnly);
 	DOREPLIFETIME_CONDITION(AShinobiMeteor, VisualScale, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AShinobiMeteor, StartDelay, COND_InitialOnly);
 }
 
 void AShinobiMeteor::BeginPlay()
@@ -103,9 +105,11 @@ void AShinobiMeteor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	Age += DeltaSeconds;
-	const float Alpha = FMath::Clamp(Age / FallSeconds, 0.f, 1.f);
+	const float Falling = Age - StartDelay;
+	SetActorHiddenInGame(Falling < 0.f); // queued behind the others: out of sight in the sky
+	const float Alpha = FMath::Clamp(Falling / FallSeconds, 0.f, 1.f);
 	SetActorLocation(FMath::Lerp(StartPoint, ImpactPoint, FMath::Pow(Alpha, 1.6f))); // speeding up as it falls
-	if (Alpha >= 1.f && HasAuthority())
+	if (Falling >= FallSeconds && HasAuthority())
 	{
 		Land();
 		Destroy();

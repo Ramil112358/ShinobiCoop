@@ -8,8 +8,8 @@
 
 namespace
 {
-	constexpr float PlaneSize = 100.f; // the engine plane is 100 units across
-	constexpr float RingArt = 1.25f;   // the ring sprite fills most of its quad; this stretches the quad to match the radius
+	constexpr float TelegraphPlaneSize = 100.f; // the engine plane is 100 units across
+	constexpr float TelegraphRingScale = 1.25f;   // the ring sprite fills most of its quad; this stretches the quad to match the radius
 }
 
 AShinobiTelegraph::AShinobiTelegraph()
@@ -73,8 +73,8 @@ void AShinobiTelegraph::BeginPlay()
 	using ShinobiVfx::ESprite;
 	Outer->SetMaterial(0, ShinobiVfx::MakeSprite(this, ESprite::Ring, 0, Tint, 1.2f));
 	Inner->SetMaterial(0, ShinobiVfx::MakeSprite(this, ESprite::Ring, 0, Tint, 2.f));
-	Outer->SetRelativeScale3D(FVector(Radius * 2.f * RingArt / PlaneSize));
-	Inner->SetRelativeScale3D(FVector(Radius * 2.f * RingArt / PlaneSize));
+	Outer->SetRelativeScale3D(FVector(Radius * 2.f * TelegraphRingScale / TelegraphPlaneSize));
+	Inner->SetRelativeScale3D(FVector(Radius * 2.f * TelegraphRingScale / TelegraphPlaneSize));
 }
 
 void AShinobiTelegraph::Tick(float DeltaSeconds)
@@ -83,5 +83,5 @@ void AShinobiTelegraph::Tick(float DeltaSeconds)
 	Age += DeltaSeconds;
 	// The inner ring closes on the centre exactly when the jutsu lands.
 	const float Left = FMath::Clamp(1.f - Age / FMath::Max(Seconds, 0.01f), 0.f, 1.f);
-	Inner->SetRelativeScale3D(FVector(Radius * 2.f * RingArt / PlaneSize * FMath::Max(Left, 0.05f)));
+	Inner->SetRelativeScale3D(FVector(Radius * 2.f * TelegraphRingScale / TelegraphPlaneSize * FMath::Max(Left, 0.05f)));
 }

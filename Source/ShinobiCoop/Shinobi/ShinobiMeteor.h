@@ -41,10 +41,12 @@ class SHINOBICOOP_API AShinobiMeteor : public AActor
 public:
 	AShinobiMeteor();
 
-	/** Server only (does nothing on a client). VisualScale sizes the rock, its light and the landing burst. */
-	static AShinobiMeteor* Spawn(UWorld* World, AShinobiCharacterBase* Caster, EShinobiMeteor Kind, const FVector& ImpactPoint, float FallSeconds, float VisualScale, const FShinobiMeteorImpact& Impact);
+	/** Server only (does nothing on a client). VisualScale sizes the rock, its light and the landing burst. It waits
+	 * StartDelay seconds out of sight before it starts to fall, so one cast can queue a whole shower. */
+	static AShinobiMeteor* Spawn(UWorld* World, AShinobiCharacterBase* Caster, EShinobiMeteor Kind, const FVector& ImpactPoint, float FallSeconds, float VisualScale, const FShinobiMeteorImpact& Impact, float StartDelay = 0.f);
 
 	EShinobiMeteor GetKind() const { return Kind; }
+	FVector GetImpactPoint() const { return ImpactPoint; }
 
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -70,6 +72,9 @@ private:
 
 	UPROPERTY(Replicated)
 	float VisualScale = 1.f;
+
+	UPROPERTY(Replicated)
+	float StartDelay = 0.f;
 
 	UPROPERTY()
 	TObjectPtr<UStaticMeshComponent> Core;
