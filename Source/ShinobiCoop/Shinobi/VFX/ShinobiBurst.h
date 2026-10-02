@@ -26,6 +26,9 @@ enum class EShinobiBurst : uint8
 	TeleportFlash,    // Teleport: the flash where the caster arrives
 	Crumble,          // Earth Wall breaking
 	Splash,           // Water Wall breaking
+	MeteorImpact,     // Fire Meteor landing
+	FrostImpact,      // an ice shard landing
+	DragonSplash,     // Water Dragon ending
 };
 
 /**

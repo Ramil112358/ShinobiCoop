@@ -365,6 +365,33 @@ bool UShinobiJutsuAbility::TraceAim(float Range, float Radius, FHitResult& OutHi
 	return false;
 }
 
+bool UShinobiJutsuAbility::FindAimGround(float Range, float AimRadius, FVector& OutPoint) const
+{
+	const AShinobiCharacterBase* Self = GetShinobiCharacter();
+	if (!Self)
+	{
+		return false;
+	}
+	FHitResult Hit;
+	if (TraceAim(Range, AimRadius, Hit))
+	{
+		OutPoint = Hit.ImpactPoint;
+		return true;
+	}
+	// Aimed above everything: the ground below the end of the aim, if there is ground within reach.
+	FVector ViewLocation;
+	FRotator ViewRotation;
+	GetAimViewPoint(ViewLocation, ViewRotation);
+	const FVector End = Self->GetActorLocation() + ViewRotation.Vector() * Range;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(ShinobiAimGround), false, Self);
+	if (Self->GetWorld()->LineTraceSingleByChannel(Hit, End, End - FVector(0.f, 0.f, Range), ECC_WorldStatic, Params))
+	{
+		OutPoint = Hit.ImpactPoint;
+		return true;
+	}
+	return false;
+}
+
 void UShinobiJutsuAbility::FaceAim(const AActor* Target) const
 {
 	AActor* Self = GetAvatarActorFromActorInfo();

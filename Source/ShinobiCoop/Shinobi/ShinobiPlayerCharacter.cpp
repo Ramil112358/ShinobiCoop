@@ -23,6 +23,7 @@
 #include "Shinobi/Abilities/GA_Chidori.h"
 #include "Shinobi/Abilities/GA_Dodge.h"
 #include "Shinobi/Abilities/GA_EarthWall.h"
+#include "Shinobi/Abilities/GA_FireMeteor.h"
 #include "Shinobi/Abilities/GA_Fireball.h"
 #include "Shinobi/Abilities/GA_Kamui.h"
 #include "Shinobi/Abilities/GA_Melee.h"
@@ -59,7 +60,7 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 		UGA_Substitution::StaticClass(), UGA_Revive::StaticClass(),
 		UGA_AlmightyPush::StaticClass(), UGA_Kamui::StaticClass(), UGA_KamuiExit::StaticClass(),
 		UGA_Teleport::StaticClass(), UGA_TeleportJump::StaticClass(),
-		UGA_EarthWall::StaticClass(), UGA_WaterWall::StaticClass(),
+		UGA_EarthWall::StaticClass(), UGA_WaterWall::StaticClass(), UGA_FireMeteor::StaticClass(),
 	};
 	StartupEffects.Add(UGE_SubstitutionRegen::StaticClass());
 
