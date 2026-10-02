@@ -68,6 +68,9 @@ namespace ShinobiVfx
 	 */
 	SHINOBICOOP_API void SpawnScorch(UWorld* World, const FVector& Location, float Radius, const FLinearColor& Tint, float Linger);
 
+	/** Kamui's see-through chakra-blue ghost (M_Phased, built by Scripts/setup_vfx.py) at Opacity 0-1. Null, with an ensure, if the asset is missing. */
+	SHINOBICOOP_API UMaterialInstanceDynamic* MakePhased(UObject* Outer, float Opacity);
+
 	/** Flat unlit colour (M_Streak): the blood under Amaterasu's eyes. Null, with an ensure, if the asset is missing. */
 	SHINOBICOOP_API UMaterialInstanceDynamic* MakeStreak(UObject* Outer, const FLinearColor& Color);
 }

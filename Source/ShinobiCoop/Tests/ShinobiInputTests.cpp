@@ -88,6 +88,12 @@ bool FShinobiInputMappingsTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("E revives"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Revive], EKeys::E));
 	TestNotNull(TEXT("Y (without RB) revives"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Revive], EKeys::Gamepad_FaceButton_Top));
 
+	TestNotNull(TEXT("Q pages forward"), FindMapping(Mappings, Config->JutsuPageNext, EKeys::Q));
+	TestNotNull(TEXT("Wheel up pages forward"), FindMapping(Mappings, Config->JutsuPageNext, EKeys::MouseScrollUp));
+	TestNotNull(TEXT("Wheel down pages back"), FindMapping(Mappings, Config->JutsuPagePrev, EKeys::MouseScrollDown));
+	TestNotNull(TEXT("RB + D-pad right pages forward"), FindMapping(JutsuMappings, Config->JutsuPageNext, EKeys::Gamepad_DPad_Right));
+	TestNotNull(TEXT("RB + D-pad left pages back"), FindMapping(JutsuMappings, Config->JutsuPagePrev, EKeys::Gamepad_DPad_Left));
+
 	const FEnhancedActionKeyMapping* LeftStick = FindMapping(Mappings, Config->Move, EKeys::Gamepad_Left2D);
 	if (TestNotNull(TEXT("Left stick mapping exists"), LeftStick))
 	{

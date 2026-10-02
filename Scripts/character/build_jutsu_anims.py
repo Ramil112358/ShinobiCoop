@@ -268,7 +268,77 @@ def amaterasu():
     }
 
 
-TIMELINES = {"Fireball": fireball(), "Chidori": chidori(), "Rasengan": rasengan(), "Amaterasu": amaterasu()}
+# Teleport (Flying Raijin): a flick of the Tiger seal, then the right arm cocked behind the head and thrown forward.
+THROW_COCK = merge(NEUTRAL, BRACE, {"hips": (7, 14, 0), "spine": (-2, -24), "neck": (0, -10), "head": (-4, -14),
+                                    "R": arm((-22, 152, -12), (-1, 0.2, -0.3), (0, 0.8, -0.6), LEFT, (30, 40, 40, 40, 40)),
+                                    "L": arm((17, 116, 34), ELBOW_L, (0, 0.5, 1), RIGHT, OPEN)})
+THROW_FOLLOW = merge(NEUTRAL, LUNGE, {"spine": (14, 12), "neck": (-6, 8), "head": (-6, 8),
+                                      "R": arm((-12, 124, 64), (-1, -0.4, 0), FWD, DOWN, OPEN),
+                                      "L": arm((24, 96, -20), (0.3, 0, 1), (0.2, -1, -0.4), RIGHT, (30, 40, 40, 40, 40))})
+
+
+def teleport():
+    seals, t = seal_run(("Tiger",), 0.1, hold=0.12)
+    return {
+        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.62, THROW_COCK, "smooth")],
+        "Release": [(0.0, THROW_COCK, "smooth"), (0.1, THROW_FOLLOW, "back"),
+                    (0.4, merge(THROW_FOLLOW, {"spine": (10, 8)}), "smooth"),
+                    (0.8, merge(NEUTRAL, READY_BODY), "smooth")],
+    }
+
+
+# Kamui: the Ram seal held while the body sinks, as if slipping into the ground.
+SINK = seal("Ram", {"hips": (14, -14, 6), "spine": (6, 9), "neck": (3, 2), "head": (4, 3)})
+
+
+def kamui():
+    return {
+        "Seal": [(0.0, NEUTRAL, "smooth"), (0.1, seal("Ram"), "snap"), (0.24, seal("Ram"), "snap"), (0.4, seal("Ram", {"hips": (8, -14, 3)}), "smooth")],
+        "Release": [(0.0, seal("Ram", {"hips": (8, -14, 3)}), "smooth"), (0.12, SINK, "smooth"), (0.45, SINK, "smooth"),
+                    (0.9, merge(NEUTRAL, READY_BODY), "smooth")],
+    }
+
+
+# Almighty Push: one palm held up at the chest, pushed out flat.
+PUSH_READY = merge(NEUTRAL, BRACE, {"spine": (-2, 6), "neck": (0, 2), "head": (-3, 3),
+                                    "R": arm((-17, 122, 22), (-1, -0.4, 0), (0, 1, 0.3), FWD, OPEN),
+                                    "L": arm((22, 106, 14), ELBOW_L, (0, -0.6, 0.8), RIGHT, (20, 20, 25, 30, 35))})
+PUSH_THRUST = merge(NEUTRAL, LUNGE, {"spine": (10, 10), "neck": (-4, 6), "head": (-4, 6),
+                                     "R": arm((-9, 128, 62), (-1, -0.4, 0), (0, 1, 0.25), FWD, OPEN),
+                                     "L": arm((24, 98, -16), (0.3, 0, 1), (0.2, -1, -0.4), RIGHT, (30, 40, 40, 40, 40))})
+
+
+def almighty_push():
+    seals, t = seal_run(("Tiger",), 0.1, hold=0.12)
+    return {
+        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.7, PUSH_READY, "smooth")],
+        "Charge": tremble(PUSH_READY, 2.2, 0.7, seed=5, step=0.2),
+        "Release": [(0.0, PUSH_READY, "smooth"), (0.08, merge(PUSH_READY, {"spine": (-5, 4)}), "snap"),
+                    (0.18, PUSH_THRUST, "back"), (0.5, merge(PUSH_THRUST, {"spine": (7, 8)}), "smooth"),
+                    (0.9, merge(NEUTRAL, READY_BODY), "smooth")],
+    }
+
+
+# Earth and Water Wall: the Tiger seal, hands raised high, then both palms slammed down to the ground in a crouch.
+HANDS_HIGH = merge(NEUTRAL, BRACE, {"spine": (-3, 9), "neck": (-3, 2), "head": (-6, 3),
+                                    "R": arm((-12, 154, 24), (-1, -0.2, -0.3), (0.1, 1, 0.3), LEFT, OPEN),
+                                    "L": arm((12, 154, 24), (1, -0.2, -0.3), (-0.1, 1, 0.3), RIGHT, OPEN)})
+PALMS_DOWN = merge(NEUTRAL, CROUCH, {"spine": (14, 6), "neck": (-8, 2), "head": (-10, 3),
+                                     "R": arm((-17, 22, 62), (-1, 0.3, -0.2), (0, -0.3, 1), DOWN, OPEN),
+                                     "L": arm((17, 22, 62), (1, 0.3, -0.2), (0, -0.3, 1), DOWN, OPEN)})
+
+
+def wall():
+    seals, t = seal_run(("Tiger",), 0.1, hold=0.1)
+    return {
+        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.6, HANDS_HIGH, "smooth")],
+        "Release": [(0.0, HANDS_HIGH, "smooth"), (0.12, merge(HANDS_HIGH, {"spine": (-6, 9)}), "snap"),
+                    (0.26, PALMS_DOWN, "back"), (0.75, PALMS_DOWN, "smooth"), (1.2, merge(NEUTRAL, READY_BODY), "smooth")],
+    }
+
+
+TIMELINES = {"Fireball": fireball(), "Chidori": chidori(), "Rasengan": rasengan(), "Amaterasu": amaterasu(),
+             "Teleport": teleport(), "Kamui": kamui(), "AlmightyPush": almighty_push(), "EarthWall": wall(), "WaterWall": wall()}
 
 
 # ---------------------------------------------------------------------------------------------------------------

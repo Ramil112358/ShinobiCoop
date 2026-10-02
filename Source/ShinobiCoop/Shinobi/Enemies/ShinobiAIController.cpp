@@ -22,7 +22,7 @@ void AShinobiAIController::Tick(float DeltaSeconds)
 	}
 
 	RetargetClock -= DeltaSeconds;
-	if (RetargetClock <= 0.f || !Target.IsValid() || !Target->IsAlive())
+	if (RetargetClock <= 0.f || !Target.IsValid() || !Target->IsTargetable())
 	{
 		RetargetClock = RetargetInterval;
 		Target = FindNearestPlayer(*Self);
@@ -94,7 +94,7 @@ AShinobiCharacterBase* AShinobiAIController::FindNearestPlayer(const AShinobiEne
 	for (TActorIterator<AShinobiCharacterBase> It(GetWorld()); It; ++It)
 	{
 		const float Distance = FVector::DistSquared2D(It->GetActorLocation(), Self.GetActorLocation());
-		if (Self.IsHostileTo(*It) && It->IsAlive() && Distance < NearestDistance)
+		if (Self.IsHostileTo(*It) && It->IsTargetable() && Distance < NearestDistance)
 		{
 			NearestDistance = Distance;
 			Nearest = *It;

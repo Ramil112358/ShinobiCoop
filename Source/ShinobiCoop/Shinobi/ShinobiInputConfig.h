@@ -54,6 +54,13 @@ public:
 	UPROPERTY()
 	TObjectPtr<UInputAction> Pause;
 
+	/** Q / wheel up (RB + D-pad right): next jutsu page. Wheel down (RB + D-pad left): previous. */
+	UPROPERTY()
+	TObjectPtr<UInputAction> JutsuPageNext;
+
+	UPROPERTY()
+	TObjectPtr<UInputAction> JutsuPagePrev;
+
 	/** Gamepad A/B/X/Y -> Jutsu 1-4. Only active while RB is held. */
 	UPROPERTY()
 	TObjectPtr<UInputMappingContext> JutsuContext;

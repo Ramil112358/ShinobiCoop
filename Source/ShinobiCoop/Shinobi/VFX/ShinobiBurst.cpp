@@ -94,7 +94,9 @@ void AShinobiBurst::BeginPlay()
 		SetActorTickEnabled(false);
 		return;
 	}
-	static const EShinobiSfx Sounds[] = { EShinobiSfx::Explosion, EShinobiSfx::Explosion, EShinobiSfx::Zap, EShinobiSfx::Whirr, EShinobiSfx::Poof, EShinobiSfx::Whoosh, EShinobiSfx::Whoosh };
+	static const EShinobiSfx Sounds[] = { EShinobiSfx::Explosion, EShinobiSfx::Explosion, EShinobiSfx::Zap, EShinobiSfx::Whirr, EShinobiSfx::Poof, EShinobiSfx::Whoosh, EShinobiSfx::Whoosh,
+		EShinobiSfx::Explosion, EShinobiSfx::Whirr, EShinobiSfx::Zap, EShinobiSfx::Thud, EShinobiSfx::Poof };
+	static_assert(UE_ARRAY_COUNT(Sounds) == static_cast<int32>(EShinobiBurst::Splash) + 1, "a sound for every burst kind");
 	ShinobiSfx::Play(this, Sounds[static_cast<uint8>(Kind)], GetActorLocation(), Kind == EShinobiBurst::Fire ? 0.7f : 1.f);
 
 	// Mostly-rim shells (low Core) at modest intensity: a solid bright sphere blows out to a white wall under bloom.
@@ -109,6 +111,11 @@ void AShinobiBurst::BeginPlay()
 	case EShinobiBurst::Substitution: Color = ShinobiVfx::Colors::Smoke;     Duration = 0.5f; MaxScale = 2.2f; Intensity = 0.8f;  LightIntensity = 0.f;     Core = 0.6f; break;
 	case EShinobiBurst::FireBreath:   Color = ShinobiVfx::Colors::Fire;      Duration = 0.4f; MaxScale = 2.2f; Intensity = 5.f;   LightIntensity = 15000.f; break;
 	case EShinobiBurst::BlackFlameIgnite: Color = ShinobiVfx::Colors::BlackFlame; Duration = 0.5f; MaxScale = 2.5f; Intensity = 3.f; LightIntensity = 15000.f; Core = 0.5f; break;
+	case EShinobiBurst::Shockwave:    Color = ShinobiVfx::Colors::Smoke;     Duration = 0.5f; MaxScale = 6.f;  Intensity = 1.5f;  LightIntensity = 0.f;     Core = 0.1f; break;
+	case EShinobiBurst::Swirl:        Color = ShinobiVfx::Colors::Chakra;    Duration = 0.5f; MaxScale = 2.f;  Intensity = 3.f;   LightIntensity = 10000.f; Core = 0.4f; break;
+	case EShinobiBurst::TeleportFlash: Color = ShinobiVfx::Colors::Lightning; Duration = 0.3f; MaxScale = 2.5f; Intensity = 4.f;   LightIntensity = 30000.f; break;
+	case EShinobiBurst::Crumble:      Color = FLinearColor(0.35f, 0.22f, 0.1f); Duration = 0.5f; MaxScale = 3.f; Intensity = 1.f;  LightIntensity = 0.f;     Core = 0.5f; break;
+	case EShinobiBurst::Splash:       Color = ShinobiVfx::Colors::Chakra;    Duration = 0.5f; MaxScale = 3.f;  Intensity = 2.f;   LightIntensity = 0.f;     Core = 0.4f; break;
 	}
 	MaxScale *= Scale;
 	SphereMaterial = Kind == EShinobiBurst::FireBreath || Kind == EShinobiBurst::BlackFlameIgnite
@@ -217,6 +224,51 @@ bool AShinobiBurst::BuildCards()
 			const float Along = (40.f + Index * 70.f) * S;
 			AddCard(Plane, ESprite::Flame, White, 1.3f, GetActorForwardVector() * Along, FVector2D(110.f + 28.f * Index, 220.f + 56.f * Index) * S, 0.f, false, true, Along / 2500.f);
 		}
+		break;
+	case EShinobiBurst::Shockwave:
+		// Almighty Push: a ring of force rolling out along the ground and dust thrown up around the caster.
+		Duration = 0.7f;
+		AddCard(Plane, ESprite::Ring, White, 1.5f, FVector::ZeroVector, FVector2D(1300.f, 1300.f) * S, 0.f, true);
+		for (int32 Index = 0; Index < 5; ++Index)
+		{
+			AddCard(Plane, ESprite::Smoke, FLinearColor(0.72f, 0.66f, 0.58f), 1.f, Around(Random.FRandRange(150.f, 320.f) * S, Index * 1.26f + Random.FRandRange(0.f, 0.5f)), FVector2D(300.f, 380.f) * S, 90.f * S);
+		}
+		break;
+	case EShinobiBurst::TeleportFlash:
+		// Flying Raijin: a bright flash and a few bolts where the caster lands.
+		Duration = 0.45f;
+		AddCard(Plane, ESprite::Burst, FLinearColor(1.f, 0.95f, 0.6f), 2.f, FVector(0.f, 0.f, 20.f), FVector2D(440.f, 440.f) * S);
+		AddCard(Plane, ESprite::Ring, FLinearColor(1.f, 0.9f, 0.5f), 1.6f, FVector::ZeroVector, FVector2D(480.f, 480.f) * S, 0.f, true);
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			AddCard(Plane, ESprite::Lightning, White, 2.5f, Around(Random.FRandRange(10.f, 60.f) * S, Random.FRandRange(0.f, 2.f * PI)), FVector2D(110.f, 270.f) * S, 0.f, false, true);
+		}
+		break;
+	case EShinobiBurst::Crumble:
+		// Earth Wall breaking: dust and grit along the wall's width (the burst is spawned with the wall's rotation).
+		Duration = 0.8f;
+		for (int32 Index = 0; Index < 5; ++Index)
+		{
+			AddCard(Plane, ESprite::Smoke, FLinearColor(0.38f, 0.28f, 0.18f), 1.f, GetActorRightVector() * (Index - 2) * 90.f * S, FVector2D(240.f, 320.f) * S, 110.f * S);
+		}
+		AddCard(Plane, ESprite::Ember, FLinearColor(0.5f, 0.38f, 0.25f), 1.f, FVector::ZeroVector, FVector2D(300.f, 500.f) * S, 80.f * S);
+		break;
+	case EShinobiBurst::Splash:
+		// Water Wall breaking: a ring of spray and a burst of light.
+		Duration = 0.6f;
+		AddCard(Plane, ESprite::Ring, FLinearColor(0.4f, 0.7f, 1.f), 1.5f, FVector::ZeroVector, FVector2D(700.f, 700.f) * S, 0.f, true);
+		AddCard(Plane, ESprite::Burst, FLinearColor(0.5f, 0.8f, 1.f), 1.2f, FVector(0.f, 0.f, 80.f), FVector2D(380.f, 380.f) * S);
+		for (int32 Index = 0; Index < 2; ++Index)
+		{
+			AddCard(Plane, ESprite::Ember, FLinearColor(0.5f, 0.8f, 1.f), 1.5f, GetActorRightVector() * (Index ? 120.f : -120.f) * S, FVector2D(260.f, 440.f) * S, 90.f * S, false, true);
+		}
+		break;
+	case EShinobiBurst::Swirl:
+		// Kamui: a spiral turning on the ground and a soft flash, in chakra blue.
+		Duration = 0.7f;
+		AddCard(Plane, ESprite::Vortex, FLinearColor(0.4f, 0.7f, 1.f), 2.f, FVector::ZeroVector, FVector2D(520.f, 520.f) * S, 0.f, true, false, 0.f);
+		Cards.Last().Spin = 360.f;
+		AddCard(Plane, ESprite::Burst, FLinearColor(0.5f, 0.8f, 1.f), 1.2f, FVector(0.f, 0.f, 90.f), FVector2D(380.f, 380.f) * S);
 		break;
 	default:
 		return false;

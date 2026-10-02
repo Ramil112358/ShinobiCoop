@@ -1,4 +1,4 @@
-"""HUD art: the unit-frame portrait and the four jutsu icons. Idempotent (re-imports in place); close the GUI editor.
+"""HUD art: the unit-frame portrait and the jutsu icons. Idempotent (re-imports in place); close the GUI editor.
 
 Source PNGs in SourceArt/UI/ (painted in Gemini / ChatGPT from the prompts in the HUD commit; square, ~1024 px):
   portrait.png                 -> /Game/Shinobi/UI/T_Portrait        (UShinobiHUDWidget's PortraitPath)
@@ -20,6 +20,11 @@ TEXTURES = {
     "jutsu_chidori.png": ("T_Jutsu_Chidori", 128),
     "jutsu_rasengan.png": ("T_Jutsu_Rasengan", 128),
     "jutsu_amaterasu.png": ("T_Jutsu_Amaterasu", 128),
+    "jutsu_teleport.png": ("T_Jutsu_Teleport", 128),
+    "jutsu_kamui.png": ("T_Jutsu_Kamui", 128),
+    "jutsu_almightypush.png": ("T_Jutsu_AlmightyPush", 128),
+    "jutsu_earthwall.png": ("T_Jutsu_EarthWall", 128),
+    "jutsu_waterwall.png": ("T_Jutsu_WaterWall", 128),
 }
 
 

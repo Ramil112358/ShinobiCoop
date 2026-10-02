@@ -20,12 +20,25 @@ UShinobiJutsuAbility::UShinobiJutsuAbility()
 	SetAssetTags(FGameplayTagContainer(ShinobiTags::Ability_Jutsu));
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Dodging);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_ChakraCharging);
+	ActivationBlockedTags.AddTag(ShinobiTags::State_Phased); // Kamui: no attacking from the other side
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Melee); // a jutsu can finish a combo
 	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_Jutsu);
 	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_Melee);
 	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);
 	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_ChakraCharge);
+}
+
+bool UShinobiJutsuAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, FGameplayTagContainer* OptionalRelevantTags) const
+{
+	if (!Super::CanActivateAbility(Handle, ActorInfo, SourceTags, TargetTags, OptionalRelevantTags))
+	{
+		return false;
+	}
+	// A player's key fires the current page's jutsu. Enemy specs have no input slot and no page.
+	const UAbilitySystemComponent* ASC = ActorInfo ? ActorInfo->AbilitySystemComponent.Get() : nullptr;
+	const FGameplayAbilitySpec* Spec = ASC ? ASC->FindAbilitySpecFromHandle(Handle) : nullptr;
+	return !Spec || Spec->InputID == INDEX_NONE || ASC->HasMatchingGameplayTag(ShinobiTags::JutsuPage(Page));
 }
 
 void UShinobiJutsuAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
@@ -312,25 +325,6 @@ FShinobiJutsuSlotState UShinobiJutsuAbility::GetSlotState(const UAbilitySystemCo
 	}
 	State.bAffordable = ASC.GetNumericAttribute(UShinobiAttributeSet::GetChakraAttribute()) >= ChakraCost;
 	return State;
-}
-
-void UShinobiJutsuAbility::GetAimViewPoint(FVector& OutLocation, FRotator& OutRotation) const
-{
-	OutLocation = FVector::ZeroVector;
-	OutRotation = FRotator::ZeroRotator;
-	const APawn* Pawn = Cast<APawn>(GetAvatarActorFromActorInfo());
-	if (!Pawn)
-	{
-		return;
-	}
-	if (const AController* Controller = Pawn->GetController())
-	{
-		Controller->GetPlayerViewPoint(OutLocation, OutRotation);
-	}
-	else
-	{
-		Pawn->GetActorEyesViewPoint(OutLocation, OutRotation);
-	}
 }
 
 bool UShinobiJutsuAbility::TraceAim(float Range, float Radius, FHitResult& OutHit) const

@@ -7,7 +7,12 @@
     {"asset_id": "cde44acf-65bd-4213-bd18-0ce1f4119cf7", "file": "VFX/energy_sheet.png", "label": "lightning x4, ring, vortex, slash, burst 4x2"},
     {"asset_id": "786cce56-6d11-4a0c-a2c6-355e876c572d", "file": "UI/status_icons_sheet.png", "label": "status medallions: burn, black flame, shock, stagger 2x2"},
     {"asset_id": "8bc2c6bf-de58-4665-8dc4-3282f96190dc", "file": "World/forest_path.png", "label": "terrain v1 forest path (washed out, rejected)"},
-    {"asset_id": "a4e6a82b-9fd2-48c0-8981-afff7329856c", "file": "World/forest_path_v2.png", "label": "terrain v2 forest path (gemini-3.1-flash, detailed, smeared seams)"}
+    {"asset_id": "a4e6a82b-9fd2-48c0-8981-afff7329856c", "file": "World/forest_path_v2.png", "label": "terrain v2 forest path (gemini-3.1-flash, detailed, smeared seams)"},
+    {"asset_id": "35dbf635-09c1-4d23-8760-ebf535afa26a", "file": "UI/jutsu_teleport.png", "label": "Teleport jutsu icon, gpt-image-2 low 1K (2 credits); copy in SourceArt/UI"},
+    {"asset_id": "5bda0c86-d523-4844-8223-752461b044bf", "file": "UI/jutsu_kamui.png", "label": "Kamui jutsu icon, gpt-image-2 low 1K (2 credits); copy in SourceArt/UI"},
+    {"asset_id": "41e38ef9-eeff-4ae9-b032-50004fb74ac2", "file": "UI/jutsu_almightypush.png", "label": "Almighty Push jutsu icon, gpt-image-2 low 1K (2 credits); copy in SourceArt/UI"},
+    {"asset_id": "0fdc09eb-009c-4340-8e50-2c792847faa2", "file": "UI/jutsu_earthwall.png", "label": "Earth Wall jutsu icon, gpt-image-2 low 1K (2 credits); copy in SourceArt/UI"},
+    {"asset_id": "1065c23d-539f-4b50-b6dd-cf35c7424a51", "file": "UI/jutsu_waterwall.png", "label": "Water Wall jutsu icon, gpt-image-2 low 1K (2 credits); copy in SourceArt/UI"}
   ],
   "ui_kits": [
     {"ui_kit_id": "9b4146da-7bb2-489d-a6ca-65bcee0ef703", "name": "Shinobi HUD"}

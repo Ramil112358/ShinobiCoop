@@ -9,6 +9,7 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiCombat.h"
+#include "Shinobi/ShinobiDamageable.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
 #include "Shinobi/VFX/ShinobiFirePatch.h"
 #include "Shinobi/VFX/ShinobiVfx.h"
@@ -141,8 +142,18 @@ void AShinobiProjectile::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 void AShinobiProjectile::OnOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
 	const AShinobiCharacterBase* Caster = Cast<AShinobiCharacterBase>(GetInstigator());
+	if (IShinobiDamageable* Wall = Cast<IShinobiDamageable>(OtherActor))
+	{
+		// A wall: the other team's shots break on it and hurt it, the owner's team's fly through.
+		if (HasAuthority() && Caster && Wall->GetDamageableTeam() != Caster->GetTeam())
+		{
+			Wall->ReceiveShinobiDamage(DirectDamage, Caster);
+			Explode(nullptr, bFromSweep ? FVector(SweepResult.Location) : GetActorLocation());
+		}
+		return;
+	}
 	AShinobiCharacterBase* Target = Cast<AShinobiCharacterBase>(OtherActor);
-	if (HasAuthority() && Caster && Caster->IsHostileTo(Target))
+	if (HasAuthority() && Caster && Caster->IsHostileTo(Target) && !Target->IsPhased()) // Kamui: shots fly through
 	{
 		// A sweep overlap reports the point of first contact; GetActorLocation() is the end of the move, up to
 		// 125 units past it.

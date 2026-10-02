@@ -49,6 +49,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
 	TSoftObjectPtr<UTexture2D> Icon;
 
+	/** Which page of the player's jutsu this sits on (keys 1-4 fire the current page's). Enemies have no input, so they ignore it. */
+	UPROPERTY(EditDefaultsOnly, Category = "Jutsu", meta = (ClampMin = "1", ClampMax = "5"))
+	int32 Page = 1;
+
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
 	float ChakraCost = 0.f;
 
@@ -82,6 +86,7 @@ public:
 	FShinobiJutsuSlotState GetSlotState(const UAbilitySystemComponent& ASC) const;
 
 	virtual const FGameplayTagContainer* GetCooldownTags() const override { return &CooldownTags; }
+	virtual bool CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags = nullptr, const FGameplayTagContainer* TargetTags = nullptr, FGameplayTagContainer* OptionalRelevantTags = nullptr) const override;
 	virtual bool CheckCost(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, FGameplayTagContainer* OptionalRelevantTags = nullptr) const override;
 	virtual void ApplyCost(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo) const override;
 	virtual void ApplyCooldown(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo) const override;
@@ -96,9 +101,6 @@ protected:
 	virtual void ExecuteJutsu() PURE_VIRTUAL(UShinobiJutsuAbility::ExecuteJutsu, );
 
 	void EndJutsu();
-
-	/** Players: the camera (the server has the client's from ServerUpdateCamera). AI and tests: the eyes. */
-	void GetAimViewPoint(FVector& OutLocation, FRotator& OutRotation) const;
 
 	/** Sphere-sweeps along the aim on ECC_Pawn (hits characters and world geometry), ignoring the caster.
 	 * Range counts from the caster, not from the camera behind it. */

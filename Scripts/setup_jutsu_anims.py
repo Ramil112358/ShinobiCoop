@@ -19,7 +19,13 @@ MIXAMO_SKELETON_PATH = "/Game/Shinobi/Mixamo/Power_Up_30fps_Skeleton.Power_Up_30
 MANNY_MESH_PATH = "/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"
 RETARGETER_PATH = "/Game/Shinobi/Retarget/RTG_MixamoToManny.RTG_MixamoToManny"
 
-JUTSU = ("Fireball", "Chidori", "Rasengan", "Amaterasu")
+ALL_PHASES = ("Seal", "Charge", "Release")
+# Which phases each jutsu has a clip for (the new ones have no charge clip unless charging does something).
+JUTSU = {
+    "Fireball": ALL_PHASES, "Chidori": ALL_PHASES, "Rasengan": ALL_PHASES, "Amaterasu": ALL_PHASES,
+    "AlmightyPush": ALL_PHASES,
+    "Teleport": ("Seal", "Release"), "Kamui": ("Seal", "Release"), "EarthWall": ("Seal", "Release"), "WaterWall": ("Seal", "Release"),
+}
 # Phase -> (blend in, blend out) seconds. The seals and the charge hand over to the next phase quickly; the release
 # blends back out to locomotion more slowly.
 PHASES = {"Seal": (0.1, 0.1), "Charge": (0.1, 0.1), "Release": (0.05, 0.25)}
@@ -123,9 +129,10 @@ mixamo_mesh = load(MIXAMO_MESH_PATH)
 skeleton = load(MIXAMO_SKELETON_PATH)
 manny_mesh = load(MANNY_MESH_PATH)
 retargeter = load(RETARGETER_PATH)
-for jutsu in JUTSU:
+for jutsu, phases in JUTSU.items():
     remove_old_single_clip(jutsu)
-    for phase, blends in PHASES.items():
+    for phase in phases:
+        blends = PHASES[phase]
         name = f"{jutsu}_{phase}"
         source = import_clip(name, name, skeleton)
         build_montage(name, retarget(source, name, mixamo_mesh, manny_mesh, retargeter), blends)

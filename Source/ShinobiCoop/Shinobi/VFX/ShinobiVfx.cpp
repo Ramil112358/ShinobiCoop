@@ -53,6 +53,16 @@ namespace ShinobiVfx
 		return Flame;
 	}
 
+	UMaterialInstanceDynamic* MakePhased(UObject* Outer, float Opacity)
+	{
+		UMaterialInstanceDynamic* Ghost = MakeInstance(Outer, TEXT("/Game/Shinobi/VFX/M_Phased.M_Phased"));
+		if (Ghost)
+		{
+			Ghost->SetScalarParameterValue(TEXT("Opacity"), Opacity);
+		}
+		return Ghost;
+	}
+
 	UMaterialInstanceDynamic* MakeStreak(UObject* Outer, const FLinearColor& Color)
 	{
 		UMaterialInstanceDynamic* Streak = MakeInstance(Outer, TEXT("/Game/Shinobi/VFX/M_Streak.M_Streak"));

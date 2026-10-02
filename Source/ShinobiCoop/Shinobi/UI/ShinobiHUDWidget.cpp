@@ -114,6 +114,7 @@ TSharedRef<SWidget> UShinobiHUDWidget::RebuildWidget()
 
 		BuildUnitFrame(Root);
 		BuildJutsuSlots(Root);
+		BuildPagePips(Root);
 
 		WaveText = AddCanvasText(Root, TEXT("WaveText"), FAnchors(0.5f, 0.f), FVector2D(0.5f, 0.f), FVector2D(0.f, 24.f), 22, ETextJustify::Center);
 		RootCanvas = Root;
@@ -370,6 +371,7 @@ void UShinobiHUDWidget::BuildJutsuSlots(UCanvasPanel* Root)
 		NameSlot->SetHorizontalAlignment(HAlign_Center);
 		NameSlot->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
 
+		SlotColumns.Add(Column);
 		SlotFrames.Add(Frame);
 		SlotIcons.Add(Icon);
 		SlotFallbacks.Add(Fallback);
@@ -380,6 +382,28 @@ void UShinobiHUDWidget::BuildJutsuSlots(UCanvasPanel* Root)
 	}
 	SlotFlashUntil.Init(0.0, NumJutsuSlots);
 	SlotJutsu.Init(nullptr, NumJutsuSlots);
+}
+
+void UShinobiHUDWidget::BuildPagePips(UCanvasPanel* Root)
+{
+	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("PagePips"));
+	UCanvasPanelSlot* RowSlot = Root->AddChildToCanvas(Row);
+	RowSlot->SetAnchors(FAnchors(0.5f, 1.f));
+	RowSlot->SetAlignment(FVector2D(0.5f, 1.f));
+	RowSlot->SetPosition(FVector2D(0.f, -10.f));
+	RowSlot->SetAutoSize(true);
+	for (int32 Page = 1; Page <= ShinobiTags::NumJutsuPages; ++Page)
+	{
+		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		Box->SetWidthOverride(9.f);
+		Box->SetHeightOverride(9.f);
+		Box->SetRenderTransformAngle(45.f); // a diamond, like the Substitution pips without art
+		UBorder* Pip = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+		Pip->SetBrush(RoundedBrush(PipOffColor, 2.f, TrimColor, 1.f));
+		Box->AddChild(Pip);
+		Row->AddChildToHorizontalBox(Box)->SetPadding(FMargin(6.f, 0.f));
+		PagePips.Add(Pip);
+	}
 }
 
 UTextBlock* UShinobiHUDWidget::MakeText(int32 FontSize, const FLinearColor& Tint, bool bBold)
@@ -479,8 +503,9 @@ void UShinobiHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 		const bool bOn = ASC->HasMatchingGameplayTag(StatusTags[Index]);
 		StatusIcons[Index]->SetVisibility(bOn && StatusIcons[Index]->GetBrush().GetResourceObject() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
-	UpdateJutsuSlots(*ASC);
-	UpdateArena(Cast<AShinobiPlayerCharacter>(Pawn));
+	const AShinobiPlayerCharacter* Player = Cast<AShinobiPlayerCharacter>(Pawn);
+	UpdateJutsuSlots(*ASC, Player ? Player->GetJutsuPage() : 1, Player);
+	UpdateArena(Player);
 	UpdateCompass();
 }
 
@@ -637,16 +662,32 @@ void UShinobiHUDWidget::UpdateArena(const AShinobiPlayerCharacter* Player)
 	HintText->SetText(FText::FromString(Hint));
 }
 
-void UShinobiHUDWidget::UpdateJutsuSlots(const UAbilitySystemComponent& ASC)
+void UShinobiHUDWidget::UpdateJutsuSlots(const UAbilitySystemComponent& ASC, int32 Page, const AShinobiPlayerCharacter* Player)
 {
 	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
-	// ponytail: per-frame poll of the granted abilities, like the bars; fine for a handful of specs
+	for (int32 Index = 0; Index < PagePips.Num(); ++Index)
+	{
+		PagePips[Index]->SetBrush(RoundedBrush(Index + 1 == Page ? TrimColor : PipOffColor, 2.f, TrimColor, 1.f));
+		PagePips[Index]->GetParent()->SetVisibility(!Player || Player->PageHasJutsu(Index + 1) ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	}
+	TArray<const UShinobiJutsuAbility*, TInlineAllocator<NumJutsuSlots>> OnPage;
+	OnPage.Init(nullptr, NumJutsuSlots);
 	for (const FGameplayAbilitySpec& Spec : ASC.GetActivatableAbilities())
 	{
 		const UShinobiJutsuAbility* Jutsu = Cast<UShinobiJutsuAbility>(Spec.Ability);
-		const int32 Index = Jutsu ? JutsuSlotIndex(Jutsu->InputID) : INDEX_NONE;
-		if (!SlotFrames.IsValidIndex(Index))
+		const int32 Index = Jutsu && Jutsu->Page == Page ? JutsuSlotIndex(Jutsu->InputID) : INDEX_NONE;
+		if (OnPage.IsValidIndex(Index))
 		{
+			OnPage[Index] = Jutsu;
+		}
+	}
+	for (int32 Index = 0; Index < NumJutsuSlots; ++Index)
+	{
+		const UShinobiJutsuAbility* Jutsu = OnPage[Index];
+		SlotColumns[Index]->SetVisibility(Jutsu ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Hidden);
+		if (!Jutsu)
+		{
+			SlotJutsu[Index] = nullptr; // refill the icon when a jutsu comes back to this slot
 			continue;
 		}
 		if (SlotJutsu[Index] != Jutsu)
@@ -695,7 +736,16 @@ void UShinobiHUDWidget::BindFailureFlash(UAbilitySystemComponent* ASC)
 void UShinobiHUDWidget::OnAbilityFailed(const UGameplayAbility* Ability, const FGameplayTagContainer& Reasons)
 {
 	const UShinobiJutsuAbility* Jutsu = Cast<UShinobiJutsuAbility>(Ability);
-	const int32 Index = Jutsu ? JutsuSlotIndex(Jutsu->InputID) : INDEX_NONE;
+	// Off-page jutsu share this key and fail by design; during Kamui and the Teleport window the same key is
+	// answered by another ability, so the jutsu's own failure is expected too.
+	const AShinobiPlayerCharacter* Player = Cast<AShinobiPlayerCharacter>(GetOwningPlayerPawn());
+	const UAbilitySystemComponent* ASC = BoundASC.Get();
+	if (!Jutsu || !Player || !ASC || Jutsu->Page != Player->GetJutsuPage()
+		|| ASC->HasMatchingGameplayTag(ShinobiTags::State_Phased) || ASC->HasMatchingGameplayTag(ShinobiTags::State_TeleportMarked))
+	{
+		return;
+	}
+	const int32 Index = JutsuSlotIndex(Jutsu->InputID);
 	if (SlotFlashUntil.IsValidIndex(Index) && GetWorld())
 	{
 		SlotFlashUntil[Index] = GetWorld()->GetTimeSeconds() + FlashSeconds;
