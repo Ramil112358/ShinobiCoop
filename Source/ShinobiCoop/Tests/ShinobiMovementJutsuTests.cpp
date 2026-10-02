@@ -458,6 +458,24 @@ bool FShinobiTeleportThrowTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiTeleportKunaiModelTest, "ShinobiCoop.Teleport.KunaiWearsTheImportedModel", ShinobiTestFlags)
+bool FShinobiTeleportKunaiModelTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	const AShinobiMarkerKunai* Kunai = AShinobiMarkerKunai::Spawn(W.World, P, FVector(0.f, 0.f, 500.f), FRotator::ZeroRotator);
+	const UStaticMeshComponent* Mesh = Kunai ? Kunai->FindComponentByClass<UStaticMeshComponent>() : nullptr;
+	const UStaticMesh* Asset = Mesh ? Mesh->GetStaticMesh() : nullptr;
+	if (TestNotNull(TEXT("A kunai with a mesh asset"), Asset))
+	{
+		TestEqual(TEXT("The Hiraishin model (run Scripts/setup_marker_kunai.py if this is the cone)"), Asset->GetName(), FString(TEXT("SM_MarkerKunai")));
+		// Tip at the origin pointing +X: the mesh extends back along -X, about 49 cm.
+		const FBox Bounds = Asset->GetBoundingBox();
+		TestTrue(FString::Printf(TEXT("tip forward (X from %.0f to %.0f)"), Bounds.Min.X, Bounds.Max.X), Bounds.Max.X < 5.0 && Bounds.Min.X < -40.0 && Bounds.Min.X > -60.0);
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiTeleportJumpTest, "ShinobiCoop.Teleport.RepressJumpsToEachKunaiThenEnds", ShinobiTestFlags)
 bool FShinobiTeleportJumpTest::RunTest(const FString& Parameters)
 {

@@ -81,3 +81,10 @@ Not wired: the generated forest-floor terrain textures (`SourceArt/SpriteCook/Wo
 extraction); Sketchfab "London Eye" (CMBC), "The Shard" and "The Gherkin" (aerial photogrammetry with city tiles baked
 in, unclear provenance); AccuCities CGTrader samples (non-commercial licence). Before a public release, check the
 remaining trademarks: the TX4 taxi and double-decker bus shapes, London Eye and landmark names in marketing.
+
+## Jutsu props
+
+- **Original** (this project): the Hiraishin marker kunai for Teleport (`Scripts/character/make_marker_kunai.py`, imported by
+  `Scripts/setup_marker_kunai.py`). Two Hyper3D Rodin generations (a dagger and a cross-shaped blade) were tried and rejected, so no
+  Rodin output ships. The Earth Wall wears Poly Haven's rock_09 (CC0, already in the world library); the Water Wall, Kamui ghost and
+  all jutsu materials are built by `Scripts/setup_vfx.py`.

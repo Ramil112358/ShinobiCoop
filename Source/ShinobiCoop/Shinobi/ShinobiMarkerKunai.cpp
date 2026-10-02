@@ -62,6 +62,14 @@ AShinobiMarkerKunai* AShinobiMarkerKunai::Spawn(UWorld* World, AShinobiCharacter
 void AShinobiMarkerKunai::BeginPlay()
 {
 	Super::BeginPlay();
+	// The Hiraishin model (Scripts/character/make_marker_kunai.py, imported by Scripts/setup_marker_kunai.py): tip at the
+	// origin, pointing +X. Until it is imported the cone stands in.
+	if (UStaticMesh* Model = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Shinobi/Jutsu/SM_MarkerKunai.SM_MarkerKunai"), nullptr, LOAD_NoWarn | LOAD_Quiet))
+	{
+		Mesh->SetStaticMesh(Model);
+		Mesh->SetRelativeRotation(FRotator::ZeroRotator);
+		Mesh->SetRelativeScale3D(FVector::OneVector);
+	}
 	if (!HasAuthority())
 	{
 		return;
