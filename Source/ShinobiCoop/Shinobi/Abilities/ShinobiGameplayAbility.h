@@ -39,6 +39,9 @@ protected:
 	AShinobiCharacterBase* GetShinobiCharacter() const;
 	UShinobiMovementComponent* GetShinobiMovement() const;
 
+	/** Players: the camera (the server has the client's from ServerUpdateCamera). AI and tests: the eyes. */
+	void GetAimViewPoint(FVector& OutLocation, FRotator& OutRotation) const;
+
 	/** Applies an effect class (no SetByCaller) to the owner. */
 	FActiveGameplayEffectHandle ApplyEffectToSelf(TSubclassOf<UGameplayEffect> EffectClass) const;
 

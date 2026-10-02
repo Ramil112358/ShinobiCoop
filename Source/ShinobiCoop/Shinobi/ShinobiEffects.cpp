@@ -208,6 +208,13 @@ UGE_Kamui::UGE_Kamui()
 	UseSingleRefreshingStack();
 }
 
+UGE_TeleportMarked::UGE_TeleportMarked()
+{
+	SetDuration(Seconds);
+	GrantTag(ShinobiTags::State_TeleportMarked);
+	UseSingleRefreshingStack();
+}
+
 UGE_JutsuCooldown::UGE_JutsuCooldown()
 {
 	DurationPolicy = EGameplayEffectDurationType::HasDuration;

@@ -183,6 +183,16 @@ public:
 	UGE_Kamui();
 };
 
+/** Teleport's jump window: 6 s of State.TeleportMarked, while the thrown kunai stand. */
+UCLASS()
+class SHINOBICOOP_API UGE_TeleportMarked : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	static constexpr float Seconds = 6.f;
+	UGE_TeleportMarked();
+};
+
 /** Jutsu cooldown. Duration: SetByCaller Data.Cooldown. The jutsu's Cooldown.Jutsu.* tag is added to each spec as a
  * dynamic granted tag (UShinobiJutsuAbility::ApplyCooldown), so one class serves all four jutsu. */
 UCLASS()

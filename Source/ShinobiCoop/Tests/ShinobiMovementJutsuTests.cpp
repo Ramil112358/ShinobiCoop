@@ -3,7 +3,13 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Components/CapsuleComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/CollisionProfile.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
 #include "Shinobi/ShinobiCombat.h"
+#include "Shinobi/ShinobiMarkerKunai.h"
+#include "Shinobi/Abilities/GA_Teleport.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/Abilities/GA_Fireball.h"
 #include "Shinobi/Abilities/GA_Melee.h"
@@ -375,6 +381,154 @@ bool FShinobiKamuiProjectileTest::RunTest(const FString& Parameters)
 	W.Tick(0.5f); // 3000 u/s: through P's spot at 300 after ~0.2 s
 	TestTrue(TEXT("The kunai passed through instead of bursting"), Kunai.IsValid());
 	TestEqual(TEXT("Unhurt"), ShinobiTest::Get(P, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
+	return true;
+}
+
+namespace
+{
+	/** A 100-unit cube scaled into a wall for the marker kunai to stick in (the test world is empty). */
+	AStaticMeshActor* SpawnWallBlock(FShinobiTestWorld& W, const FVector& Location, const FVector& Scale)
+	{
+		AStaticMeshActor* Block = W.World->SpawnActor<AStaticMeshActor>(Location, FRotator::ZeroRotator);
+		Block->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+		Block->GetStaticMeshComponent()->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")));
+		Block->GetStaticMeshComponent()->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+		Block->SetActorScale3D(Scale);
+		return Block;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiTeleportThrowTest, "ShinobiCoop.Teleport.ThrowsThreeKunaiAndMarks", ShinobiTestFlags)
+bool FShinobiTeleportThrowTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	SpawnWallBlock(W, FVector(1600.f, 0.f, 0.f), FVector(1.f, 30.f, 30.f));
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(2);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	TestEqual(TEXT("Cost 25 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 75.f);
+	W.Tick(1.2f);
+
+	TestEqual(TEXT("Three kunai"), ShinobiTest::CountActors<AShinobiMarkerKunai>(W), 3);
+	for (TActorIterator<AShinobiMarkerKunai> It(W.World); It; ++It)
+	{
+		TestTrue(TEXT("each stuck in the wall"), It->IsStuck());
+	}
+	TestTrue(TEXT("The jump window is open"), ShinobiTest::HasTag(P, ShinobiTags::State_TeleportMarked));
+	TestTrue(TEXT("Cooldown started at the throw"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Teleport));
+	TestFalse(TEXT("The jutsu itself is over"), ShinobiTest::IsActive(P, UGA_Teleport::StaticClass()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiTeleportJumpTest, "ShinobiCoop.Teleport.RepressJumpsToEachKunaiThenEnds", ShinobiTestFlags)
+bool FShinobiTeleportJumpTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	SpawnWallBlock(W, FVector(1600.f, 0.f, 0.f), FVector(1.f, 30.f, 30.f));
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(2);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(1.5f);
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(0.2f);
+	TestTrue(FString::Printf(TEXT("Jumped to the wall (X=%.0f)"), P->GetActorLocation().X), P->GetActorLocation().X > 1000.0);
+	TestEqual(TEXT("one kunai used"), ShinobiTest::CountActors<AShinobiMarkerKunai>(W), 2);
+	TestTrue(TEXT("window still open"), ShinobiTest::HasTag(P, ShinobiTags::State_TeleportMarked));
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(0.2f);
+	TestEqual(TEXT("second kunai used"), ShinobiTest::CountActors<AShinobiMarkerKunai>(W), 1);
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(0.2f);
+	TestEqual(TEXT("third kunai used"), ShinobiTest::CountActors<AShinobiMarkerKunai>(W), 0);
+	TestFalse(TEXT("window closed with the last one"), ShinobiTest::HasTag(P, ShinobiTags::State_TeleportMarked));
+	TestTrue(TEXT("The jumps cost nothing"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()) >= 75.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiTeleportStrikeTest, "ShinobiCoop.Teleport.ArrivalStrikesNearbyHostiles", ShinobiTestFlags)
+bool FShinobiTeleportStrikeTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	SpawnWallBlock(W, FVector(1600.f, 0.f, 0.f), FVector(1.f, 30.f, 30.f));
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(1400.f, 0.f, 0.f));
+	ShinobiTest::Hover(P);
+	ShinobiTest::Hover(E);
+	P->ApplyJutsuPage(2);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(1.5f);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1); // aimed along +X: the middle kunai, 100 from the enemy
+	W.Tick(0.2f);
+	TestEqual(TEXT("The arrival hits for 20"), ShinobiTest::Get(E, UShinobiAttributeSet::GetHealthAttribute()), 480.f);
+	TestTrue(TEXT("and staggers"), ShinobiTest::HasTag(E, ShinobiTags::State_Staggered));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiTeleportExpiryTest, "ShinobiCoop.Teleport.WindowExpiresAndRemovesKunai", ShinobiTestFlags)
+bool FShinobiTeleportExpiryTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	SpawnWallBlock(W, FVector(1600.f, 0.f, 0.f), FVector(1.f, 30.f, 30.f));
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(2);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(1.5f);
+	W.Tick(5.2f); // 6.7 s after the cast, the window is long shut
+
+	TestEqual(TEXT("Kunai gone"), ShinobiTest::CountActors<AShinobiMarkerKunai>(W), 0);
+	TestFalse(TEXT("Window closed"), ShinobiTest::HasTag(P, ShinobiTags::State_TeleportMarked));
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	TestFalse(TEXT("Nothing to jump to"), ShinobiTest::IsActive(P, UGA_TeleportJump::StaticClass()));
+	TestFalse(TEXT("and the jutsu is still cooling down"), ShinobiTest::IsActive(P, UGA_Teleport::StaticClass()));
+	TestEqual(TEXT("Not moved"), P->GetActorLocation().X, 0.0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiTeleportSkyTest, "ShinobiCoop.Teleport.OpenSkyThrowLeavesNothingToJumpTo", ShinobiTestFlags)
+bool FShinobiTeleportSkyTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W; // no wall: the kunai never stick
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(2);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(1.5f);
+	TestEqual(TEXT("The unstuck kunai are gone"), ShinobiTest::CountActors<AShinobiMarkerKunai>(W), 0);
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(0.1f);
+	TestEqual(TEXT("A re-press goes nowhere"), P->GetActorLocation().X, 0.0);
+	TestFalse(TEXT("and nothing is left running"), ShinobiTest::IsActive(P, UGA_TeleportJump::StaticClass()));
+	TestFalse(TEXT("the empty window closes"), ShinobiTest::HasTag(P, ShinobiTags::State_TeleportMarked));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiTeleportForeignTest, "ShinobiCoop.Teleport.ForeignKunaiAreNotUsed", ShinobiTestFlags)
+bool FShinobiTeleportForeignTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	SpawnWallBlock(W, FVector(1600.f, 0.f, 0.f), FVector(1.f, 100.f, 30.f));
+	AShinobiPlayerCharacter* P1 = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiPlayerCharacter* P2 = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, 2000.f, 0.f));
+	ShinobiTest::Hover(P1);
+	ShinobiTest::Hover(P2);
+	P1->ApplyJutsuPage(2);
+	P2->ApplyJutsuPage(2);
+	ShinobiTest::Tap(P2, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(1.5f);
+	TestEqual(TEXT("P2's three kunai stand"), ShinobiTest::CountActors<AShinobiMarkerKunai>(W), 3);
+
+	ShinobiTest::ApplyEffect(P1, UGE_TeleportMarked::StaticClass()); // P1 has an open window but threw nothing
+	ShinobiTest::Tap(P1, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(0.2f);
+	TestEqual(TEXT("P1 did not jump to P2's kunai"), P1->GetActorLocation().X, 0.0);
+	TestEqual(TEXT("and P2's kunai are all still there"), ShinobiTest::CountActors<AShinobiMarkerKunai>(W), 3);
 	return true;
 }
 

@@ -102,9 +102,6 @@ protected:
 
 	void EndJutsu();
 
-	/** Players: the camera (the server has the client's from ServerUpdateCamera). AI and tests: the eyes. */
-	void GetAimViewPoint(FVector& OutLocation, FRotator& OutRotation) const;
-
 	/** Sphere-sweeps along the aim on ECC_Pawn (hits characters and world geometry), ignoring the caster.
 	 * Range counts from the caster, not from the camera behind it. */
 	bool TraceAim(float Range, float Radius, FHitResult& OutHit) const;

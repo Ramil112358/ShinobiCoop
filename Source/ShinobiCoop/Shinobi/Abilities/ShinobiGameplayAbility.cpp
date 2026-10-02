@@ -1,6 +1,8 @@
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
 #include "AbilitySystemComponent.h"
 #include "EngineUtils.h"
+#include "GameFramework/Controller.h"
+#include "GameFramework/Pawn.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiMovementComponent.h"
@@ -26,6 +28,25 @@ UShinobiMovementComponent* UShinobiGameplayAbility::GetShinobiMovement() const
 {
 	const AShinobiCharacterBase* Character = GetShinobiCharacter();
 	return Character ? Cast<UShinobiMovementComponent>(Character->GetCharacterMovement()) : nullptr;
+}
+
+void UShinobiGameplayAbility::GetAimViewPoint(FVector& OutLocation, FRotator& OutRotation) const
+{
+	OutLocation = FVector::ZeroVector;
+	OutRotation = FRotator::ZeroRotator;
+	const APawn* Pawn = Cast<APawn>(GetAvatarActorFromActorInfo());
+	if (!Pawn)
+	{
+		return;
+	}
+	if (const AController* Controller = Pawn->GetController())
+	{
+		Controller->GetPlayerViewPoint(OutLocation, OutRotation);
+	}
+	else
+	{
+		Pawn->GetActorEyesViewPoint(OutLocation, OutRotation);
+	}
 }
 
 FActiveGameplayEffectHandle UShinobiGameplayAbility::ApplyEffectToSelf(TSubclassOf<UGameplayEffect> EffectClass) const
