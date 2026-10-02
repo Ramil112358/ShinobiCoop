@@ -169,6 +169,42 @@ bool FShinobiBarrierLifeTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBarrierBurstTest, "ShinobiCoop.Barrier.BreakingAndExpiringLeaveABurst", ShinobiTestFlags)
+bool FShinobiBarrierBurstTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	const FTransform Base(FRotator::ZeroRotator, FVector(300.f, 0.f, -100.f));
+	const auto FindBurst = [&W](EShinobiBurst Kind) -> const AShinobiBurst*
+	{
+		for (TActorIterator<AShinobiBurst> It(W.World); It; ++It)
+		{
+			if (It->GetKind() == Kind)
+			{
+				return *It;
+			}
+		}
+		return nullptr;
+	};
+
+	AShinobiBarrier::Spawn(W.World, Base, P, EShinobiBarrierKind::Earth)->ReceiveShinobiDamage(400.f, nullptr);
+	W.Tick(0.1f);
+	const AShinobiBurst* Crumble = FindBurst(EShinobiBurst::Crumble);
+	if (TestNotNull(TEXT("A broken earth wall crumbles"), Crumble))
+	{
+		TestEqual(TEXT("at full size"), Crumble->GetScale(), 1.f);
+	}
+
+	AShinobiBarrier::Spawn(W.World, Base, P, EShinobiBarrierKind::Water);
+	W.Tick(6.15f);
+	const AShinobiBurst* Splash = FindBurst(EShinobiBurst::Splash);
+	if (TestNotNull(TEXT("A water wall that runs out splashes"), Splash))
+	{
+		TestEqual(TEXT("at half size"), Splash->GetScale(), 0.5f);
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBarrierReplaceTest, "ShinobiCoop.Barrier.NewWallReplacesOnlyOwnersOldWall", ShinobiTestFlags)
 bool FShinobiBarrierReplaceTest::RunTest(const FString& Parameters)
 {

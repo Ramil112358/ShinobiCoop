@@ -1,4 +1,4 @@
-"""Jutsu VFX materials. Idempotent: rebuilds M_ChakraBodyAura, M_Flame, M_FlameDark, M_Streak and M_Phased from scratch each run.
+"""Jutsu VFX materials. Idempotent: rebuilds M_ChakraBodyAura, M_Flame, M_FlameDark, M_Streak, M_Phased and M_WaterWall from scratch each run.
 
 Close the GUI editor before running: an editor that has this material loaded would silently
 overwrite the regenerated asset on its next Save All.
@@ -290,6 +290,63 @@ def build_phased():
     finish(m, emissive, transmittance)
 
 
+def build_water_wall():
+    """M_WaterWall: the Water Wall's slab. Translucent unlit blue, flowing noise rising through it, brighter at the edges.
+    (Not the river's single-layer-water material: that one lights depth behind a surface, not a vertical slab.) Param: Color, Intensity."""
+    m = fresh_material("M_WaterWall", two_sided=True, blend=unreal.BlendMode.BLEND_TRANSLUCENT)
+    color = node(m, unreal.MaterialExpressionVectorParameter, -1400, -300,
+                 parameter_name="Color", default_value=unreal.LinearColor(0.08, 0.38, 0.9, 1.0))
+    intensity = node(m, unreal.MaterialExpressionScalarParameter, -1400, -150, parameter_name="Intensity", default_value=1.4)
+
+    # Noise climbing through the slab: world position shifted down over time, ~1 cell per 33 units.
+    world_pos = node(m, unreal.MaterialExpressionWorldPosition, -1400, 250)
+    time = node(m, unreal.MaterialExpressionTime, -1400, 350)
+    rise = node(m, unreal.MaterialExpressionMultiply, -1200, 400, const_b=90.0)
+    link(time, rise, "A")
+    xy_zero = node(m, unreal.MaterialExpressionConstant2Vector, -1200, 500, r=0.0, g=0.0)
+    offset = node(m, unreal.MaterialExpressionAppendVector, -1050, 450)
+    link(xy_zero, offset, "A")
+    link(rise, offset, "B")
+    moved = node(m, unreal.MaterialExpressionSubtract, -900, 300)
+    link(world_pos, moved, "A")
+    link(offset, moved, "B")
+    scaled = node(m, unreal.MaterialExpressionMultiply, -750, 300, const_b=0.03)
+    link(moved, scaled, "A")
+    noise = node(m, unreal.MaterialExpressionNoise, -600, 300, scale=1.0, levels=3, output_min=0.0, output_max=1.0)
+    link(scaled, noise, "World Position")
+    rim = node(m, unreal.MaterialExpressionFresnel, -600, 100, exponent=2.0, base_reflect_fraction=0.0)
+
+    # brightness = 0.5 + 0.5 * noise + 0.8 * rim; coverage = 0.45 + 0.35 * noise + 0.2 * rim
+    noise_glow = node(m, unreal.MaterialExpressionMultiply, -400, 300, const_b=0.5)
+    link(noise, noise_glow, "A")
+    rim_glow = node(m, unreal.MaterialExpressionMultiply, -400, 100, const_b=0.8)
+    link(rim, rim_glow, "A")
+    glow_sum = node(m, unreal.MaterialExpressionAdd, -250, 200)
+    link(noise_glow, glow_sum, "A")
+    link(rim_glow, glow_sum, "B")
+    brightness = node(m, unreal.MaterialExpressionAdd, -100, 200, const_b=0.5)
+    link(glow_sum, brightness, "A")
+    ci = node(m, unreal.MaterialExpressionMultiply, -400, -250)
+    link(color, ci, "A")
+    link(intensity, ci, "B")
+    emissive = node(m, unreal.MaterialExpressionMultiply, 100, -100)
+    link(ci, emissive, "A")
+    link(brightness, emissive, "B")
+
+    noise_cover = node(m, unreal.MaterialExpressionMultiply, -400, 500, const_b=0.35)
+    link(noise, noise_cover, "A")
+    rim_cover = node(m, unreal.MaterialExpressionMultiply, -400, 650, const_b=0.2)
+    link(rim, rim_cover, "A")
+    cover_sum = node(m, unreal.MaterialExpressionAdd, -250, 550)
+    link(noise_cover, cover_sum, "A")
+    link(rim_cover, cover_sum, "B")
+    coverage = node(m, unreal.MaterialExpressionAdd, -100, 550, const_b=0.45)
+    link(cover_sum, coverage, "A")
+    transmittance = node(m, unreal.MaterialExpressionOneMinus, 100, 550)
+    link(coverage, transmittance, "")
+    finish(m, emissive, transmittance)
+
+
 remove_if_exists(f"{VFX_DIR}/M_ChakraAura")
 remove_if_exists(f"{VFX_DIR}/M_ChakraRing")
 build_body_aura()
@@ -297,3 +354,4 @@ build_flame("M_Flame", dark=False)
 build_flame("M_FlameDark", dark=True)
 build_streak()
 build_phased()
+build_water_wall()

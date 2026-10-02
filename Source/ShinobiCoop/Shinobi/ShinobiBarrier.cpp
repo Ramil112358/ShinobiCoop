@@ -6,6 +6,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
+#include "Shinobi/VFX/ShinobiBurst.h"
 
 namespace
 {
@@ -111,14 +112,33 @@ void AShinobiBarrier::BeginPlay()
 		SetActorTickEnabled(false);
 		return;
 	}
-	// ponytail: an engine cube in the basic shape material, tinted, until Scripts/setup_barrier_assets.py's rock and water
-	if (UMaterialInterface* Basic = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")))
+	// Earth: Poly Haven's rock_09 PBR material on the slab (stretched with the cube's UVs). Water: M_WaterWall (Scripts/setup_vfx.py).
+	// Either missing: the engine's basic shape material, tinted.
+	const TCHAR* LookPath = Kind == EShinobiBarrierKind::Earth
+		? TEXT("/Game/Shinobi/World/Library/PH_Rock/rock_09/rock_09_2k/Materials/rock_09.rock_09")
+		: TEXT("/Game/Shinobi/VFX/M_WaterWall.M_WaterWall");
+	if (UMaterialInterface* Look = LoadObject<UMaterialInterface>(nullptr, LookPath, nullptr, LOAD_NoWarn | LOAD_Quiet))
+	{
+		Mesh->SetMaterial(0, UMaterialInstanceDynamic::Create(Look, this));
+	}
+	else if (UMaterialInterface* Basic = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial")))
 	{
 		UMaterialInstanceDynamic* Tinted = UMaterialInstanceDynamic::Create(Basic, this);
 		Tinted->SetVectorParameterValue(TEXT("Color"), StatsFor(Kind).Tint);
 		Mesh->SetMaterial(0, Tinted);
 	}
 	Mesh->SetRelativeLocation(FVector(0.f, 0.f, -RiseDepth));
+}
+
+void AShinobiBarrier::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// Broken (full burst) or run out (half): the server spawns it and it replicates to every client.
+	if (EndPlayReason == EEndPlayReason::Destroyed && HasAuthority() && GetWorld() && !GetWorld()->bIsTearingDown)
+	{
+		AShinobiBurst::Spawn(GetWorld(), Kind == EShinobiBarrierKind::Earth ? EShinobiBurst::Crumble : EShinobiBurst::Splash,
+			GetActorLocation() + FVector(0.f, 0.f, 120.f), Health <= 0.f ? 1.f : 0.5f, GetActorRotation());
+	}
+	Super::EndPlay(EndPlayReason);
 }
 
 void AShinobiBarrier::Tick(float DeltaSeconds)

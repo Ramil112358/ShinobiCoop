@@ -225,6 +225,44 @@ bool AShinobiBurst::BuildCards()
 			AddCard(Plane, ESprite::Flame, White, 1.3f, GetActorForwardVector() * Along, FVector2D(110.f + 28.f * Index, 220.f + 56.f * Index) * S, 0.f, false, true, Along / 2500.f);
 		}
 		break;
+	case EShinobiBurst::Shockwave:
+		// Almighty Push: a ring of force rolling out along the ground and dust thrown up around the caster.
+		Duration = 0.7f;
+		AddCard(Plane, ESprite::Ring, White, 1.5f, FVector::ZeroVector, FVector2D(1300.f, 1300.f) * S, 0.f, true);
+		for (int32 Index = 0; Index < 5; ++Index)
+		{
+			AddCard(Plane, ESprite::Smoke, FLinearColor(0.72f, 0.66f, 0.58f), 1.f, Around(Random.FRandRange(150.f, 320.f) * S, Index * 1.26f + Random.FRandRange(0.f, 0.5f)), FVector2D(300.f, 380.f) * S, 90.f * S);
+		}
+		break;
+	case EShinobiBurst::TeleportFlash:
+		// Flying Raijin: a bright flash and a few bolts where the caster lands.
+		Duration = 0.45f;
+		AddCard(Plane, ESprite::Burst, FLinearColor(1.f, 0.95f, 0.6f), 2.f, FVector(0.f, 0.f, 20.f), FVector2D(440.f, 440.f) * S);
+		AddCard(Plane, ESprite::Ring, FLinearColor(1.f, 0.9f, 0.5f), 1.6f, FVector::ZeroVector, FVector2D(480.f, 480.f) * S, 0.f, true);
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			AddCard(Plane, ESprite::Lightning, White, 2.5f, Around(Random.FRandRange(10.f, 60.f) * S, Random.FRandRange(0.f, 2.f * PI)), FVector2D(110.f, 270.f) * S, 0.f, false, true);
+		}
+		break;
+	case EShinobiBurst::Crumble:
+		// Earth Wall breaking: dust and grit along the wall's width (the burst is spawned with the wall's rotation).
+		Duration = 0.8f;
+		for (int32 Index = 0; Index < 5; ++Index)
+		{
+			AddCard(Plane, ESprite::Smoke, FLinearColor(0.38f, 0.28f, 0.18f), 1.f, GetActorRightVector() * (Index - 2) * 90.f * S, FVector2D(240.f, 320.f) * S, 110.f * S);
+		}
+		AddCard(Plane, ESprite::Ember, FLinearColor(0.5f, 0.38f, 0.25f), 1.f, FVector::ZeroVector, FVector2D(300.f, 500.f) * S, 80.f * S);
+		break;
+	case EShinobiBurst::Splash:
+		// Water Wall breaking: a ring of spray and a burst of light.
+		Duration = 0.6f;
+		AddCard(Plane, ESprite::Ring, FLinearColor(0.4f, 0.7f, 1.f), 1.5f, FVector::ZeroVector, FVector2D(700.f, 700.f) * S, 0.f, true);
+		AddCard(Plane, ESprite::Burst, FLinearColor(0.5f, 0.8f, 1.f), 1.2f, FVector(0.f, 0.f, 80.f), FVector2D(380.f, 380.f) * S);
+		for (int32 Index = 0; Index < 2; ++Index)
+		{
+			AddCard(Plane, ESprite::Ember, FLinearColor(0.5f, 0.8f, 1.f), 1.5f, GetActorRightVector() * (Index ? 120.f : -120.f) * S, FVector2D(260.f, 440.f) * S, 90.f * S, false, true);
+		}
+		break;
 	case EShinobiBurst::Swirl:
 		// Kamui: a spiral turning on the ground and a soft flash, in chakra blue.
 		Duration = 0.7f;
