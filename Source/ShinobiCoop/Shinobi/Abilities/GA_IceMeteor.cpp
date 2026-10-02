@@ -16,6 +16,8 @@ UGA_IceMeteor::UGA_IceMeteor()
 	Cooldown = 16.f;
 	WindUp = 0.5f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_IceMeteor);
+	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_IceMeteor_Seal.AM_IceMeteor_Seal")));
+	ReleaseMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_IceMeteor_Release.AM_IceMeteor_Release")));
 }
 
 bool UGA_IceMeteor::PrepareJutsu()

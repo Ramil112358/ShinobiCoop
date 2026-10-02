@@ -13,6 +13,8 @@ UGA_WaterDragon::UGA_WaterDragon()
 	Cooldown = 12.f;
 	WindUp = 0.6f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_WaterDragon);
+	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_WaterDragon_Seal.AM_WaterDragon_Seal")));
+	ReleaseMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_WaterDragon_Release.AM_WaterDragon_Release")));
 }
 
 void UGA_WaterDragon::ExecuteJutsu()

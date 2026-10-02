@@ -16,6 +16,8 @@ UGA_FireMeteor::UGA_FireMeteor()
 	Cooldown = 18.f;
 	WindUp = 0.6f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_FireMeteor);
+	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_FireMeteor_Seal.AM_FireMeteor_Seal")));
+	ReleaseMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_FireMeteor_Release.AM_FireMeteor_Release")));
 }
 
 bool UGA_FireMeteor::PrepareJutsu()

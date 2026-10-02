@@ -25,6 +25,7 @@ JUTSU = {
     "Fireball": ALL_PHASES, "Chidori": ALL_PHASES, "Rasengan": ALL_PHASES, "Amaterasu": ALL_PHASES,
     "AlmightyPush": ALL_PHASES,
     "Teleport": ("Seal", "Release"), "Kamui": ("Seal", "Release"), "EarthWall": ("Seal", "Release"), "WaterWall": ("Seal", "Release"),
+    "FireMeteor": ("Seal", "Release"), "IceMeteor": ("Seal", "Release"), "WaterDragon": ("Seal", "Release"),
 }
 # Phase -> (blend in, blend out) seconds. The seals and the charge hand over to the next phase quickly; the release
 # blends back out to locomotion more slowly.

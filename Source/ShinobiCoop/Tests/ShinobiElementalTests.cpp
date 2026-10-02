@@ -2,7 +2,9 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "Animation/AnimMontage.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/Texture2D.h"
 #include "Engine/CollisionProfile.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
@@ -245,6 +247,20 @@ bool FShinobiWaterDragonWallTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("The enemy before the wall is hit"), ShinobiTest::Get(Before, UShinobiAttributeSet::GetHealthAttribute()), 445.f);
 	TestEqual(TEXT("The one behind it is not"), ShinobiTest::Get(Behind, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
 	TestEqual(TEXT("The dragon is gone"), ShinobiTest::CountActors<AShinobiWaterDragon>(W), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiElementalAssetsTest, "ShinobiCoop.Meteor.ElementalJutsuHaveAnimationsAndIcons", ShinobiTestFlags)
+bool FShinobiElementalAssetsTest::RunTest(const FString& Parameters)
+{
+	// (run Scripts/setup_jutsu_anims.py and Scripts/setup_hud.py if an asset is missing)
+	for (const UShinobiJutsuAbility* Jutsu : { static_cast<const UShinobiJutsuAbility*>(GetDefault<UGA_FireMeteor>()), static_cast<const UShinobiJutsuAbility*>(GetDefault<UGA_IceMeteor>()), static_cast<const UShinobiJutsuAbility*>(GetDefault<UGA_WaterDragon>()) })
+	{
+		const FString Name = Jutsu->DisplayName.ToString();
+		TestNotNull(*(Name + TEXT(" seal montage")), Jutsu->SealMontage.LoadSynchronous());
+		TestNotNull(*(Name + TEXT(" release montage")), Jutsu->ReleaseMontage.LoadSynchronous());
+		TestNotNull(*(Name + TEXT(" icon")), Jutsu->Icon.LoadSynchronous());
+	}
 	return true;
 }
 
