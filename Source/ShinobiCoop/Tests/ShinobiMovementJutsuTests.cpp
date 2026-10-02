@@ -5,6 +5,7 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/Abilities/GA_Fireball.h"
 #include "Shinobi/Enemies/GA_EnemyAttacks.h"
+#include "Shinobi/VFX/ShinobiBurst.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOffPageJutsuTest, "ShinobiCoop.JutsuPages.OffPageJutsuDoesNotFire", ShinobiTestFlags)
 bool FShinobiOffPageJutsuTest::RunTest(const FString& Parameters)
@@ -51,6 +52,23 @@ bool FShinobiServerRejectsPageTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Page 0 is ignored too"), P->GetJutsuPage(), 1);
 	P->ServerSetJutsuPage_Implementation(3);
 	TestEqual(TEXT("A valid page is taken"), P->GetJutsuPage(), 3);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiNewBurstKindsTest, "ShinobiCoop.Burst.NewKindsSpawnAndKeepKindAndScale", ShinobiTestFlags)
+bool FShinobiNewBurstKindsTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	for (const EShinobiBurst Kind : { EShinobiBurst::Shockwave, EShinobiBurst::Swirl, EShinobiBurst::TeleportFlash, EShinobiBurst::Crumble, EShinobiBurst::Splash })
+	{
+		const AShinobiBurst* Burst = AShinobiBurst::Spawn(W.World, Kind, FVector::ZeroVector, 1.5f);
+		if (TestNotNull(TEXT("Burst spawns"), Burst))
+		{
+			TestEqual(TEXT("Kind kept"), Burst->GetKind(), Kind);
+			TestEqual(TEXT("Scale kept"), Burst->GetScale(), 1.5f);
+		}
+	}
+	W.Tick(0.2f); // every kind ticks without a crash (sound and look tables cover the new kinds)
 	return true;
 }
 

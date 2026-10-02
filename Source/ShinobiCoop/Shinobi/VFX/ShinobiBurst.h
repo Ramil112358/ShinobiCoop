@@ -21,6 +21,11 @@ enum class EShinobiBurst : uint8
 	Substitution, // a log left where the player stood, in a puff of smoke
 	FireBreath,       // Fireball: a flame cone from the caster's mouth along the burst's rotation
 	BlackFlameIgnite, // Amaterasu: the black flames catching on the target
+	Shockwave,        // Almighty Push: a ring of force and dust on the ground
+	Swirl,            // Kamui: the spiral the caster slips into or out of
+	TeleportFlash,    // Teleport: the flash where the caster arrives
+	Crumble,          // Earth Wall breaking
+	Splash,           // Water Wall breaking
 };
 
 /**

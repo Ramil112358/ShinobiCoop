@@ -94,7 +94,9 @@ void AShinobiBurst::BeginPlay()
 		SetActorTickEnabled(false);
 		return;
 	}
-	static const EShinobiSfx Sounds[] = { EShinobiSfx::Explosion, EShinobiSfx::Explosion, EShinobiSfx::Zap, EShinobiSfx::Whirr, EShinobiSfx::Poof, EShinobiSfx::Whoosh, EShinobiSfx::Whoosh };
+	static const EShinobiSfx Sounds[] = { EShinobiSfx::Explosion, EShinobiSfx::Explosion, EShinobiSfx::Zap, EShinobiSfx::Whirr, EShinobiSfx::Poof, EShinobiSfx::Whoosh, EShinobiSfx::Whoosh,
+		EShinobiSfx::Explosion, EShinobiSfx::Whirr, EShinobiSfx::Zap, EShinobiSfx::Thud, EShinobiSfx::Poof };
+	static_assert(UE_ARRAY_COUNT(Sounds) == static_cast<int32>(EShinobiBurst::Splash) + 1, "a sound for every burst kind");
 	ShinobiSfx::Play(this, Sounds[static_cast<uint8>(Kind)], GetActorLocation(), Kind == EShinobiBurst::Fire ? 0.7f : 1.f);
 
 	// Mostly-rim shells (low Core) at modest intensity: a solid bright sphere blows out to a white wall under bloom.
@@ -109,6 +111,11 @@ void AShinobiBurst::BeginPlay()
 	case EShinobiBurst::Substitution: Color = ShinobiVfx::Colors::Smoke;     Duration = 0.5f; MaxScale = 2.2f; Intensity = 0.8f;  LightIntensity = 0.f;     Core = 0.6f; break;
 	case EShinobiBurst::FireBreath:   Color = ShinobiVfx::Colors::Fire;      Duration = 0.4f; MaxScale = 2.2f; Intensity = 5.f;   LightIntensity = 15000.f; break;
 	case EShinobiBurst::BlackFlameIgnite: Color = ShinobiVfx::Colors::BlackFlame; Duration = 0.5f; MaxScale = 2.5f; Intensity = 3.f; LightIntensity = 15000.f; Core = 0.5f; break;
+	case EShinobiBurst::Shockwave:    Color = ShinobiVfx::Colors::Smoke;     Duration = 0.5f; MaxScale = 6.f;  Intensity = 1.5f;  LightIntensity = 0.f;     Core = 0.1f; break;
+	case EShinobiBurst::Swirl:        Color = ShinobiVfx::Colors::Chakra;    Duration = 0.5f; MaxScale = 2.f;  Intensity = 3.f;   LightIntensity = 10000.f; Core = 0.4f; break;
+	case EShinobiBurst::TeleportFlash: Color = ShinobiVfx::Colors::Lightning; Duration = 0.3f; MaxScale = 2.5f; Intensity = 4.f;   LightIntensity = 30000.f; break;
+	case EShinobiBurst::Crumble:      Color = FLinearColor(0.35f, 0.22f, 0.1f); Duration = 0.5f; MaxScale = 3.f; Intensity = 1.f;  LightIntensity = 0.f;     Core = 0.5f; break;
+	case EShinobiBurst::Splash:       Color = ShinobiVfx::Colors::Chakra;    Duration = 0.5f; MaxScale = 3.f;  Intensity = 2.f;   LightIntensity = 0.f;     Core = 0.4f; break;
 	}
 	MaxScale *= Scale;
 	SphereMaterial = Kind == EShinobiBurst::FireBreath || Kind == EShinobiBurst::BlackFlameIgnite
