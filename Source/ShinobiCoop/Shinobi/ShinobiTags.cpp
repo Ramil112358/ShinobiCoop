@@ -28,6 +28,19 @@ namespace ShinobiTags
 	UE_DEFINE_GAMEPLAY_TAG(State_Casting_Rasengan, "State.Casting.Rasengan");
 	UE_DEFINE_GAMEPLAY_TAG(State_Casting_Amaterasu, "State.Casting.Amaterasu");
 	UE_DEFINE_GAMEPLAY_TAG(State_Casting_Charging, "State.Casting.Charging");
+	UE_DEFINE_GAMEPLAY_TAG(State_Phased, "State.Phased");
+	UE_DEFINE_GAMEPLAY_TAG(State_TeleportMarked, "State.TeleportMarked");
+	UE_DEFINE_GAMEPLAY_TAG(State_JutsuPage_1, "State.JutsuPage.1");
+	UE_DEFINE_GAMEPLAY_TAG(State_JutsuPage_2, "State.JutsuPage.2");
+	UE_DEFINE_GAMEPLAY_TAG(State_JutsuPage_3, "State.JutsuPage.3");
+	UE_DEFINE_GAMEPLAY_TAG(State_JutsuPage_4, "State.JutsuPage.4");
+	UE_DEFINE_GAMEPLAY_TAG(State_JutsuPage_5, "State.JutsuPage.5");
+
+	FGameplayTag JutsuPage(int32 Page)
+	{
+		const FNativeGameplayTag* Pages[NumJutsuPages] = { &State_JutsuPage_1, &State_JutsuPage_2, &State_JutsuPage_3, &State_JutsuPage_4, &State_JutsuPage_5 };
+		return Pages[FMath::Clamp(Page, 1, NumJutsuPages) - 1]->GetTag();
+	}
 
 	UE_DEFINE_GAMEPLAY_TAG(Ability_Melee, "Ability.Melee");
 	UE_DEFINE_GAMEPLAY_TAG(Ability_Dodge, "Ability.Dodge");
@@ -41,6 +54,11 @@ namespace ShinobiTags
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_Chidori, "Cooldown.Jutsu.Chidori");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_Rasengan, "Cooldown.Jutsu.Rasengan");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_Amaterasu, "Cooldown.Jutsu.Amaterasu");
+	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_Teleport, "Cooldown.Jutsu.Teleport");
+	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_Kamui, "Cooldown.Jutsu.Kamui");
+	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_AlmightyPush, "Cooldown.Jutsu.AlmightyPush");
+	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_EarthWall, "Cooldown.Jutsu.EarthWall");
+	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_WaterWall, "Cooldown.Jutsu.WaterWall");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Substitution, "Cooldown.Substitution");
 
 	UE_DEFINE_GAMEPLAY_TAG(Fail_NoTarget, "Fail.NoTarget");

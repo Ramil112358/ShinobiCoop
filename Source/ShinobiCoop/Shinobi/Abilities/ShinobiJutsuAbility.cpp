@@ -28,6 +28,18 @@ UShinobiJutsuAbility::UShinobiJutsuAbility()
 	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_ChakraCharge);
 }
 
+bool UShinobiJutsuAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, FGameplayTagContainer* OptionalRelevantTags) const
+{
+	if (!Super::CanActivateAbility(Handle, ActorInfo, SourceTags, TargetTags, OptionalRelevantTags))
+	{
+		return false;
+	}
+	// A player's key fires the current page's jutsu. Enemy specs have no input slot and no page.
+	const UAbilitySystemComponent* ASC = ActorInfo ? ActorInfo->AbilitySystemComponent.Get() : nullptr;
+	const FGameplayAbilitySpec* Spec = ASC ? ASC->FindAbilitySpecFromHandle(Handle) : nullptr;
+	return !Spec || Spec->InputID == INDEX_NONE || ASC->HasMatchingGameplayTag(ShinobiTags::JutsuPage(Page));
+}
+
 void UShinobiJutsuAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
 	if (!PrepareJutsu())

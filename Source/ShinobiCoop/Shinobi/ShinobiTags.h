@@ -36,6 +36,19 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Casting_Amaterasu);
 	// A jutsu's charge phase (button held after the seals); the charge visuals grow while it's on.
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Casting_Charging);
+	// Kamui: untouchable and unseen by the AI; the Teleport window: kunai thrown, a re-press jumps to one.
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Phased);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_TeleportMarked);
+
+	// Jutsu pages: exactly one is on a player's ability system (loose tag, set per machine); keys 1-4 fire that page's jutsu.
+	constexpr int32 NumJutsuPages = 5;
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_JutsuPage_1);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_JutsuPage_2);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_JutsuPage_3);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_JutsuPage_4);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_JutsuPage_5);
+	/** The tag for Page (1..NumJutsuPages; clamped). */
+	SHINOBICOOP_API FGameplayTag JutsuPage(int32 Page);
 
 	// Ability identity (asset tags)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Melee);
@@ -51,6 +64,11 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_Chidori);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_Rasengan);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_Amaterasu);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_Teleport);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_Kamui);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_AlmightyPush);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_EarthWall);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_WaterWall);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Substitution);
 
 	// Activation failure reasons

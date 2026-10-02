@@ -27,6 +27,7 @@
 #include "Shinobi/Abilities/GA_Revive.h"
 #include "Shinobi/Abilities/GA_Sprint.h"
 #include "Shinobi/Abilities/GA_Substitution.h"
+#include "Shinobi/Abilities/ShinobiJutsuAbility.h"
 #include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/UI/ShinobiOverheadTextComponent.h"
@@ -232,10 +233,116 @@ bool AShinobiPlayerCharacter::CanMove() const
 	return !AbilitySystem->HasAnyMatchingGameplayTags(Blockers);
 }
 
+int32 AShinobiPlayerCharacter::GetJutsuPage() const
+{
+	for (int32 Page = 1; Page <= ShinobiTags::NumJutsuPages; ++Page)
+	{
+		if (AbilitySystem->HasMatchingGameplayTag(ShinobiTags::JutsuPage(Page)))
+		{
+			return Page;
+		}
+	}
+	return 1;
+}
+
+void AShinobiPlayerCharacter::ApplyJutsuPage(int32 Page)
+{
+	if (Page < 1 || Page > ShinobiTags::NumJutsuPages || AbilitySystem->HasMatchingGameplayTag(ShinobiTags::JutsuPage(Page)))
+	{
+		return;
+	}
+	for (int32 Old = 1; Old <= ShinobiTags::NumJutsuPages; ++Old)
+	{
+		if (AbilitySystem->HasMatchingGameplayTag(ShinobiTags::JutsuPage(Old)))
+		{
+			AbilitySystem->RemoveLooseGameplayTag(ShinobiTags::JutsuPage(Old));
+		}
+	}
+	AbilitySystem->AddLooseGameplayTag(ShinobiTags::JutsuPage(Page));
+}
+
+void AShinobiPlayerCharacter::SetJutsuPage(int32 Page)
+{
+	if (Page < 1 || Page > ShinobiTags::NumJutsuPages || IsCastingJutsu())
+	{
+		return;
+	}
+	ApplyJutsuPage(Page);
+	if (!HasAuthority())
+	{
+		ServerSetJutsuPage(static_cast<uint8>(Page));
+	}
+}
+
+bool AShinobiPlayerCharacter::TryCycleJutsuPage(int32 Direction)
+{
+	if (IsCastingJutsu())
+	{
+		return false;
+	}
+	const int32 Current = GetJutsuPage();
+	const int32 Count = ShinobiTags::NumJutsuPages;
+	for (int32 Step = 1; Step < Count; ++Step)
+	{
+		const int32 Candidate = ((Current - 1 + Direction * Step) % Count + Count) % Count + 1;
+		if (PageHasJutsu(Candidate))
+		{
+			SetJutsuPage(Candidate);
+			return true;
+		}
+	}
+	return false;
+}
+
+bool AShinobiPlayerCharacter::IsCastingJutsu() const
+{
+	for (const FGameplayAbilitySpec& Spec : AbilitySystem->GetActivatableAbilities())
+	{
+		if (Spec.IsActive() && Cast<UShinobiJutsuAbility>(Spec.Ability))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool AShinobiPlayerCharacter::PageHasJutsu(int32 Page) const
+{
+	for (const TSubclassOf<UShinobiGameplayAbility>& AbilityClass : StartupAbilities)
+	{
+		const UShinobiJutsuAbility* Jutsu = AbilityClass ? Cast<UShinobiJutsuAbility>(AbilityClass->GetDefaultObject()) : nullptr;
+		if (Jutsu && Jutsu->Page == Page)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void AShinobiPlayerCharacter::ServerSetJutsuPage_Implementation(uint8 Page)
+{
+	if (Page < 1 || Page > ShinobiTags::NumJutsuPages)
+	{
+		return; // a client's value: ignore it
+	}
+	if (IsCastingJutsu())
+	{
+		ClientSetJutsuPage(static_cast<uint8>(GetJutsuPage())); // the client switched mid-cast: put it back
+		return;
+	}
+	ApplyJutsuPage(Page);
+}
+
+void AShinobiPlayerCharacter::ClientSetJutsuPage_Implementation(uint8 Page)
+{
+	ApplyJutsuPage(Page);
+}
+
 void AShinobiPlayerCharacter::BeginPlay()
 {
 	ApplyHero();
 	Super::BeginPlay();
+	AbilitySystem->AddLooseGameplayTag(ShinobiTags::JutsuPage(1)); // every machine tracks its own copy
 	AbilitySystem->RegisterGameplayTagEvent(ShinobiTags::State_Downed).AddUObject(this, &AShinobiPlayerCharacter::OnDownedTagChanged);
 }
 

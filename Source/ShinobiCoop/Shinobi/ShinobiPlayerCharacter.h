@@ -101,6 +101,29 @@ public:
 	USkeletalMeshComponent* GetHeroMesh() const { return HeroMesh; }
 	UShinobiOverheadTextComponent* GetNameTag() const { return NameTag; }
 
+	/** The jutsu page keys 1-4 fire (1..ShinobiTags::NumJutsuPages). It is a loose tag on each machine's ability system:
+	 * the owning client applies a switch at once so activation predicts, and tells the server. */
+	int32 GetJutsuPage() const;
+
+	/** Owner: switch to Page (ignored while a jutsu is active or for an invalid page) and tell the server. */
+	void SetJutsuPage(int32 Page);
+
+	/** Owner: the next (Direction +1) or previous (-1) page that has a jutsu, wrapping. False if casting or no other page has one. */
+	bool TryCycleJutsuPage(int32 Direction);
+
+	/** Local tags only: makes Page the current page. SetJutsuPage and the RPCs call it. */
+	void ApplyJutsuPage(int32 Page);
+
+	bool IsCastingJutsu() const;
+	bool PageHasJutsu(int32 Page) const;
+
+	/** Server: a client's page switch. Out-of-range values are ignored; during a cast the client is sent back the real page. */
+	UFUNCTION(Server, Reliable)
+	void ServerSetJutsuPage(uint8 Page);
+
+	UFUNCTION(Client, Reliable)
+	void ClientSetJutsuPage(uint8 Page);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
