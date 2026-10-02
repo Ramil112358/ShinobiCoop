@@ -87,5 +87,6 @@ private:
 
 	FShinobiMeteorImpact Impact;
 	TWeakObjectPtr<AShinobiCharacterBase> Caster;
+	bool bPartsHidden = false;
 	float Age = 0.f;
 };

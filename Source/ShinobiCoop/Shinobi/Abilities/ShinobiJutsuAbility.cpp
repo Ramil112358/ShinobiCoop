@@ -373,9 +373,14 @@ bool UShinobiJutsuAbility::FindAimGround(float Range, float AimRadius, FVector& 
 		return false;
 	}
 	FHitResult Hit;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(ShinobiAimGround), false, Self);
 	if (TraceAim(Range, AimRadius, Hit))
 	{
-		OutPoint = Hit.ImpactPoint;
+		// The crosshair is on a wall or a character, at chest height: land on the floor below that spot (a little off the
+		// surface, so the trace does not start inside the wall).
+		FHitResult Floor;
+		const FVector Above = Hit.ImpactPoint + Hit.ImpactNormal * 10.f + FVector(0.f, 0.f, 50.f);
+		OutPoint = Self->GetWorld()->LineTraceSingleByChannel(Floor, Above, Above - FVector(0.f, 0.f, 600.f), ECC_WorldStatic, Params) ? Floor.ImpactPoint : Hit.ImpactPoint;
 		return true;
 	}
 	// Aimed above everything: the ground below the end of the aim, if there is ground within reach.
@@ -383,7 +388,6 @@ bool UShinobiJutsuAbility::FindAimGround(float Range, float AimRadius, FVector& 
 	FRotator ViewRotation;
 	GetAimViewPoint(ViewLocation, ViewRotation);
 	const FVector End = Self->GetActorLocation() + ViewRotation.Vector() * Range;
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(ShinobiAimGround), false, Self);
 	if (Self->GetWorld()->LineTraceSingleByChannel(Hit, End, End - FVector(0.f, 0.f, Range), ECC_WorldStatic, Params))
 	{
 		OutPoint = Hit.ImpactPoint;

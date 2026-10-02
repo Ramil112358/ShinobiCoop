@@ -106,7 +106,16 @@ void AShinobiMeteor::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	Age += DeltaSeconds;
 	const float Falling = Age - StartDelay;
-	SetActorHiddenInGame(Falling < 0.f); // queued behind the others: out of sight in the sky
+	// Queued behind the others: out of sight in the sky. The parts hide, not the actor: a hidden actor with no collision
+	// is not relevant to the other clients, who would only get it when it starts to fall and then wait out the delay again.
+	const bool bQueued = Falling < 0.f;
+	if (bQueued != bPartsHidden)
+	{
+		bPartsHidden = bQueued;
+		Core->SetVisibility(!bQueued);
+		Shell->SetVisibility(!bQueued);
+		Light->SetVisibility(!bQueued);
+	}
 	const float Alpha = FMath::Clamp(Falling / FallSeconds, 0.f, 1.f);
 	SetActorLocation(FMath::Lerp(StartPoint, ImpactPoint, FMath::Pow(Alpha, 1.6f))); // speeding up as it falls
 	if (Falling >= FallSeconds && HasAuthority())

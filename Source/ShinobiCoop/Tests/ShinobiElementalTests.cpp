@@ -181,6 +181,9 @@ bool FShinobiIceShowerTest::RunTest(const FString& Parameters)
 		TestTrue(FString::Printf(TEXT("every shard lands inside the 500 circle (%.0f from the centre)"), FVector::Dist2D(It->GetImpactPoint(), FVector(1450.f, 0.f, 0.f))),
 			FVector::Dist2D(It->GetImpactPoint(), FVector(1450.f, 0.f, 0.f)) <= 500.5f);
 		TestTrue(TEXT("and is an ice shard"), It->GetKind() == EShinobiMeteor::Ice);
+		// A hidden actor with no collision is not relevant to other clients: a partner would only get the shard when it
+		// starts to fall, then wait out its delay a second time. Queued shards hide their parts, not themselves.
+		TestFalse(TEXT("and a queued shard is not a hidden actor"), It->IsHidden());
 	}
 
 	W.Tick(2.0f);
@@ -261,6 +264,47 @@ bool FShinobiElementalAssetsTest::RunTest(const FString& Parameters)
 		TestNotNull(*(Name + TEXT(" release montage")), Jutsu->ReleaseMontage.LoadSynchronous());
 		TestNotNull(*(Name + TEXT(" icon")), Jutsu->Icon.LoadSynchronous());
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMeteorFloorTest, "ShinobiCoop.Meteor.AimingAtAWallLandsOnTheFloorBelow", ShinobiTestFlags)
+bool FShinobiMeteorFloorTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	SpawnMeteorWall(W, FVector(1500.f, 0.f, -150.f), FVector(30.f, 30.f, 1.f)); // a floor whose top is at Z = -100
+	SpawnMeteorWall(W, FVector(1500.f, 0.f, 0.f), FVector(1.f, 10.f, 10.f));     // the wall the crosshair is on, at about eye height
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(3);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
+	W.Tick(0.9f);
+	const AShinobiTelegraph* Ring = nullptr;
+	for (TActorIterator<AShinobiTelegraph> It(W.World); It; ++It)
+	{
+		Ring = *It;
+	}
+	if (TestNotNull(TEXT("The ring is up"), Ring))
+	{
+		TestTrue(FString::Printf(TEXT("and sits on the floor, not on the wall at chest height (Z=%.0f)"), Ring->GetActorLocation().Z), FMath::Abs(Ring->GetActorLocation().Z + 100.0) < 5.0);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiWaterDragonCloseTest, "ShinobiCoop.Dragon.PointBlankTargetStillSendsItForward", ShinobiTestFlags)
+bool FShinobiWaterDragonCloseTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* Adjacent = W.Spawn<AShinobiCharacterBase>(FVector(100.f, 0.f, 0.f)); // the crosshair lands on it, nearer than the dragon's mouth
+	AShinobiCharacterBase* Further = W.Spawn<AShinobiCharacterBase>(FVector(700.f, 0.f, 0.f));
+	for (AShinobiCharacterBase* Each : { static_cast<AShinobiCharacterBase*>(P), Adjacent, Further })
+	{
+		ShinobiTest::Hover(Each);
+	}
+	P->ApplyJutsuPage(3);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
+	W.Tick(2.4f);
+	TestEqual(TEXT("The dragon went forward and caught the enemy behind the adjacent one"), ShinobiTest::Get(Further, UShinobiAttributeSet::GetHealthAttribute()), 445.f);
 	return true;
 }
 

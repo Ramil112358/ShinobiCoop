@@ -31,7 +31,13 @@ void UGA_WaterDragon::ExecuteJutsu()
 		const FVector Mouth = Self->GetActorLocation() + Self->GetActorForwardVector() * 90.f + FVector(0.f, 0.f, 40.f);
 		FShinobiDragonHit Catch;
 		Catch.Damage = Damage * GetDamageScale();
-		AShinobiWaterDragon::Spawn(Self->GetWorld(), Self, Mouth, AimPoint - Mouth, FlightSpeed, FlightSeconds, GetVisualScale(), Catch);
+		// A target nearer than the mouth (point blank) would point the dragon back at the caster: use the view direction then.
+		FVector Direction = AimPoint - Mouth;
+		if (FVector::DotProduct(Direction, ViewRotation.Vector()) < 150.f)
+		{
+			Direction = ViewRotation.Vector();
+		}
+		AShinobiWaterDragon::Spawn(Self->GetWorld(), Self, Mouth, Direction, FlightSpeed, FlightSeconds, GetVisualScale(), Catch);
 	}
 	EndJutsu();
 }
