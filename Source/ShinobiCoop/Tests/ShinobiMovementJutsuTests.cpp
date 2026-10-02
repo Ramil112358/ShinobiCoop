@@ -553,6 +553,26 @@ bool FShinobiTeleportStrikeTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiTeleportBlockedTest, "ShinobiCoop.Teleport.BlockedArrivalStillGetsTheCasterThere", ShinobiTestFlags)
+bool FShinobiTeleportBlockedTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	SpawnWallBlock(W, FVector(1600.f, 0.f, 0.f), FVector(1.f, 30.f, 30.f));
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(2);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(1.5f);
+	// Something solid fills the spot beside the wall where the middle kunai (the one under the crosshair) would put them.
+	SpawnWallBlock(W, FVector(1500.f, 0.f, 30.f), FVector(6.f, 6.f, 6.f));
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(0.2f);
+	TestTrue(FString::Printf(TEXT("The caster still arrives by the wall (X=%.0f)"), P->GetActorLocation().X), P->GetActorLocation().X > 1000.0);
+	TestTrue(TEXT("and a kunai was used up"), ShinobiTest::CountActors<AShinobiMarkerKunai>(W) <= 2);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiTeleportExpiryTest, "ShinobiCoop.Teleport.WindowExpiresAndRemovesKunai", ShinobiTestFlags)
 bool FShinobiTeleportExpiryTest::RunTest(const FString& Parameters)
 {
