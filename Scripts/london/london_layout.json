@@ -1,0 +1,52 @@
+{
+ "_doc": "London collage (docs/superpowers/specs/2026-10-01-london-map-design.md). Map metres, +X east, +Y SOUTH (UE's left-handed axes: north-up maps stay unmirrored). Every map coordinate below gets origin_offset_m added at load, so the collage is centred on the landscape. Districts are real north-up cut-outs (centre lat/lon, size_m [east-west, north-south]) whose centre sits at map [x, y]. Connector regions fill the gaps; their roads are generated (frontage: plots of the given style along the road). Markers/landmarks are real lat/lon inside a district.",
+ "origin_offset_m": [-330, -232],
+ "margin_m": 250,
+ "districts": [
+  {"id": "WE", "name": "West End", "lat": 51.5102, "lon": -0.1286, "size_m": [950, 600], "map": [0, 0]},
+  {"id": "CAM", "name": "Camden Town", "lat": 51.5405, "lon": -0.1445, "size_m": [450, 450], "map": [-150, -660]},
+  {"id": "WST", "name": "Westminster", "lat": 51.50106, "lon": -0.12272, "size_m": [800, 700], "map": [-300, 1000]},
+  {"id": "TWR", "name": "Tower Bridge", "lat": 51.50626, "lon": -0.0770, "size_m": [800, 650], "map": [960, 628]}
+ ],
+ "regions": [
+  {"id": "RegentsPark", "rect": [-475, -435, 475, -300], "surface": "park"},
+  {"id": "Embankment", "rect": [-700, 300, 560, 650], "surface": "park"},
+  {"id": "Strand", "rect": [475, -300, 560, 300], "surface": "paving"},
+  {"id": "SouthBank", "rect": [100, 650, 560, 800], "surface": "paving"}
+ ],
+ "river": {"line": [[-220, 650], [-220, 585], [-195, 530], [-140, 495], [-60, 485], [560, 485]], "width_m": 240},
+ "green": [[150, 655, 340, 700]],
+ "roads": [
+  {"id": "Regents Boulevard", "line": [[-475, -372], [475, -372]], "class": "secondary", "frontage": {"right": "stucco"}, "trees": true},
+  {"id": "Victoria Embankment", "line": [[-470, 335], [560, 335]], "class": "primary", "trees": true, "heritage_lamps": true},
+  {"id": "Whitehall", "line": [[-440, 335], [-520, 650]], "class": "primary", "frontage": {"left": "portland_stone", "right": "portland_stone"}},
+  {"id": "Strand", "line": [[515, -372], [515, 335]], "class": "secondary", "frontage": {"left": "victorian_terrace", "right": "portland_stone"}},
+  {"id": "Upper Ground", "line": [[60, 725], [560, 725]], "class": "tertiary", "frontage": {"left": "concrete_modern", "right": "warehouse"}},
+  {"id": "Queen's Walk", "line": [[-90, 612], [560, 612]], "class": "promenade", "trees": true, "heritage_lamps": true}
+ ],
+ "hub": {"name": "Leicester Square", "lat": 51.51030, "lon": -0.13010},
+ "camps": [
+  {"id": "covent_garden", "name": "Covent Garden", "lat": 51.51180, "lon": -0.12290, "r": 30, "difficulty": 1, "waves": [{"ninjas": 3, "throwers": 1}, {"ninjas": 3, "throwers": 2}]},
+  {"id": "camden_lock", "name": "Camden Lock", "lat": 51.54160, "lon": -0.14650, "r": 30, "difficulty": 2, "waves": [{"ninjas": 4, "throwers": 1}, {"ninjas": 4, "throwers": 2}]},
+  {"id": "jubilee_gardens", "name": "Jubilee Gardens", "lat": 51.50350, "lon": -0.11880, "r": 35, "difficulty": 3, "waves": [{"ninjas": 4, "throwers": 2}, {"ninjas": 5, "throwers": 2}]},
+  {"id": "potters_fields", "name": "Potters Fields", "lat": 51.50450, "lon": -0.07930, "r": 35, "difficulty": 4, "waves": [{"ninjas": 5, "throwers": 2}, {"ninjas": 5, "throwers": 3}]}
+ ],
+ "boss": {"name": "Tower of London", "lat": 51.50815, "lon": -0.07640, "r": 40},
+ "landmarks": [
+  {"id": "london_eye", "lat": 51.50330, "lon": -0.11960, "clear_m": 70},
+  {"id": "elizabeth_tower", "lat": 51.50070, "lon": -0.12460, "clear_m": 9},
+  {"id": "tower_bridge", "lat": 51.50550, "lon": -0.07540, "clear_m": 0},
+  {"id": "westminster_bridge", "lat": 51.50085, "lon": -0.12185, "clear_m": 0},
+  {"id": "white_tower", "lat": 51.50810, "lon": -0.07590, "clear_m": 22},
+  {"id": "nelsons_column", "lat": 51.50773, "lon": -0.12803, "clear_m": 4},
+  {"id": "eros", "lat": 51.51010, "lon": -0.13467, "clear_m": 4},
+  {"id": "piccadilly_lights", "lat": 51.51015, "lon": -0.13440, "clear_m": 0}
+ ],
+ "skyline": [
+  {"id": "shard", "map": [420, 870], "clear_m": 40},
+  {"id": "st_pauls", "map": [660, 110], "clear_m": 90},
+  {"id": "walkie_talkie", "map": [820, 200], "clear_m": 35},
+  {"id": "gherkin", "map": [1010, 90], "clear_m": 35},
+  {"id": "bt_tower", "map": [300, -560], "clear_m": 20}
+ ]
+}

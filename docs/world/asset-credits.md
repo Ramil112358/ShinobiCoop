@@ -33,3 +33,51 @@ Generated with the SpriteCook MCP (project "ShinobiCoop"; account-owned, origina
 | HUD kit (portrait ring, bar frame and fill, slot frame, key badge, pips, compass) and four status medallions | `SourceArt/SpriteCook/UI/hud_final/` | `Scripts/setup_sprite_hud.py` -> `/Game/Shinobi/UI/Hud/T_Hud_*` | `UShinobiHUDWidget`; each piece falls back to the old drawn look while its texture is missing |
 
 Not wired: the generated forest-floor terrain textures (`SourceArt/SpriteCook/World/`). They are albedo only and the tile seams smear, so they are below the Poly Haven PBR sets used by `M_LandscapeReal`.
+
+
+## London map (sub-project: Lvl_London)
+
+- **OpenStreetMap** data (c) OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/copyright): building
+  footprints, heights, roads, water, parks, trees and street furniture of the four districts, fetched by
+  `Scripts/london/fetch_osm.py`. An in-game credit line is required before any public release.
+- **Poly Haven** (CC0), fetched by `Scripts/world/fetch_polyhaven.py Scripts/london/polyhaven_london.json`: textures
+  `brick_wall_02`, `red_brick`, `brick_wall_001`, `brick_wall_09`, `white_sandstone_bricks_03`, `sandstone_blocks_05`,
+  `stone_brick_wall_001`, `plastered_wall`, `concrete_wall_008`, `asphalt_02`, `large_grey_tiles`, `granite_tile`,
+  `cobblestone_floor_03`, `grey_roof_tiles_02`, `concrete_floor`, `leafy_grass`, `river_small_rocks`; props
+  `street_lamp_01/02`, `metal_trash_can`, `concrete_road_barrier(_02)`, `utility_box_01/02`, `exterior_aircon_unit`,
+  `water_manhole_cover`, `modular_street_seating`, `painted_wooden_bench`, `outdoor_table_chair_set_01`,
+  `planter_box_01`, `rollershutter_door`, `rollershutter_window_01`, `security_camera_01`, `trashbag`,
+  `cardboard_box_01`, `plastic_crate_01`, `wooden_crate_01`.
+- **Sketchfab** models (credit required), fetched by `Scripts/london/fetch_models.py`:
+
+| Model | Author | Licence | Source |
+|---|---|---|---|
+| Clock Tower (Big Ben) | ManySince910 | CC Attribution | https://sketchfab.com/3d-models/clock-tower-big-ben-9a1c691fac774bcca4e2ba565c4c9d9b |
+| LTI TX4 London Taxi | Nieve5677 | CC Attribution | https://sketchfab.com/3d-models/lti-tx4-london-taxi-9e57abf043744b86adbbc96083da637b |
+| London DD Bus | r34maxpro | CC Attribution | https://sketchfab.com/3d-models/london-dd-bus-a2a2736856a7452bbbaf712e07ed8eb4 |
+| Cab Shelter Northumberland Avenue | artfletch | CC Attribution | https://sketchfab.com/3d-models/cab-shelter-northumberland-avenue-e2f1342d70d54eb2867cb58c7dd57938 |
+| Victoria Embankment Camel Bench | artfletch | CC Attribution | https://sketchfab.com/3d-models/victoria-embankment-camel-bench-ec4cc34bee7242fb8b660e147b952bee |
+| Mini Cooper S (downloaded, not placed: broken UVs in UE) | cenobyte | CC Attribution | https://sketchfab.com/3d-models/mini-cooper-s-b262744901a04cda823f17289d1a4847 |
+| Narrowboat | andrea.notarstefano | CC Attribution | https://sketchfab.com/3d-models/narrowboat-bfd9e2f43e184c8398677f1744ff278a |
+| Nelsons_ Column_ Final | hardingdave | CC Attribution | https://sketchfab.com/3d-models/nelsons--column--final-6f42acbc26c3451aba570db6621fa19c |
+| HomeWork 8. Part 1. The red telephone box | rus.zam56 | CC Attribution | https://sketchfab.com/3d-models/homework-8-part-1-the-red-telephone-box-66ab8d583ca24a0fa20f6096f66396b9 |
+| Toyota Prius 2012 | Doz3 | CC Attribution | https://sketchfab.com/3d-models/toyota-prius-2012-04eaf6b288cc466785365b7d985e3b29 |
+| Mercedes Benz Sprinter 2006 | Max | CC Attribution | https://sketchfab.com/3d-models/mercedes-benz-sprinter-2006-f69de1315bb049c8946d57f6006acd73 |
+| St Paul's Cathedral | artfletch | CC Attribution | https://sketchfab.com/3d-models/st-pauls-cathedral-21e41040c4ca45c7b134aa768b5c993b |
+| UK Traffic Light \| Game Ready \| Low Poly | ThomasRedfern12 | CC Attribution | https://sketchfab.com/3d-models/uk-traffic-light-game-ready-low-poly-75e09798f86247b69ce3ca150522d6cf |
+| Transit Van | Dani Satellite | CC Attribution | https://sketchfab.com/3d-models/transit-van-4d7e7de43c6149448d13881f06e903d5 |
+
+- **Fab** (Fab Standard License, added by the user through Fab): London Sample Pack (Coded Arts), City Street Props
+  (Dekogon), Vehicle Variety Pack (Switchboard Studios), Urban Bus Stop Shelter (AshenCut, CC-BY), London Street Props
+  (Free), Victorian Street Lamp, AccuCities Textured Sample (unused), City Sample Crowd (Epic Games: the crowd
+  pedestrians). The Classic British Red Telephone Booth was replaced by the Sketchfab K6 (its door is modelled open).
+- **Hyper3D Rodin** (generated for this project): the Shaftesbury Memorial (Eros) fountain and the White Tower.
+- **SpriteCook** (generated for this project): `T_ScreenAds.png`, the Piccadilly screen's eight adverts for made-up brands.
+- **Original** (this project): the facade, street and embankment generator (`Scripts/london/blender/make_city_meshes.py`),
+  the procedural London Eye, Tower Bridge, Westminster Bridge, Shard, Gherkin, Walkie-Talkie, BT Tower and Piccadilly
+  screen (`make_london_pieces.py`), and the shop sign atlas (`make_signage.py`, made-up shop names).
+
+**Not used:** the Sketchfab AEC double-decker look-alike (1930s, replaced by "London DD Bus"); Watch Dogs: Legion assets (Ubisoft copyright); Google Photorealistic 3D Tiles (terms forbid caching or
+extraction); Sketchfab "London Eye" (CMBC), "The Shard" and "The Gherkin" (aerial photogrammetry with city tiles baked
+in, unclear provenance); AccuCities CGTrader samples (non-commercial licence). Before a public release, check the
+remaining trademarks: the TX4 taxi and double-decker bus shapes, London Eye and landmark names in marketing.

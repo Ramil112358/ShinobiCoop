@@ -106,10 +106,10 @@ def sample(m, texture_id, suffix, uv, x, y):
     return node
 
 
-def layer_blend(m, x, y):
+def layer_blend(m, x, y, layers=None):
     blend = expr(m, unreal.MaterialExpressionLandscapeLayerBlend, x, y)
     layers = []
-    for name in LAYERS:
+    for name in (layers or LAYERS):
         entry = unreal.LayerBlendInput()
         entry.set_editor_property("layer_name", name)
         entry.set_editor_property("blend_type", unreal.LandscapeLayerBlendType.LB_HEIGHT_BLEND)
@@ -119,14 +119,15 @@ def layer_blend(m, x, y):
     return blend
 
 
-def grass_types():
-    """LGT_<type> assets from GRASS_TYPES and the PH_Grass / PH_Shrub catalog variants."""
+def grass_types(types=None):
+    """LGT_<type> assets from GRASS_TYPES (or the given types) and the PH_Grass / PH_Shrub catalog variants."""
+    types = types or GRASS_TYPES
     ensure_dir(GRASS_DIR)
     with open(os.path.join(HERE, "library_catalog.json"), encoding="utf-8") as f:
         catalog = json.load(f)
     plants = {**catalog.get("PH_Grass", {}), **catalog.get("PH_Shrub", {})}
     out = {}
-    for type_name, (_, varieties) in GRASS_TYPES.items():
+    for type_name, (_, varieties) in types.items():
         path = f"{GRASS_DIR}/LGT_{type_name}"
         lgt = unreal.load_asset(path) if unreal.EditorAssetLibrary.does_asset_exist(path) else TOOLS.create_asset(
             f"LGT_{type_name}", GRASS_DIR, unreal.LandscapeGrassType, None)
@@ -157,10 +158,11 @@ def grass_types():
     return out
 
 
-def build_landscape_material():
+def build_landscape_material(asset_name="M_LandscapeReal", layers=None, grass=None):
     """M_LandscapeReal: five height-blended Poly Haven layers (albedo fades to a variation set at 4x scale with distance,
     large-scale brightness variation against tiling), normal and roughness, and the landscape grass output (meadow on Grass, ferns and moss on Forest)."""
-    m = fresh_asset("M_LandscapeReal", WORLD_DIR, unreal.Material, unreal.MaterialFactoryNew())
+    layers, grass = layers or LAYERS, grass or GRASS_TYPES
+    m = fresh_asset(asset_name, WORLD_DIR, unreal.Material, unreal.MaterialFactoryNew())
     depth = expr(m, unreal.MaterialExpressionPixelDepth, -2600, -600)
     near = expr(m, unreal.MaterialExpressionSubtract, -2400, -600, const_b=1500.0)
     MEL.connect_material_expressions(depth, "", near, "A")
@@ -168,9 +170,9 @@ def build_landscape_material():
     MEL.connect_material_expressions(near, "", far, "A")
     fade = expr(m, unreal.MaterialExpressionSaturate, -2100, -600)
     MEL.connect_material_expressions(far, "", fade, "")
-    albedo, normal, rough = (layer_blend(m, -600, y) for y in (-400, 0, 300))
+    albedo, normal, rough = (layer_blend(m, -600, y, layers) for y in (-400, 0, 300))
     y = 0
-    for name, (main, variation, tile) in LAYERS.items():
+    for name, (main, variation, tile) in layers.items():
         uv_near = expr(m, unreal.MaterialExpressionLandscapeLayerCoords, -2400, y, mapping_scale=tile)
         uv_far = expr(m, unreal.MaterialExpressionLandscapeLayerCoords, -2400, y + 120, mapping_scale=tile * 4)
         a_near = sample(m, main, "A", uv_near, -2000, y)
@@ -201,21 +203,21 @@ def build_landscape_material():
     MEL.connect_material_expressions(rough, "", slab, "Roughness")
     MEL.connect_material_expressions(normal, "", slab, "Normal")
     MEL.connect_material_property(slab, "", unreal.MaterialProperty.MP_FRONT_MATERIAL)
-    types = grass_types()
-    grass = expr(m, unreal.MaterialExpressionLandscapeGrassOutput, -50, 900)
+    types = grass_types(grass)
+    grass_out = expr(m, unreal.MaterialExpressionLandscapeGrassOutput, -50, 900)
     inputs = []
-    for type_name in GRASS_TYPES:
+    for type_name in grass:
         gi = unreal.GrassInput()
         gi.set_editor_property("name", type_name)
         gi.set_editor_property("grass_type", types[type_name])
         inputs.append(gi)
-    grass.set_editor_property("grass_types", inputs)
-    for i, (type_name, (layer, _)) in enumerate(GRASS_TYPES.items()):
+    grass_out.set_editor_property("grass_types", inputs)
+    for i, (type_name, (layer, _)) in enumerate(grass.items()):
         weight = expr(m, unreal.MaterialExpressionLandscapeLayerSample, -400, 900 + i * 150, parameter_name=layer)
-        MEL.connect_material_expressions(weight, "", grass, type_name)
+        MEL.connect_material_expressions(weight, "", grass_out, type_name)
     errors = MEL.recompile_material(m)
     if errors:
-        raise RuntimeError(f"M_LandscapeReal failed to compile: {errors}")
+        raise RuntimeError(f"{asset_name} failed to compile: {errors}")
     unreal.EditorAssetLibrary.save_loaded_asset(m)
     return m
 
@@ -588,5 +590,6 @@ def stage_water(lay):
 
 
 STAGES = {"terrain": stage_terrain, "dress": stage_dress, "mood": stage_mood, "water": stage_water}
-stage = os.environ.get("SHINOBI_WORLD_STAGE", "terrain")
-STAGES[stage](layout_mod.load())
+if __name__ == "__main__":  # Scripts/london/build_london.py imports the helpers
+    stage = os.environ.get("SHINOBI_WORLD_STAGE", "terrain")
+    STAGES[stage](layout_mod.load())

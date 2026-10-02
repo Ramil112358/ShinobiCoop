@@ -1,5 +1,5 @@
 """Downloads the realistic world's Poly Haven assets (CC0) listed in polyhaven_assets.json into
-SourceArt/World/PolyHaven/<id>/ (gitignored). Standard-library Python: `python Scripts/world/fetch_polyhaven.py`.
+SourceArt/World/PolyHaven/<id>/ (gitignored). Standard-library Python: `python Scripts/world/fetch_polyhaven.py [list.json]`.
 
 Models come as glTF (the .gltf, its .bin and its JPG textures, laid out as the .gltf references them); textures as
 JPG albedo, OpenGL normal, roughness and displacement. Files whose size already matches the API are skipped, and each
@@ -53,7 +53,9 @@ def download(url, path):
 
 
 def main():
-    with open(os.path.join(HERE, "polyhaven_assets.json"), encoding="utf-8") as f:
+    # Optional argument: another list in the same format (Scripts/london/polyhaven_london.json).
+    path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "polyhaven_assets.json")
+    with open(path, encoding="utf-8") as f:
         assets = json.load(f)
     total = fetched = 0
     for kind, group in (("model", assets["models"]), ("texture", assets["textures"])):

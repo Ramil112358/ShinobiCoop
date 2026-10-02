@@ -1,0 +1,145 @@
+{
+ "models": {
+  "street_lamp_01": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "street_lamp_02": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "metal_trash_can": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "concrete_road_barrier": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "concrete_road_barrier_02": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "utility_box_01": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "utility_box_02": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "exterior_aircon_unit": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "water_manhole_cover": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "modular_street_seating": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "painted_wooden_bench": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "outdoor_table_chair_set_01": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "planter_box_01": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "rollershutter_door": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "rollershutter_window_01": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "security_camera_01": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "trashbag": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "cardboard_box_01": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "plastic_crate_01": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "wooden_crate_01": {
+   "category": "Prop",
+   "res": "2k"
+  },
+  "tree_small_02": {
+   "category": "Tree",
+   "res": "2k"
+  },
+  "jacaranda_tree": {
+   "category": "Tree",
+   "res": "2k"
+  }
+ },
+ "textures": {
+  "brick_wall_02": {
+   "res": "2k"
+  },
+  "red_brick": {
+   "res": "2k"
+  },
+  "brick_wall_001": {
+   "res": "2k"
+  },
+  "brick_wall_09": {
+   "res": "2k"
+  },
+  "white_sandstone_bricks_03": {
+   "res": "2k"
+  },
+  "sandstone_blocks_05": {
+   "res": "2k"
+  },
+  "stone_brick_wall_001": {
+   "res": "2k"
+  },
+  "plastered_wall": {
+   "res": "2k"
+  },
+  "concrete_wall_008": {
+   "res": "2k"
+  },
+  "asphalt_02": {
+   "res": "2k"
+  },
+  "large_grey_tiles": {
+   "res": "2k"
+  },
+  "granite_tile": {
+   "res": "2k"
+  },
+  "cobblestone_floor_03": {
+   "res": "2k"
+  },
+  "grey_roof_tiles_02": {
+   "res": "2k"
+  },
+  "concrete_floor": {
+   "res": "2k"
+  },
+  "leafy_grass": {
+   "res": "2k"
+  },
+  "river_small_rocks": {
+   "res": "2k"
+  }
+ }
+}

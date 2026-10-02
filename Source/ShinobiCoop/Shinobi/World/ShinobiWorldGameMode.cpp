@@ -97,6 +97,19 @@ bool AShinobiWorldGameMode::ReadVillagerMarker(const AActor& Marker, TArray<FVec
 	return OutRoute.Num() > 0;
 }
 
+FString AShinobiWorldGameMode::TagValue(const AActor& Actor, const TCHAR* Key)
+{
+	for (const FName& Tag : Actor.Tags)
+	{
+		FString TagKey, Value;
+		if (Tag.ToString().Split(TEXT(":"), &TagKey, &Value) && TagKey == Key)
+		{
+			return Value;
+		}
+	}
+	return FString();
+}
+
 void AShinobiWorldGameMode::BeginPlay()
 {
 	Super::BeginPlay();
@@ -119,12 +132,20 @@ void AShinobiWorldGameMode::BeginPlay()
 		Camp->OnCleared.AddWeakLambda(this, [this, Camp]() { OnCampCleared(Camp); });
 		Camps.Add(Camp);
 		State->NumCamps += Camp->bBoss ? 0 : 1;
+		if (const FString Victory = TagValue(**It, TEXT("Victory")); Camp->bBoss && !Victory.IsEmpty())
+		{
+			State->VictoryText = Victory;
+		}
 	}
 	UE_LOG(LogShinobiCoop, Log, TEXT("World: %d camps (+ boss: %s)"), State->NumCamps, Camps.Num() > State->NumCamps ? TEXT("yes") : TEXT("no"));
 
 	if (TActorIterator<APlayerStart> Start(GetWorld()); Start)
 	{
 		State->VillageLocation = Start->GetActorLocation();
+		if (const FString Hub = TagValue(**Start, TEXT("Hub")); !Hub.IsEmpty())
+		{
+			State->HubName = Hub;
+		}
 	}
 	int32 Villagers = 0;
 	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
@@ -139,6 +160,8 @@ void AShinobiWorldGameMode::BeginPlay()
 			ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
 		Villager->Route = MoveTemp(Route);
 		Villager->Variant = Villagers++;
+		Villager->bLondon = TagValue(**It, TEXT("Barks")) == TEXT("London");
+		Villager->bCrowd = TagValue(**It, TEXT("Look")) == TEXT("Crowd");
 		Villager->FinishSpawning(Where);
 	}
 	UE_LOG(LogShinobiCoop, Log, TEXT("World: %d villagers"), Villagers);

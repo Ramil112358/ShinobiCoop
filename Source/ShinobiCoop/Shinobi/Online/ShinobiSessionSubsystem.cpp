@@ -19,6 +19,7 @@ const TArray<FShinobiMap>& UShinobiSessionSubsystem::GetMaps()
 {
 	static const TArray<FShinobiMap> Maps = {
 		{ TEXT("Hidden Leaf Valley"), TEXT("/Game/Shinobi/Maps/Lvl_HiddenLeafValley") },
+		{ TEXT("London"), TEXT("/Game/Shinobi/Maps/Lvl_London") },
 		{ TEXT("Training Grounds"), TEXT("/Game/Shinobi/Maps/Lvl_TrainingGrounds") },
 		{ TEXT("Test Level"), TEXT("/Game/ThirdPerson/Lvl_ThirdPerson") },
 		{ TEXT("Combat Level"), TEXT("/Game/Variant_Combat/Lvl_Combat") },

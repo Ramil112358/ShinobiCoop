@@ -174,6 +174,25 @@ bool FShinobiBarkTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiLondonMarkerTest, "ShinobiCoop.World.LondonMarkerTags", ShinobiTestFlags)
+bool FShinobiLondonMarkerTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AActor* Marker = W.Spawn<ATargetPoint>();
+	Marker->Tags = { TEXT("ShinobiVillager"), TEXT("Barks:London"), TEXT("Hub:Leicester Square"), TEXT("Victory:LONDON CLEARED") };
+	TestEqual(TEXT("Hub tag"), AShinobiWorldGameMode::TagValue(*Marker, TEXT("Hub")), FString(TEXT("Leicester Square")));
+	TestEqual(TEXT("Victory tag"), AShinobiWorldGameMode::TagValue(*Marker, TEXT("Victory")), FString(TEXT("LONDON CLEARED")));
+	TestTrue(TEXT("Missing tag is empty"), AShinobiWorldGameMode::TagValue(*Marker, TEXT("Camp")).IsEmpty());
+	TSet<FString> Seen;
+	for (int32 Seed = 0; Seed < AShinobiVillager::NumBarks(true) * 2; ++Seed)
+	{
+		Seen.Add(AShinobiVillager::PickBark(Seed, true).ToString());
+	}
+	TestEqual(TEXT("Every London line reachable"), Seen.Num(), AShinobiVillager::NumBarks(true));
+	TestFalse(TEXT("London lines differ from the valley's"), Seen.Contains(AShinobiVillager::PickBark(0).ToString()));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiVillagerTargetTest, "ShinobiCoop.World.VillagerNotTargetable", ShinobiTestFlags)
 bool FShinobiVillagerTargetTest::RunTest(const FString& Parameters)
 {

@@ -7,7 +7,8 @@
 #   -Fire:    -ShinobiFireShot: a fire patch and a black-flame patch 5 m ahead, close-ups of the flame cards.
 #   -Look:    -ShinobiLookShot: the arena (-Map, default Training Grounds) in wave mode: the view ahead, the character,
 #             an overview, the first wave closing in and a fight.
-#   -Tour:    -ShinobiWorldTour: flies to every tour point of the open world (village, gate, bridge, camps, boss).
+#   -Tour:    -ShinobiWorldTour: flies to every tour point of the open world (village, gate, bridge, camps, boss);
+#             -Map picks another world map (London: /Game/Shinobi/Maps/Lvl_London).
 #   -Perf:    the tour at 1920x1080, Epic preset, no vsync, 10 s per point; prints the average frame time at each point.
 #             Keep the game window in the foreground: Windows throttles background windows (about 2x slower).
 param([switch]$Fire, [switch]$Jutsu, [switch]$Look, [switch]$Tour, [switch]$Perf, [int]$TimeoutSec = 300, [string]$Map = "/Game/Shinobi/Maps/Lvl_TrainingGrounds")
@@ -20,7 +21,7 @@ if ($Perf) { $Tour = $true }
 $Res = if ($Perf) { "-ResX=1920 -ResY=1080 -ExecCmds=`"scalability 3,r.VSync 0,t.MaxFPS 0`" -ShinobiPerf" } else { "-ResX=1280 -ResY=720" }
 $Flag = if ($Tour) { "ShinobiWorldTour" } elseif ($Look) { "ShinobiLookShot" } elseif ($Fire) { "ShinobiFireShot" } elseif ($Jutsu) { "ShinobiJutsuShot" } else { "ShinobiShot" }
 $Pattern = "$($Flag)_*.png"
-$Level = if ($Tour) { "/Game/Shinobi/Maps/Lvl_HiddenLeafValley" } elseif ($Look) { $Map } else { "/Game/ThirdPerson/Lvl_ThirdPerson?game=/Script/ShinobiCoop.ShinobiGameMode" }
+$Level = if ($Tour) { if ($PSBoundParameters.ContainsKey("Map")) { $Map } else { "/Game/Shinobi/Maps/Lvl_HiddenLeafValley" } } elseif ($Look) { $Map } else { "/Game/ThirdPerson/Lvl_ThirdPerson?game=/Script/ShinobiCoop.ShinobiGameMode" }
 
 Get-ChildItem $ShotRoot -Recurse -Filter $Pattern -ErrorAction SilentlyContinue | Remove-Item
 $game = Start-Process $Editor -PassThru -ArgumentList "`"$Project`" $Level -game -nosteam -windowed $Res -nosound -unattended -nosplash -$Flag -log=$Flag.log"

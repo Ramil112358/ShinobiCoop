@@ -357,6 +357,8 @@ void AShinobiPlayerController::RunWorldTourTest()
 	{
 		FString Name;
 		FVector Location;
+		/** Camera stand-off from the point (a TourOffset:x,y,z tag in cm), zero = the default for its name. */
+		FVector Offset = FVector::ZeroVector;
 	};
 	TArray<FTourPoint> Points;
 	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
@@ -369,6 +371,7 @@ void AShinobiPlayerController::RunWorldTourTest()
 		if (It->ActorHasTag(TEXT("Tour")) || It->ActorHasTag(TEXT("ShinobiCampSite")))
 		{
 			FString Name = It->GetName();
+			FVector Offset = FVector::ZeroVector;
 			for (const FName& Tag : It->Tags)
 			{
 				const FString TagText = Tag.ToString();
@@ -376,12 +379,20 @@ void AShinobiPlayerController::RunWorldTourTest()
 				{
 					Name = TagText.RightChop(5);
 				}
+				else if (TagText.StartsWith(TEXT("TourOffset:")))
+				{
+					TArray<FString> Parts;
+					if (TagText.RightChop(11).ParseIntoArray(Parts, TEXT(",")) == 3)
+					{
+						Offset = FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]));
+					}
+				}
 				else if (TagText == TEXT("Boss"))
 				{
 					Name = TEXT("Boss");
 				}
 			}
-			Points.Add({ Name, It->GetActorLocation() });
+			Points.Add({ Name, It->GetActorLocation(), Offset });
 		}
 	}
 	UE_LOG(LogShinobiCoop, Log, TEXT("World tour: %d points"), Points.Num());
@@ -405,7 +416,8 @@ void AShinobiPlayerController::RunWorldTourTest()
 				// The spring arm sits ~4.5 m behind the pawn: stand off 16 m, 9 m up, looking at the point.
 				// Close-up points (ground and plant detail) stand off ~5 m, 2.5 m up.
 				static const TSet<FString> CloseUps = { TEXT("Meadow"), TEXT("Forest"), TEXT("Street"), TEXT("Edge"), TEXT("Riverbank") };
-				const FVector Eye = Point.Location + (Point.Name == TEXT("Meadow") ? FVector(-300.f, 0.f, 120.f)
+				const FVector Eye = Point.Location + (!Point.Offset.IsZero() ? Point.Offset
+					: Point.Name == TEXT("Meadow") ? FVector(-300.f, 0.f, 120.f)
 					: CloseUps.Contains(Point.Name) ? FVector(-450.f, -250.f, 250.f) : FVector(-1300.f, -900.f, 900.f));
 				Body->SetActorLocation(Eye, false, nullptr, ETeleportType::TeleportPhysics);
 				if (USpringArmComponent* Boom = Body->FindComponentByClass<USpringArmComponent>())

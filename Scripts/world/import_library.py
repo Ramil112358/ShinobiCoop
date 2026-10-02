@@ -319,7 +319,7 @@ def texture_set(asset_id, res):
     albedo = texture(pick("_diff"), dest, f"T_{asset_id}_A", "color")
     normal = texture(pick("_nor_gl_"), dest, f"T_{asset_id}_N", "normal")
     rough = texture(pick("_rough_"), dest, f"T_{asset_id}_R", "linear")
-    texture(pick("_disp_"), dest, f"T_{asset_id}_D", "linear")  # used by the landscape height blend (R2)
+    texture(pick("_disp"), dest, f"T_{asset_id}_D", "linear")  # used by the landscape height blend (R2)
     path = f"{LIB}/Materials/MI_PBR_{asset_id}"
     mi = unreal.load_asset(path) if unreal.EditorAssetLibrary.does_asset_exist(path) else TOOLS.create_asset(
         f"MI_PBR_{asset_id}", f"{LIB}/Materials", unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
@@ -578,4 +578,5 @@ def realistic():
         json.dump(catalog, f, indent=1, sort_keys=True)
 
 
-realistic() if os.environ.get("SHINOBI_IMPORT") == "realistic" else main()
+if __name__ == "__main__":  # Scripts/london/import_london.py imports the helpers
+    realistic() if os.environ.get("SHINOBI_IMPORT") == "realistic" else main()
