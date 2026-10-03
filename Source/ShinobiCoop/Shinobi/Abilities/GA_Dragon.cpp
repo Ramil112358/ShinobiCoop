@@ -1,5 +1,8 @@
 #include "Shinobi/Abilities/GA_Dragon.h"
 #include "AbilitySystemComponent.h"
+#include "Abilities/Tasks/AbilityTask_WaitDelay.h"
+#include "EngineUtils.h"
+#include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiDragonMount.h"
 #include "Shinobi/ShinobiEffects.h"
@@ -52,4 +55,69 @@ void UGA_DragonDismount::ActivateAbility(const FGameplayAbilitySpecHandle Handle
 		}
 	}
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+}
+
+UGA_DragonBreath::UGA_DragonBreath()
+{
+	InputID = EShinobiAbilityInputID::Melee;
+	ActivationRequiredTags.AddTag(ShinobiTags::State_Mounted);
+	CostGameplayEffectClass = UGE_DragonBreathCost::StaticClass();
+	CooldownGameplayEffectClass = UGE_DragonBreathCooldown::StaticClass();
+}
+
+void UGA_DragonBreath::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
+{
+	if (!CommitAbility(Handle, ActorInfo, ActivationInfo))
+	{
+		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+	Pulses = 0;
+	Ignited.Reset();
+	Pulse();
+}
+
+void UGA_DragonBreath::Pulse()
+{
+	AShinobiCharacterBase* Self = GetShinobiCharacter();
+	if (!Self || !Self->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Mounted) || Pulses >= PulseCount)
+	{
+		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
+		return;
+	}
+	++Pulses;
+	if (HasAuthority(&CurrentActivationInfo))
+	{
+		FVector Mouth = Self->GetActorLocation() + Self->GetActorForwardVector() * 400.f;
+		for (TActorIterator<AShinobiDragonMount> It(Self->GetWorld()); It; ++It)
+		{
+			if (It->GetRider() == Self)
+			{
+				Mouth = It->GetMouthLocation();
+			}
+		}
+		FVector ViewLocation;
+		FRotator ViewRotation;
+		GetAimViewPoint(ViewLocation, ViewRotation);
+		const FVector Aim = ViewRotation.Vector();
+		AShinobiBurst::Spawn(Self->GetWorld(), EShinobiBurst::FireBreath, Mouth, 3.f, Aim.Rotation());
+
+		const float Cos = FMath::Cos(FMath::DegreesToRadians(HalfAngle));
+		for (AShinobiCharacterBase* Target : ShinobiCombat::FindHostilesInRadius(Self, Mouth + Aim * (Range * 0.5f), Range * 0.5f + 150.f))
+		{
+			const FVector ToTarget = Target->GetActorLocation() - Mouth;
+			if (ToTarget.Size() > Range || FVector::DotProduct(ToTarget.GetSafeNormal(), Aim) < Cos)
+			{
+				continue;
+			}
+			if (ApplyDamage(Target, PulseDamage) && !Ignited.Contains(Target))
+			{
+				Ignited.Add(Target);
+				ShinobiCombat::ApplyStatus(Self->GetAbilitySystemComponent(), Target, UGE_Burn::StaticClass(), UGE_Burn::DamagePerTick);
+			}
+		}
+	}
+	UAbilityTask_WaitDelay* Wait = UAbilityTask_WaitDelay::WaitDelay(this, PulseGap);
+	Wait->OnFinish.AddDynamic(this, &UGA_DragonBreath::Pulse);
+	Wait->ReadyForActivation();
 }

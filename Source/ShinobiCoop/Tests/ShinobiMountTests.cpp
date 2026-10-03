@@ -13,6 +13,7 @@
 #include "Shinobi/Abilities/GA_Dodge.h"
 #include "Shinobi/Abilities/GA_Dragon.h"
 #include "Shinobi/Abilities/GA_Melee.h"
+#include "Shinobi/ShinobiCombat.h"
 
 namespace
 {
@@ -254,6 +255,58 @@ bool FShinobiDragonAssetsTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("seal montage"), Jutsu->SealMontage.LoadSynchronous());
 	TestNotNull(TEXT("release montage"), Jutsu->ReleaseMontage.LoadSynchronous());
 	TestNotNull(TEXT("icon (run Scripts/setup_hud.py)"), Jutsu->Icon.LoadSynchronous());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBreathTest, "ShinobiCoop.Mount.DragonBreathBurnsWhatIsInFrontAndNothingElse", ShinobiTestFlags)
+bool FShinobiBreathTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = Rider(W);
+	AShinobiCharacterBase* Front = W.Spawn<AShinobiCharacterBase>(FVector(800.f, 0.f, 0.f));
+	AShinobiCharacterBase* Side = W.Spawn<AShinobiCharacterBase>(FVector(800.f, 600.f, 0.f)); // 37 degrees off
+	AShinobiCharacterBase* Behind = W.Spawn<AShinobiCharacterBase>(FVector(-800.f, 0.f, 0.f));
+	AShinobiCharacterBase* TooFar = W.Spawn<AShinobiCharacterBase>(FVector(3000.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Friend = W.Spawn<AShinobiPlayerCharacter>(FVector(800.f, -40.f, 0.f));
+	for (AShinobiCharacterBase* Each : { Front, Side, Behind, TooFar, (AShinobiCharacterBase*)Friend })
+	{
+		ShinobiTest::Hover(Each);
+	}
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Melee);
+	TestTrue(TEXT("The swing button breathes fire"), ShinobiTest::IsActive(P, UGA_DragonBreath::StaticClass()));
+	TestEqual(TEXT("for 15 chakra"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 85.f);
+	W.Tick(2.f);
+	TestFalse(TEXT("It is over after a moment"), ShinobiTest::IsActive(P, UGA_DragonBreath::StaticClass()));
+	TestTrue(FString::Printf(TEXT("The enemy ahead took several pulses (%.0f left)"), ShinobiTest::Get(Front, Health)), ShinobiTest::Get(Front, Health) <= 500.f - 3 * UGA_DragonBreath::PulseDamage);
+	TestTrue(TEXT("and burns"), ShinobiTest::HasTag(Front, ShinobiTags::State_Burning));
+	TestEqual(TEXT("Off to the side: untouched"), ShinobiTest::Get(Side, Health), 500.f);
+	TestEqual(TEXT("Behind: untouched"), ShinobiTest::Get(Behind, Health), 500.f);
+	TestEqual(TEXT("Out of range: untouched"), ShinobiTest::Get(TooFar, Health), 500.f);
+	TestEqual(TEXT("A teammate in the flames: untouched"), ShinobiTest::Get(Friend, Health), 500.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBreathRulesTest, "ShinobiCoop.Mount.DragonBreathNeedsADragonAndCoolsDown", ShinobiTestFlags)
+bool FShinobiBreathRulesTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* OnFoot = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(OnFoot);
+	ShinobiTest::Press(OnFoot, EShinobiAbilityInputID::Melee);
+	TestFalse(TEXT("No breath on foot (the swing is a punch)"), ShinobiTest::IsActive(OnFoot, UGA_DragonBreath::StaticClass()));
+
+	AShinobiPlayerCharacter* P = Rider(W, FVector(0.f, 5000.f, 0.f));
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Melee);
+	W.Tick(2.f);
+	TestTrue(TEXT("Cooling down"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_DragonBreath));
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Melee);
+	TestFalse(TEXT("so a second breath has to wait"), ShinobiTest::IsActive(P, UGA_DragonBreath::StaticClass()));
+	ShinobiTest::Release(P, EShinobiAbilityInputID::Melee);
+	W.Tick(UGA_DragonBreath::CooldownSeconds);
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Melee);
+	TestTrue(TEXT("and then it is ready again"), ShinobiTest::IsActive(P, UGA_DragonBreath::StaticClass()));
 	return true;
 }
 

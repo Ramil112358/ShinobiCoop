@@ -215,6 +215,18 @@ UGE_Mounted::UGE_Mounted()
 	UseSingleRefreshingStack();
 }
 
+UGE_DragonBreathCost::UGE_DragonBreathCost()
+{
+	DurationPolicy = EGameplayEffectDurationType::Instant;
+	AddModifier(UShinobiAttributeSet::GetChakraAttribute(), -15.f);
+}
+
+UGE_DragonBreathCooldown::UGE_DragonBreathCooldown()
+{
+	SetDuration(Seconds);
+	GrantTag(ShinobiTags::Cooldown_DragonBreath);
+}
+
 UGE_Susanoo::UGE_Susanoo()
 {
 	SetDuration(Seconds);

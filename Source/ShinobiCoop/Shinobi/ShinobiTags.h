@@ -81,6 +81,7 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_SummonToad);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_SummonSnake);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_SummonDogs);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_DragonBreath);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Substitution);
 
 	// Activation failure reasons

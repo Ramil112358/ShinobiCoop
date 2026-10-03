@@ -30,3 +30,30 @@ public:
 
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
 };
+
+/** While mounted, the swing button breathes fire from the dragon's mouth along the camera's aim: PulseCount pulses PulseGap apart, each
+ * PulseDamage to every hostile in a narrow cone (3D) up to Range away; the first to hit also sets them alight. 15 chakra, 4 s cooldown. */
+UCLASS()
+class SHINOBICOOP_API UGA_DragonBreath : public UShinobiGameplayAbility
+{
+	GENERATED_BODY()
+
+public:
+	UGA_DragonBreath();
+
+	static constexpr float PulseDamage = 25.f;
+	static constexpr int32 PulseCount = 5;
+	static constexpr float PulseGap = 0.3f;
+	static constexpr float Range = 1500.f;
+	static constexpr float HalfAngle = 20.f;
+	static constexpr float CooldownSeconds = 4.f;
+
+	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
+
+private:
+	UFUNCTION()
+	void Pulse();
+
+	int32 Pulses = 0;
+	TSet<TWeakObjectPtr<AShinobiCharacterBase>> Ignited;
+};
