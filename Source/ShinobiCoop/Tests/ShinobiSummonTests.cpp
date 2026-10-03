@@ -6,6 +6,7 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 #include "Shinobi/Enemies/ShinobiSummon.h"
+#include "Shinobi/Abilities/GA_Summons.h"
 
 namespace
 {
@@ -148,6 +149,73 @@ bool FShinobiSummonDeathTest::RunTest(const FString& Parameters)
 		Alive += It->IsAlive() ? 1 : 0;
 	}
 	TestEqual(TEXT("Four living dogs"), Alive, AShinobiSummon::DogPackSize);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonCastToadTest, "ShinobiCoop.Summons.ToadJutsuCostsChakraThenCallsTheToad", ShinobiTestFlags)
+bool FShinobiSummonCastToadTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(4);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
+	TestEqual(TEXT("Cost 60 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 40.f);
+	TestEqual(TEXT("No toad during the seals"), ShinobiTest::CountActors<AShinobiSummon>(W), 0);
+	W.Tick(1.2f);
+	TestTrue(TEXT("Cooldown running"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonToad));
+	TestFalse(TEXT("The jutsu itself is over"), ShinobiTest::IsActive(P, UGA_SummonToad::StaticClass()));
+
+	AShinobiSummon* Toad = nullptr;
+	for (TActorIterator<AShinobiSummon> It(W.World); It; ++It)
+	{
+		Toad = *It;
+	}
+	if (!TestNotNull(TEXT("The toad is here"), Toad))
+	{
+		return false;
+	}
+	TestEqual(TEXT("It is a toad"), Toad->GetKind(), EShinobiSummonKind::Toad);
+	TestTrue(TEXT("It is the caster's"), Toad->GetSummoner() == P);
+	TestTrue(FString::Printf(TEXT("and stands in front of the caster (X %.0f)"), Toad->GetActorLocation().X), Toad->GetActorLocation().X > 200.f && Toad->GetActorLocation().X < 600.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonCastSnakeAndDogsTest, "ShinobiCoop.Summons.SnakeAndDogJutsuCallTheirKind", ShinobiTestFlags)
+bool FShinobiSummonCastSnakeAndDogsTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(4);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
+	TestEqual(TEXT("Snake cost 50"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 50.f);
+	W.Tick(1.2f);
+	TestTrue(TEXT("Snake cooldown"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonSnake));
+	TestEqual(TEXT("One snake"), ShinobiTest::CountActors<AShinobiSummon>(W), 1);
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
+	const float Left = ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute());
+	TestTrue(FString::Printf(TEXT("Dogs cost 45 out of the ~52 regenerated so far (%.1f left)"), Left), Left > 3.f && Left < 12.f);
+	W.Tick(1.2f);
+	TestTrue(TEXT("Dog cooldown"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonDogs));
+	TestEqual(TEXT("The snake and four dogs"), ShinobiTest::CountActors<AShinobiSummon>(W), 1 + AShinobiSummon::DogPackSize);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonPageTest, "ShinobiCoop.Summons.OnlyCallableFromPageFour", ShinobiTestFlags)
+bool FShinobiSummonPageTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(2);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
+	TestFalse(TEXT("Toad not on page 2"), ShinobiTest::IsActive(P, UGA_SummonToad::StaticClass()));
+	TestFalse(TEXT("Snake not on page 2"), ShinobiTest::IsActive(P, UGA_SummonSnake::StaticClass()));
+	TestFalse(TEXT("Dogs not on page 2"), ShinobiTest::IsActive(P, UGA_SummonDogs::StaticClass()));
 	return true;
 }
 
