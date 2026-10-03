@@ -25,7 +25,7 @@ public:
 	/** True while the armour is up (the figure may still be fading out after it ends). */
 	bool IsShown() const { return bWanted; }
 
-	/** The figure's mesh component; null on a dedicated server. */
+	/** The figure's mesh component; null until the armour first goes up, and on a dedicated server. */
 	UStaticMeshComponent* GetFigure() const { return Figure; }
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
@@ -36,6 +36,9 @@ protected:
 
 private:
 	void OnSusanooChanged(const FGameplayTag Tag, int32 Count);
+
+	/** Builds the figure and its material the first time they are needed. Does nothing if the model is not imported. */
+	void EnsureFigure();
 
 	UPROPERTY()
 	TObjectPtr<UStaticMeshComponent> Figure;

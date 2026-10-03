@@ -32,27 +32,42 @@ void UShinobiSusanooComponent::BeginPlay()
 	{
 		AbilitySystem = Owner->GetAbilitySystemComponent();
 	}
-	// The ribcage model (Scripts/character/make_susanoo.py, imported by Scripts/setup_susanoo.py): origin at the feet.
-	if (UStaticMesh* Model = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Shinobi/Jutsu/SM_Susanoo.SM_Susanoo"), nullptr, LOAD_NoWarn | LOAD_Quiet))
-	{
-		Figure = NewObject<UStaticMeshComponent>(GetOwner(), MakeUniqueObjectName(GetOwner(), UStaticMeshComponent::StaticClass(), TEXT("SusanooFigure")));
-		Figure->SetStaticMesh(Model);
-		Figure->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		Figure->SetCastShadow(false);
-		Figure->SetVisibility(false);
-		Material = ShinobiVfx::MakeSusanoo(this, 0.f);
-		Figure->SetMaterial(0, Material);
-		Figure->SetupAttachment(GetOwner()->GetRootComponent());
-		const ACharacter* Character = Cast<ACharacter>(GetOwner());
-		Figure->SetRelativeLocation(FVector(0.f, 0.f, Character ? -Character->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 0.f));
-		Figure->RegisterComponent();
-	}
 	if (UAbilitySystemComponent* ASC = AbilitySystem.Get())
 	{
 		Handle = ASC->RegisterGameplayTagEvent(ShinobiTags::State_Susanoo).AddUObject(this, &UShinobiSusanooComponent::OnSusanooChanged);
-		bWanted = ASC->HasMatchingGameplayTag(ShinobiTags::State_Susanoo);
+		bWanted = ASC->HasMatchingGameplayTag(ShinobiTags::State_Susanoo); // a client that joins mid-armour
+		if (bWanted)
+		{
+			EnsureFigure();
+		}
 		SetComponentTickEnabled(bWanted);
 	}
+}
+
+void UShinobiSusanooComponent::EnsureFigure()
+{
+	if (Figure)
+	{
+		return;
+	}
+	// Built the first time the armour goes up, not at spawn: most characters (every enemy and villager) never wear it.
+	// The ribcage model (Scripts/character/make_susanoo.py, imported by Scripts/setup_susanoo.py) has its origin at the feet.
+	UStaticMesh* Model = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Shinobi/Jutsu/SM_Susanoo.SM_Susanoo"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	if (!Model)
+	{
+		return;
+	}
+	Figure = NewObject<UStaticMeshComponent>(GetOwner(), MakeUniqueObjectName(GetOwner(), UStaticMeshComponent::StaticClass(), TEXT("SusanooFigure")));
+	Figure->SetStaticMesh(Model);
+	Figure->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Figure->SetCastShadow(false);
+	Figure->SetVisibility(false);
+	Material = ShinobiVfx::MakeSusanoo(this, 0.f);
+	Figure->SetMaterial(0, Material);
+	Figure->SetupAttachment(GetOwner()->GetRootComponent());
+	const ACharacter* Character = Cast<ACharacter>(GetOwner());
+	Figure->SetRelativeLocation(FVector(0.f, 0.f, Character ? -Character->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 0.f));
+	Figure->RegisterComponent();
 }
 
 void UShinobiSusanooComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -72,6 +87,10 @@ void UShinobiSusanooComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void UShinobiSusanooComponent::OnSusanooChanged(const FGameplayTag Tag, int32 Count)
 {
 	bWanted = Count > 0;
+	if (bWanted)
+	{
+		EnsureFigure();
+	}
 	SetComponentTickEnabled(true); // fade in or out
 }
 

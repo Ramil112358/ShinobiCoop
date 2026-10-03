@@ -134,6 +134,7 @@ bool FShinobiSusanooModelTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::ApplyEffect(P, UGE_Susanoo::StaticClass()); // the figure is built when the armour first goes up
 	const UStaticMeshComponent* Figure = P->GetSusanoo() ? P->GetSusanoo()->GetFigure() : nullptr;
 	const UStaticMesh* Mesh = Figure ? Figure->GetStaticMesh() : nullptr;
 	if (TestNotNull(TEXT("The figure has a mesh (run Scripts/setup_susanoo.py if not)"), Mesh))
@@ -154,6 +155,38 @@ bool FShinobiSusanooAssetsTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("seal montage"), Susanoo->SealMontage.LoadSynchronous());
 	TestNotNull(TEXT("release montage"), Susanoo->ReleaseMontage.LoadSynchronous());
 	TestNotNull(TEXT("icon"), Susanoo->Icon.LoadSynchronous());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSusanooLazyTest, "ShinobiCoop.Susanoo.FigureIsOnlyBuiltWhenTheArmourFirstGoesUp", ShinobiTestFlags)
+bool FShinobiSusanooLazyTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiCharacterBase* Enemy = W.Spawn<AShinobiCharacterBase>(); // never armoured: it must not pay for a 6 m figure
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	TestNull(TEXT("No figure on an enemy"), Enemy->GetSusanoo()->GetFigure());
+	TestNull(TEXT("and none on a player who has not cast it"), P->GetSusanoo()->GetFigure());
+	ShinobiTest::ApplyEffect(P, UGE_Susanoo::StaticClass());
+	TestNotNull(TEXT("The figure exists once the armour is up"), P->GetSusanoo()->GetFigure());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSusanooDownedTest, "ShinobiCoop.Susanoo.IsSuspendedWhileDownedAndComesBackOnRevive", ShinobiTestFlags)
+bool FShinobiSusanooDownedTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::ApplyEffect(P, UGE_Susanoo::StaticClass());
+	W.Tick(1.f);
+	TestTrue(TEXT("Armoured"), ShinobiTest::HasTag(P, ShinobiTags::State_Susanoo));
+
+	ShinobiTest::ApplyEffect(P, UGE_Downed::StaticClass());
+	TestFalse(TEXT("A downed player is not armoured"), ShinobiTest::HasTag(P, ShinobiTags::State_Susanoo));
+	TestFalse(TEXT("and no figure stands over the body"), P->GetSusanoo()->IsShown());
+
+	P->GetAbilitySystemComponent()->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_Downed));
+	TestTrue(TEXT("Revived: the rest of the 20 s is theirs again"), ShinobiTest::HasTag(P, ShinobiTags::State_Susanoo));
+	TestTrue(TEXT("and the figure is back"), P->GetSusanoo()->IsShown());
 	return true;
 }
 
