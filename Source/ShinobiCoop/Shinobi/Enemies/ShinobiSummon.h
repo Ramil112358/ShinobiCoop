@@ -4,7 +4,7 @@
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 #include "ShinobiSummon.generated.h"
 
-class UAnimSequence;
+class USkeletalMeshComponent;
 
 UENUM()
 enum class EShinobiSummonKind : uint8
@@ -52,6 +52,14 @@ public:
 
 	static constexpr float LeashRange = 3000.f;
 
+	/** Nothing to fight: it walks to its post beside the caster, which is about this far from them (a pack fans out round it). */
+	static constexpr float FollowDistance = 500.f;
+
+	/** Left this far behind (a teleport, a dragon ride, a long chase), it reappears beside the caster instead of walking. */
+	static constexpr float CatchUpDistance = 2500.f;
+
+	virtual bool GetIdlePost(FVector& OutPost) const override;
+
 	/** Server: leaves in a puff of smoke now. Does nothing for one that has already fallen. */
 	void Dismiss();
 
@@ -67,27 +75,18 @@ private:
 	 * mannequin. Does nothing on a dedicated server or when the creature is not imported. */
 	void WearCreature();
 
-	/** Picks the creature's clip from what the summon is doing (idle, walking, running, biting, dying). */
-	void UpdateCreatureClip();
-
 	UPROPERTY()
 	TObjectPtr<USkeletalMeshComponent> Creature;
 
-	UPROPERTY()
-	TObjectPtr<UAnimSequence> IdleClip;
-	UPROPERTY()
-	TObjectPtr<UAnimSequence> WalkClip;
-	UPROPERTY()
-	TObjectPtr<UAnimSequence> RunClip;
-	UPROPERTY()
-	TObjectPtr<UAnimSequence> BiteClip;
-	UPROPERTY()
-	TObjectPtr<UAnimSequence> DeathClip;
+	/** Server: with the caster far off, appears at its post beside them in a puff of smoke. */
+	void CatchUpWithCaster();
 
-	UPROPERTY()
-	TObjectPtr<UAnimSequence> PlayingClip;
-	bool bWasBiting = false;
-	bool bDeathPlayed = false;
+	/** Server: the summon's post in the world: its place beside the caster, on the ground under it when there is ground. */
+	FVector GetPostBesideCaster() const;
+
+	/** Direction (radians, world) from the caster to this summon's post, and how far out it stands; a pack fans out round them. */
+	float FollowAngle = 0.f;
+	float FollowRadius = 400.f;
 
 	UPROPERTY(Replicated)
 	EShinobiSummonKind Kind = EShinobiSummonKind::Toad;

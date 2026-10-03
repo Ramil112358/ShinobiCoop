@@ -28,9 +28,14 @@ public:
 private:
 	AShinobiCharacterBase* FindNearestPlayer(const AShinobiEnemyCharacter& Self) const;
 
+	/** With nothing to fight: walks to Post (paths where there is a navmesh, else steers straight), standing once there. */
+	void GoToPost(AShinobiEnemyCharacter& Self, const FVector& Post);
+
 	TWeakObjectPtr<AShinobiCharacterBase> Target;
 	float RetargetClock = 0.f;
 	float NextAttackTime = 0.f;
 	/** The last MoveToActor failed (no navmesh or no path): steer directly until the next retarget. */
 	bool bSteerDirectly = false;
+	/** Where the last path to an idle post was asked for; asked again when the post has moved on (its caster walks). */
+	FVector PostGoal = FVector::ZeroVector;
 };

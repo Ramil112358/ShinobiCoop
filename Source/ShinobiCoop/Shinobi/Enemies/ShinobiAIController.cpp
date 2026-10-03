@@ -39,7 +39,14 @@ void AShinobiAIController::Tick(float DeltaSeconds)
 	}
 	const AShinobiCharacterBase* Victim = Target.Get();
 	UAbilitySystemComponent* ASC = Self->GetAbilitySystemComponent();
-	if (!Victim || Self->IsBusy() || ASC->HasMatchingGameplayTag(ShinobiTags::State_Shocked) || ASC->HasMatchingGameplayTag(ShinobiTags::State_Staggered))
+	const bool bHeld = Self->IsBusy() || ASC->HasMatchingGameplayTag(ShinobiTags::State_Shocked) || ASC->HasMatchingGameplayTag(ShinobiTags::State_Staggered);
+	FVector Post;
+	if (!Victim && !bHeld && Self->GetIdlePost(Post))
+	{
+		GoToPost(*Self, Post);
+		return;
+	}
+	if (!Victim || bHeld)
 	{
 		StopMovement();
 		return;
@@ -84,6 +91,28 @@ void AShinobiAIController::Tick(float DeltaSeconds)
 	else
 	{
 		StopMovement();
+	}
+}
+
+void AShinobiAIController::GoToPost(AShinobiEnemyCharacter& Self, const FVector& Post)
+{
+	constexpr float ArriveWithin = 120.f;
+	const FVector ToPost = (Post - Self.GetActorLocation()) * FVector(1.f, 1.f, 0.f);
+	if (ToPost.Size() <= ArriveWithin)
+	{
+		StopMovement();
+		bSteerDirectly = false;
+		return;
+	}
+	if (!bSteerDirectly && (GetMoveStatus() == EPathFollowingStatus::Idle || FVector::Dist2D(PostGoal, Post) > 200.f))
+	{
+		PostGoal = Post;
+		bSteerDirectly = MoveToLocation(Post, ArriveWithin * 0.5f, true, true, false, false) == EPathFollowingRequestResult::Failed;
+	}
+	if (bSteerDirectly)
+	{
+		SetFocalPoint(Post, EAIFocusPriority::Move);
+		Self.AddMovementInput(ToPost.GetSafeNormal());
 	}
 }
 
