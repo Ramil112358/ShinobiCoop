@@ -409,9 +409,25 @@ def susanoo():
     }
 
 
+# Summoning: the seals, then a crouch with the right fist drawn up (the bitten thumb) and the left hand low; the release slams
+# both palms flat on the ground, the contract signed in blood.
+SUMMON_GATHER = merge(NEUTRAL, CROUCH, {"spine": (10, 6), "neck": (-6, 2), "head": (-8, 3),
+                                        "R": arm((-17, 74, 38), (-1, 0.3, 0), (0, -0.4, 1), LEFT, FIST),
+                                        "L": arm((17, 80, 26), (1, 0.3, 0), (0, -0.2, 1), RIGHT, OPEN)})
+
+
+def summon():
+    seals, t = seal_run(("Snake", "Ram", "Monkey"), 0.1)
+    return {
+        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.8, SUMMON_GATHER, "smooth")],
+        "Release": [(0.0, SUMMON_GATHER, "smooth"), (0.1, merge(SUMMON_GATHER, {"spine": (-4, 6)}), "snap"),
+                    (0.24, PALMS_DOWN, "back"), (0.8, PALMS_DOWN, "smooth"), (1.25, merge(NEUTRAL, READY_BODY), "smooth")],
+    }
+
+
 TIMELINES = {"Fireball": fireball(), "Chidori": chidori(), "Rasengan": rasengan(), "Amaterasu": amaterasu(),
              "Teleport": teleport(), "Kamui": kamui(), "AlmightyPush": almighty_push(), "EarthWall": wall(), "WaterWall": wall(),
-             "FireMeteor": fire_meteor(), "IceMeteor": ice_meteor(), "WaterDragon": water_dragon(), "Susanoo": susanoo()}
+             "FireMeteor": fire_meteor(), "IceMeteor": ice_meteor(), "WaterDragon": water_dragon(), "Susanoo": susanoo(), "Summon": summon()}
 
 
 # ---------------------------------------------------------------------------------------------------------------

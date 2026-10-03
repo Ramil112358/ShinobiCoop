@@ -8,6 +8,7 @@
 #include "Shinobi/Enemies/ShinobiSummon.h"
 #include "Shinobi/Abilities/GA_Summons.h"
 #include "Animation/AnimSingleNodeInstance.h"
+#include "Engine/Texture2D.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
@@ -400,6 +401,20 @@ bool FShinobiToadLookTest::RunTest(const FString& Parameters)
 	}
 	TestTrue(TEXT("It rears up to slam"), bSlamming);
 	TestEqual(TEXT("with the slam clip"), PlayingClip(Toad), FString(TEXT("ANIM_Toad_Slam")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonAssetsTest, "ShinobiCoop.Summons.JutsuHaveSealAnimationsAndIcons", ShinobiTestFlags)
+bool FShinobiSummonAssetsTest::RunTest(const FString& Parameters)
+{
+	// (run Scripts/setup_jutsu_anims.py and Scripts/setup_hud.py if an asset is missing)
+	for (const UGA_SummonBase* Jutsu : { (const UGA_SummonBase*)GetDefault<UGA_SummonToad>(), (const UGA_SummonBase*)GetDefault<UGA_SummonSnake>(), (const UGA_SummonBase*)GetDefault<UGA_SummonDogs>() })
+	{
+		const FString Name = Jutsu->DisplayName.ToString();
+		TestNotNull(Name + TEXT(" seal montage"), Jutsu->SealMontage.LoadSynchronous());
+		TestNotNull(Name + TEXT(" release montage"), Jutsu->ReleaseMontage.LoadSynchronous());
+		TestNotNull(Name + TEXT(" icon"), Jutsu->Icon.LoadSynchronous());
+	}
 	return true;
 }
 

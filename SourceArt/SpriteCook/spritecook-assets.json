@@ -16,7 +16,10 @@
     {"asset_id": "0c17ca79-b8c9-4e1c-9c58-d94185322767", "file": "UI/jutsu_firemeteor.png", "label": "Fire Meteor jutsu icon, gpt-image-2 low 1K (2 credits); copy in SourceArt/UI"},
     {"asset_id": "5013c0db-6d2a-46e8-a746-c9164b3d5087", "file": "UI/jutsu_icemeteor.png", "label": "Ice Meteor Shower jutsu icon, gpt-image-2 low 1K (2 credits); copy in SourceArt/UI"},
     {"asset_id": "2f0ae6c0-e99f-4652-8805-1c1b2d7e3a8f", "file": "UI/jutsu_waterdragon.png", "label": "Water Dragon jutsu icon, gpt-image-2 low 1K (2 credits); copy in SourceArt/UI"},
-    {"asset_id": "bf200c95-2d16-4300-b8b4-8474ef816795", "file": "UI/jutsu_susanoo.png", "label": "Susanoo jutsu icon, gpt-image-2 low 1K (2 credits); copy in SourceArt/UI"}
+    {"asset_id": "bf200c95-2d16-4300-b8b4-8474ef816795", "file": "UI/jutsu_susanoo.png", "label": "Susanoo jutsu icon, gpt-image-2 low 1K (2 credits); copy in SourceArt/UI"},
+    {"asset_id": "0e4956cf-2cba-4581-8028-ab3ff925b524", "file": "UI/jutsu_summontoad.png", "label": "Summon Toad jutsu icon, gpt-image-2 low 1K, Susanoo icon as style reference (2 credits); copy in SourceArt/UI"},
+    {"asset_id": "1e9e8e1d-3ec2-463d-9d0a-f12d0b3908e6", "file": "UI/jutsu_summonsnake.png", "label": "Summon Snake jutsu icon, gpt-image-2 low 1K, Susanoo icon as style reference (2 credits); copy in SourceArt/UI"},
+    {"asset_id": "a63fbe91-d077-44d4-ad2a-acacbd8a04db", "file": "UI/jutsu_summondogs.png", "label": "Summon Dogs jutsu icon, gpt-image-2 low 1K, Susanoo icon as style reference (2 credits); copy in SourceArt/UI"}
   ],
   "ui_kits": [
     {"ui_kit_id": "9b4146da-7bb2-489d-a6ca-65bcee0ef703", "name": "Shinobi HUD"}

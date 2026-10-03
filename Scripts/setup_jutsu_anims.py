@@ -26,6 +26,7 @@ JUTSU = {
     "AlmightyPush": ALL_PHASES,
     "Teleport": ("Seal", "Release"), "Kamui": ("Seal", "Release"), "EarthWall": ("Seal", "Release"), "WaterWall": ("Seal", "Release"),
     "FireMeteor": ("Seal", "Release"), "IceMeteor": ("Seal", "Release"), "WaterDragon": ("Seal", "Release"), "Susanoo": ("Seal", "Release"),
+    "Summon": ("Seal", "Release"),  # shared by the toad, snake and dogs
 }
 # Phase -> (blend in, blend out) seconds. The seals and the charge hand over to the next phase quickly; the release
 # blends back out to locomotion more slowly.
