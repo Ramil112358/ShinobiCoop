@@ -38,6 +38,7 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Casting_Charging);
 	// Kamui: untouchable and unseen by the AI; the Teleport window: kunai thrown, a re-press jumps to one.
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Phased);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Susanoo); // the armour is up: damage taken halved, dealt x1.3, chakra comes back faster
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Chilled); // Ice Meteor Shower: moves slower
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_TeleportMarked);
 
@@ -73,6 +74,7 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_FireMeteor);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_IceMeteor);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_WaterDragon);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_Susanoo);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Substitution);
 
 	// Activation failure reasons

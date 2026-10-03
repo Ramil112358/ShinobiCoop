@@ -208,6 +208,15 @@ UGE_Kamui::UGE_Kamui()
 	UseSingleRefreshingStack();
 }
 
+UGE_Susanoo::UGE_Susanoo()
+{
+	SetDuration(Seconds);
+	SetPeriodic(0.25f);
+	AddModifier(UShinobiAttributeSet::GetChakraAttribute(), 1.f); // +4 a second, on top of the base 2
+	GrantTag(ShinobiTags::State_Susanoo);
+	UseSingleRefreshingStack();
+}
+
 UGE_Chill::UGE_Chill()
 {
 	SetDuration(Seconds);

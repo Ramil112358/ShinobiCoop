@@ -1,6 +1,7 @@
 #include "Shinobi/ShinobiDamageExec.h"
 #include "AbilitySystemComponent.h"
 #include "Shinobi/ShinobiAttributeSet.h"
+#include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
 
 namespace
@@ -33,6 +34,16 @@ void UShinobiDamageExec::Execute_Implementation(const FGameplayEffectCustomExecu
 	if (Target->HasMatchingGameplayTag(ShinobiTags::State_Phased))
 	{
 		return; // Kamui: nothing touches them, burning included, and it is no dodge (no Substitution)
+	}
+
+	// Susanoo: the armour takes half, and the one wearing it hits 30% harder (burning too: it is their flame).
+	if (Source && Source->HasMatchingGameplayTag(ShinobiTags::State_Susanoo))
+	{
+		Damage *= UGE_Susanoo::DamageDealtScale;
+	}
+	if (Target->HasMatchingGameplayTag(ShinobiTags::State_Susanoo))
+	{
+		Damage *= UGE_Susanoo::DamageTakenScale;
 	}
 
 	// Only direct hits send events. They come from instant effects, whose spec is the applier's own copy, so a

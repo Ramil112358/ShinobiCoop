@@ -183,6 +183,19 @@ public:
 	UGE_Kamui();
 };
 
+/** Susanoo: 20 s of State.Susanoo. UShinobiDamageExec halves the damage its owner takes and raises the damage it deals by
+ * 30%; chakra comes back 4 a second faster (a periodic modifier on top of the base regen). Recasting refreshes it. */
+UCLASS()
+class SHINOBICOOP_API UGE_Susanoo : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	static constexpr float Seconds = 20.f;
+	static constexpr float DamageTakenScale = 0.5f; // read by UShinobiDamageExec
+	static constexpr float DamageDealtScale = 1.3f;
+	UGE_Susanoo();
+};
+
 /** Chill (Ice Meteor Shower): 3 s of State.Chilled, 40% slower movement. Another hit refreshes it. */
 UCLASS()
 class SHINOBICOOP_API UGE_Chill : public UShinobiEffect
