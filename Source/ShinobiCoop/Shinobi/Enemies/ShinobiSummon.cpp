@@ -5,6 +5,7 @@
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 #include "Shinobi/Enemies/GA_EnemyAttacks.h"
+#include "Shinobi/Enemies/GA_SummonAttacks.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
 
 namespace
@@ -12,7 +13,7 @@ namespace
 	struct FSummonStats
 	{
 		float Health;
-		float Damage;       // per hit of the shared melee (two hits per attack)
+		float Damage;       // per hit (a dog bites twice per attack)
 		float AttackRange;
 		float AttackInterval;
 		float Speed;
@@ -25,8 +26,8 @@ namespace
 	const FSummonStats& SummonStatsFor(EShinobiSummonKind Kind)
 	{
 		static const FSummonStats Table[] = {
-			{ 600.f, 30.f, 350.f, 2.5f, 350.f, 12.f, 2.5f, FLinearColor(0.1f, 0.4f, 0.1f), 1 },
-			{ 350.f, 35.f, 300.f, 2.0f, 500.f, 10.f, 1.6f, FLinearColor(0.35f, 0.1f, 0.5f), 1 },
+			{ 600.f, 60.f, 350.f, 2.5f, 350.f, 12.f, 2.5f, FLinearColor(0.1f, 0.4f, 0.1f), 1 },
+			{ 350.f, 70.f, 600.f, 2.0f, 500.f, 10.f, 1.6f, FLinearColor(0.35f, 0.1f, 0.5f), 1 },
 			{ 120.f, 18.f, 170.f, 0.8f, 800.f, 15.f, 0.8f, FLinearColor(0.15f, 0.15f, 0.17f), AShinobiSummon::DogPackSize },
 		};
 		return Table[static_cast<int32>(Kind)];
@@ -37,8 +38,6 @@ AShinobiSummon::AShinobiSummon(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 	Team = EShinobiTeam::Players;
-	AttackAbility = UGA_EnemyMelee::StaticClass();
-	StartupAbilities = { AttackAbility };
 	UseMannequinMesh();
 }
 
@@ -61,6 +60,10 @@ void AShinobiSummon::Configure()
 	AttackRange = Stats.AttackRange;
 	AttackInterval = Stats.AttackInterval;
 	BodyTint = Stats.Tint;
+	AttackAbility = Kind == EShinobiSummonKind::Toad ? TSubclassOf<UShinobiGameplayAbility>(UGA_ToadSlam::StaticClass())
+		: Kind == EShinobiSummonKind::Snake ? TSubclassOf<UShinobiGameplayAbility>(UGA_SnakeStrike::StaticClass())
+		: TSubclassOf<UShinobiGameplayAbility>(UGA_EnemyMelee::StaticClass());
+	StartupAbilities = { AttackAbility }; // granted by the character base's BeginPlay, after this
 	GetCharacterMovement()->MaxWalkSpeed = Stats.Speed;
 	SetActorScale3D(FVector(Stats.Scale));
 }

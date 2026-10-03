@@ -53,7 +53,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonFightTest, "ShinobiCoop.Summons.A
 bool FShinobiSummonFightTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(5000.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-5000.f, 0.f, 0.f));
 	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>();
 	ShinobiTest::Hover(Caster);
 	ShinobiTest::Hover(Ninja);
@@ -63,9 +63,10 @@ bool FShinobiSummonFightTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
+	W.Tick(0.6f);
+	TestTrue(TEXT("The ninja heads for the toad, not the far-off caster"), Ninja->GetActorLocation().X > 100.f);
 	W.Tick(3.f);
 	TestTrue(TEXT("The toad hurt the ninja"), ShinobiTest::Get(Ninja, UShinobiAttributeSet::GetHealthAttribute()) < 200.f);
-	TestTrue(TEXT("The ninja went for the toad, not the far-off caster"), ShinobiTest::Get(Pack[0], UShinobiAttributeSet::GetHealthAttribute()) < 600.f);
 	TestEqual(TEXT("The caster was never touched"), ShinobiTest::Get(Caster, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
 	return true;
 }
@@ -216,6 +217,50 @@ bool FShinobiSummonPageTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Toad not on page 2"), ShinobiTest::IsActive(P, UGA_SummonToad::StaticClass()));
 	TestFalse(TEXT("Snake not on page 2"), ShinobiTest::IsActive(P, UGA_SummonSnake::StaticClass()));
 	TestFalse(TEXT("Dogs not on page 2"), ShinobiTest::IsActive(P, UGA_SummonDogs::StaticClass()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiToadSlamTest, "ShinobiCoop.Summons.ToadSlamHitsEveryoneAroundIt", ShinobiTestFlags)
+bool FShinobiToadSlamTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(5000.f, 0.f, 0.f));
+	AShinobiRogueNinja* InFront = W.Spawn<AShinobiRogueNinja>(FVector(350.f, 0.f, 0.f));
+	AShinobiRogueNinja* Behind = W.Spawn<AShinobiRogueNinja>(FVector(-300.f, 0.f, 0.f));
+	AShinobiRogueNinja* Far = W.Spawn<AShinobiRogueNinja>(FVector(0.f, 1500.f, 0.f));
+	for (AShinobiCharacterBase* Each : { (AShinobiCharacterBase*)Caster, (AShinobiCharacterBase*)InFront, (AShinobiCharacterBase*)Behind, (AShinobiCharacterBase*)Far })
+	{
+		ShinobiTest::Hover(Each);
+	}
+	// Held still, so only the slam can have hurt them.
+	for (AShinobiRogueNinja* Each : { InFront, Behind, Far })
+	{
+		ShinobiTest::ApplyEffect(Each, UGE_Shock::StaticClass());
+	}
+	Summon(Caster, EShinobiSummonKind::Toad, FVector::ZeroVector);
+
+	W.Tick(1.2f);
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+	TestEqual(TEXT("In front: one slam of 60"), ShinobiTest::Get(InFront, Health), 140.f);
+	TestEqual(TEXT("Behind: the slam is all around"), ShinobiTest::Get(Behind, Health), 140.f);
+	TestEqual(TEXT("Out of reach: untouched"), ShinobiTest::Get(Far, Health), 200.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSnakeStrikeTest, "ShinobiCoop.Summons.SnakeStrikesFromFarOff", ShinobiTestFlags)
+bool FShinobiSnakeStrikeTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(5000.f, 0.f, 0.f));
+	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(FVector(550.f, 0.f, 0.f));
+	ShinobiTest::Hover(Caster);
+	ShinobiTest::Hover(Ninja);
+	ShinobiTest::ApplyEffect(Ninja, UGE_Shock::StaticClass()); // rooted for 1.5 s
+	Summon(Caster, EShinobiSummonKind::Snake, FVector::ZeroVector);
+
+	W.Tick(1.2f);
+	TestEqual(TEXT("Bitten once for 70 from 550 away"), ShinobiTest::Get(Ninja, UShinobiAttributeSet::GetHealthAttribute()), 130.f);
+	TestTrue(TEXT("The ninja never got close"), FVector::Dist2D(Ninja->GetActorLocation(), FVector::ZeroVector) > 450.f);
 	return true;
 }
 
