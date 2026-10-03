@@ -14,6 +14,8 @@ UGA_Susanoo::UGA_Susanoo()
 	Cooldown = 60.f;
 	WindUp = 0.6f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Susanoo);
+	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Susanoo_Seal.AM_Susanoo_Seal")));
+	ReleaseMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Susanoo_Release.AM_Susanoo_Release")));
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Susanoo); // one armour at a time
 }
 

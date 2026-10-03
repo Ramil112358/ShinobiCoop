@@ -28,6 +28,7 @@ TEXTURES = {
     "jutsu_firemeteor.png": ("T_Jutsu_FireMeteor", 128),
     "jutsu_icemeteor.png": ("T_Jutsu_IceMeteor", 128),
     "jutsu_waterdragon.png": ("T_Jutsu_WaterDragon", 128),
+    "jutsu_susanoo.png": ("T_Jutsu_Susanoo", 128),
 }
 
 

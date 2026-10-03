@@ -5,7 +5,9 @@
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/Abilities/GA_Susanoo.h"
+#include "Animation/AnimMontage.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/Texture2D.h"
 #include "Engine/StaticMesh.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
 #include "Shinobi/VFX/ShinobiSusanooComponent.h"
@@ -141,6 +143,17 @@ bool FShinobiSusanooModelTest::RunTest(const FString& Parameters)
 		TestTrue(FString::Printf(TEXT("standing on the ground, about 6 m tall (Z %.0f to %.0f)"), Box.Min.Z, Box.Max.Z), Box.Min.Z > -20.0 && Box.Min.Z < 20.0 && Box.Max.Z > 500.0 && Box.Max.Z < 700.0);
 		TestTrue(TEXT("facing +X: the arms reach forward"), Box.Max.X > 120.0);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSusanooAssetsTest, "ShinobiCoop.Susanoo.HasAnimationsAndAnIcon", ShinobiTestFlags)
+bool FShinobiSusanooAssetsTest::RunTest(const FString& Parameters)
+{
+	// (run Scripts/setup_jutsu_anims.py and Scripts/setup_hud.py if an asset is missing)
+	const UGA_Susanoo* Susanoo = GetDefault<UGA_Susanoo>();
+	TestNotNull(TEXT("seal montage"), Susanoo->SealMontage.LoadSynchronous());
+	TestNotNull(TEXT("release montage"), Susanoo->ReleaseMontage.LoadSynchronous());
+	TestNotNull(TEXT("icon"), Susanoo->Icon.LoadSynchronous());
 	return true;
 }
 

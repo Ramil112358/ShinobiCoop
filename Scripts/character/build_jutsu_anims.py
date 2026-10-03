@@ -394,9 +394,24 @@ def water_dragon():
     }
 
 
+# Susanoo: the Tiger seal held at the chest, then both arms thrown wide and the head back as the armour rises.
+ARMS_WIDE = merge(NEUTRAL, BRACE, {"spine": (-8, 9), "neck": (-8, 2), "head": (-18, 3),
+                                   "R": arm((-50, 166, 14), (-1, -0.2, -0.3), (-1, 0.4, 0.2), FWD, OPEN),
+                                   "L": arm((50, 166, 14), (1, -0.2, -0.3), (1, 0.4, 0.2), FWD, OPEN)})
+
+
+def susanoo():
+    seals, t = seal_run(("Ram", "Tiger"), 0.1, hold=0.12)
+    return {
+        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.62, seal("Tiger", BRACE), "smooth")],
+        "Release": [(0.0, seal("Tiger", BRACE), "smooth"), (0.12, merge(seal("Tiger", BRACE), {"hips": (9, -16, 0)}), "snap"),
+                    (0.3, ARMS_WIDE, "back"), (1.0, ARMS_WIDE, "smooth"), (1.5, merge(NEUTRAL, READY_BODY), "smooth")],
+    }
+
+
 TIMELINES = {"Fireball": fireball(), "Chidori": chidori(), "Rasengan": rasengan(), "Amaterasu": amaterasu(),
              "Teleport": teleport(), "Kamui": kamui(), "AlmightyPush": almighty_push(), "EarthWall": wall(), "WaterWall": wall(),
-             "FireMeteor": fire_meteor(), "IceMeteor": ice_meteor(), "WaterDragon": water_dragon()}
+             "FireMeteor": fire_meteor(), "IceMeteor": ice_meteor(), "WaterDragon": water_dragon(), "Susanoo": susanoo()}
 
 
 # ---------------------------------------------------------------------------------------------------------------
