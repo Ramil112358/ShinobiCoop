@@ -286,5 +286,6 @@ Where the creatures come from (all in `docs/world/asset-credits.md`):
 
 Shots 27-30 of `Scripts/shot_chakra.ps1 -Jutsu` show the three arrivals and the full page-4 HUD; `Scripts/smoke_m1.ps1` checks the client
 sees the four dogs. Not done: the rideable dragon (cycle E; `dragon-animations.glb` and `rig-dragon.glb` are already in
-`SourceArt/Mesh2Motion`), summons following their caster when nothing is in sight (they chase any hostile in the level), and
-hit-reaction clips (the `Hit` clips are imported but unused).
+`SourceArt/Mesh2Motion`), summons walking back to their caster when nothing is in sight (they only pick enemies within 30 m of the caster and
+otherwise stand still), and hit-reaction clips (the `Hit` clips are imported but unused). A summon leaves the moment its caster is downed,
+dies or leaves the game, and one cast next to a wall is pulled back in front of it and put on the floor.
