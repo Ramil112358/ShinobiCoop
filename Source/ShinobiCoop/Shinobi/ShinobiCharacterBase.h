@@ -15,6 +15,7 @@ class UShinobiCastFxComponent;
 class UShinobiChakraAuraComponent;
 class UShinobiFeedbackComponent;
 class UShinobiPhaseFxComponent;
+class UShinobiSusanooComponent;
 
 UENUM(BlueprintType)
 enum class EShinobiTeam : uint8
@@ -41,6 +42,9 @@ public:
 	UShinobiCastFxComponent* GetCastFx() const { return CastFx; }
 
 	UShinobiBodyFlameComponent* GetBodyFlames() const { return BodyFlames; }
+
+	/** Susanoo's ribcage figure while the armour is up. */
+	UShinobiSusanooComponent* GetSusanoo() const { return Susanoo; }
 
 	EShinobiTeam GetTeam() const { return Team; }
 	bool IsHostileTo(const AShinobiCharacterBase* Other) const { return Other && Other != this && Other->Team != Team; }
@@ -101,6 +105,10 @@ protected:
 	/** Kamui's ghost look (cosmetic, every machine that renders). */
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UShinobiPhaseFxComponent> PhaseFx;
+
+	/** Susanoo's figure (cosmetic, every machine that renders). */
+	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
+	TObjectPtr<UShinobiSusanooComponent> Susanoo;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	EShinobiTeam Team = EShinobiTeam::Enemies;

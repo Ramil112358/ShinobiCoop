@@ -73,6 +73,9 @@ namespace ShinobiVfx
 	 * Null, with an ensure, if the asset is missing. */
 	SHINOBICOOP_API UMaterialInstanceDynamic* MakeWater(UObject* Outer, const FLinearColor& Color, float Intensity);
 
+	/** Susanoo's glowing spectral armour (M_Susanoo, built by Scripts/setup_vfx.py) at Fade 0-1. Null, with an ensure, if the asset is missing. */
+	SHINOBICOOP_API UMaterialInstanceDynamic* MakeSusanoo(UObject* Outer, float Fade);
+
 	/** Kamui's see-through chakra-blue ghost (M_Phased, built by Scripts/setup_vfx.py) at Opacity 0-1. Null, with an ensure, if the asset is missing. */
 	SHINOBICOOP_API UMaterialInstanceDynamic* MakePhased(UObject* Outer, float Opacity);
 

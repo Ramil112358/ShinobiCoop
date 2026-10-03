@@ -5,7 +5,10 @@
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/Abilities/GA_Susanoo.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
+#include "Shinobi/VFX/ShinobiSusanooComponent.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSusanooDamageTest, "ShinobiCoop.Susanoo.HalvesDamageTakenAndBoostsDamageDealt", ShinobiTestFlags)
 bool FShinobiSusanooDamageTest::RunTest(const FString& Parameters)
@@ -103,6 +106,41 @@ bool FShinobiSusanooPageTest::RunTest(const FString& Parameters)
 	P->ApplyJutsuPage(2); // key 1 is Teleport there
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
 	TestFalse(TEXT("Not on page 2"), ShinobiTest::IsActive(P, UGA_Susanoo::StaticClass()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSusanooFigureTest, "ShinobiCoop.Susanoo.FigureStandsWhileTheArmourIsUp", ShinobiTestFlags)
+bool FShinobiSusanooFigureTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	UShinobiSusanooComponent* Armour = P->GetSusanoo();
+	if (!TestNotNull(TEXT("Every character has the figure component"), Armour))
+	{
+		return false;
+	}
+	TestFalse(TEXT("No figure before the cast"), Armour->IsShown());
+	ShinobiTest::ApplyEffect(P, UGE_Susanoo::StaticClass());
+	TestTrue(TEXT("The figure stands while the armour is up"), Armour->IsShown());
+	W.Tick(21.f);
+	TestFalse(TEXT("and goes when it ends"), Armour->IsShown());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSusanooModelTest, "ShinobiCoop.Susanoo.FigureIsTheRibcageModelStandingOnTheGround", ShinobiTestFlags)
+bool FShinobiSusanooModelTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	const UStaticMeshComponent* Figure = P->GetSusanoo() ? P->GetSusanoo()->GetFigure() : nullptr;
+	const UStaticMesh* Mesh = Figure ? Figure->GetStaticMesh() : nullptr;
+	if (TestNotNull(TEXT("The figure has a mesh (run Scripts/setup_susanoo.py if not)"), Mesh))
+	{
+		TestEqual(TEXT("the Susanoo ribcage"), Mesh->GetName(), FString(TEXT("SM_Susanoo")));
+		const FBox Box = Mesh->GetBoundingBox();
+		TestTrue(FString::Printf(TEXT("standing on the ground, about 6 m tall (Z %.0f to %.0f)"), Box.Min.Z, Box.Max.Z), Box.Min.Z > -20.0 && Box.Min.Z < 20.0 && Box.Max.Z > 500.0 && Box.Max.Z < 700.0);
+		TestTrue(TEXT("facing +X: the arms reach forward"), Box.Max.X > 120.0);
+	}
 	return true;
 }
 

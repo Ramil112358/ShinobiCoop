@@ -18,6 +18,7 @@
 #include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
 #include "Shinobi/VFX/ShinobiFeedbackComponent.h"
 #include "Shinobi/VFX/ShinobiPhaseFxComponent.h"
+#include "Shinobi/VFX/ShinobiSusanooComponent.h"
 
 AShinobiCharacterBase::AShinobiCharacterBase(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.SetDefaultSubobjectClass<UShinobiMovementComponent>(ACharacter::CharacterMovementComponentName))
@@ -38,6 +39,7 @@ AShinobiCharacterBase::AShinobiCharacterBase(const FObjectInitializer& ObjectIni
 	BodyFlames->SetupAttachment(RootComponent);
 	Feedback = CreateDefaultSubobject<UShinobiFeedbackComponent>(TEXT("Feedback"));
 	PhaseFx = CreateDefaultSubobject<UShinobiPhaseFxComponent>(TEXT("PhaseFx"));
+	Susanoo = CreateDefaultSubobject<UShinobiSusanooComponent>(TEXT("Susanoo"));
 
 	StartupEffects = { UGE_ChakraRegen::StaticClass(), UGE_StaminaRegen::StaticClass() };
 }

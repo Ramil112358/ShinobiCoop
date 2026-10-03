@@ -289,6 +289,50 @@ def build_phased():
     finish(m, emissive)
 
 
+def build_susanoo():
+    """M_Susanoo: Susanoo's armour. Additive and unlit, two-sided: a violet glow, brightest at the edges, with a slow band of
+    light drifting up the figure. Params: Color, Intensity, Fade."""
+    m = fresh_material("M_Susanoo", two_sided=True)
+    color = node(m, unreal.MaterialExpressionVectorParameter, -1000, -300,
+                 parameter_name="Color", default_value=unreal.LinearColor(0.45, 0.22, 1.0, 1.0))
+    intensity = node(m, unreal.MaterialExpressionScalarParameter, -1000, -150, parameter_name="Intensity", default_value=2.5)
+    fade = node(m, unreal.MaterialExpressionScalarParameter, -1000, 0, parameter_name="Fade", default_value=1.0)
+    rim = node(m, unreal.MaterialExpressionFresnel, -1000, 150, exponent=2.5, base_reflect_fraction=0.0)
+    rim_part = node(m, unreal.MaterialExpressionMultiply, -800, 150, const_b=0.75)
+    link(rim, rim_part, "A")
+    # A band of light climbing the figure: sine of (height * 0.02 - time).
+    world_pos = node(m, unreal.MaterialExpressionWorldPosition, -1000, 400)
+    height = node(m, unreal.MaterialExpressionComponentMask, -850, 400, r=False, g=False, b=True, a=False)
+    link(world_pos, height, "")
+    scaled = node(m, unreal.MaterialExpressionMultiply, -700, 400, const_b=0.02)
+    link(height, scaled, "A")
+    time = node(m, unreal.MaterialExpressionTime, -850, 520)
+    slowed = node(m, unreal.MaterialExpressionMultiply, -700, 520, const_b=1.5)
+    link(time, slowed, "A")
+    phase = node(m, unreal.MaterialExpressionSubtract, -550, 450)
+    link(scaled, phase, "A")
+    link(slowed, phase, "B")
+    wave = node(m, unreal.MaterialExpressionSine, -400, 450)
+    link(phase, wave, "")
+    band = node(m, unreal.MaterialExpressionMultiply, -250, 450, const_b=0.15)  # +-0.15 around the base
+    link(wave, band, "A")
+    base = node(m, unreal.MaterialExpressionAdd, -600, 150, const_b=0.3)
+    link(rim_part, base, "A")
+    body = node(m, unreal.MaterialExpressionAdd, -100, 250)
+    link(base, body, "A")
+    link(band, body, "B")
+    glow = node(m, unreal.MaterialExpressionMultiply, -700, -250)
+    link(color, glow, "A")
+    link(intensity, glow, "B")
+    faded = node(m, unreal.MaterialExpressionMultiply, -500, -150)
+    link(glow, faded, "A")
+    link(fade, faded, "B")
+    emissive = node(m, unreal.MaterialExpressionMultiply, -200, -50)
+    link(faded, emissive, "A")
+    link(body, emissive, "B")
+    finish(m, emissive)
+
+
 def build_water_wall():
     """M_WaterWall: the Water Wall's slab. Translucent unlit blue, flowing noise rising through it, brighter at the edges.
     (Not the river's single-layer-water material: that one lights depth behind a surface, not a vertical slab.) Param: Color, Intensity."""
@@ -354,3 +398,4 @@ build_flame("M_FlameDark", dark=True)
 build_streak()
 build_phased()
 build_water_wall()
+build_susanoo()
