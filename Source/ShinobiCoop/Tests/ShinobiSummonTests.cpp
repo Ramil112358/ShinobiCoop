@@ -7,6 +7,10 @@
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 #include "Shinobi/Enemies/ShinobiSummon.h"
 #include "Shinobi/Abilities/GA_Summons.h"
+#include "Animation/AnimSingleNodeInstance.h"
+#include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
 
 namespace
 {
@@ -261,6 +265,73 @@ bool FShinobiSnakeStrikeTest::RunTest(const FString& Parameters)
 	W.Tick(1.2f);
 	TestEqual(TEXT("Bitten once for 70 from 550 away"), ShinobiTest::Get(Ninja, UShinobiAttributeSet::GetHealthAttribute()), 130.f);
 	TestTrue(TEXT("The ninja never got close"), FVector::Dist2D(Ninja->GetActorLocation(), FVector::ZeroVector) > 450.f);
+	return true;
+}
+
+namespace
+{
+	FString PlayingClip(const AShinobiSummon* Dog)
+	{
+		UAnimSingleNodeInstance* Instance = Dog->GetBodyMesh()->GetSingleNodeInstance();
+		return Instance && Instance->GetCurrentAsset() ? Instance->GetCurrentAsset()->GetName() : FString();
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDogLookTest, "ShinobiCoop.Summons.DogsWearTheDarkWolfFacingForward", ShinobiTestFlags)
+bool FShinobiDogLookTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Dog, FVector(400.f, 0.f, 0.f));
+	const TArray<AShinobiSummon*> Toad = Summon(Caster, EShinobiSummonKind::Toad, FVector(-400.f, 0.f, 0.f));
+	if (Pack.Num() != AShinobiSummon::DogPackSize || Toad.Num() != 1)
+	{
+		return false;
+	}
+	const AShinobiSummon* Dog = Pack[0];
+	const USkeletalMeshComponent* Wolf = Dog->GetBodyMesh();
+	TestTrue(TEXT("The wolf is the visible body"), Wolf != Dog->GetMesh());
+	if (!TestNotNull(TEXT("with a mesh (the Animal Variety Pack is imported)"), Wolf->GetSkeletalMeshAsset()))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the wolf"), Wolf->GetSkeletalMeshAsset()->GetName(), FString(TEXT("SK_Wolf")));
+	TestFalse(TEXT("The mannequin under it is hidden"), Dog->GetMesh()->IsVisible());
+	TestTrue(TEXT("It faces the way the dog does (the wolf model faces +Y)"), FVector::DotProduct(Wolf->GetComponentTransform().TransformVectorNoScale(FVector(0.f, 1.f, 0.f)), Dog->GetActorForwardVector()) > 0.99f);
+	TestTrue(TEXT("in the dark coat"), Wolf->GetMaterial(0) && Wolf->GetMaterial(0)->GetName().Contains(TEXT("Dark")));
+	TestTrue(TEXT("The capsule is dog-sized, not a person's"), Dog->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() < 70.f);
+	const float FeetGap = (Wolf->Bounds.Origin.Z - Wolf->Bounds.BoxExtent.Z) - (Dog->GetActorLocation().Z - Dog->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+	TestTrue(FString::Printf(TEXT("Paws on the capsule's floor (off by %.0f)"), FeetGap), FMath::Abs(FeetGap) < 20.f);
+	TestTrue(TEXT("The toad keeps its own body"), Toad[0]->GetBodyMesh() == Toad[0]->GetMesh());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDogAnimTest, "ShinobiCoop.Summons.DogsIdleRunAndBite", ShinobiTestFlags)
+bool FShinobiDogAnimTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-5000.f, 0.f, 0.f));
+	ShinobiTest::Hover(Caster);
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Dog, FVector::ZeroVector);
+	const AShinobiSummon* Dog = Pack[0];
+	W.Tick(0.2f);
+	TestTrue(FString::Printf(TEXT("Idle with nothing to fight (%s)"), *PlayingClip(Dog)), PlayingClip(Dog).Contains(TEXT("Idle")));
+
+	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(FVector(900.f, 0.f, 0.f));
+	ShinobiTest::Hover(Ninja);
+	ShinobiTest::ApplyEffect(Ninja, UGE_Shock::StaticClass());
+	W.Tick(0.3f);
+	TestEqual(TEXT("Runs at the ninja"), PlayingClip(Dog), FString(TEXT("ANIM_Wolf_Run")));
+
+	bool bBit = false;
+	for (int32 Step = 0; Step < 40 && !bBit; ++Step)
+	{
+		W.Tick(0.05f);
+		bBit = ShinobiTest::HasTag(Dog, ShinobiTags::State_SummonAttacking);
+	}
+	TestTrue(TEXT("Bites once it arrives"), bBit);
+	TestEqual(TEXT("with the bite clip"), PlayingClip(Dog), FString(TEXT("ANIM_Wolf_Bite")));
 	return true;
 }
 

@@ -1,10 +1,24 @@
 #include "Shinobi/Enemies/GA_SummonAttacks.h"
 #include "Shinobi/ShinobiCombat.h"
+#include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
 
+UGA_DogBite::UGA_DogBite()
+{
+	Hits = 1;
+	WindUp = 0.4f;
+	Recovery = 0.35f;
+	Range = 190.f;
+	HalfAngle = 70.f;
+	WindUpMontage = nullptr; // the wolf plays its own clip, on State.SummonAttacking
+	FollowUpMontage = nullptr;
+	ActivationOwnedTags.AddTag(ShinobiTags::State_SummonAttacking);
+}
+
 UGA_ToadSlam::UGA_ToadSlam()
 {
+	ActivationOwnedTags.AddTag(ShinobiTags::State_SummonAttacking);
 	WindUp = 0.7f;
 	Recovery = 0.5f;
 }
@@ -27,6 +41,7 @@ void UGA_ToadSlam::Strike()
 
 UGA_SnakeStrike::UGA_SnakeStrike()
 {
+	ActivationOwnedTags.AddTag(ShinobiTags::State_SummonAttacking);
 	WindUp = 0.5f;
 	Recovery = 0.4f;
 }

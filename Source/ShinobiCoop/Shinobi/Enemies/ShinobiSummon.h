@@ -4,6 +4,8 @@
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 #include "ShinobiSummon.generated.h"
 
+class UAnimSequence;
+
 UENUM()
 enum class EShinobiSummonKind : uint8
 {
@@ -40,6 +42,11 @@ public:
 	EShinobiSummonKind GetKind() const { return Kind; }
 	AShinobiCharacterBase* GetSummoner() const { return Summoner.Get(); }
 
+	/** The wolf for a dog, else the placeholder mannequin. */
+	virtual USkeletalMeshComponent* GetBodyMesh() const override { return Creature ? Creature.Get() : Super::GetBodyMesh(); }
+
+	virtual void Tick(float DeltaSeconds) override;
+
 	/** Server: leaves in a puff of smoke now. Does nothing for one that has already fallen. */
 	void Dismiss();
 
@@ -50,6 +57,28 @@ protected:
 private:
 	/** Applies Kind's numbers, size and look. Runs on every machine, before the enemy base reads them. */
 	void Configure();
+
+	/** Dogs: dresses the dog in the Animal Variety Pack wolf over the hidden mannequin. Does nothing without the pack. */
+	void WearWolf();
+
+	/** Picks the wolf's clip from what the dog is doing (idle, walking, running, biting). */
+	void UpdateWolfClip();
+
+	UPROPERTY()
+	TObjectPtr<USkeletalMeshComponent> Creature;
+
+	UPROPERTY()
+	TObjectPtr<UAnimSequence> IdleClip;
+	UPROPERTY()
+	TObjectPtr<UAnimSequence> WalkClip;
+	UPROPERTY()
+	TObjectPtr<UAnimSequence> RunClip;
+	UPROPERTY()
+	TObjectPtr<UAnimSequence> BiteClip;
+
+	UPROPERTY()
+	TObjectPtr<UAnimSequence> PlayingClip;
+	bool bWasBiting = false;
 
 	UPROPERTY(Replicated)
 	EShinobiSummonKind Kind = EShinobiSummonKind::Toad;
