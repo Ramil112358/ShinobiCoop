@@ -10,8 +10,9 @@ import unreal
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CREATURES = {
-    # name: (colour, clips)
-    "Snake": ((0.10, 0.05, 0.16), ["Idle", "Move", "Bite", "Hit", "Death"]),
+    # name: (colour or None, clips, base-colour PNG or None). With a PNG the creature wears M_Character (the heroes' lit material).
+    "Snake": ((0.20, 0.08, 0.30), ["Idle", "Move", "Bite", "Hit", "Death"], None),
+    "Toad": (None, ["Idle", "Move", "Slam", "Hit", "Death"], "Toad.png"),
 }
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 MEL = unreal.MaterialEditingLibrary
@@ -43,6 +44,29 @@ def skeletal_options(mesh):
     return options
 
 
+def textured_material(name, png, dest):
+    parent = unreal.load_asset("/Game/Shinobi/Characters/M_Character")
+    if parent is None:
+        raise RuntimeError("M_Character is missing (Scripts/setup_hero.py)")
+    task = unreal.AssetImportTask()
+    task.filename = png
+    task.destination_path = dest
+    task.destination_name = f"T_{name}"
+    task.automated = True
+    task.save = True
+    task.replace_existing = True
+    TOOLS.import_asset_tasks([task])
+    texture = unreal.load_asset(f"{dest}/T_{name}")
+    if not isinstance(texture, unreal.Texture2D):
+        raise RuntimeError(f"could not import {png}")
+    path = f"{dest}/MI_{name}"
+    mi = unreal.load_asset(path) or TOOLS.create_asset(f"MI_{name}", dest, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    MEL.set_material_instance_parent(mi, parent)
+    MEL.set_material_instance_texture_parameter_value(mi, "BaseColor", texture)
+    unreal.EditorAssetLibrary.save_loaded_asset(mi)
+    return mi
+
+
 def material_for(name, colour, dest):
     solid = unreal.load_asset("/Game/Shinobi/Materials/M_ShinobiSolid")
     if solid is None:
@@ -58,7 +82,7 @@ def material_for(name, colour, dest):
     return mi
 
 
-for name, (colour, clips) in CREATURES.items():
+for name, (colour, clips, texture) in CREATURES.items():
     source = os.path.join(ROOT, "SourceArt", "Creatures", name)
     dest = f"/Game/Shinobi/Creatures/{name}"
     unreal.EditorAssetLibrary.make_directory(dest)
@@ -67,7 +91,7 @@ for name, (colour, clips) in CREATURES.items():
     if not isinstance(mesh, unreal.SkeletalMesh):
         raise RuntimeError(f"SK_{name} was not imported")
     skeleton = mesh.get_editor_property("skeleton")
-    mi = material_for(name, colour, dest)
+    mi = textured_material(name, os.path.join(source, texture), dest) if texture else material_for(name, colour, dest)
     slots = list(mesh.get_editor_property("materials"))
     if not slots:
         raise RuntimeError(f"SK_{name} has no material slot")

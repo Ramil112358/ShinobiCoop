@@ -119,6 +119,8 @@ for action_name, clip in CLIPS.items():
     if action is None:
         raise RuntimeError(f"no action {action_name!r}; have {[a.name for a in bpy.data.actions]}")
     arm.animation_data.action = action
+    if action.slots:
+        arm.animation_data.action_slot = action.slots[0]  # Blender 5 actions are slotted
     scene.frame_start, scene.frame_end = int(action.frame_range[0]), int(action.frame_range[1])
     select(arm)
     path = os.path.join(OUT, f"{NAME}_{clip}.fbx")

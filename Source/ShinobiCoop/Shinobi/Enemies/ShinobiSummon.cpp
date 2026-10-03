@@ -33,7 +33,7 @@ namespace
 	const FSummonStats& SummonStatsFor(EShinobiSummonKind Kind)
 	{
 		static const FSummonStats Table[] = {
-			{ 600.f, 60.f, 350.f, 2.5f, 350.f, 12.f, 2.5f, FLinearColor(0.1f, 0.4f, 0.1f), 1 },
+			{ 600.f, 60.f, 350.f, 2.5f, 350.f, 12.f, 1.0f, FLinearColor(0.1f, 0.4f, 0.1f), 1 },
 			{ 350.f, 70.f, 800.f, 2.0f, 500.f, 10.f, 1.0f, FLinearColor(0.35f, 0.1f, 0.5f), 1 },
 			{ 120.f, 18.f, 170.f, 0.8f, 800.f, 15.f, 1.0f, FLinearColor(0.15f, 0.15f, 0.17f), AShinobiSummon::DogPackSize },
 		};
@@ -50,7 +50,7 @@ namespace
 		const TCHAR* Bite;
 		const TCHAR* Death;
 		float Yaw;        // turns the model to face +X
-		float Scale;
+		FVector Scale;
 		float CapsuleRadius;
 		float CapsuleHalfHeight;
 		bool bDarkCoat;   // swap in the "...Dark" twin of each material
@@ -60,11 +60,14 @@ namespace
 	{
 		// The Animal Variety Pack wolf faces +Y and is a 2 m wolf; a ninken is a little bigger.
 		static const FCreatureLook Dog = { TEXT("/Game/AnimalVarietyPack/Wolf/Meshes/SK_Wolf"), TEXT("/Game/AnimalVarietyPack/Wolf/Animations/ANIM_Wolf_"),
-			TEXT("IdleAggressive"), TEXT("Walk"), TEXT("Run"), TEXT("Bite"), nullptr, -90.f, 1.1f, 45.f, 55.f, true };
-		// The Mesh2Motion snake (Scripts/character/export_creature.py) faces +X, 4 m long; a summoned one is three times that.
+			TEXT("IdleAggressive"), TEXT("Walk"), TEXT("Run"), TEXT("Bite"), nullptr, -90.f, FVector(1.1f), 45.f, 55.f, true };
+		// The Mesh2Motion snake (Scripts/character/export_creature.py) faces +X, 4 m long; a summoned one is two and a half times as long and five times as thick.
 		static const FCreatureLook Snake = { TEXT("/Game/Shinobi/Creatures/Snake/SK_Snake"), TEXT("/Game/Shinobi/Creatures/Snake/ANIM_Snake_"),
-			TEXT("Idle"), TEXT("Move"), TEXT("Move"), TEXT("Bite"), TEXT("Death"), 0.f, 3.f, 60.f, 40.f, false };
-		return Kind == EShinobiSummonKind::Dog ? &Dog : Kind == EShinobiSummonKind::Snake ? &Snake : nullptr;
+			TEXT("Idle"), TEXT("Move"), TEXT("Move"), TEXT("Bite"), TEXT("Death"), 0.f, FVector(2.5f, 5.f, 5.f), 60.f, 40.f, false };
+		// The Rodin toad (Scripts/character/build_toad.py) faces +X, 1.9 m long and 1.5 m tall; a summoned one is two and a half times that.
+		static const FCreatureLook Toad = { TEXT("/Game/Shinobi/Creatures/Toad/SK_Toad"), TEXT("/Game/Shinobi/Creatures/Toad/ANIM_Toad_"),
+			TEXT("Idle"), TEXT("Move"), TEXT("Move"), TEXT("Slam"), TEXT("Death"), 0.f, FVector(2.5f), 170.f, 190.f, false };
+		return Kind == EShinobiSummonKind::Dog ? &Dog : Kind == EShinobiSummonKind::Snake ? &Snake : &Toad;
 	}
 }
 
@@ -137,7 +140,7 @@ void AShinobiSummon::WearCreature()
 	// The model's paws (belly) rest on Z = 0; the capsule's floor is at -half height.
 	Creature->SetupAttachment(GetCapsuleComponent());
 	Creature->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -Look->CapsuleHalfHeight), FRotator(0.f, Look->Yaw, 0.f));
-	Creature->SetRelativeScale3D(FVector(Look->Scale));
+	Creature->SetRelativeScale3D(Look->Scale);
 	if (Look->bDarkCoat) // every material has a "...Dark" twin beside it
 	{
 		for (int32 Slot = 0; Slot < Creature->GetNumMaterials(); ++Slot)

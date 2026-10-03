@@ -20,6 +20,7 @@
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiMarkerKunai.h"
 #include "Shinobi/ShinobiMeteor.h"
+#include "Shinobi/Enemies/ShinobiSummon.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
 #include "Shinobi/ShinobiInputConfig.h"
@@ -702,17 +703,18 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(50.5f, [FaceCamera]() { FaceCamera(70.f, 70.f, 400.f, 900.f); });
 	At(50.6f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_27_Dogs")); });
 	At(51.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_27b_Dogs")); });
-	At(51.5f, BackToPlayer);
+	auto ClearSummons = [this]() { for (TActorIterator<AShinobiSummon> It(GetWorld()); It; ++It) { It->Dismiss(); } };
+	At(51.5f, [BackToPlayer, ClearSummons]() { BackToPlayer(); ClearSummons(); });
 	At(52.0f, [CastJutsu]() { CastJutsu(2, 0.8f); }); // Toad: appears at 52.7
 	At(53.2f, [FaceCamera]() { FaceCamera(70.f, 70.f, 500.f, 1300.f); });
 	At(53.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_28_Toad")); });
 	At(54.4f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_28b_Toad")); });
-	At(54.8f, BackToPlayer);
+	At(54.8f, [BackToPlayer, ClearSummons]() { BackToPlayer(); ClearSummons(); });
 	At(55.0f, [CastJutsu]() { CastJutsu(3, 0.8f); }); // Snake: appears at 55.7
 	At(56.2f, [FaceCamera]() { FaceCamera(70.f, 70.f, 500.f, 1200.f); });
 	At(56.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_29_Snake")); });
 	At(57.4f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_29b_Snake")); });
-	At(57.8f, BackToPlayer);
+	At(57.8f, [BackToPlayer, ClearSummons]() { BackToPlayer(); ClearSummons(); });
 	At(58.2f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_30_HudPage4Full")); });
 	At(58.8f, [this]() { ConsoleCommand(TEXT("quit")); });
 }

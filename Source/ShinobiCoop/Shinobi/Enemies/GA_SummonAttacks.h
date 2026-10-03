@@ -14,7 +14,8 @@ public:
 	UGA_DogBite();
 };
 
-/** The toad rears up and slams the ground: AttackDamage to everything hostile within Radius (scaled by its size) of its feet. */
+/** The toad rears up and slams the ground: AttackDamage to everything hostile within Radius (scaled by its size) of its feet.
+ * The clip (Scripts/character/build_toad.py) lands on the ground 0.7 s in, WindUp. */
 UCLASS()
 class SHINOBICOOP_API UGA_ToadSlam : public UGA_EnemyAttack
 {
@@ -24,7 +25,7 @@ public:
 	UGA_ToadSlam();
 
 	UPROPERTY(EditDefaultsOnly, Category = "Enemy")
-	float Radius = 180.f;
+	float Radius = 450.f;
 
 protected:
 	virtual void Strike() override;

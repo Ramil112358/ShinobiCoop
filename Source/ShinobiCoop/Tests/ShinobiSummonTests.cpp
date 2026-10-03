@@ -284,8 +284,7 @@ bool FShinobiDogLookTest::RunTest(const FString& Parameters)
 	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(Caster);
 	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Dog, FVector(400.f, 0.f, 0.f));
-	const TArray<AShinobiSummon*> Toad = Summon(Caster, EShinobiSummonKind::Toad, FVector(-400.f, 0.f, 0.f));
-	if (Pack.Num() != AShinobiSummon::DogPackSize || Toad.Num() != 1)
+	if (Pack.Num() != AShinobiSummon::DogPackSize)
 	{
 		return false;
 	}
@@ -303,7 +302,6 @@ bool FShinobiDogLookTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("The capsule is dog-sized, not a person's"), Dog->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() < 70.f);
 	const float FeetGap = (Wolf->Bounds.Origin.Z - Wolf->Bounds.BoxExtent.Z) - (Dog->GetActorLocation().Z - Dog->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
 	TestTrue(FString::Printf(TEXT("Paws on the capsule's floor (off by %.0f)"), FeetGap), FMath::Abs(FeetGap) < 20.f);
-	TestTrue(TEXT("The toad keeps its own body"), Toad[0]->GetBodyMesh() == Toad[0]->GetMesh());
 	return true;
 }
 
@@ -362,6 +360,46 @@ bool FShinobiSnakeLookTest::RunTest(const FString& Parameters)
 	ShinobiTest::Damage(const_cast<AShinobiSummon*>(Snake), 999.f);
 	W.Tick(0.2f);
 	TestEqual(TEXT("and plays its death clip when it falls"), PlayingClip(Snake), FString(TEXT("ANIM_Snake_Death")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiToadLookTest, "ShinobiCoop.Summons.ToadIsTheRiggedToadThatHopsAndSlams", ShinobiTestFlags)
+bool FShinobiToadLookTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-9000.f, 0.f, 0.f));
+	ShinobiTest::Hover(Caster);
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Toad, FVector::ZeroVector);
+	if (Pack.Num() != 1)
+	{
+		return false;
+	}
+	AShinobiSummon* Toad = Pack[0];
+	const USkeletalMeshComponent* Body = Toad->GetBodyMesh();
+	if (!TestTrue(TEXT("The toad model is the visible body (run Scripts/setup_creatures.py if not)"), Body != Toad->GetMesh() && Body->GetSkeletalMeshAsset()))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the toad"), Body->GetSkeletalMeshAsset()->GetName(), FString(TEXT("SK_Toad")));
+	const FBoxSphereBounds Bounds = Body->Bounds;
+	TestTrue(FString::Printf(TEXT("a giant: %.0f long, %.0f tall"), Bounds.BoxExtent.X * 2.f, Bounds.BoxExtent.Z * 2.f), Bounds.BoxExtent.X * 2.f > 400.f && Bounds.BoxExtent.Z * 2.f > 300.f);
+	const float FeetGap = (Bounds.Origin.Z - Bounds.BoxExtent.Z) - (Toad->GetActorLocation().Z - Toad->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+	TestTrue(FString::Printf(TEXT("standing on the capsule's floor (off by %.0f)"), FeetGap), FMath::Abs(FeetGap) < 20.f);
+	W.Tick(0.1f);
+	TestEqual(TEXT("It idles"), PlayingClip(Toad), FString(TEXT("ANIM_Toad_Idle")));
+
+	// Something to slam: held still next to it.
+	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(FVector(300.f, 0.f, 0.f));
+	ShinobiTest::Hover(Ninja);
+	ShinobiTest::ApplyEffect(Ninja, UGE_Shock::StaticClass());
+	bool bSlamming = false;
+	for (int32 Step = 0; Step < 30 && !bSlamming; ++Step)
+	{
+		W.Tick(0.05f);
+		bSlamming = ShinobiTest::HasTag(Toad, ShinobiTags::State_SummonAttacking);
+	}
+	TestTrue(TEXT("It rears up to slam"), bSlamming);
+	TestEqual(TEXT("with the slam clip"), PlayingClip(Toad), FString(TEXT("ANIM_Toad_Slam")));
 	return true;
 }
 
