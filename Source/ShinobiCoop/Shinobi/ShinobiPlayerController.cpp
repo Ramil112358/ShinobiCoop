@@ -574,7 +574,8 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	// The aim at the dummies, set once and restored well before each later cast (the server sees the client's camera
 	// with some lag, so a restore right at the cast can miss): the dashes and the face shots can leave it turned.
 	TSharedRef<FRotator> Aim = MakeShared<FRotator>();
-	At(2.f, [this, Aim]() { *Aim = FRotator(-8.f, GetControlRotation().Yaw, 0.f); SetControlRotation(*Aim); }); // the dummies stand lower
+	TSharedRef<FTransform> Start = MakeShared<FTransform>();
+	At(2.f, [this, Aim, Start]() { *Aim = FRotator(-8.f, GetControlRotation().Yaw, 0.f); SetControlRotation(*Aim); if (const APawn* Shinobi = GetPawn()) { *Start = Shinobi->GetActorTransform(); } }); // the dummies stand lower
 	auto RestoreAim = [this, Aim]() { SetControlRotation(*Aim); };
 	At(5.7f, RestoreAim);
 	At(8.7f, RestoreAim);
@@ -687,5 +688,31 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(47.85f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_25b_Susanoo")); });
 	At(48.2f, BackToPlayer);
 	At(49.0f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_26_HudPage4")); });
-	At(49.6f, [this]() { ConsoleCommand(TEXT("quit")); });
+
+	// The summons (page 4 slots 4, 2, 3), each watched from the side as it arrives and goes for the dummies.
+	At(49.1f, [this, Start, RestoreAim]() // the teleport and the dashes left the caster somewhere else: back to where it started
+	{
+		if (APawn* Shinobi = GetPawn())
+		{
+			Shinobi->SetActorTransform(*Start, false, nullptr, ETeleportType::TeleportPhysics);
+			RestoreAim();
+		}
+	});
+	At(49.3f, [CastJutsu]() { CastJutsu(4, 0.8f); }); // Dogs: 0.7 s seals, the pack appears at 50.0
+	At(50.5f, [FaceCamera]() { FaceCamera(70.f, 70.f, 400.f, 900.f); });
+	At(50.6f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_27_Dogs")); });
+	At(51.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_27b_Dogs")); });
+	At(51.5f, BackToPlayer);
+	At(52.0f, [CastJutsu]() { CastJutsu(2, 0.8f); }); // Toad: appears at 52.7
+	At(53.2f, [FaceCamera]() { FaceCamera(70.f, 70.f, 500.f, 1300.f); });
+	At(53.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_28_Toad")); });
+	At(54.4f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_28b_Toad")); });
+	At(54.8f, BackToPlayer);
+	At(55.0f, [CastJutsu]() { CastJutsu(3, 0.8f); }); // Snake: appears at 55.7
+	At(56.2f, [FaceCamera]() { FaceCamera(70.f, 70.f, 500.f, 1200.f); });
+	At(56.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_29_Snake")); });
+	At(57.4f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_29b_Snake")); });
+	At(57.8f, BackToPlayer);
+	At(58.2f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_30_HudPage4Full")); });
+	At(58.8f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
