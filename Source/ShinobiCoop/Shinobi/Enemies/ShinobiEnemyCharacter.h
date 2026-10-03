@@ -75,6 +75,9 @@ public:
 	/** True while any ability runs (the AI holds still). */
 	bool IsBusy() const;
 
+	/** Whether the AI may pick Candidate as a target (it is already hostile and targetable). Summons stay near their caster. */
+	virtual bool CanTarget(const AShinobiCharacterBase& Candidate) const { return true; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

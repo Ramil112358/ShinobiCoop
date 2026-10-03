@@ -30,6 +30,7 @@ enum class EShinobiBurst : uint8
 	FrostImpact,      // an ice shard landing
 	DragonSplash,     // Water Dragon ending
 	SusanooRise,      // Susanoo rising around the caster
+	SummonPoof,       // a summon arriving or leaving: a big puff of smoke
 };
 
 /**

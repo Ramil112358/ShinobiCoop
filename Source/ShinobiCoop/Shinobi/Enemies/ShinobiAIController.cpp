@@ -94,7 +94,7 @@ AShinobiCharacterBase* AShinobiAIController::FindNearestPlayer(const AShinobiEne
 	for (TActorIterator<AShinobiCharacterBase> It(GetWorld()); It; ++It)
 	{
 		const float Distance = FVector::DistSquared2D(It->GetActorLocation(), Self.GetActorLocation());
-		if (Self.IsHostileTo(*It) && It->IsTargetable() && Distance < NearestDistance)
+		if (Self.IsHostileTo(*It) && It->IsTargetable() && Distance < NearestDistance && Self.CanTarget(**It))
 		{
 			NearestDistance = Distance;
 			Nearest = *It;

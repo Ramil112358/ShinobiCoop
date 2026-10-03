@@ -49,3 +49,4 @@ __pycache__/
 /SourceArt/World/
 
 SourceArt/World/PolyHaven/
+SourceArt/Creatures/*/*.fbm/

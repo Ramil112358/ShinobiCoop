@@ -88,3 +88,15 @@ remaining trademarks: the TX4 taxi and double-decker bus shapes, London Eye and 
   `Scripts/setup_marker_kunai.py`). Two Hyper3D Rodin generations (a dagger and a cross-shaped blade) were tried and rejected, so no
   Rodin output ships. The Earth Wall wears Poly Haven's rock_09 (CC0, already in the world library); the Water Wall, Kamui ghost and
   all jutsu materials are built by `Scripts/setup_vfx.py`.
+
+## Summons
+
+- **Animal Variety Pack** (Epic Games, free on Fab, Fab Standard License; in `Content/AnimalVarietyPack`): the wolf mesh, material and
+  animations worn by the summoned dogs.
+- **Mesh2Motion** (https://github.com/scottpetrovic/mesh2motion-app, art assets CC0): the snake model, rig and animations
+  (`SourceArt/Mesh2Motion/snake-animations.glb`, exported by `Scripts/character/export_creature.py`). The fox, dragon and kaiju rigs
+  and animations were also downloaded there; the dragon is for the rideable summon.
+- **Hyper3D Rodin** (generated for this project): the toad (`SourceArt/Creatures/Toad/rodin_toad.glb`), rigged and animated in
+  Blender by `Scripts/character/build_toad.py`.
+- **SpriteCook** (generated for this project): the three summon jutsu icons.
+
