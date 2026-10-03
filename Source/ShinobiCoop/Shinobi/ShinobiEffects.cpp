@@ -208,6 +208,13 @@ UGE_Kamui::UGE_Kamui()
 	UseSingleRefreshingStack();
 }
 
+UGE_Mounted::UGE_Mounted()
+{
+	SetDuration(Seconds);
+	GrantTag(ShinobiTags::State_Mounted);
+	UseSingleRefreshingStack();
+}
+
 UGE_Susanoo::UGE_Susanoo()
 {
 	SetDuration(Seconds);

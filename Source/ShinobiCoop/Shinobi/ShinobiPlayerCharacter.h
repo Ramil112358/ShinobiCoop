@@ -39,6 +39,10 @@ public:
 	/** False while charging chakra, shocked, staggered, reviving, downed or dead: move and jump input are ignored. */
 	bool CanMove() const;
 
+	/** Flight while mounted: Space climbs, Control dives (both cancel). Ignored on the ground. */
+	void SetFlightClimb(bool bHeld) { bFlightClimb = bHeld; }
+	void SetFlightDive(bool bHeld) { bFlightDive = bHeld; }
+
 	static constexpr float ReviveHealthFraction = 0.3f;
 
 	/** Server: back up from downed at ReviveHealthFraction of max HP (GA_Revive; the game mode at a wave's end). */
@@ -135,10 +139,17 @@ protected:
 	virtual void FellOutOfWorld(const UDamageType& DamageType) override;
 
 private:
+	bool bFlightClimb = false;
+	bool bFlightDive = false;
+
+	static constexpr float FootArmLength = 450.f;
+	static constexpr float MountedArmLength = 900.f;
+
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 	/** Ignores the jump input while CanMove() is false. */
 	void JumpPressed();
+	void JumpReleased();
 	void AbilityInputPressed(EShinobiAbilityInputID InputID);
 	void AbilityInputReleased(EShinobiAbilityInputID InputID);
 	void CycleJutsuPage(int32 Direction) { TryCycleJutsuPage(Direction); }

@@ -196,6 +196,17 @@ public:
 	UGE_Susanoo();
 };
 
+/** Riding the summoned dragon: 45 s of State.Mounted. UShinobiMovementComponent flies the rider while it lasts. Ends early when the
+ * rider is downed or dies (AShinobiCharacterBase) or dismounts (UGA_DragonDismount). Recasting refreshes it. */
+UCLASS()
+class SHINOBICOOP_API UGE_Mounted : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	static constexpr float Seconds = 45.f;
+	UGE_Mounted();
+};
+
 /** Chill (Ice Meteor Shower): 3 s of State.Chilled, 40% slower movement. Another hit refreshes it. */
 UCLASS()
 class SHINOBICOOP_API UGE_Chill : public UShinobiEffect

@@ -77,14 +77,35 @@ UShinobiMovementComponent::UShinobiMovementComponent()
 {
 	bWantsToSprint = false;
 	MaxWalkSpeed = 600.f;
+	BrakingDecelerationFlying = 2500.f; // a dragon stops and turns quickly
 	// Uncontrolled characters (dummies, knocked-back pawns, test actors) still need physics and root motion.
 	bRunPhysicsWithNoController = true;
+}
+
+void UShinobiMovementComponent::UpdateCharacterStateBeforeMovement(float DeltaSeconds)
+{
+	const AShinobiCharacterBase* Character = Cast<AShinobiCharacterBase>(GetOwner());
+	const bool bMounted = Character && Character->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Mounted);
+	if (bMounted && MovementMode != MOVE_Flying)
+	{
+		SetMovementMode(MOVE_Flying);
+	}
+	else if (!bMounted && bWasMounted && MovementMode == MOVE_Flying)
+	{
+		SetMovementMode(MOVE_Falling);
+	}
+	bWasMounted = bMounted;
+	Super::UpdateCharacterStateBeforeMovement(DeltaSeconds);
 }
 
 float UShinobiMovementComponent::GetMaxSpeed() const
 {
 	float Speed = (bWantsToSprint && MovementMode == MOVE_Walking) ? SprintSpeed : Super::GetMaxSpeed();
 	const AShinobiCharacterBase* Character = Cast<AShinobiCharacterBase>(GetOwner());
+	if (MovementMode == MOVE_Flying && Character && Character->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Mounted))
+	{
+		Speed = FlightSpeed;
+	}
 	if (Character && Character->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Chilled))
 	{
 		Speed *= UGE_Chill::SpeedScale;

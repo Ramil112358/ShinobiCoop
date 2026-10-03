@@ -17,6 +17,12 @@ public:
 	bool IsSprinting() const { return bWantsToSprint; }
 
 	virtual float GetMaxSpeed() const override;
+
+	/** Rides State.Mounted: flies while it is on and falls once it ends. Runs in every move, on the client and the server alike,
+	 * so the tag (which replicates) is all the two need to agree on. */
+	virtual void UpdateCharacterStateBeforeMovement(float DeltaSeconds) override;
+
+	static constexpr float FlightSpeed = 1500.f;
 	virtual void UpdateFromCompressedFlags(uint8 Flags) override;
 	virtual FNetworkPredictionData_Client* GetPredictionData_Client() const override;
 	virtual bool ClientUpdatePositionAfterServerUpdate() override;
@@ -34,4 +40,5 @@ public:
 
 private:
 	double ForceRotationCorrectionUntil = 0.0;
+	bool bWasMounted = false;
 };

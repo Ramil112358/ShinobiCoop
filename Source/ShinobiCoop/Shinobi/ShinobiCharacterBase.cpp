@@ -61,6 +61,17 @@ void AShinobiCharacterBase::BeginPlay()
 	AbilitySystem->InitAbilityActorInfo(this, this);
 	AbilitySystem->RegisterGameplayTagEvent(ShinobiTags::State_Dead).AddUObject(this, &AShinobiCharacterBase::OnDeadTagChanged);
 	AbilitySystem->RegisterGameplayTagEvent(ShinobiTags::State_Phased).AddUObject(this, &AShinobiCharacterBase::OnPhasedTagChanged);
+	// A downed or dead rider is thrown from the dragon.
+	for (const FGameplayTag Out : { ShinobiTags::State_Downed.GetTag(), ShinobiTags::State_Dead.GetTag() })
+	{
+		AbilitySystem->RegisterGameplayTagEvent(Out).AddWeakLambda(this, [this](const FGameplayTag, int32 Count)
+		{
+			if (Count > 0 && HasAuthority())
+			{
+				AbilitySystem->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_Mounted));
+			}
+		});
+	}
 	if (HasAuthority())
 	{
 		Attributes->OnOutOfHealth.AddUObject(this, &AShinobiCharacterBase::HandleOutOfHealth);

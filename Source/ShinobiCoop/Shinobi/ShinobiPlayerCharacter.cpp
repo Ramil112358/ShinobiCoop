@@ -84,7 +84,7 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->TargetArmLength = 450.f;
+	CameraBoom->TargetArmLength = FootArmLength;
 	CameraBoom->SocketOffset = FVector(0.f, 60.f, 60.f);
 	CameraBoom->bUsePawnControlRotation = true;
 
@@ -452,6 +452,13 @@ void AShinobiPlayerCharacter::ToggleLockOn()
 void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	// Riding a dragon: the camera pulls back, and Space / Control climb and dive (the owner's input; a remote rider's flight arrives in its moves).
+	const bool bMounted = AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Mounted);
+	CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, bMounted ? MountedArmLength : FootArmLength, DeltaSeconds, 2.f);
+	if (bMounted && (IsLocallyControlled() || !GetController()) && CanMove())
+	{
+		AddMovementInput(FVector::UpVector, (bFlightClimb ? 1.f : 0.f) - (bFlightDive ? 1.f : 0.f));
+	}
 	// Possession and the player state can arrive after BeginPlay, so keep the tag current here.
 	NameTag->SetVisibility(!IsLocallyControlled());
 	if (const APlayerState* State = GetPlayerState())
@@ -509,7 +516,7 @@ void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 	Input->BindAction(InputConfig.Move, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Move);
 	Input->BindAction(InputConfig.Look, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Look);
 	Input->BindAction(InputConfig.Jump, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::JumpPressed);
-	Input->BindAction(InputConfig.Jump, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
+	Input->BindAction(InputConfig.Jump, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::JumpReleased);
 	for (const TPair<EShinobiAbilityInputID, TObjectPtr<UInputAction>>& Pair : InputConfig.AbilityActions)
 	{
 		Input->BindAction(Pair.Value, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::AbilityInputPressed, Pair.Key);
@@ -551,16 +558,32 @@ void AShinobiPlayerCharacter::JumpPressed()
 	{
 		return;
 	}
+	if (AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Mounted))
+	{
+		bFlightClimb = true; // on a dragon Space climbs
+		return;
+	}
 	Jump();
+}
+
+void AShinobiPlayerCharacter::JumpReleased()
+{
+	bFlightClimb = false;
+	StopJumping();
 }
 
 void AShinobiPlayerCharacter::AbilityInputPressed(EShinobiAbilityInputID InputID)
 {
+	bFlightDive |= InputID == EShinobiAbilityInputID::Dodge && AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Mounted); // Control dives
 	AbilitySystem->AbilityLocalInputPressed(static_cast<int32>(InputID));
 }
 
 void AShinobiPlayerCharacter::AbilityInputReleased(EShinobiAbilityInputID InputID)
 {
+	if (InputID == EShinobiAbilityInputID::Dodge)
+	{
+		bFlightDive = false;
+	}
 	AbilitySystem->AbilityLocalInputReleased(static_cast<int32>(InputID));
 }
 
