@@ -71,5 +71,6 @@ private:
 	void Stop(bool bCancelled);
 
 	int32 Pulses = 0;
+	TWeakObjectPtr<class AShinobiDragonFlame> Flame;
 	TSet<TWeakObjectPtr<AShinobiCharacterBase>> Ignited;
 };

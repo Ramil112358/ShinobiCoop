@@ -11,10 +11,13 @@ import unreal
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CREATURES = {
     # name: (colour or None, clips, base-colour PNG or None). With a PNG the creature wears M_Character (the heroes' lit material).
+    # The files are SourceArt/Creatures/<SOURCE.get(name, name)>/<name>*.fbx.
     "Snake": ((0.20, 0.08, 0.30), ["Idle", "Move", "Bite", "Hit", "Death"], None),
-    "Dragon": ((0.30, 0.04, 0.03), ["Idle", "Walk", "Flap", "Glide"], None),
+    "Dragon": (None, ["Idle", "Flap", "Glide", "Breath"], "Dragon.png"),
     "Toad": (None, ["Idle", "Move", "Slam", "Hit", "Death"], "Toad.png"),
 }
+SOURCE = {"Dragon": "DragonRodin"}  # the Rodin dragon (Scripts/character/build_dragon.py)
+CLEAN = {"Dragon"}  # replaced wholesale: the first dragon (Mesh2Motion's) had other clips
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 MEL = unreal.MaterialEditingLibrary
 
@@ -84,8 +87,10 @@ def material_for(name, colour, dest):
 
 
 for name, (colour, clips, texture) in CREATURES.items():
-    source = os.path.join(ROOT, "SourceArt", "Creatures", name)
+    source = os.path.join(ROOT, "SourceArt", "Creatures", SOURCE.get(name, name))
     dest = f"/Game/Shinobi/Creatures/{name}"
+    if name in CLEAN and unreal.EditorAssetLibrary.does_directory_exist(dest):
+        unreal.EditorAssetLibrary.delete_directory(dest)
     unreal.EditorAssetLibrary.make_directory(dest)
     import_fbx(os.path.join(source, f"{name}.fbx"), dest, f"SK_{name}", skeletal_options(True))
     mesh = unreal.load_asset(f"{dest}/SK_{name}")

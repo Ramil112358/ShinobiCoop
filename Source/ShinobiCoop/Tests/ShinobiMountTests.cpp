@@ -7,12 +7,16 @@
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimSingleNodeInstance.h"
 #include "Camera/CameraComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiDragonMount.h"
+#include "Shinobi/VFX/ShinobiDragonFlame.h"
 #include "Shinobi/Abilities/GA_Dodge.h"
 #include "Shinobi/Abilities/GA_Dragon.h"
 #include "Shinobi/Abilities/GA_Fireball.h"
@@ -240,7 +244,12 @@ bool FShinobiDragonLookTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Rides on the rider"), Dragon->GetAttachParentActor() == P);
 
 	W.Tick(0.3f);
-	TestEqual(TEXT("Hovering: wings flapping"), DragonClip(Dragon), FString(TEXT("ANIM_Dragon_Flap")));
+	TestEqual(TEXT("Hovering: the idle hover"), DragonClip(Dragon), FString(TEXT("ANIM_Dragon_Idle")));
+	P->SetFlightClimb(true);
+	W.Tick(0.4f);
+	TestEqual(TEXT("Climbing: wings beating"), DragonClip(Dragon), FString(TEXT("ANIM_Dragon_Flap")));
+	P->SetFlightClimb(false);
+	W.Tick(1.5f);
 	// Flying level and fast: gliding.
 	for (int32 Step = 0; Step < 30; ++Step)
 	{
@@ -438,6 +447,69 @@ bool FShinobiBoomLeftAloneTest::RunTest(const FString& Parameters)
 	Boom->TargetArmLength = 120.f; // the world tour's close-ups
 	W.Tick(1.f);
 	TestEqual(TEXT("Never mounted: someone else's setting stays"), Boom->TargetArmLength, 120.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMountClearanceTest, "ShinobiCoop.Mount.TheDragonNeverSinksIntoTheGround", ShinobiTestFlags)
+bool FShinobiMountClearanceTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	if (!TestNotNull(TEXT("engine cube"), Cube))
+	{
+		return false;
+	}
+	// A floor whose top is at Z = -88: where a standing player's feet are (the capsule centre is 88 above it).
+	AStaticMeshActor* Floor = W.World->SpawnActor<AStaticMeshActor>(FVector(0.f, 0.f, -138.f), FRotator::ZeroRotator);
+	Floor->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+	Floor->GetStaticMeshComponent()->SetStaticMesh(Cube);
+	Floor->SetActorScale3D(FVector(400.f, 400.f, 1.f));
+	Floor->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	W.Tick(0.3f); // lands
+	const float Bottom = P->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	ShinobiTest::ApplyEffect(P, UGE_Mounted::StaticClass());
+	W.Tick(1.5f);
+	const float Gap = P->GetActorLocation().Z - Bottom + 88.f; // the capsule's floor above the ground
+	TestTrue(FString::Printf(TEXT("Mounting lifts the rider clear of the ground (%.0f)"), Gap), Gap >= UShinobiMovementComponent::MountedGroundClearance - 15.f);
+
+	P->SetFlightDive(true);
+	W.Tick(2.f);
+	const float Dived = P->GetActorLocation().Z - Bottom + 88.f;
+	TestTrue(FString::Printf(TEXT("and diving cannot push the dragon into it (%.0f)"), Dived), Dived >= UShinobiMovementComponent::MountedGroundClearance - 15.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBreathAnimTest, "ShinobiCoop.Mount.TheDragonBreathesWithItsWholeHeadAndAJetOfFlame", ShinobiTestFlags)
+bool FShinobiBreathAnimTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = Rider(W);
+	AShinobiDragonMount* Dragon = AShinobiDragonMount::Spawn(P);
+	if (!TestNotNull(TEXT("dragon"), Dragon))
+	{
+		return false;
+	}
+	W.Tick(0.2f);
+	TestEqual(TEXT("No jet before the breath"), ShinobiTest::CountActors<AShinobiDragonFlame>(W), 0);
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Melee);
+	W.Tick(0.2f);
+	TestTrue(TEXT("The breath tag is up"), ShinobiTest::HasTag(P, ShinobiTags::State_DragonBreathing));
+	TestEqual(TEXT("The dragon plays its breath clip"), DragonClip(Dragon), FString(TEXT("ANIM_Dragon_Breath")));
+	TestEqual(TEXT("One jet of flame"), ShinobiTest::CountActors<AShinobiDragonFlame>(W), 1);
+	for (TActorIterator<AShinobiDragonFlame> It(W.World); It; ++It)
+	{
+		TestTrue(TEXT("with plenty of flames in it"), It->GetParticleCount() >= 40);
+		TestTrue(TEXT("at the dragon's mouth"), FVector::Dist(It->GetActorLocation(), AShinobiDragonMount::MouthLocation(*P)) < 60.f);
+		TestTrue(TEXT("belonging to the rider"), It->GetRider() == P);
+	}
+
+	W.Tick(UGA_DragonBreath::PulseCount * UGA_DragonBreath::PulseGap + 1.5f);
+	TestFalse(TEXT("The breath tag is down again"), ShinobiTest::HasTag(P, ShinobiTags::State_DragonBreathing));
+	TestEqual(TEXT("and the jet has burnt out"), ShinobiTest::CountActors<AShinobiDragonFlame>(W), 0);
+	TestNotEqual(TEXT("The dragon is back to hovering"), DragonClip(Dragon), FString(TEXT("ANIM_Dragon_Breath")));
 	return true;
 }
 

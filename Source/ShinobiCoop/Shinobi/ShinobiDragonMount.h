@@ -30,6 +30,7 @@ public:
 
 	/** Where the breath comes from: the dragon's mouth, at a fixed offset from the rider (the same on every machine). */
 	FVector GetMouthLocation() const;
+	static FVector MouthLocation(const AShinobiCharacterBase& Rider);
 
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -41,7 +42,7 @@ protected:
 	void OnRep_Rider();
 
 private:
-	void Play(UAnimSequence* Clip);
+	void Play(UAnimSequence* Clip, bool bLoop);
 
 	/** Rides the rider's mesh (smoothed on clients). Retried each tick until the rider is known: its channel can open after ours. */
 	void AttachToRider();
@@ -53,6 +54,10 @@ private:
 	UPROPERTY(ReplicatedUsing = OnRep_Rider)
 	TObjectPtr<AShinobiCharacterBase> Rider;
 
+	UPROPERTY()
+	TObjectPtr<UAnimSequence> IdleClip;
+	UPROPERTY()
+	TObjectPtr<UAnimSequence> BreathClip;
 	UPROPERTY()
 	TObjectPtr<UAnimSequence> FlapClip;
 	UPROPERTY()

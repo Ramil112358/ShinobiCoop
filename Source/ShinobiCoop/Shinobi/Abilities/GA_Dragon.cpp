@@ -2,13 +2,13 @@
 #include "AbilitySystemComponent.h"
 #include "Abilities/Tasks/AbilityTask_WaitDelay.h"
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
-#include "EngineUtils.h"
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiDragonMount.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
+#include "Shinobi/VFX/ShinobiDragonFlame.h"
 
 UGA_SummonDragon::UGA_SummonDragon()
 {
@@ -71,6 +71,7 @@ UGA_DragonBreath::UGA_DragonBreath()
 	ActivationRequiredTags.AddTag(ShinobiTags::State_Mounted);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Phased); // no attacking from the other side of Kamui
 	ActivationBlockedTags.AddTag(ShinobiTags::State_ChakraCharging);
+	ActivationOwnedTags.AddTag(ShinobiTags::State_DragonBreathing); // the dragon's head clip, on every machine
 	CostGameplayEffectClass = UGE_DragonBreathCost::StaticClass();
 	CooldownGameplayEffectClass = UGE_DragonBreathCooldown::StaticClass();
 }
@@ -84,6 +85,10 @@ void UGA_DragonBreath::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 	}
 	Pulses = 0;
 	Ignited.Reset();
+	if (HasAuthority(&ActivationInfo))
+	{
+		Flame = AShinobiDragonFlame::Spawn(GetShinobiCharacter());
+	}
 	UAbilityTask_WaitGameplayEvent* Interrupt = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, ShinobiTags::Event_Hit_Stagger, nullptr, true);
 	Interrupt->EventReceived.AddDynamic(this, &UGA_DragonBreath::OnStaggered);
 	Interrupt->ReadyForActivation();
@@ -97,6 +102,10 @@ void UGA_DragonBreath::OnStaggered(FGameplayEventData Payload)
 
 void UGA_DragonBreath::Stop(bool bCancelled)
 {
+	if (AShinobiDragonFlame* Jet = Flame.Get())
+	{
+		Jet->Stop();
+	}
 	// The server's copy ends it for everyone: a client that ended first could cut the server's last pulse short on a latency spike.
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, HasAuthority(&CurrentActivationInfo), bCancelled);
 }
@@ -112,19 +121,11 @@ void UGA_DragonBreath::Pulse()
 	++Pulses;
 	if (HasAuthority(&CurrentActivationInfo))
 	{
-		FVector Mouth = Self->GetActorLocation() + Self->GetActorForwardVector() * 400.f;
-		for (TActorIterator<AShinobiDragonMount> It(Self->GetWorld()); It; ++It)
-		{
-			if (It->GetRider() == Self)
-			{
-				Mouth = It->GetMouthLocation();
-			}
-		}
+		const FVector Mouth = AShinobiDragonMount::MouthLocation(*Self);
 		FVector ViewLocation;
 		FRotator ViewRotation;
 		GetAimViewPoint(ViewLocation, ViewRotation);
 		const FVector Aim = ViewRotation.Vector();
-		AShinobiBurst::Spawn(Self->GetWorld(), EShinobiBurst::FireBreath, Mouth, 3.f, Aim.Rotation());
 
 		const float Cos = FMath::Cos(FMath::DegreesToRadians(HalfAngle));
 		for (AShinobiCharacterBase* Target : ShinobiCombat::FindHostilesInRadius(Self, Mouth + Aim * (Range * 0.5f), Range * 0.5f + 150.f))
@@ -137,6 +138,7 @@ void UGA_DragonBreath::Pulse()
 			if (ApplyDamage(Target, PulseDamage) && !Ignited.Contains(Target))
 			{
 				Ignited.Add(Target);
+				AShinobiBurst::Spawn(Self->GetWorld(), EShinobiBurst::Fire, Target->GetActorLocation(), 0.7f);
 				ShinobiCombat::ApplyStatus(Self->GetAbilitySystemComponent(), Target, UGE_Burn::StaticClass(), UGE_Burn::DamagePerTick);
 			}
 		}

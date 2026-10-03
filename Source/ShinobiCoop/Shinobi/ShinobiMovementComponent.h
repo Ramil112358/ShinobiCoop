@@ -23,6 +23,10 @@ public:
 	virtual void UpdateCharacterStateBeforeMovement(float DeltaSeconds) override;
 
 	static constexpr float FlightSpeed = 1500.f;
+
+	/** The lowest a mounted rider's capsule floor may be above the ground: the dragon's legs hang below the rider, so it can lift off
+	 * from the ground and never lowers into it. */
+	static constexpr float MountedGroundClearance = 200.f;
 	virtual void UpdateFromCompressedFlags(uint8 Flags) override;
 	virtual FNetworkPredictionData_Client* GetPredictionData_Client() const override;
 	virtual bool ClientUpdatePositionAfterServerUpdate() override;

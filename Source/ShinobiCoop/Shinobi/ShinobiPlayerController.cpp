@@ -733,15 +733,18 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(58.2f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_30_HudPage4Full")); });
 	// The dragon (page 5): mount, ride in the default (pulled-back) view, breathe fire at the dummies, climb, dismount.
 	auto Rider = [this]() { return GetPawn<AShinobiPlayerCharacter>(); };
+	At(58.4f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_Susanoo)); } }); // the armour hides the rider
 	At(58.6f, [this, RestoreAim]() { ShinobiPage(5); RestoreAim(); });
 	At(58.8f, [CastJutsu]() { CastJutsu(1, 0.9f); }); // Summon Dragon: 0.8 s seals, mounted from about 59.6
 	At(61.6f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_31_DragonRide")); });
-	At(61.8f, [FaceCamera]() { FaceCamera(75.f, 60.f, 0.f, 1400.f); });
+	At(61.8f, [FaceCamera]() { FaceCamera(75.f, 60.f, 0.f, 2300.f); });
 	At(61.95f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_31b_DragonSide")); });
-	At(62.1f, BackToPlayer);
+	At(62.0f, [FaceCamera]() { FaceCamera(45.f, 70.f, 0.f, 800.f); }); // the rider close up
+	At(62.05f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_31c_DragonRider")); });
+	At(62.2f, BackToPlayer);
 	At(62.4f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->AbilityLocalInputPressed(static_cast<int32>(EShinobiAbilityInputID::Melee)); } }); // breath
 	At(62.8f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_32_DragonBreath")); });
-	At(63.1f, [FaceCamera]() { FaceCamera(75.f, 60.f, 400.f, 1400.f); });
+	At(63.1f, [FaceCamera]() { FaceCamera(75.f, 60.f, 500.f, 2300.f); });
 	At(63.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_32b_DragonBreath")); });
 	At(63.4f, BackToPlayer);
 	At(63.6f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->AbilityLocalInputReleased(static_cast<int32>(EShinobiAbilityInputID::Melee)); P->SetFlightClimb(true); } });
