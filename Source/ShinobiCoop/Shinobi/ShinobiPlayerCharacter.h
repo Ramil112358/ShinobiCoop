@@ -139,6 +139,12 @@ protected:
 	virtual void FellOutOfWorld(const UDamageType& DamageType) override;
 
 private:
+	/** While mounted: keeps the seated loop (AM_Mount_Sit) playing whenever no other montage (a jutsu) is, and ends it on the dismount. */
+	void UpdateSeatedPose();
+
+	UPROPERTY()
+	TObjectPtr<UAnimMontage> SeatedMontage;
+
 	bool bFlightClimb = false;
 	bool bFlightDive = false;
 

@@ -461,6 +461,7 @@ void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
 	{
 		AddMovementInput(FVector::UpVector, (bFlightClimb ? 1.f : 0.f) - (bFlightDive ? 1.f : 0.f));
 	}
+	UpdateSeatedPose();
 	// Possession and the player state can arrive after BeginPlay, so keep the tag current here.
 	NameTag->SetVisibility(!IsLocallyControlled());
 	if (const APlayerState* State = GetPlayerState())
@@ -484,6 +485,35 @@ void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
 	FRotator Desired = (Target->GetActorLocation() + FVector(0.f, 0.f, 30.f) - ViewLocation).Rotation();
 	Desired.Pitch = FMath::Clamp(FRotator::NormalizeAxis(Desired.Pitch), -40.f, 20.f);
 	Controller->SetControlRotation(FMath::RInterpTo(Controller->GetControlRotation(), Desired, DeltaSeconds, 10.f));
+}
+
+void AShinobiPlayerCharacter::UpdateSeatedPose()
+{
+	UAnimInstance* Anim = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!Anim || IsNetMode(NM_DedicatedServer))
+	{
+		return;
+	}
+	if (!SeatedMontage)
+	{
+		SeatedMontage = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Shinobi/Anims/AM_Mount_Sit.AM_Mount_Sit"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		if (!SeatedMontage)
+		{
+			return;
+		}
+	}
+	if (AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Mounted))
+	{
+		if (!Anim->IsAnyMontagePlaying()) // a jutsu's montage takes the pose for its moment, then the rider sits again
+		{
+			Anim->Montage_Play(SeatedMontage);
+			Anim->Montage_SetNextSection(TEXT("Default"), TEXT("Default"), SeatedMontage); // a loop
+		}
+	}
+	else if (Anim->Montage_IsPlaying(SeatedMontage))
+	{
+		Anim->Montage_Stop(0.3f, SeatedMontage);
+	}
 }
 
 void AShinobiPlayerCharacter::UnPossessed()

@@ -56,17 +56,24 @@ $phased = Select-String -LiteralPath $ClientLog -Pattern "ShinobiStats \S+ local
 $armour = Select-String -LiteralPath $ClientLog -Pattern "ShinobiStats \S+ local=1 .* Susanoo=1"
 # The Dogs (cast at 7.1 s): at 11.3 s the client sees the pack of four, replicated from the server.
 $dogs = Select-String -LiteralPath $ClientLog -Pattern "ShinobiJutsuWorld .* Summons=4"
-if ($hit -and $burned -and $wall -and $phased -and $armour -and $dogs) {
+# The Dragon (cast at 14.4 s, after Kamui): the client sees itself mounted, and the dragon actor under it.
+$mounted = Select-String -LiteralPath $ClientLog -Pattern "ShinobiStats \S+ local=1 .* Mounted=1"
+$dragon = Select-String -LiteralPath $ClientLog -Pattern "ShinobiJutsuWorld .* Dragons=1"
+if ($hit -and $burned -and $wall -and $phased -and $armour -and $dogs -and $mounted -and $dragon) {
     Write-Host "SMOKE PASS: $($hit.Line)"
     Write-Host "SMOKE PASS: $($burned[0].Line)"
     Write-Host "SMOKE PASS: $($wall[0].Line)"
     Write-Host "SMOKE PASS: $($phased[0].Line)"
     Write-Host "SMOKE PASS: $($armour[0].Line)"
     Write-Host "SMOKE PASS: $($dogs[0].Line)"
+    Write-Host "SMOKE PASS: $($mounted[0].Line)"
+    Write-Host "SMOKE PASS: $($dragon[0].Line)"
 } else {
     Select-String -LiteralPath $ClientLog -Pattern "ShinobiStats|Error" | Select-Object -Last 20 | ForEach-Object { Write-Host $_.Line }
     Select-String -LiteralPath $ClientLog -Pattern "ShinobiJutsuWorld" | Select-Object -Last 3 | ForEach-Object { Write-Host $_.Line }
     if (-not $wall) { throw "SMOKE FAIL: client never saw the replicated Earth Wall and falling ice shards (page 2, one barrier, meteors in the sky)" }
+    if (-not $mounted) { throw "SMOKE FAIL: client never saw itself mounted on the dragon" }
+    if (-not $dragon) { throw "SMOKE FAIL: client never saw the replicated dragon" }
     if (-not $dogs) { throw "SMOKE FAIL: client never saw the four summoned dogs" }
     if (-not $armour) { throw "SMOKE FAIL: client never saw its own Susanoo armour" }
     if (-not $phased) { throw "SMOKE FAIL: client never saw its own Kamui phase" }

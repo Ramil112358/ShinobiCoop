@@ -2,6 +2,8 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
 #include "Animation/AnimSingleNodeInstance.h"
 #include "Camera/CameraComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -307,6 +309,38 @@ bool FShinobiBreathRulesTest::RunTest(const FString& Parameters)
 	W.Tick(UGA_DragonBreath::CooldownSeconds);
 	ShinobiTest::Press(P, EShinobiAbilityInputID::Melee);
 	TestTrue(TEXT("and then it is ready again"), ShinobiTest::IsActive(P, UGA_DragonBreath::StaticClass()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMountSeatedTest, "ShinobiCoop.Mount.TheRiderSitsAndKeepsSittingWhileMounted", ShinobiTestFlags)
+bool FShinobiMountSeatedTest::RunTest(const FString& Parameters)
+{
+	// (run Scripts/setup_jutsu_anims.py if the montage is missing)
+	const UAnimMontage* Sit = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Shinobi/Anims/AM_Mount_Sit.AM_Mount_Sit"));
+	if (!TestNotNull(TEXT("seated montage"), Sit))
+	{
+		return false;
+	}
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	UAnimInstance* Anim = P->GetMesh()->GetAnimInstance();
+	if (!TestNotNull(TEXT("the character's animation instance"), Anim))
+	{
+		return false;
+	}
+	W.Tick(0.3f);
+	TestFalse(TEXT("Standing on foot"), Anim->Montage_IsPlaying(Sit));
+
+	ShinobiTest::ApplyEffect(P, UGE_Mounted::StaticClass());
+	W.Tick(0.5f);
+	TestTrue(TEXT("Seated once mounted"), Anim->Montage_IsPlaying(Sit));
+	W.Tick(Sit->GetPlayLength() * 2.5f);
+	TestTrue(TEXT("and still seated after the clip has looped"), Anim->Montage_IsPlaying(Sit));
+
+	P->GetAbilitySystemComponent()->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_Mounted));
+	W.Tick(1.f);
+	TestFalse(TEXT("Standing again after the dismount"), Anim->Montage_IsPlaying(Sit));
 	return true;
 }
 

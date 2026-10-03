@@ -12,6 +12,7 @@
 #include "Shinobi/ShinobiMarkerKunai.h"
 #include "Shinobi/Abilities/GA_Teleport.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/Abilities/GA_Chidori.h"
 #include "Shinobi/Abilities/GA_Fireball.h"
 #include "Animation/AnimMontage.h"
 #include "Engine/Texture2D.h"
@@ -33,18 +34,18 @@ bool FShinobiOffPageJutsuTest::RunTest(const FString& Parameters)
 	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
 
 	TestTrue(TEXT("Starts on page 1"), ShinobiTest::HasTag(P, ShinobiTags::JutsuPage(1)));
-	P->ApplyJutsuPage(5); // empty: nothing lives there
+	P->ApplyJutsuPage(5); // key 2 is empty there (only the Dragon lives on page 5, on key 1)
 	TestFalse(TEXT("Page 1 tag removed"), ShinobiTest::HasTag(P, ShinobiTags::JutsuPage(1)));
 	TestEqual(TEXT("On page 5"), P->GetJutsuPage(), 5);
 
-	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
-	TestFalse(TEXT("Fireball is on page 1: key 1 does nothing on page 5"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
+	TestFalse(TEXT("Chidori is on page 1: key 2 does nothing on page 5"), ShinobiTest::IsActive(P, UGA_Chidori::StaticClass()));
 	TestEqual(TEXT("Nothing spent"), ShinobiTest::Get(P, Chakra), 100.f);
 
 	P->ApplyJutsuPage(1);
-	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
-	TestTrue(TEXT("Back on page 1 the Fireball fires"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
-	TestEqual(TEXT("Cost paid"), ShinobiTest::Get(P, Chakra), 80.f);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
+	TestTrue(TEXT("Back on page 1 the Chidori fires"), ShinobiTest::IsActive(P, UGA_Chidori::StaticClass()));
+	TestEqual(TEXT("Cost paid"), ShinobiTest::Get(P, Chakra), 70.f);
 	return true;
 }
 
@@ -285,9 +286,11 @@ bool FShinobiPageCycleTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Forward from 3"), P->TryCycleJutsuPage(1));
 	TestEqual(TEXT("to 4 (Susanoo)"), P->GetJutsuPage(), 4);
 	TestTrue(TEXT("Forward from 4"), P->TryCycleJutsuPage(1));
-	TestEqual(TEXT("page 5 is empty: wraps to 1"), P->GetJutsuPage(), 1);
+	TestEqual(TEXT("to 5 (the Dragon)"), P->GetJutsuPage(), 5);
+	TestTrue(TEXT("Forward from 5"), P->TryCycleJutsuPage(1));
+	TestEqual(TEXT("wraps to 1"), P->GetJutsuPage(), 1);
 	TestTrue(TEXT("Back from 1"), P->TryCycleJutsuPage(-1));
-	TestEqual(TEXT("wraps to 4"), P->GetJutsuPage(), 4);
+	TestEqual(TEXT("wraps to 5"), P->GetJutsuPage(), 5);
 
 	P->ApplyJutsuPage(2);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);

@@ -21,6 +21,7 @@
 #include "Shinobi/ShinobiMarkerKunai.h"
 #include "Shinobi/ShinobiMeteor.h"
 #include "Shinobi/Enemies/ShinobiSummon.h"
+#include "Shinobi/ShinobiDragonMount.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
 #include "Shinobi/ShinobiInputConfig.h"
@@ -238,14 +239,15 @@ void AShinobiPlayerController::ShinobiDumpStats()
 	for (TActorIterator<AShinobiCharacterBase> It(GetWorld()); It; ++It)
 	{
 		const UShinobiAttributeSet* Stats = It->GetAttributes();
-		UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiStats %s local=%d H=%.1f C=%.1f S=%.1f Burn=%d Phased=%d Susanoo=%d"),
+		UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiStats %s local=%d H=%.1f C=%.1f S=%.1f Burn=%d Phased=%d Susanoo=%d Mounted=%d"),
 			*It->GetName(), It->IsLocallyControlled() ? 1 : 0, Stats->GetHealth(), Stats->GetChakra(), Stats->GetStamina(),
 			It->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Burning) ? 1 : 0,
 			It->IsPhased() ? 1 : 0,
-			It->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Susanoo) ? 1 : 0);
+			It->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Susanoo) ? 1 : 0,
+			It->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Mounted) ? 1 : 0);
 	}
 	// What the replicated jutsu actors look like from this machine (the co-op check compares both sides).
-	int32 Barriers = 0, Kunai = 0, Meteors = 0, Summons = 0;
+	int32 Barriers = 0, Kunai = 0, Meteors = 0, Summons = 0, Dragons = 0;
 	for (TActorIterator<AShinobiBarrier> It(GetWorld()); It; ++It)
 	{
 		++Barriers;
@@ -262,8 +264,12 @@ void AShinobiPlayerController::ShinobiDumpStats()
 	{
 		Summons += It->IsAlive() ? 1 : 0;
 	}
+	for (TActorIterator<AShinobiDragonMount> It(GetWorld()); It; ++It)
+	{
+		++Dragons;
+	}
 	const AShinobiPlayerCharacter* Me = GetPawn<AShinobiPlayerCharacter>();
-	UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiJutsuWorld Page=%d Barriers=%d Kunai=%d Meteors=%d Summons=%d"), Me ? Me->GetJutsuPage() : 0, Barriers, Kunai, Meteors, Summons);
+	UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiJutsuWorld Page=%d Barriers=%d Kunai=%d Meteors=%d Summons=%d Dragons=%d"), Me ? Me->GetJutsuPage() : 0, Barriers, Kunai, Meteors, Summons, Dragons);
 }
 
 void AShinobiPlayerController::RunSmokeTest()
@@ -305,8 +311,11 @@ void AShinobiPlayerController::RunSmokeTest()
 	GetWorldTimerManager().SetTimer(DumpTimer, FTimerDelegate::CreateWeakLambda(this, [this]()
 	{
 		ShinobiDumpStats();
-		ConsoleCommand(TEXT("quit"));
 	}), 11.3f, false);
+	// Kamui blocks casting while it lasts (until about 13.9 s); then the dragon: page 5, mounted from about 15.2 s.
+	At(14.2f, [this]() { ShinobiDrainChakra(-100.f); ShinobiPage(5); });
+	At(14.4f, [this]() { ShinobiCast(1); });
+	At(15.8f, [this]() { ShinobiDumpStats(); ConsoleCommand(TEXT("quit")); });
 }
 
 void AShinobiPlayerController::RunShotTest()
@@ -722,5 +731,24 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(57.4f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_29b_Snake")); });
 	At(57.8f, [BackToPlayer, ClearSummons]() { BackToPlayer(); ClearSummons(); });
 	At(58.2f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_30_HudPage4Full")); });
-	At(58.8f, [this]() { ConsoleCommand(TEXT("quit")); });
+	// The dragon (page 5): mount, ride in the default (pulled-back) view, breathe fire at the dummies, climb, dismount.
+	auto Rider = [this]() { return GetPawn<AShinobiPlayerCharacter>(); };
+	At(58.6f, [this, RestoreAim]() { ShinobiPage(5); RestoreAim(); });
+	At(58.8f, [CastJutsu]() { CastJutsu(1, 0.9f); }); // Summon Dragon: 0.8 s seals, mounted from about 59.6
+	At(61.6f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_31_DragonRide")); });
+	At(61.8f, [FaceCamera]() { FaceCamera(75.f, 60.f, 0.f, 1400.f); });
+	At(61.95f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_31b_DragonSide")); });
+	At(62.1f, BackToPlayer);
+	At(62.4f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->AbilityLocalInputPressed(static_cast<int32>(EShinobiAbilityInputID::Melee)); } }); // breath
+	At(62.8f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_32_DragonBreath")); });
+	At(63.1f, [FaceCamera]() { FaceCamera(75.f, 60.f, 400.f, 1400.f); });
+	At(63.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_32b_DragonBreath")); });
+	At(63.4f, BackToPlayer);
+	At(63.6f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->AbilityLocalInputReleased(static_cast<int32>(EShinobiAbilityInputID::Melee)); P->SetFlightClimb(true); } });
+	At(65.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_33_DragonClimb")); });
+	At(65.3f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->SetFlightClimb(false); P->SetFlightDive(true); } });
+	At(66.6f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->SetFlightDive(false); } });
+	At(67.0f, [this]() { ShinobiCast(1); }); // the same key: dismount
+	At(68.0f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_34_HudPage5")); });
+	At(68.6f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
