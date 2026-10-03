@@ -1,8 +1,13 @@
-"""Rigs and animates the summon dragon: SourceArt/Creatures/DragonRodin/rodin_dragon.glb (a Hyper3D Rodin model) -> FBX for Unreal.
+"""Rigs and animates the summon dragon, Tairn (Fourth Wing's black Morningstartail): SourceArt/Creatures/Tairn/rodin_tairn.glb (a Hyper3D
+Rodin model) with a morningstar club grafted on the tail -> FBX for Unreal.
 
 Run: blender -b -P Scripts/character/build_dragon.py            (add  -- preview  to render pose previews to Saved/dragon_*.png)
 
-The Rodin dragon sits upright on its haunches (tail on the ground, neck raised, wings up in a V). A 36-bone rig is built to its
+Rodin's Tairn has the right look (black ridged scales, a mane of neck spikes, golden eyes, scalloped black wings) but ends its tail in a thin
+curl, and the books give Tairn a morningstar tail: a heavy club studded with long spikes. So the curl is cut off and a spiked club is joined on:
+a Rodin-generated spiked ball (rodin_tail_club2.glb) with long conical spikes added. Three materials: the body, the ball, the spikes (flat black).
+
+The Rodin dragon sits upright on its haunches (tail on the ground, neck raised, wings up in a V). A 37-bone rig is built to its
 proportions (spine, neck, head and jaw, a five-bone tail, two arms, two legs, and a wing of five bones a side), the mesh is weighted to
 it by distance, and every flying clip tips the whole dragon nose-down about its hips so the back is level, with the neck and tail bent
 back to level: Idle (a slow hover), Flap (the fast beat, a loop), Glide (wings out, a slow sway) and Breath (rears the head back, opens the
@@ -13,18 +18,20 @@ import math
 import os
 import sys
 
+import bmesh
 import bpy
+import numpy as np
 from mathutils import Matrix, Vector
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-OUT = os.path.join(ROOT, "SourceArt", "Creatures", "DragonRodin")
+OUT = os.path.join(ROOT, "SourceArt", "Creatures", "Tairn")
 PREVIEW = "preview" in sys.argv
 FPS = 30
 PITCH = 62.0           # how far the flying dragon is tipped nose-down about its hips
 HIPS = Vector((0.3, 0, 0.6))
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
-bpy.ops.import_scene.gltf(filepath=os.path.join(OUT, "rodin_dragon.glb"))
+bpy.ops.import_scene.gltf(filepath=os.path.join(OUT, "rodin_tairn.glb"))
 scene = bpy.context.scene
 scene.render.fps = FPS
 body = next(o for o in bpy.data.objects if o.type == "MESH")
@@ -52,12 +59,138 @@ shift = Vector(((min(p.x for p in points) + max(p.x for p in points)) / 2, (min(
 body.location -= shift
 bpy.ops.object.transform_apply(location=True, rotation=False, scale=False)
 
-image = next((i for i in bpy.data.images if i.size[0] > 0 and i.name != "Render Result"), None)
-if image:
-    image.scale(2048, 2048)
-    image.filepath_raw = os.path.join(OUT, "Dragon.png")
-    image.file_format = "PNG"
-    image.save()
+# --- the club --------------------------------------------------------------------------------------------------------------
+CUT_X = -0.70
+CLUB_DIAMETER = 0.36
+SPIKE_COUNT = 26
+SPIKE_LENGTH = 0.2
+SPIKE_RADIUS = 0.035
+
+body_materials = len(body.data.materials)
+bm = bmesh.new()
+bm.from_mesh(body.data)
+doomed = [v for v in bm.verts if v.co.x < CUT_X]
+bmesh.ops.delete(bm, geom=doomed, context="VERTS")
+# The thin curl of the old tail tip leaves a stub standing above the cut: take out the pieces above the tail line behind x = -0.58.
+stub = [v for v in bm.verts if v.co.x < -0.58 and v.co.z > 0.3]
+print("[build_dragon] removing", len(stub), "stub vertices above the tail near the cut")
+bmesh.ops.delete(bm, geom=stub, context="VERTS")
+# Scarred wings (the books: "scarred black wings"): ragged tears torn out of each membrane's lower, trailing part. Candidate spots are
+# faces low on the wing (z 0.5-0.85, |y| > 0.6); three well-separated ones per side are removed with a little of what surrounds them.
+tears = []
+for sign in (1, -1):
+    chosen = []
+    for f in sorted(bm.faces, key=lambda f: (f.calc_center_median().x * 7.0 + f.calc_center_median().z * 3.0)):
+        c = f.calc_center_median()
+        if c.y * sign > 0.6 and 0.5 < c.z < 0.85 and all((c - o).length > 0.22 for o in chosen):
+            chosen.append(c)
+        if len(chosen) == 3:
+            break
+    tears += [(c, 0.075) for c in chosen]
+for centre, tear in tears:
+    torn = [f for f in bm.faces if (f.calc_center_median() - centre).length < tear]
+    print("[build_dragon] tear at", tuple(round(x, 2) for x in centre), "removes", len(torn), "faces")
+    bmesh.ops.delete(bm, geom=torn, context="FACES_ONLY")
+bm.to_mesh(body.data)
+bm.free()
+# where the tail now ends: its middle there (the median of the verts just inside the cut, spikes excluded)
+near = [v.co for v in body.data.vertices if CUT_X <= v.co.x < CUT_X + 0.06]
+tail_z = sorted(c.z for c in near)[len(near) // 2]
+tail_y = sorted(c.y for c in near)[len(near) // 2]
+radius = CLUB_DIAMETER / 2
+centre = Vector((CUT_X - radius * 0.55, tail_y, tail_z))
+print("[build_dragon] tail cut at x", CUT_X, "middle", round(tail_y, 2), round(tail_z, 2), "; club centre", tuple(round(c, 2) for c in centre))
+
+before = set(bpy.data.objects)
+bpy.ops.import_scene.gltf(filepath=os.path.join(OUT, "rodin_tail_club2.glb"))
+balls = [o for o in bpy.data.objects if o not in before and o.type == "MESH"]
+for o in set(bpy.data.objects) - before - set(balls):
+    if o.type == "EMPTY":
+        for child in o.children:
+            child.parent = None
+        bpy.data.objects.remove(o)
+select(*balls)
+if len(balls) > 1:
+    bpy.ops.object.join()
+ball = bpy.context.view_layer.objects.active
+ball.parent = None
+bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+# The ball's axis is Z with its bronze socket at the bottom (-Z): lay it along -X with the socket toward the body (+X).
+ball.rotation_mode = "XYZ"
+ball.rotation_euler.y = math.radians(-90)
+select(ball)
+bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
+pts = [ball.matrix_world @ v.co for v in ball.data.vertices]
+size = max(max(p.x for p in pts) - min(p.x for p in pts), max(p.y for p in pts) - min(p.y for p in pts), max(p.z for p in pts) - min(p.z for p in pts))
+ball.scale = (CLUB_DIAMETER / size * 1.0,) * 3
+select(ball)
+bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+pts = [ball.matrix_world @ v.co for v in ball.data.vertices]
+mid = Vector(((min(p.x for p in pts) + max(p.x for p in pts)) / 2, (min(p.y for p in pts) + max(p.y for p in pts)) / 2, (min(p.z for p in pts) + max(p.z for p in pts)) / 2))
+ball.location = centre - mid
+select(ball)
+bpy.ops.object.transform_apply(location=True, rotation=False, scale=False)
+ball.name = "Club"
+
+# long conical spikes all round the ball (Fibonacci sphere), none pointing back into the tail
+spike_mesh = bpy.data.meshes.new("SpikeMesh")
+bmc = bmesh.new()
+golden = math.pi * (3 - math.sqrt(5))
+for i in range(SPIKE_COUNT):
+    y = 1 - (i + 0.5) / SPIKE_COUNT * 2
+    r = math.sqrt(max(0.0, 1 - y * y))
+    direction = Vector((math.cos(golden * i) * r, y, math.sin(golden * i) * r))
+    if direction.x > 0.55:
+        continue  # toward the body
+    base = centre + direction * (radius * 0.82)
+    cone = bmesh.ops.create_cone(bmc, cap_ends=True, segments=7, radius1=SPIKE_RADIUS, radius2=0.002, depth=SPIKE_LENGTH + radius * 0.18)
+    rotation = Vector((0, 0, 1)).rotation_difference(direction).to_matrix().to_4x4()
+    bmesh.ops.transform(bmc, matrix=Matrix.Translation(base + direction * ((SPIKE_LENGTH + radius * 0.18) / 2)) @ rotation, verts=cone["verts"])
+bmc.to_mesh(spike_mesh)
+bmc.free()
+spikes = bpy.data.objects.new("ClubSpikes", spike_mesh)
+scene.collection.objects.link(spikes)
+black = bpy.data.materials.new("ClubSpike")
+black.diffuse_color = (0.02, 0.02, 0.025, 1)
+spikes.data.materials.append(black)
+
+# one mesh: body slot 0, the ball its own slot, the spikes a flat black one
+club_first_vertex = len(body.data.vertices)
+select(body, ball, spikes)
+bpy.ops.object.join()
+body = bpy.context.view_layer.objects.active
+body.name = "Body"
+club_vertices = set(range(club_first_vertex, len(body.data.vertices)))
+print("[build_dragon] club vertices:", len(club_vertices), "materials:", [m.name for m in body.data.materials])
+
+# --- the textures: the body's base colour with its emissive map (the golden eyes) added, so the eyes glow ----------------------------
+def save_texture(material, path, add_emissive=False):
+    tree = material.node_tree
+    principled = next(n for n in tree.nodes if n.type == "BSDF_PRINCIPLED")
+    base = principled.inputs["Base Color"].links[0].from_node.image if principled.inputs["Base Color"].links else None
+    if base is None:
+        return
+    base.scale(2048, 2048)
+    if add_emissive and principled.inputs["Emission Color"].links:
+        glow = principled.inputs["Emission Color"].links[0].from_node.image
+        if glow:
+            glow.scale(2048, 2048)
+            a = np.empty(len(base.pixels), dtype=np.float32)
+            b = np.empty(len(glow.pixels), dtype=np.float32)
+            base.pixels.foreach_get(a)
+            glow.pixels.foreach_get(b)
+            a[:] = np.clip(a + b, 0.0, 1.0)
+            a[3::4] = 1.0
+            base.pixels.foreach_set(a)
+            print("[build_dragon] emissive added to", material.name)
+    base.filepath_raw = path
+    base.file_format = "PNG"
+    base.save()
+
+
+save_texture(body.data.materials[0], os.path.join(OUT, "Tairn.png"), add_emissive=True)
+if len(body.data.materials) > 1:
+    save_texture(body.data.materials[1], os.path.join(OUT, "TairnClub.png"))
 
 # --- the rig ---------------------------------------------------------------------------------------------------------------
 # name: (parent, head, tail). Y > 0 is the left side. Measured on the mesh (see the silhouettes in the build notes): hind feet at x 0.43,
@@ -74,7 +207,7 @@ BONES = {
     "tail2": ("tail1", (-0.05, 0, 0.42), (-0.3, 0, 0.36)),
     "tail3": ("tail2", (-0.3, 0, 0.36), (-0.55, 0, 0.32)),
     "tail4": ("tail3", (-0.55, 0, 0.32), (-0.78, 0, 0.3)),
-    "tail5": ("tail4", (-0.78, 0, 0.3), (-0.95, 0, 0.28)),
+    "tail5": ("tail4", (-0.78, 0, 0.3), (CUT_X - radius * 0.55, 0, tail_z)),
 }
 for side, s in (("L", 1), ("R", -1)):
     BONES[f"thigh_{side}"] = ("pelvis", (0.3, s * 0.22, 0.5), (0.46, s * 0.27, 0.27))
@@ -83,11 +216,11 @@ for side, s in (("L", 1), ("R", -1)):
     BONES[f"arm_{side}"] = ("chest", (0.45, s * 0.2, 0.92), (0.58, s * 0.3, 0.75))
     BONES[f"forearm_{side}"] = (f"arm_{side}", (0.58, s * 0.3, 0.75), (0.75, s * 0.3, 0.88))
     BONES[f"hand_{side}"] = (f"forearm_{side}", (0.75, s * 0.3, 0.88), (0.84, s * 0.3, 0.96))
-    BONES[f"wing1_{side}"] = ("chest", (0.4, s * 0.2, 1.12), (0.5, s * 0.5, 1.4))
-    BONES[f"wing2_{side}"] = (f"wing1_{side}", (0.5, s * 0.5, 1.4), (0.52, s * 0.72, 1.22))
-    BONES[f"finger1_{side}"] = (f"wing2_{side}", (0.52, s * 0.72, 1.22), (0.5, s * 0.9, 0.8))
-    BONES[f"finger2_{side}"] = (f"wing2_{side}", (0.52, s * 0.72, 1.22), (0.38, s * 0.82, 0.7))
-    BONES[f"finger3_{side}"] = (f"wing2_{side}", (0.52, s * 0.72, 1.22), (0.3, s * 0.62, 0.68))
+    BONES[f"wing1_{side}"] = ("chest", (0.4, s * 0.2, 1.1), (0.45, s * 0.46, 1.38))
+    BONES[f"wing2_{side}"] = (f"wing1_{side}", (0.45, s * 0.46, 1.38), (0.45, s * 0.7, 1.15))
+    BONES[f"finger1_{side}"] = (f"wing2_{side}", (0.45, s * 0.7, 1.15), (0.38, s * 0.95, 0.69))
+    BONES[f"finger2_{side}"] = (f"wing2_{side}", (0.45, s * 0.7, 1.15), (0.3, s * 0.8, 0.58))
+    BONES[f"finger3_{side}"] = (f"wing2_{side}", (0.45, s * 0.7, 1.15), (0.25, s * 0.6, 0.5))
 
 data = bpy.data.armatures.new("Armature")
 arm = bpy.data.objects.new("Armature", data)
@@ -116,6 +249,9 @@ def segment_distance(p, a, b):
 
 segments = {name: (Vector(head), Vector(tail)) for name, (_, head, tail) in BONES.items() if name != "root"}
 for v in body.data.vertices:
+    if v.index in club_vertices:
+        groups["tail5"].add([v.index], 1.0, "REPLACE")
+        continue
     nearest = sorted((segment_distance(v.co, a, b), name) for name, (a, b) in segments.items())[:4]
     weights = [1.0 / (d + 0.04) ** 3 for d, _ in nearest]
     total = sum(weights)

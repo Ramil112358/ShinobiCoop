@@ -26,7 +26,7 @@ AShinobiDragonFlame::AShinobiDragonFlame()
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
 	Light = CreateDefaultSubobject<UPointLightComponent>(TEXT("Light"));
 	Light->SetupAttachment(GetRootComponent());
-	Light->SetLightColor(FLinearColor(1.f, 0.55f, 0.2f));
+	Light->SetLightColor(FLinearColor(0.45f, 0.65f, 1.f));
 	Light->SetIntensity(0.f);
 	Light->SetAttenuationRadius(1800.f);
 	Light->SetCastShadows(false);
@@ -115,29 +115,31 @@ void AShinobiDragonFlame::BeginPlay()
 	}
 	using ShinobiVfx::ESprite;
 	const FLinearColor White(1.f, 1.f, 1.f);
-	// The body of the jet: tongues of flame born at the mouth, each flying most of the way out, widening and drifting apart.
-	for (int32 Index = 0; Index < 36; ++Index)
+	// Tairn's fire is blue-white and crackles with lightning (he is the dragon Violet wields lightning through). The stock flame sheet is
+	// orange and a tint only darkens it, so the blue comes from two other sheets: BlackFlame, whose tint is its glow colour, gives the
+	// flames their shape and ragged edges; Vortex, an additive energy swirl, gives them their bright blue-white body; Lightning forks
+	// through both.
+	for (int32 Index = 0; Index < 20; ++Index)
 	{
-		const float Phase = Index / 36.f;
-		AddParticle(Plane, static_cast<uint8>(ESprite::Flame), FLinearColor(1.f, 0.5f, 0.18f), 3.2f, Phase, FMath::FRandRange(0.5f, 0.7f), FMath::FRandRange(280.f, 440.f), 0.2f, FMath::FRandRange(0.85f, 1.f));
+		AddParticle(Plane, static_cast<uint8>(ESprite::BlackFlame), FLinearColor(0.3f, 0.55f, 1.f), 4.f, Index / 20.f, FMath::FRandRange(0.5f, 0.7f), FMath::FRandRange(260.f, 420.f), 0.2f, FMath::FRandRange(0.85f, 1.f));
 	}
-	// A hot, narrow core and a muzzle flash at the mouth.
+	for (int32 Index = 0; Index < 26; ++Index)
+	{
+		AddParticle(Plane, static_cast<uint8>(ESprite::Vortex), White, 3.2f, Index / 26.f, FMath::FRandRange(0.45f, 0.65f), FMath::FRandRange(220.f, 380.f), 0.2f, FMath::FRandRange(0.85f, 1.f));
+	}
+	// The hot core and the flash at the mouth.
 	for (int32 Index = 0; Index < 8; ++Index)
 	{
-		AddParticle(Plane, static_cast<uint8>(ESprite::Flame), FLinearColor(1.f, 0.9f, 0.55f), 2.4f, Index / 8.f, 0.32f, FMath::FRandRange(90.f, 140.f), 0.06f, 0.5f);
+		AddParticle(Plane, static_cast<uint8>(ESprite::Vortex), FLinearColor(1.f, 1.f, 1.f), 4.5f, Index / 8.f, 0.3f, FMath::FRandRange(100.f, 160.f), 0.05f, 0.5f);
 	}
 	for (int32 Index = 0; Index < 3; ++Index)
 	{
-		AddParticle(Plane, static_cast<uint8>(ESprite::Burst), FLinearColor(1.f, 0.7f, 0.3f), 1.8f, Index / 3.f, 0.25f, 420.f, 0.f, 0.02f);
+		AddParticle(Plane, static_cast<uint8>(ESprite::Vortex), White, 4.f, Index / 3.f, 0.22f, 460.f, 0.f, 0.02f);
 	}
-	// Sparks thrown ahead of the flames and smoke trailing off the far end.
-	for (int32 Index = 0; Index < 10; ++Index)
+	// Bolts of lightning forking along the jet and off the mouth.
+	for (int32 Index = 0; Index < 18; ++Index)
 	{
-		AddParticle(Plane, static_cast<uint8>(ESprite::Ember), White, 2.f, Index / 10.f, FMath::FRandRange(0.6f, 0.9f), FMath::FRandRange(120.f, 200.f), 0.3f, 1.1f);
-	}
-	for (int32 Index = 0; Index < 8; ++Index)
-	{
-		AddParticle(Plane, static_cast<uint8>(ESprite::Smoke), FLinearColor(0.25f, 0.2f, 0.18f), 1.f, Index / 8.f, 0.9f, FMath::FRandRange(380.f, 560.f), 0.3f, 1.05f);
+		AddParticle(Plane, static_cast<uint8>(ESprite::Lightning), FLinearColor(0.8f, 0.9f, 1.f), 3.5f, Index / 18.f, FMath::FRandRange(0.16f, 0.3f), FMath::FRandRange(160.f, 260.f), 0.3f, FMath::FRandRange(0.6f, 1.f));
 	}
 }
 
@@ -190,8 +192,9 @@ void AShinobiDragonFlame::Tick(float DeltaSeconds)
 		}
 		const FVector Across = FVector::CrossProduct(Along, ToCamera).GetSafeNormal();
 		const FMatrix Basis(Across, Along, ToCamera, FVector::ZeroVector);
-		const bool bTongue = Particle.Sprite == static_cast<uint8>(ShinobiVfx::ESprite::Flame) || Particle.Sprite == static_cast<uint8>(ShinobiVfx::ESprite::Ember);
-		const float Length = Width * (bTongue ? 1.7f : 1.f);
+		const bool bBolt = Particle.Sprite == static_cast<uint8>(ShinobiVfx::ESprite::Lightning);
+		const bool bTongue = bBolt || Particle.Sprite == static_cast<uint8>(ShinobiVfx::ESprite::BlackFlame) || Particle.Sprite == static_cast<uint8>(ShinobiVfx::ESprite::Ember);
+		const float Length = Width * (bBolt ? 3.2f : bTongue ? 1.7f : 1.f);
 
 		Particle.Mesh->SetVisibility(Dying > 0.f);
 		Particle.Mesh->SetWorldLocationAndRotation(At + Along * (bTongue ? Length * 0.35f : 0.f), Basis.Rotator());
@@ -199,7 +202,7 @@ void AShinobiDragonFlame::Tick(float DeltaSeconds)
 		if (Particle.Material)
 		{
 			const float Born = FMath::Min(Cycle * 8.f, 1.f);
-			Particle.Material->SetScalarParameterValue(TEXT("Fade"), Born * FMath::Pow(1.f - Cycle, Particle.Sprite == static_cast<uint8>(ShinobiVfx::ESprite::Flame) ? 0.3f : 1.2f) * Dying);
+			Particle.Material->SetScalarParameterValue(TEXT("Fade"), Born * FMath::Pow(1.f - Cycle, Particle.Sprite == static_cast<uint8>(ShinobiVfx::ESprite::BlackFlame) ? 0.3f : 1.2f) * Dying);
 		}
 		if (Age >= Particle.NextSwap && Particle.Sprite != static_cast<uint8>(ShinobiVfx::ESprite::Burst))
 		{

@@ -4,7 +4,7 @@
 #include "Shinobi/Abilities/ShinobiJutsuAbility.h"
 #include "GA_Dragon.generated.h"
 
-/** Page 5, slot 1: Summon Dragon. After the Kuchiyose seals a dragon rises under the caster, who rides it for UGE_Mounted::Seconds
+/** Page 5, slot 1: Summon Tairn (Fourth Wing's black Morningstartail). After the Kuchiyose seals a dragon rises under the caster, who rides it for UGE_Mounted::Seconds
  * (UShinobiMovementComponent flies them; Space climbs, Control dives; melee becomes UGA_DragonBreath). Like the other summons, charging
  * does nothing. */
 UCLASS()

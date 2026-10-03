@@ -12,14 +12,15 @@
 
 namespace
 {
-	// The model (Scripts/character/build_dragon.py, from a Rodin generation) is 1.9 m long in its rest pose, centred on the origin with its
-	// feet on the ground, facing +X; every flying clip tips it nose-down about its hips. Its back in that flying pose, between the wings
-	// (the torso's top without the spikes), is at about (0.3, 0, 0.72) m. Scaled up, the saddle goes where a seated rider's hips are.
-	constexpr float DragonScale = 3.5f;
-	const FVector Saddle(30.f, 0.f, 72.f);
+	// The model (Scripts/character/build_dragon.py: Tairn, from a Rodin generation, with a morningstar club on the tail) is 1.9 m long in its
+	// rest pose, centred on the origin with its feet on the ground, facing +X; every flying clip tips it nose-down about its hips. Its back in
+	// that flying pose, between the wings (the torso's top without the spikes), is at about (0.3, 0, 0.76) m. Tairn is among the biggest
+	// dragons in the books, so it is scaled up 4x (7.6 m of body, a 9 m wingspan); the saddle goes where a seated rider's hips are.
+	constexpr float DragonScale = 4.f;
+	const FVector Saddle(30.f, 0.f, 76.f);
 	constexpr float SeatBelowCapsuleCentre = 25.f; // how far under the rider's capsule centre the saddle sits
-	constexpr float MouthAhead = 330.f; // the head's mouth, ahead of and a little above the seated rider's capsule centre
-	constexpr float MouthHeight = 55.f;
+	constexpr float MouthAhead = 380.f; // the head's mouth, ahead of and a little above the seated rider's capsule centre
+	constexpr float MouthHeight = 50.f;
 	constexpr float GlideSpeed = 800.f;
 	constexpr float GlideClimb = 250.f;
 	constexpr float HoverSpeed = 150.f;

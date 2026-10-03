@@ -14,7 +14,7 @@ UGA_SummonDragon::UGA_SummonDragon()
 {
 	InputID = EShinobiAbilityInputID::Jutsu1;
 	Page = 5;
-	DisplayName = INVTEXT("Summon Dragon");
+	DisplayName = INVTEXT("Summon Tairn");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonDragon.T_Jutsu_SummonDragon")));
 	ChakraCost = 70.f;
 	Cooldown = 60.f;
@@ -138,7 +138,7 @@ void UGA_DragonBreath::Pulse()
 			if (ApplyDamage(Target, PulseDamage) && !Ignited.Contains(Target))
 			{
 				Ignited.Add(Target);
-				AShinobiBurst::Spawn(Self->GetWorld(), EShinobiBurst::Fire, Target->GetActorLocation(), 0.7f);
+				AShinobiBurst::Spawn(Self->GetWorld(), EShinobiBurst::Lightning, Target->GetActorLocation(), 0.9f); // Tairn's fire is blue-white and crackles
 				ShinobiCombat::ApplyStatus(Self->GetAbilitySystemComponent(), Target, UGE_Burn::StaticClass(), UGE_Burn::DamagePerTick);
 			}
 		}

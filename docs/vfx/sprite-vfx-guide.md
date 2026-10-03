@@ -290,9 +290,9 @@ sees the four dogs. Not done: the rideable dragon (cycle E; `dragon-animations.g
 otherwise stand still), and hit-reaction clips (the `Hit` clips are imported but unused). A summon leaves the moment its caster is downed,
 dies or leaves the game, and one cast next to a wall is pulled back in front of it and put on the floor.
 
-## 11. Dragon (2026-10-03)
+## 11. Tairn, the dragon (2026-10-03)
 
-Page 5, slot 1: Summon Dragon (70 chakra, 60 s cooldown). After the Kuchiyose seals the caster rides a dragon for `UGE_Mounted::Seconds`
+Page 5, slot 1: Summon Tairn (70 chakra, 60 s cooldown). After the Kuchiyose seals the caster rides Tairn, the dragon of Fourth Wing, for `UGE_Mounted::Seconds`
 (45 s). The rider stays the player's own character: the effect grants `State.Mounted`, and `UShinobiMovementComponent::UpdateCharacterStateBeforeMovement`
 (which runs in every move on the client and the server) switches to `MOVE_Flying` at 1500 u/s while the tag is on and back to falling when it goes.
 No possession swap and no second ability system; the tag replicates, so the server and the predicting client agree. While mounted the movement
@@ -308,22 +308,30 @@ hang below the rider, so a mount from the ground is a quick lift-off and a dive 
   charging, a jutsu cancels it, a staggering hit puts it out. The mouth is a fixed offset from the rider (`AShinobiDragonMount::MouthLocation`), the same on
   every machine, so the cone and the flames agree.
 - **The jet** is `AShinobiDragonFlame` (`VFX/`): one replicated actor the server turns with the aim; every machine animates its own particles from the
-  clock (about 60 billboard sprites: orange flame tongues, a hot core, a muzzle burst, embers, smoke) streaming from the mouth, widening and drifting
-  apart, with a gutter-ing light riding the flames. The sprites are the existing SpriteCook flame sheets. `State.DragonBreathing` (granted by the
-  ability) plays the dragon's head clip on every machine.
+  clock (about 75 billboard sprites) streaming from the mouth, widening and drifting apart, with a blue light riding it. Tairn's fire colour is not
+  stated anywhere in the books or the fan wikis, so it is **blue-white and lightning-tinged** (the user's choice; Violet wields lightning through
+  Tairn): the stock Flame sheet is orange and a tint only darkens it, so the jet is built from the BlackFlame sheet (its tint is its glow colour: the
+  ragged flame shape), the additive Vortex sheet (the bright blue-white body and the mouth flash) and Lightning forks. Targets that are hit get a
+  lightning burst; the Burn status they catch is still the ordinary orange one. `State.DragonBreathing` (granted by the ability) plays the dragon's
+  head clip on every machine.
 - **Camera:** the boom eases from 450 to 900 while mounted, and only then (anything else that sets the boom is left alone).
 - **The dragon** is `AShinobiDragonMount`, a replicated actor with no collision or health, attached to the rider's mesh so it is smoothed on clients
-  with the rider (the transform uses the mesh's default offset, not its current network-smoothed one). The model is a Hyper3D Rodin generation
-  (`SourceArt/Creatures/DragonRodin/rodin_dragon.glb`, an upright, rearing dragon). `Scripts/character/build_dragon.py` builds a 36-bone rig to it
-  (spine, neck, jaw, tail, arms, legs, five wing bones a side), weights it by distance (bone heat fails on it, like the toad), tips it nose-down about
+  with the rider (the transform uses the mesh's default offset, not its current network-smoothed one).
+- **Tairn's model** is a Hyper3D Rodin generation prompted from the books (a Black Morningstartail: thick ridged black scales, a mane of pointed neck
+  spikes, giant golden eyes, scarred black wings, long taloned toes, a rock-hard underbelly; `SourceArt/Creatures/Tairn/rodin_tairn.glb`). Rodin
+  gave him a thin curl for a tail tip, but a Morningstartail ends in a club studded with lethal spikes, so `Scripts/character/build_dragon.py` cuts the
+  curl off and grafts on a Rodin-generated spiked ball (`rodin_tail_club2.glb`, from a second generation; the first came out as a fan of spikes) with 20
+  long procedural cones, and tears ragged holes out of the wing membranes for the scars. It then builds a 37-bone rig to it (spine, neck, jaw, a tail whose
+  last bone carries the club, arms, legs, five wing bones a side), weights it by distance (bone heat fails on it, like the toad), tips it nose-down about
   the hips in every flying clip so the back is level, and keys the clips: Idle (hover), Flap (climbing and slow flight), Glide (fast and level) and Breath
-  (once per breath). `blender -b -P Scripts/character/build_dragon.py` (add `-- preview` for pose renders in `Saved/dragon_*.png`), then
-  `Scripts/setup_creatures.py`. The saddle and mouth constants are at the top of `ShinobiDragonMount.cpp`; `build_dragon.py -- preview` prints the back
-  height to measure them from. The Mesh2Motion dragon (CC0) that came first is gone from the project, but its GLB is still in `SourceArt/Mesh2Motion`.
+  (once per breath). Three material slots: the body and the ball (M_Character instances of `Tairn.png` and `TairnClub.png`) and the spikes (flat black).
+  `blender -b -P Scripts/character/build_dragon.py` (add `-- preview` for pose renders in `Saved/dragon_*.png`; it prints the back height the saddle
+  is measured from), then `Scripts/setup_creatures.py`. The assets keep the name Dragon (`SK_Dragon`, `ANIM_Dragon_*`); the saddle, the mouth and the
+  4x scale are constants at the top of `ShinobiDragonMount.cpp`. The icon is a SpriteCook painting of Tairn.
 - **The seated pose** is the Mixamo "Sitting Idle" (`SourceArt/Mixamo/Sitting Idle.fbx`, imported by `Scripts/setup_jutsu_anims.py` as `AM_Mount_Sit`).
   `AShinobiPlayerCharacter::UpdateSeatedPose` loops it while mounted and replays it whenever no jutsu montage is playing. Without that file the script
   falls back to a pose built by `build_jutsu_anims.py` (timeline `Mount`).
 
 Shots 31-34 of `Scripts/shot_chakra.ps1 -Jutsu` show the ride, the rider close up, the breath, a climb and the page-5 HUD; `Scripts/smoke_m1.ps1` checks
 the client sees itself mounted and the dragon actor. Not done: the rider cannot steer by pitch (Space and Control are the only vertical control), the
-dragon does not bank with the flight, and the flames are the stock flame sheets (a dragon-specific SpriteCook sheet would sharpen the jet).
+dragon does not bank with the flight, and the jet is built from stock sprite sheets (a blue dragon-fire SpriteCook sheet would sharpen it), and the eyes are Rodin's small golden ones.

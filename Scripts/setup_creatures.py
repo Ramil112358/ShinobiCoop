@@ -10,13 +10,14 @@ import unreal
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CREATURES = {
-    # name: (colour or None, clips, base-colour PNG or None). With a PNG the creature wears M_Character (the heroes' lit material).
+    # name: (colour or None, clips, base-colour PNG, or None, or a list with one entry per material slot: a PNG, or a flat colour).
+    # With a PNG the creature wears M_Character (the heroes' lit material).
     # The files are SourceArt/Creatures/<SOURCE.get(name, name)>/<name>*.fbx.
     "Snake": ((0.20, 0.08, 0.30), ["Idle", "Move", "Bite", "Hit", "Death"], None),
-    "Dragon": (None, ["Idle", "Flap", "Glide", "Breath"], "Dragon.png"),
+    "Dragon": (None, ["Idle", "Flap", "Glide", "Breath"], ["Tairn.png", "TairnClub.png", (0.02, 0.02, 0.025)]),  # Tairn: body, club ball, club spikes
     "Toad": (None, ["Idle", "Move", "Slam", "Hit", "Death"], "Toad.png"),
 }
-SOURCE = {"Dragon": "DragonRodin"}  # the Rodin dragon (Scripts/character/build_dragon.py)
+SOURCE = {"Dragon": "Tairn"}  # Tairn, the Rodin dragon (Scripts/character/build_dragon.py)
 CLEAN = {"Dragon"}  # replaced wholesale: the first dragon (Mesh2Motion's) had other clips
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 MEL = unreal.MaterialEditingLibrary
@@ -97,11 +98,18 @@ for name, (colour, clips, texture) in CREATURES.items():
     if not isinstance(mesh, unreal.SkeletalMesh):
         raise RuntimeError(f"SK_{name} was not imported")
     skeleton = mesh.get_editor_property("skeleton")
-    mi = textured_material(name, os.path.join(source, texture), dest) if texture else material_for(name, colour, dest)
     slots = list(mesh.get_editor_property("materials"))
     if not slots:
         raise RuntimeError(f"SK_{name} has no material slot")
-    for slot in slots:
+    per_slot = texture if isinstance(texture, list) else [texture] * len(slots)
+    if len(per_slot) != len(slots):
+        raise RuntimeError(f"SK_{name} has {len(slots)} material slots, CREATURES lists {len(per_slot)}")
+    for index, (slot, entry) in enumerate(zip(slots, per_slot)):
+        suffix = f"{name}_{index}" if isinstance(texture, list) else name
+        if isinstance(entry, str):
+            mi = textured_material(suffix, os.path.join(source, entry), dest)
+        else:
+            mi = material_for(suffix, entry or colour, dest)
         slot.set_editor_property("material_interface", mi)
     mesh.set_editor_property("materials", slots)
     unreal.EditorAssetLibrary.save_loaded_asset(mesh)
