@@ -208,6 +208,18 @@ UGE_Kamui::UGE_Kamui()
 	UseSingleRefreshingStack();
 }
 
+UGE_Susanoo::UGE_Susanoo()
+{
+	SetDuration(Seconds);
+	SetPeriodic(0.25f);
+	AddModifier(UShinobiAttributeSet::GetChakraAttribute(), 1.f); // +4 a second, on top of the base 2
+	GrantTag(ShinobiTags::State_Susanoo);
+	// A downed or dead wearer is not armoured (no 6 m figure over the body); the rest of the 20 s waits for a revive.
+	InhibitWhileTargetHas(ShinobiTags::State_Downed);
+	InhibitWhileTargetHas(ShinobiTags::State_Dead);
+	UseSingleRefreshingStack();
+}
+
 UGE_Chill::UGE_Chill()
 {
 	SetDuration(Seconds);

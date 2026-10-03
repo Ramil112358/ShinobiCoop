@@ -237,10 +237,11 @@ void AShinobiPlayerController::ShinobiDumpStats()
 	for (TActorIterator<AShinobiCharacterBase> It(GetWorld()); It; ++It)
 	{
 		const UShinobiAttributeSet* Stats = It->GetAttributes();
-		UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiStats %s local=%d H=%.1f C=%.1f S=%.1f Burn=%d Phased=%d"),
+		UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiStats %s local=%d H=%.1f C=%.1f S=%.1f Burn=%d Phased=%d Susanoo=%d"),
 			*It->GetName(), It->IsLocallyControlled() ? 1 : 0, Stats->GetHealth(), Stats->GetChakra(), Stats->GetStamina(),
 			It->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Burning) ? 1 : 0,
-			It->IsPhased() ? 1 : 0);
+			It->IsPhased() ? 1 : 0,
+			It->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Susanoo) ? 1 : 0);
 	}
 	// What the replicated jutsu actors look like from this machine (the co-op check compares both sides).
 	int32 Barriers = 0, Kunai = 0, Meteors = 0;
@@ -286,17 +287,19 @@ void AShinobiPlayerController::RunSmokeTest()
 		FTimerHandle Handle;
 		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
 	};
-	At(6.3f, [this]() { ShinobiPage(3); });
-	At(6.5f, [this]() { ShinobiCast(4); }); // Ice Meteors: the shards are queued from about 7.0 s and land over the next 4.5 s
-	At(7.2f, [this]() { ShinobiDrainChakra(-100.f); ShinobiPage(2); });
-	At(7.5f, [this]() { ShinobiCast(4); }); // Earth Wall
-	At(8.3f, [this]() { ShinobiCast(2); }); // Kamui
+	At(6.3f, [this]() { ShinobiPage(4); });
+	At(6.5f, [this]() { ShinobiCast(1); }); // Susanoo: the armour is up from about 7.15 s for 20 s
+	At(7.3f, [this]() { ShinobiDrainChakra(-100.f); ShinobiPage(3); });
+	At(7.5f, [this]() { ShinobiCast(4); }); // Ice Meteors: the shards are queued from about 8.05 s and land over the next 4.5 s
+	At(8.2f, [this]() { ShinobiDrainChakra(-100.f); ShinobiPage(2); });
+	At(8.5f, [this]() { ShinobiCast(4); }); // Earth Wall
+	At(9.3f, [this]() { ShinobiCast(2); }); // Kamui
 	FTimerHandle DumpTimer;
 	GetWorldTimerManager().SetTimer(DumpTimer, FTimerDelegate::CreateWeakLambda(this, [this]()
 	{
 		ShinobiDumpStats();
 		ConsoleCommand(TEXT("quit"));
-	}), 9.5f, false);
+	}), 10.5f, false);
 }
 
 void AShinobiPlayerController::RunShotTest()
@@ -674,5 +677,15 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(44.3f, BackToPlayer);
 	At(45.0f, [this]() { ShinobiCast(1); }); // the same key jumps to a kunai
 	At(45.5f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_19_TeleportArrival")); });
-	At(46.2f, [this]() { ConsoleCommand(TEXT("quit")); });
+
+	// Page 4: Susanoo. A tall figure, so the camera stands back and watches from the side.
+	At(46.0f, [this, RestoreAim]() { ShinobiPage(4); RestoreAim(); });
+	At(46.2f, [CastJutsu]() { CastJutsu(1, 0.7f); }); // Susanoo: 0.6 s seals, the armour rises at 46.9
+	At(47.4f, [FaceCamera]() { FaceCamera(80.f, -60.f, 0.f, 1000.f); });
+	At(47.55f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_25_Susanoo")); });
+	At(47.7f, [FaceCamera]() { FaceCamera(80.f, 150.f, 0.f, 1000.f); }); // two angles: the arena's walls hide one or the other
+	At(47.85f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_25b_Susanoo")); });
+	At(48.2f, BackToPlayer);
+	At(49.0f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_26_HudPage4")); });
+	At(49.6f, [this]() { ConsoleCommand(TEXT("quit")); });
 }

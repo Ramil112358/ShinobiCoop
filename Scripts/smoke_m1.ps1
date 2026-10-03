@@ -49,19 +49,22 @@ $hit = Select-String -LiteralPath $ClientLog -Pattern "ShinobiStats .* local=1 H
 # The Fireball (cast at 5.5 s) hit the middle dummy: 60 direct plus burn ticks, and it's still burning at 9 s.
 $burned = Select-String -LiteralPath $ClientLog -Pattern "ShinobiStats ShinobiTrainingDummy\S* local=0 H=(\d+)\.\d .*Burn=1" |
     Where-Object { [double]$_.Matches[0].Groups[1].Value -le 440 }
-# Ice Meteors (shards falling from 7.0 s to 11.5 s), Earth Wall (8.0 s) and Kamui (8.65 s, three seconds): at 9.5 s the
-# client sees the wall, shards still in the sky, and its own phase.
+# Susanoo (up from 7.15 s for 20 s), Ice Meteors (shards falling from 8.05 s to 12.5 s), Earth Wall (9.05 s) and Kamui
+# (9.65 s, three seconds): at 10.5 s the client sees the armour, the wall, shards still in the sky, and its own phase.
 $wall = Select-String -LiteralPath $ClientLog -Pattern "ShinobiJutsuWorld Page=2 Barriers=1 Kunai=0 Meteors=[1-9]"
 $phased = Select-String -LiteralPath $ClientLog -Pattern "ShinobiStats \S+ local=1 .* Phased=1"
-if ($hit -and $burned -and $wall -and $phased) {
+$armour = Select-String -LiteralPath $ClientLog -Pattern "ShinobiStats \S+ local=1 .* Susanoo=1"
+if ($hit -and $burned -and $wall -and $phased -and $armour) {
     Write-Host "SMOKE PASS: $($hit.Line)"
     Write-Host "SMOKE PASS: $($burned[0].Line)"
     Write-Host "SMOKE PASS: $($wall[0].Line)"
     Write-Host "SMOKE PASS: $($phased[0].Line)"
+    Write-Host "SMOKE PASS: $($armour[0].Line)"
 } else {
     Select-String -LiteralPath $ClientLog -Pattern "ShinobiStats|Error" | Select-Object -Last 20 | ForEach-Object { Write-Host $_.Line }
     Select-String -LiteralPath $ClientLog -Pattern "ShinobiJutsuWorld" | Select-Object -Last 3 | ForEach-Object { Write-Host $_.Line }
     if (-not $wall) { throw "SMOKE FAIL: client never saw the replicated Earth Wall and falling ice shards (page 2, one barrier, meteors in the sky)" }
+    if (-not $armour) { throw "SMOKE FAIL: client never saw its own Susanoo armour" }
     if (-not $phased) { throw "SMOKE FAIL: client never saw its own Kamui phase" }
     if (-not $hit) { throw "SMOKE FAIL: client never saw its replicated Health drop to 450" }
     throw "SMOKE FAIL: client never saw a fireballed (H <= 440), burning dummy"

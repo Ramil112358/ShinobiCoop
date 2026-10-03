@@ -15,7 +15,8 @@
     {"asset_id": "1065c23d-539f-4b50-b6dd-cf35c7424a51", "file": "UI/jutsu_waterwall.png", "label": "Water Wall jutsu icon, gpt-image-2 low 1K (2 credits); copy in SourceArt/UI"},
     {"asset_id": "0c17ca79-b8c9-4e1c-9c58-d94185322767", "file": "UI/jutsu_firemeteor.png", "label": "Fire Meteor jutsu icon, gpt-image-2 low 1K (2 credits); copy in SourceArt/UI"},
     {"asset_id": "5013c0db-6d2a-46e8-a746-c9164b3d5087", "file": "UI/jutsu_icemeteor.png", "label": "Ice Meteor Shower jutsu icon, gpt-image-2 low 1K (2 credits); copy in SourceArt/UI"},
-    {"asset_id": "2f0ae6c0-e99f-4652-8805-1c1b2d7e3a8f", "file": "UI/jutsu_waterdragon.png", "label": "Water Dragon jutsu icon, gpt-image-2 low 1K (2 credits); copy in SourceArt/UI"}
+    {"asset_id": "2f0ae6c0-e99f-4652-8805-1c1b2d7e3a8f", "file": "UI/jutsu_waterdragon.png", "label": "Water Dragon jutsu icon, gpt-image-2 low 1K (2 credits); copy in SourceArt/UI"},
+    {"asset_id": "bf200c95-2d16-4300-b8b4-8474ef816795", "file": "UI/jutsu_susanoo.png", "label": "Susanoo jutsu icon, gpt-image-2 low 1K (2 credits); copy in SourceArt/UI"}
   ],
   "ui_kits": [
     {"ui_kit_id": "9b4146da-7bb2-489d-a6ca-65bcee0ef703", "name": "Shinobi HUD"}

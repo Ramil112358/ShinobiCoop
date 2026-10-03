@@ -29,6 +29,7 @@ enum class EShinobiBurst : uint8
 	MeteorImpact,     // Fire Meteor landing
 	FrostImpact,      // an ice shard landing
 	DragonSplash,     // Water Dragon ending
+	SusanooRise,      // Susanoo rising around the caster
 };
 
 /**

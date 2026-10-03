@@ -64,6 +64,16 @@ namespace ShinobiVfx
 		return Water;
 	}
 
+	UMaterialInstanceDynamic* MakeSusanoo(UObject* Outer, float Fade)
+	{
+		UMaterialInstanceDynamic* Armour = MakeInstance(Outer, TEXT("/Game/Shinobi/VFX/M_Susanoo.M_Susanoo"));
+		if (Armour)
+		{
+			Armour->SetScalarParameterValue(TEXT("Fade"), Fade);
+		}
+		return Armour;
+	}
+
 	UMaterialInstanceDynamic* MakePhased(UObject* Outer, float Opacity)
 	{
 		UMaterialInstanceDynamic* Ghost = MakeInstance(Outer, TEXT("/Game/Shinobi/VFX/M_Phased.M_Phased"));

@@ -33,12 +33,12 @@ bool FShinobiOffPageJutsuTest::RunTest(const FString& Parameters)
 	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
 
 	TestTrue(TEXT("Starts on page 1"), ShinobiTest::HasTag(P, ShinobiTags::JutsuPage(1)));
-	P->ApplyJutsuPage(4); // empty: nothing lives there
+	P->ApplyJutsuPage(5); // empty: nothing lives there
 	TestFalse(TEXT("Page 1 tag removed"), ShinobiTest::HasTag(P, ShinobiTags::JutsuPage(1)));
-	TestEqual(TEXT("On page 4"), P->GetJutsuPage(), 4);
+	TestEqual(TEXT("On page 5"), P->GetJutsuPage(), 5);
 
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
-	TestFalse(TEXT("Fireball is on page 1: key 1 does nothing on page 4"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
+	TestFalse(TEXT("Fireball is on page 1: key 1 does nothing on page 5"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
 	TestEqual(TEXT("Nothing spent"), ShinobiTest::Get(P, Chakra), 100.f);
 
 	P->ApplyJutsuPage(1);
@@ -283,9 +283,11 @@ bool FShinobiPageCycleTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Forward from 2"), P->TryCycleJutsuPage(1));
 	TestEqual(TEXT("to 3"), P->GetJutsuPage(), 3);
 	TestTrue(TEXT("Forward from 3"), P->TryCycleJutsuPage(1));
-	TestEqual(TEXT("pages 4 and 5 are empty: wraps to 1"), P->GetJutsuPage(), 1);
+	TestEqual(TEXT("to 4 (Susanoo)"), P->GetJutsuPage(), 4);
+	TestTrue(TEXT("Forward from 4"), P->TryCycleJutsuPage(1));
+	TestEqual(TEXT("page 5 is empty: wraps to 1"), P->GetJutsuPage(), 1);
 	TestTrue(TEXT("Back from 1"), P->TryCycleJutsuPage(-1));
-	TestEqual(TEXT("wraps to 3"), P->GetJutsuPage(), 3);
+	TestEqual(TEXT("wraps to 4"), P->GetJutsuPage(), 4);
 
 	P->ApplyJutsuPage(2);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
