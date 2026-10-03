@@ -32,6 +32,7 @@
 #include "Shinobi/Abilities/GA_Revive.h"
 #include "Shinobi/Abilities/GA_Sprint.h"
 #include "Shinobi/Abilities/GA_Substitution.h"
+#include "Shinobi/Abilities/GA_Dragon.h"
 #include "Shinobi/Abilities/GA_Summons.h"
 #include "Shinobi/Abilities/GA_Susanoo.h"
 #include "Shinobi/Abilities/GA_Teleport.h"
@@ -66,6 +67,7 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 		UGA_Teleport::StaticClass(), UGA_TeleportJump::StaticClass(),
 		UGA_EarthWall::StaticClass(), UGA_WaterWall::StaticClass(), UGA_FireMeteor::StaticClass(), UGA_IceMeteor::StaticClass(), UGA_WaterDragon::StaticClass(), UGA_Susanoo::StaticClass(),
 		UGA_SummonToad::StaticClass(), UGA_SummonSnake::StaticClass(), UGA_SummonDogs::StaticClass(),
+		UGA_SummonDragon::StaticClass(), UGA_DragonDismount::StaticClass(),
 	};
 	StartupEffects.Add(UGE_SubstitutionRegen::StaticClass());
 

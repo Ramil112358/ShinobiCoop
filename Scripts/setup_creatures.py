@@ -12,6 +12,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CREATURES = {
     # name: (colour or None, clips, base-colour PNG or None). With a PNG the creature wears M_Character (the heroes' lit material).
     "Snake": ((0.20, 0.08, 0.30), ["Idle", "Move", "Bite", "Hit", "Death"], None),
+    "Dragon": ((0.30, 0.04, 0.03), ["Idle", "Walk", "Flap", "Glide"], None),
     "Toad": (None, ["Idle", "Move", "Slam", "Hit", "Death"], "Toad.png"),
 }
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
