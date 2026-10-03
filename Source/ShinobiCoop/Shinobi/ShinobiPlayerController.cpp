@@ -245,7 +245,7 @@ void AShinobiPlayerController::ShinobiDumpStats()
 			It->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Susanoo) ? 1 : 0);
 	}
 	// What the replicated jutsu actors look like from this machine (the co-op check compares both sides).
-	int32 Barriers = 0, Kunai = 0, Meteors = 0;
+	int32 Barriers = 0, Kunai = 0, Meteors = 0, Summons = 0;
 	for (TActorIterator<AShinobiBarrier> It(GetWorld()); It; ++It)
 	{
 		++Barriers;
@@ -258,8 +258,12 @@ void AShinobiPlayerController::ShinobiDumpStats()
 	{
 		++Meteors;
 	}
+	for (TActorIterator<AShinobiSummon> It(GetWorld()); It; ++It)
+	{
+		Summons += It->IsAlive() ? 1 : 0;
+	}
 	const AShinobiPlayerCharacter* Me = GetPawn<AShinobiPlayerCharacter>();
-	UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiJutsuWorld Page=%d Barriers=%d Kunai=%d Meteors=%d"), Me ? Me->GetJutsuPage() : 0, Barriers, Kunai, Meteors);
+	UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiJutsuWorld Page=%d Barriers=%d Kunai=%d Meteors=%d Summons=%d"), Me ? Me->GetJutsuPage() : 0, Barriers, Kunai, Meteors, Summons);
 }
 
 void AShinobiPlayerController::RunSmokeTest()
@@ -289,18 +293,20 @@ void AShinobiPlayerController::RunSmokeTest()
 		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
 	};
 	At(6.3f, [this]() { ShinobiPage(4); });
-	At(6.5f, [this]() { ShinobiCast(1); }); // Susanoo: the armour is up from about 7.15 s for 20 s
-	At(7.3f, [this]() { ShinobiDrainChakra(-100.f); ShinobiPage(3); });
-	At(7.5f, [this]() { ShinobiCast(4); }); // Ice Meteors: the shards are queued from about 8.05 s and land over the next 4.5 s
-	At(8.2f, [this]() { ShinobiDrainChakra(-100.f); ShinobiPage(2); });
-	At(8.5f, [this]() { ShinobiCast(4); }); // Earth Wall
-	At(9.3f, [this]() { ShinobiCast(2); }); // Kamui
+	At(6.5f, [this]() { ShinobiCast(4); }); // Dogs: the pack of four appears from about 7.2 s
+	At(7.4f, [this]() { ShinobiDrainChakra(-100.f); });
+	At(7.6f, [this]() { ShinobiCast(1); }); // Susanoo: the armour is up from about 8.3 s for 20 s
+	At(8.4f, [this]() { ShinobiDrainChakra(-100.f); ShinobiPage(3); });
+	At(8.6f, [this]() { ShinobiCast(4); }); // Ice Meteors: the shards are queued from about 9.15 s and land over the next 4.5 s
+	At(9.2f, [this]() { ShinobiDrainChakra(-100.f); ShinobiPage(2); });
+	At(9.5f, [this]() { ShinobiCast(4); }); // Earth Wall
+	At(10.3f, [this]() { ShinobiCast(2); }); // Kamui
 	FTimerHandle DumpTimer;
 	GetWorldTimerManager().SetTimer(DumpTimer, FTimerDelegate::CreateWeakLambda(this, [this]()
 	{
 		ShinobiDumpStats();
 		ConsoleCommand(TEXT("quit"));
-	}), 10.5f, false);
+	}), 11.3f, false);
 }
 
 void AShinobiPlayerController::RunShotTest()

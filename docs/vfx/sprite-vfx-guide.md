@@ -248,3 +248,43 @@ and legs; `Scripts/setup_susanoo.py` imports it; `M_Susanoo` comes from `Scripts
 
 Shots 25-26 of `Scripts/shot_chakra.ps1 -Jutsu` show it (the arena's walls hide the camera from one of the two angles; the other
 shows the figure). `Scripts/smoke_m1.ps1` checks that the client sees its own armour.
+
+## 10. Summons (2026-10-03)
+
+Page 4, slots 2-4: Summon Toad (60 chakra, 45 s cooldown), Summon Snake (50, 40 s) and Summon Dogs (45, 30 s). After the Kuchiyose seals
+(`AM_Summon_Seal`, a crouch with the right fist drawn up) and a palm slam (`AM_Summon_Release`, both built by
+`Scripts/character/build_jutsu_anims.py`, timeline `Summon`) the creature appears 4-5 m in front of the caster in a puff of smoke
+(`EShinobiBurst::SummonPoof`). A caster has one of each kind out at a time: calling it again replaces it (a dog pack of four counts as one).
+
+A summon is `AShinobiSummon`, an `AShinobiEnemyCharacter` on the **players'** team, so the existing enemy AI, health, attack abilities and
+death do the work: it chases the nearest hostile, enemies pick it as a target like a player, and the caster's area jutsu skip it. It is
+not counted by waves or camps (only `FShinobiEncounter::Spawn` registers kills). Its numbers are the table at the top of
+`ShinobiSummon.cpp`:
+
+| Kind | Health | Attack | Stays |
+|---|---|---|---|
+| Toad (x1) | 600 | `UGA_ToadSlam`: 60 to everything within 4.5 m of its feet, every 2.5 s | 12 s |
+| Snake (x1) | 350 | `UGA_SnakeStrike`: 70 from up to 8 m, every 2 s | 10 s |
+| Dog (x4) | 120 each | `UGA_DogBite`: 18 in front, every 0.8 s, run speed 800 | 15 s |
+
+Looks and animation are code-driven single-node playback (no animation blueprint): `UpdateCreatureClip` picks idle, walk, run or the
+attack clip from the velocity and the replicated tag `State.SummonAttacking` (granted by the three attack abilities), so every machine
+animates the same. Dogs and toad have no physics asset to ragdoll; the toad and snake play their death clip, the wolf ragdolls.
+
+Where the creatures come from (all in `docs/world/asset-credits.md`):
+
+- **Dogs**: the Animal Variety Pack wolf (Epic, Fab), dark coat, scaled 1.1. It faces +Y in the pack and is turned in code.
+- **Snake**: the Mesh2Motion snake (CC0) with its own idle, side-winding, bite, hit and death clips, five times as thick and two and a
+  half times as long as the original. `Scripts/character/export_creature.py` turns a Mesh2Motion GLB to face +X, stands it on the
+  ground and writes one FBX per clip; `Scripts/setup_creatures.py` imports them under `/Game/Shinobi/Creatures/<Name>`.
+- **Toad**: a Hyper3D Rodin model (`SourceArt/Creatures/Toad/rodin_toad.glb`, one unrigged mesh). Mesh2Motion has no toad, so
+  `Scripts/character/build_toad.py` builds a 17-bone quadruped rig to its proportions, weights it by distance (Blender's bone-heat
+  weights failed on the mesh) and keys the clips: idle, a hop for movement, a slam (rears up, crashes down at 0.7 s, which is
+  `UGA_ToadSlam::WindUp`), hit and death. To rerun: `blender -b -P Scripts/character/build_toad.py` (add `-- preview`
+  for pose renders in `Saved/`), then `Scripts/setup_creatures.py`.
+- To add a creature: put it in `CREATURES` in `setup_creatures.py`, a look in `CreatureLookFor` and a row in `SummonStatsFor`.
+
+Shots 27-30 of `Scripts/shot_chakra.ps1 -Jutsu` show the three arrivals and the full page-4 HUD; `Scripts/smoke_m1.ps1` checks the client
+sees the four dogs. Not done: the rideable dragon (cycle E; `dragon-animations.glb` and `rig-dragon.glb` are already in
+`SourceArt/Mesh2Motion`), summons following their caster when nothing is in sight (they chase any hostile in the level), and
+hit-reaction clips (the `Hit` clips are imported but unused).
