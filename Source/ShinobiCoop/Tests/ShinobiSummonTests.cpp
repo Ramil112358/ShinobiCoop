@@ -8,6 +8,8 @@
 #include "Shinobi/Enemies/ShinobiSummon.h"
 #include "Shinobi/Abilities/GA_Summons.h"
 #include "Animation/AnimSingleNodeInstance.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
 #include "Engine/Texture2D.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -58,7 +60,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonFightTest, "ShinobiCoop.Summons.A
 bool FShinobiSummonFightTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-5000.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-2500.f, 0.f, 0.f)); // near enough to guard, far enough not to be the nearest target
 	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>();
 	ShinobiTest::Hover(Caster);
 	ShinobiTest::Hover(Ninja);
@@ -216,9 +218,12 @@ bool FShinobiSummonPageTest::RunTest(const FString& Parameters)
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
 	P->ApplyJutsuPage(2);
-	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2); // other jutsu live on these keys here: they may run, the summons must not
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
+	W.Tick(1.5f);
+	TestEqual(TEXT("No summon appeared"), ShinobiTest::CountActors<AShinobiSummon>(W), 0);
+	TestFalse(TEXT("No summon cooldown started"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonToad) || ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonSnake) || ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonDogs));
 	TestFalse(TEXT("Toad not on page 2"), ShinobiTest::IsActive(P, UGA_SummonToad::StaticClass()));
 	TestFalse(TEXT("Snake not on page 2"), ShinobiTest::IsActive(P, UGA_SummonSnake::StaticClass()));
 	TestFalse(TEXT("Dogs not on page 2"), ShinobiTest::IsActive(P, UGA_SummonDogs::StaticClass()));
@@ -229,7 +234,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiToadSlamTest, "ShinobiCoop.Summons.Toad
 bool FShinobiToadSlamTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(5000.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(2500.f, 0.f, 0.f));
 	AShinobiRogueNinja* InFront = W.Spawn<AShinobiRogueNinja>(FVector(350.f, 0.f, 0.f));
 	AShinobiRogueNinja* Behind = W.Spawn<AShinobiRogueNinja>(FVector(-300.f, 0.f, 0.f));
 	AShinobiRogueNinja* Far = W.Spawn<AShinobiRogueNinja>(FVector(0.f, 1500.f, 0.f));
@@ -256,7 +261,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSnakeStrikeTest, "ShinobiCoop.Summons.S
 bool FShinobiSnakeStrikeTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(5000.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(2500.f, 0.f, 0.f));
 	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(FVector(550.f, 0.f, 0.f));
 	ShinobiTest::Hover(Caster);
 	ShinobiTest::Hover(Ninja);
@@ -310,7 +315,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDogAnimTest, "ShinobiCoop.Summons.DogsI
 bool FShinobiDogAnimTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-5000.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-1500.f, 0.f, 0.f));
 	ShinobiTest::Hover(Caster);
 	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Dog, FVector::ZeroVector);
 	const AShinobiSummon* Dog = Pack[0];
@@ -368,7 +373,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiToadLookTest, "ShinobiCoop.Summons.Toad
 bool FShinobiToadLookTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-9000.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-2000.f, 0.f, 0.f));
 	ShinobiTest::Hover(Caster);
 	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Toad, FVector::ZeroVector);
 	if (Pack.Num() != 1)
@@ -415,6 +420,102 @@ bool FShinobiSummonAssetsTest::RunTest(const FString& Parameters)
 		TestNotNull(Name + TEXT(" release montage"), Jutsu->ReleaseMontage.LoadSynchronous());
 		TestNotNull(Name + TEXT(" icon"), Jutsu->Icon.LoadSynchronous());
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonSmoothingTest, "ShinobiCoop.Summons.CreatureRidesTheSmoothedMesh", ShinobiTestFlags)
+bool FShinobiSummonSmoothingTest::RunTest(const FString& Parameters)
+{
+	// The movement component's client smoothing moves GetMesh() only; a creature attached to the capsule would snap to every update.
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Dog, FVector(400.f, 0.f, 0.f));
+	if (Pack.Num() != AShinobiSummon::DogPackSize)
+	{
+		return false;
+	}
+	TestTrue(TEXT("The wolf is attached to the character's mesh"), Pack[0]->GetBodyMesh()->GetAttachParent() == Pack[0]->GetMesh());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonCasterGoneTest, "ShinobiCoop.Summons.LeaveWhenTheirCasterFalls", ShinobiTestFlags)
+bool FShinobiSummonCasterGoneTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Downed = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiPlayerCharacter* Leaver = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, 4000.f, 0.f));
+	AShinobiPlayerCharacter* Steady = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, -4000.f, 0.f));
+	ShinobiTest::Hover(Downed);
+	ShinobiTest::Hover(Leaver);
+	ShinobiTest::Hover(Steady);
+	Summon(Downed, EShinobiSummonKind::Toad, FVector(300.f, 0.f, 0.f));
+	Summon(Leaver, EShinobiSummonKind::Toad, FVector(300.f, 4000.f, 0.f));
+	Summon(Steady, EShinobiSummonKind::Toad, FVector(300.f, -4000.f, 0.f));
+	TestEqual(TEXT("Three toads"), ShinobiTest::CountActors<AShinobiSummon>(W), 3);
+
+	ShinobiTest::Damage(Downed, 600.f); // downed
+	Leaver->Destroy(); // left the game
+	W.Tick(0.2f);
+	TestEqual(TEXT("Only the standing caster's toad remains"), ShinobiTest::CountActors<AShinobiSummon>(W), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonLeashTest, "ShinobiCoop.Summons.OnlyGoAfterEnemiesNearTheirCaster", ShinobiTestFlags)
+bool FShinobiSummonLeashTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-9000.f, 0.f, 0.f));
+	ShinobiTest::Hover(Caster);
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Dog, FVector(-8700.f, 0.f, 0.f));
+	AShinobiRogueNinja* Far = W.Spawn<AShinobiRogueNinja>(FVector(0.f, 0.f, 0.f));
+	AShinobiRogueNinja* Near = W.Spawn<AShinobiRogueNinja>(FVector(-8000.f, 0.f, 0.f));
+	ShinobiTest::Hover(Far);
+	ShinobiTest::Hover(Near);
+	ShinobiTest::ApplyEffect(Far, UGE_Shock::StaticClass());
+	ShinobiTest::ApplyEffect(Near, UGE_Shock::StaticClass());
+
+	W.Tick(1.4f);
+	TestTrue(TEXT("The ninja 1 km from the caster is attacked"), ShinobiTest::Get(Near, UShinobiAttributeSet::GetHealthAttribute()) < 200.f);
+	TestEqual(TEXT("The one 9 km away is left alone"), ShinobiTest::Get(Far, UShinobiAttributeSet::GetHealthAttribute()), 200.f);
+	for (const AShinobiSummon* Dog : Pack)
+	{
+		TestTrue(TEXT("and no dog ran off towards it"), Dog->GetActorLocation().X < -4000.f);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonWallTest, "ShinobiCoop.Summons.AppearInFrontOfAWallNotInsideIt", ShinobiTestFlags)
+bool FShinobiSummonWallTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	if (!TestNotNull(TEXT("engine cube"), Cube))
+	{
+		return false;
+	}
+	// A wall across the way 3 m ahead: its near face is at X = 300.
+	AStaticMeshActor* Wall = W.World->SpawnActor<AStaticMeshActor>(FVector(350.f, 0.f, 0.f), FRotator::ZeroRotator);
+	Wall->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+	Wall->GetStaticMeshComponent()->SetStaticMesh(Cube);
+	Wall->SetActorScale3D(FVector(1.f, 30.f, 30.f));
+	Wall->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	Caster->ApplyJutsuPage(4);
+	ShinobiTest::Tap(Caster, EShinobiAbilityInputID::Jutsu2);
+	W.Tick(1.2f);
+	AShinobiSummon* Toad = nullptr;
+	for (TActorIterator<AShinobiSummon> It(W.World); It; ++It)
+	{
+		Toad = *It;
+	}
+	if (!TestNotNull(TEXT("The toad came"), Toad))
+	{
+		return false;
+	}
+	TestTrue(FString::Printf(TEXT("and stands clear of the wall, its 1.7 m radius short of X = 300 (X %.0f)"), Toad->GetActorLocation().X), Toad->GetActorLocation().X < 300.f - 150.f);
 	return true;
 }
 

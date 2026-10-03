@@ -22,6 +22,9 @@ protected:
 
 	/** How far in front of the caster it appears. */
 	float Distance = 400.f;
+
+	/** Room it needs: a wall nearer than Distance + Clearance pulls it back, so a big creature does not appear inside one. */
+	float Clearance = 250.f;
 };
 
 /** Page 4, slot 2: a giant toad, slow and tough, that slams the ground. */

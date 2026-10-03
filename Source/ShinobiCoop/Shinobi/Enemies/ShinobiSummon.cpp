@@ -2,6 +2,7 @@
 #include "AbilitySystemComponent.h"
 #include "Animation/AnimSequence.h"
 #include "Components/CapsuleComponent.h"
+#include "NavigationInvokerComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "EngineUtils.h"
@@ -20,7 +21,7 @@ namespace
 	struct FSummonStats
 	{
 		float Health;
-		float Damage;       // per hit (a dog bites twice per attack)
+		float Damage;       // per hit
 		float AttackRange;
 		float AttackInterval;
 		float Speed;
@@ -56,7 +57,7 @@ namespace
 		bool bDarkCoat;   // swap in the "...Dark" twin of each material
 	};
 
-	const FCreatureLook* CreatureLookFor(EShinobiSummonKind Kind)
+	const FCreatureLook& CreatureLookFor(EShinobiSummonKind Kind)
 	{
 		// The Animal Variety Pack wolf faces +Y and is a 2 m wolf; a ninken is a little bigger.
 		static const FCreatureLook Dog = { TEXT("/Game/AnimalVarietyPack/Wolf/Meshes/SK_Wolf"), TEXT("/Game/AnimalVarietyPack/Wolf/Animations/ANIM_Wolf_"),
@@ -67,7 +68,7 @@ namespace
 		// The Rodin toad (Scripts/character/build_toad.py) faces +X, 1.9 m long and 1.5 m tall; a summoned one is two and a half times that.
 		static const FCreatureLook Toad = { TEXT("/Game/Shinobi/Creatures/Toad/SK_Toad"), TEXT("/Game/Shinobi/Creatures/Toad/ANIM_Toad_"),
 			TEXT("Idle"), TEXT("Move"), TEXT("Move"), TEXT("Slam"), TEXT("Death"), 0.f, FVector(2.5f), 170.f, 190.f, false };
-		return Kind == EShinobiSummonKind::Dog ? &Dog : Kind == EShinobiSummonKind::Snake ? &Snake : &Toad;
+		return Kind == EShinobiSummonKind::Dog ? Dog : Kind == EShinobiSummonKind::Snake ? Snake : Toad;
 	}
 }
 
@@ -76,6 +77,7 @@ AShinobiSummon::AShinobiSummon(const FObjectInitializer& ObjectInitializer)
 {
 	Team = EShinobiTeam::Players;
 	UseMannequinMesh();
+	NavInvoker->SetGenerationRadii(1500.f, 2500.f); // fast and plentiful: the inherited 5 km would keep rebuilding navmesh tiles
 }
 
 void AShinobiSummon::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -103,17 +105,14 @@ void AShinobiSummon::Configure()
 	StartupAbilities = { AttackAbility }; // granted by the character base's BeginPlay, after this
 	GetCharacterMovement()->MaxWalkSpeed = Stats.Speed;
 	SetActorScale3D(FVector(Stats.Scale));
-	if (const FCreatureLook* Look = CreatureLookFor(Kind))
-	{
-		GetCapsuleComponent()->SetCapsuleSize(Look->CapsuleRadius, Look->CapsuleHalfHeight);
-		WearCreature();
-	}
+	GetCapsuleComponent()->SetCapsuleSize(CreatureLookFor(Kind).CapsuleRadius, CreatureLookFor(Kind).CapsuleHalfHeight);
+	WearCreature();
 }
 
 void AShinobiSummon::WearCreature()
 {
-	const FCreatureLook* Look = CreatureLookFor(Kind);
-	USkeletalMesh* Model = Look && !IsNetMode(NM_DedicatedServer) ? LoadObject<USkeletalMesh>(nullptr, *FString::Printf(TEXT("%s.%s"), Look->Mesh, *FPaths::GetBaseFilename(Look->Mesh)), nullptr, LOAD_NoWarn | LOAD_Quiet) : nullptr;
+	const FCreatureLook* Look = &CreatureLookFor(Kind);
+	USkeletalMesh* Model = !IsNetMode(NM_DedicatedServer) ? LoadObject<USkeletalMesh>(nullptr, *FString::Printf(TEXT("%s.%s"), Look->Mesh, *FPaths::GetBaseFilename(Look->Mesh)), nullptr, LOAD_NoWarn | LOAD_Quiet) : nullptr;
 	if (!Model)
 	{
 		return;
@@ -137,9 +136,12 @@ void AShinobiSummon::WearCreature()
 	Creature->SetSkeletalMeshAsset(Model);
 	Creature->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 	Creature->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	// The model's paws (belly) rest on Z = 0; the capsule's floor is at -half height.
-	Creature->SetupAttachment(GetCapsuleComponent());
-	Creature->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -Look->CapsuleHalfHeight), FRotator(0.f, Look->Yaw, 0.f));
+	// The model's paws (belly) rest on Z = 0; the capsule's floor is at -half height, and it faces +X. It rides GetMesh(), which the
+	// movement component smooths on clients (a capsule child would snap to every network update); the transform below cancels the
+	// mannequin mesh's own offset so the creature ends up where the capsule says.
+	const FTransform Wanted(FRotator(0.f, Look->Yaw, 0.f), FVector(0.f, 0.f, -Look->CapsuleHalfHeight));
+	Creature->SetupAttachment(GetMesh());
+	Creature->SetRelativeTransform(Wanted * GetMesh()->GetRelativeTransform().Inverse());
 	Creature->SetRelativeScale3D(Look->Scale);
 	if (Look->bDarkCoat) // every material has a "...Dark" twin beside it
 	{
@@ -159,9 +161,25 @@ void AShinobiSummon::WearCreature()
 	GetMesh()->SetVisibility(false); // the mannequin only carries the capsule's old look; hidden under the creature
 }
 
+bool AShinobiSummon::CanTarget(const AShinobiCharacterBase& Candidate) const
+{
+	const AShinobiCharacterBase* Caster = Summoner.Get();
+	return Caster && FVector::Dist2D(Candidate.GetActorLocation(), Caster->GetActorLocation()) <= LeashRange;
+}
+
 void AShinobiSummon::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (HasAuthority())
+	{
+		// The contract ends with the caster: downed, dead, or gone from the game (a respawned pawn is a different caster).
+		const AShinobiCharacterBase* Caster = Summoner.Get();
+		if (!Caster || !Caster->IsAlive())
+		{
+			Dismiss();
+			return;
+		}
+	}
 	if (Creature)
 	{
 		UpdateCreatureClip();
@@ -202,7 +220,7 @@ void AShinobiSummon::BeginPlay()
 
 void AShinobiSummon::Dismiss()
 {
-	if (!IsAlive() || IsActorBeingDestroyed())
+	if (!HasAuthority() || !IsAlive() || IsActorBeingDestroyed())
 	{
 		return;
 	}
@@ -232,8 +250,7 @@ TArray<AShinobiSummon*> AShinobiSummon::Summon(AShinobiCharacterBase* Caster, ES
 	}
 
 	const FSummonStats& Stats = SummonStatsFor(Kind);
-	const FCreatureLook* Look = CreatureLookFor(Kind);
-	const float HalfHeight = Look ? Look->CapsuleHalfHeight : GetDefault<AShinobiSummon>()->GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() * Stats.Scale;
+	const float HalfHeight = CreatureLookFor(Kind).CapsuleHalfHeight;
 	const float Yaw = Caster->GetActorRotation().Yaw;
 	for (int32 Index = 0; Index < Stats.Count; ++Index)
 	{

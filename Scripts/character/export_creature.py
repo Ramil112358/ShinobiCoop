@@ -1,10 +1,10 @@
 """Exports a Mesh2Motion creature (CC0 GLB with a skinned mesh, armature and actions) as FBX for Unreal.
 
-Run: blender -b -P Scripts/character/export_creature.py -- <name> <src.glb> <yaw-or-auto> <Action=Clip,Action=Clip,...> [mesh.glb]
+Run: blender -b -P Scripts/character/export_creature.py -- <name> <src.glb> <yaw-or-auto> <Action=Clip,Action=Clip,...>
 
 Writes SourceArt/Creatures/<name>/<name>.fbx (mesh + skeleton, no animation) and <name>_<Clip>.fbx per clip (skeleton + that one
-animation). The creature is turned to face +X (UE's forward), in centimetres. With mesh.glb (an unskinned model, e.g. from Rodin) the
-GLB's own mesh is replaced by it, scaled to the old mesh's length and weighted to the rig by automatic weights.
+animation). The creature is turned to face +X (UE's forward), centred over the origin with its lowest point on the ground.
+(A Rodin model is rigged by Scripts/character/build_toad.py instead.)
 Units: glTF metres -> Blender metres; the FBX exporter makes them centimetres (so a 4 m snake is 400 UE units).
 """
 import math
@@ -18,7 +18,6 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 args = sys.argv[sys.argv.index("--") + 1:]
 NAME, SRC, YAW = args[0], args[1], args[2]
 CLIPS = dict(pair.split("=") for pair in args[3].split(",")) if len(args) > 3 and args[3] else {}
-MESH_SRC = args[4] if len(args) > 4 else None
 OUT = os.path.join(ROOT, "SourceArt", "Creatures", NAME)
 os.makedirs(OUT, exist_ok=True)
 
@@ -50,28 +49,6 @@ def head_direction():
     v = arm.matrix_world @ head.head_local - arm.matrix_world @ centre
     return Vector((v.x, v.y, 0.0))
 
-
-if MESH_SRC:
-    old = Vector(mesh.dimensions)
-    old_length = max(old.x, old.y)
-    anchor = mesh.matrix_world.translation.copy()
-    before = set(bpy.data.objects)
-    bpy.ops.import_scene.gltf(filepath=MESH_SRC if os.path.isabs(MESH_SRC) else os.path.join(ROOT, MESH_SRC))
-    fresh = [o for o in bpy.data.objects if o not in before and o.type == "MESH"]
-    for o in set(bpy.data.objects) - before - set(fresh):
-        if o.type == "EMPTY":
-            for child in o.children:
-                child.parent = None
-            bpy.data.objects.remove(o)
-    select(*fresh)
-    if len(fresh) > 1:
-        bpy.ops.object.join()
-    new = bpy.context.view_layer.objects.active
-    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    bpy.data.objects.remove(mesh)
-    mesh = new
-    mesh.name = "Body"
-    raise SystemExit("rodin fit: not implemented in this pass")
 
 direction = head_direction()
 yaw = math.degrees(math.atan2(direction.y, direction.x)) if YAW == "auto" else float(YAW)

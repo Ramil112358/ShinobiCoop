@@ -1,4 +1,5 @@
 #include "Shinobi/Abilities/GA_Summons.h"
+#include "Engine/World.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiTags.h"
 
@@ -16,8 +17,24 @@ void UGA_SummonBase::ExecuteJutsu()
 	AShinobiCharacterBase* Self = GetShinobiCharacter();
 	if (Self && HasAuthority(&CurrentActivationInfo))
 	{
+		const FVector Forward = Self->GetActorForwardVector().GetSafeNormal2D();
 		const FVector Feet = Self->GetActorLocation() - FVector(0.f, 0.f, Self->GetSimpleCollisionHalfHeight());
-		AShinobiSummon::Summon(Self, SummonKind, Feet + Self->GetActorForwardVector().GetSafeNormal2D() * Distance);
+		UWorld* World = Self->GetWorld();
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(SummonSpot), false, Self);
+		FHitResult Hit;
+		// Not into a wall: stop short of anything in the way.
+		float Ahead = Distance;
+		if (World->LineTraceSingleByChannel(Hit, Self->GetActorLocation(), Self->GetActorLocation() + Forward * (Distance + Clearance), ECC_WorldStatic, Params))
+		{
+			Ahead = FMath::Clamp(Hit.Distance - Clearance, 0.f, Distance);
+		}
+		// And on the ground there: down from above, so a ledge or a slope puts it on the floor rather than in the air or in the hill.
+		FVector Spot = Feet + Forward * Ahead;
+		if (World->LineTraceSingleByChannel(Hit, Spot + FVector(0.f, 0.f, 200.f), Spot - FVector(0.f, 0.f, 500.f), ECC_WorldStatic, Params))
+		{
+			Spot = Hit.ImpactPoint;
+		}
+		AShinobiSummon::Summon(Self, SummonKind, Spot);
 	}
 	EndJutsu();
 }
@@ -32,6 +49,7 @@ UGA_SummonToad::UGA_SummonToad()
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_SummonToad);
 	SummonKind = EShinobiSummonKind::Toad;
 	Distance = 500.f;
+	Clearance = 300.f;
 }
 
 UGA_SummonSnake::UGA_SummonSnake()
@@ -44,6 +62,7 @@ UGA_SummonSnake::UGA_SummonSnake()
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_SummonSnake);
 	SummonKind = EShinobiSummonKind::Snake;
 	Distance = 400.f;
+	Clearance = 350.f;
 }
 
 UGA_SummonDogs::UGA_SummonDogs()
@@ -56,4 +75,5 @@ UGA_SummonDogs::UGA_SummonDogs()
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_SummonDogs);
 	SummonKind = EShinobiSummonKind::Dog;
 	Distance = 350.f;
+	Clearance = 250.f;
 }

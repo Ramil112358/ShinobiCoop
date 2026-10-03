@@ -47,6 +47,11 @@ public:
 
 	virtual void Tick(float DeltaSeconds) override;
 
+	/** Only enemies within LeashRange of the summoner: a summon guards its caster, it does not cross the level after a stray enemy. */
+	virtual bool CanTarget(const AShinobiCharacterBase& Candidate) const override;
+
+	static constexpr float LeashRange = 3000.f;
+
 	/** Server: leaves in a puff of smoke now. Does nothing for one that has already fallen. */
 	void Dismiss();
 
