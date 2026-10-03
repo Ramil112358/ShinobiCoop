@@ -114,8 +114,16 @@ def remove_old_single_clip(jutsu):
 def build_montage(jutsu, anim, blends):
     path = f"{ANIM_DIR}/AM_{jutsu}"
     if unreal.EditorAssetLibrary.does_asset_exist(path):
-        montage = load(path)
+        # A montage keeps the length its clip had when it was made, so a clip that changed length needs a new one.
+        existing = load(path)
+        if abs(existing.get_play_length() - anim.get_play_length()) < 0.01:
+            montage = existing
+        else:
+            unreal.EditorAssetLibrary.delete_asset(path)
+            montage = None
     else:
+        montage = None
+    if montage is None:
         factory = unreal.AnimMontageFactory()
         factory.set_editor_property("source_animation", anim)
         montage = TOOLS.create_asset(f"AM_{jutsu}", ANIM_DIR, unreal.AnimMontage, factory)
@@ -140,7 +148,10 @@ if os.path.exists(MIXAMO_SIT):
     import shutil
     shutil.copyfile(MIXAMO_SIT, os.path.join(SOURCE_DIR, "Mount_Sit.fbx"))
     unreal.log("[setup_jutsu_anims] seated loop: using the Mixamo Sitting Idle")
+ONLY = os.environ.get("JUTSU_ONLY")  # e.g. Mount: re-import just that jutsu
 for jutsu, phases in JUTSU.items():
+    if ONLY and jutsu != ONLY:
+        continue
     remove_old_single_clip(jutsu)
     for phase in phases:
         blends = PHASES[phase]

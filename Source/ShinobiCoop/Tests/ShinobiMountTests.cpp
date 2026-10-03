@@ -4,6 +4,7 @@
 
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
+#include "Animation/AnimSequence.h"
 #include "Animation/AnimSingleNodeInstance.h"
 #include "Camera/CameraComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -321,6 +322,11 @@ bool FShinobiMountSeatedTest::RunTest(const FString& Parameters)
 	if (!TestNotNull(TEXT("seated montage"), Sit))
 	{
 		return false;
+	}
+	const UAnimSequence* Clip = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Shinobi/Anims/AS_Mount_Sit.AS_Mount_Sit"));
+	if (TestNotNull(TEXT("seated clip"), Clip))
+	{
+		TestTrue(FString::Printf(TEXT("The montage is as long as its clip (%.2f vs %.2f): rerun setup_jutsu_anims.py if not"), Sit->GetPlayLength(), Clip->GetPlayLength()), FMath::IsNearlyEqual(Sit->GetPlayLength(), Clip->GetPlayLength(), 0.02f));
 	}
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
