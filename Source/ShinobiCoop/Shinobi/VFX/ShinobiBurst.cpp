@@ -97,8 +97,8 @@ void AShinobiBurst::BeginPlay()
 	static const EShinobiSfx Sounds[] = { EShinobiSfx::Explosion, EShinobiSfx::Explosion, EShinobiSfx::Zap, EShinobiSfx::Whirr, EShinobiSfx::Poof, EShinobiSfx::Whoosh, EShinobiSfx::Whoosh,
 		EShinobiSfx::Explosion, EShinobiSfx::Whirr, EShinobiSfx::Zap, EShinobiSfx::Thud, EShinobiSfx::Poof,
 		EShinobiSfx::Explosion, EShinobiSfx::Poof, EShinobiSfx::Whoosh,
-		EShinobiSfx::Whirr };
-	static_assert(UE_ARRAY_COUNT(Sounds) == static_cast<int32>(EShinobiBurst::SusanooRise) + 1, "a sound for every burst kind");
+		EShinobiSfx::Whirr, EShinobiSfx::Poof };
+	static_assert(UE_ARRAY_COUNT(Sounds) == static_cast<int32>(EShinobiBurst::SummonPoof) + 1, "a sound for every burst kind");
 	ShinobiSfx::Play(this, Sounds[static_cast<uint8>(Kind)], GetActorLocation(), Kind == EShinobiBurst::Fire ? 0.7f : 1.f);
 
 	// Mostly-rim shells (low Core) at modest intensity: a solid bright sphere blows out to a white wall under bloom.
@@ -121,6 +121,7 @@ void AShinobiBurst::BeginPlay()
 	case EShinobiBurst::MeteorImpact: Color = ShinobiVfx::Colors::Fire;      Duration = 0.8f; MaxScale = 8.f;  Intensity = 3.f;   LightIntensity = 60000.f; Core = 0.2f; break;
 	case EShinobiBurst::FrostImpact:  Color = ShinobiVfx::Colors::Ice;       Duration = 0.5f; MaxScale = 2.f;  Intensity = 3.f;   LightIntensity = 12000.f; Core = 0.4f; break;
 	case EShinobiBurst::SusanooRise:  Color = FLinearColor(0.5f, 0.25f, 1.f); Duration = 0.9f; MaxScale = 6.f; Intensity = 2.5f; LightIntensity = 40000.f; Core = 0.3f; break;
+	case EShinobiBurst::SummonPoof:   Color = ShinobiVfx::Colors::Smoke;     Duration = 0.7f; MaxScale = 4.f;  Intensity = 0.8f;  LightIntensity = 0.f;     Core = 0.6f; break;
 	case EShinobiBurst::DragonSplash: Color = ShinobiVfx::Colors::Chakra;    Duration = 0.7f; MaxScale = 5.f;  Intensity = 2.f;   LightIntensity = 10000.f; Core = 0.4f; break;
 	}
 	MaxScale *= Scale;
@@ -300,6 +301,14 @@ bool AShinobiBurst::BuildCards()
 		Cards.Last().Spin = 240.f;
 		AddCard(Plane, ESprite::Ring, FLinearColor(0.55f, 0.3f, 1.f), 1.8f, FVector::ZeroVector, FVector2D(1500.f, 1500.f) * S, 0.f, true);
 		AddCard(Plane, ESprite::Burst, FLinearColor(0.65f, 0.4f, 1.f), 1.6f, FVector(0.f, 0.f, 220.f), FVector2D(900.f, 900.f) * S);
+		break;
+	case EShinobiBurst::SummonPoof:
+		// A summon arriving or leaving: a ring of smoke puffs billowing out from the ground.
+		Duration = 0.9f;
+		for (int32 Index = 0; Index < 7; ++Index)
+		{
+			AddCard(Plane, ESprite::Smoke, FLinearColor(0.78f, 0.76f, 0.72f), 1.f, Around(Random.FRandRange(120.f, 380.f) * S, Index * 0.9f + Random.FRandRange(0.f, 0.5f)), FVector2D(420.f, 520.f) * S, 110.f * S);
+		}
 		break;
 	case EShinobiBurst::DragonSplash:
 		// The Water Dragon breaking: a wide ring, a burst of spray and a crown of mist.
