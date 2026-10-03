@@ -183,6 +183,17 @@ public:
 	UGE_Kamui();
 };
 
+/** Chill (Ice Meteor Shower): 3 s of State.Chilled, 40% slower movement. Another hit refreshes it. */
+UCLASS()
+class SHINOBICOOP_API UGE_Chill : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	static constexpr float Seconds = 3.f;
+	static constexpr float SpeedScale = 0.6f; // read by UShinobiMovementComponent::GetMaxSpeed
+	UGE_Chill();
+};
+
 /** Teleport's jump window: 6 s of State.TeleportMarked, while the thrown kunai stand. */
 UCLASS()
 class SHINOBICOOP_API UGE_TeleportMarked : public UShinobiEffect

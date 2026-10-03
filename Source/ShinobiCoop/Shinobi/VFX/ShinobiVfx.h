@@ -16,6 +16,7 @@ namespace ShinobiVfx
 		const FLinearColor BlackFlame(0.35f, 0.02f, 0.6f);
 		const FLinearColor Lightning(0.05f, 0.3f, 1.f); // Chidori blue (keep R and G under 1 at glow intensities, or it reads white)
 		const FLinearColor Smoke(0.6f, 0.6f, 0.6f);
+		const FLinearColor Ice(0.55f, 0.85f, 1.f);
 		const FLinearColor BlackFlameCore(0.01f, 0.f, 0.015f);
 		const FLinearColor Blood(0.35f, 0.f, 0.f);
 	}
@@ -67,6 +68,10 @@ namespace ShinobiVfx
 	 * Does nothing without a world or on a dedicated server.
 	 */
 	SHINOBICOOP_API void SpawnScorch(UWorld* World, const FVector& Location, float Radius, const FLinearColor& Tint, float Linger);
+
+	/** The Water Wall's flowing-water material (M_WaterWall, built by Scripts/setup_vfx.py) tinted Color: the Water Dragon's body.
+	 * Null, with an ensure, if the asset is missing. */
+	SHINOBICOOP_API UMaterialInstanceDynamic* MakeWater(UObject* Outer, const FLinearColor& Color, float Intensity);
 
 	/** Kamui's see-through chakra-blue ghost (M_Phased, built by Scripts/setup_vfx.py) at Opacity 0-1. Null, with an ensure, if the asset is missing. */
 	SHINOBICOOP_API UMaterialInstanceDynamic* MakePhased(UObject* Outer, float Opacity);

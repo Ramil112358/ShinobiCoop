@@ -25,6 +25,9 @@ TEXTURES = {
     "jutsu_almightypush.png": ("T_Jutsu_AlmightyPush", 128),
     "jutsu_earthwall.png": ("T_Jutsu_EarthWall", 128),
     "jutsu_waterwall.png": ("T_Jutsu_WaterWall", 128),
+    "jutsu_firemeteor.png": ("T_Jutsu_FireMeteor", 128),
+    "jutsu_icemeteor.png": ("T_Jutsu_IceMeteor", 128),
+    "jutsu_waterdragon.png": ("T_Jutsu_WaterDragon", 128),
 }
 
 

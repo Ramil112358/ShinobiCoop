@@ -337,8 +337,66 @@ def wall():
     }
 
 
+# Fire Meteor: one arm thrown straight up to call the rock down, then swept down to point at the spot.
+SKY_POINT = merge(NEUTRAL, BRACE, {"spine": (-6, 9), "neck": (-8, 2), "head": (-16, 3),
+                                   "R": arm((-14, 178, 8), (-1, 0, -0.2), UP, LEFT, (10, 0, 0, 80, 80)),
+                                   "L": arm((22, 100, -10), ELBOW_L, (0.3, -1, -0.3), RIGHT, (30, 40, 40, 40, 40))})
+METEOR_POINT = merge(NEUTRAL, LUNGE, {"spine": (14, 10), "neck": (-4, 6), "head": (-4, 6),
+                                      "R": arm((-12, 108, 64), (-1, -0.4, 0), (0, -0.45, 1), LEFT, (10, 0, 0, 80, 80)),
+                                      "L": arm((24, 96, -18), (0.3, 0, 1), (0.2, -1, -0.4), RIGHT, (30, 40, 40, 40, 40))})
+
+
+def fire_meteor():
+    seals, t = seal_run(("Snake", "Tiger"), 0.1)
+    return {
+        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.7, SKY_POINT, "smooth")],
+        "Release": [(0.0, SKY_POINT, "smooth"), (0.08, merge(SKY_POINT, {"spine": (-9, 9)}), "snap"),
+                    (0.2, METEOR_POINT, "back"), (0.6, merge(METEOR_POINT, {"spine": (10, 8)}), "smooth"),
+                    (1.0, merge(NEUTRAL, READY_BODY), "smooth")],
+    }
+
+
+# Ice Meteor Shower: both hands drawn wide at the hips, palms up, then thrown to the sky together.
+HANDS_WIDE = merge(NEUTRAL, BRACE, {"spine": (-3, 9), "neck": (-4, 2), "head": (-8, 3),
+                                    "R": arm((-40, 96, 14), (-1, -0.3, -0.4), (-1, 0.2, 0.4), UP, OPEN),
+                                    "L": arm((40, 96, 14), (1, -0.3, -0.4), (1, 0.2, 0.4), UP, OPEN)})
+HANDS_SKY = merge(NEUTRAL, BRACE, {"spine": (-9, 9), "neck": (-9, 2), "head": (-18, 3),
+                                   "R": arm((-22, 176, 6), (-1, 0, -0.3), UP, LEFT, OPEN),
+                                   "L": arm((22, 176, 6), (1, 0, -0.3), UP, RIGHT, OPEN)})
+
+
+def ice_meteor():
+    seals, t = seal_run(("Ox", "Rabbit"), 0.1)
+    return {
+        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.6, HANDS_WIDE, "smooth")],
+        "Release": [(0.0, HANDS_WIDE, "smooth"), (0.1, merge(HANDS_WIDE, {"hips": (9, -16, 0)}), "snap"),
+                    (0.22, HANDS_SKY, "back"), (0.9, HANDS_SKY, "smooth"),
+                    (1.3, merge(NEUTRAL, READY_BODY), "smooth")],
+    }
+
+
+# Water Dragon: the dragon seals, then both hands swept out together in front, palms flat, on a lunge.
+DRAGON_GATHER = merge(NEUTRAL, BRACE, {"spine": (-3, 6), "neck": (-2, 2), "head": (-4, 3),
+                                       "R": arm((-12, 112, 12), (-1, -0.4, 0), (0.3, 0.1, 1), LEFT, OPEN),
+                                       "L": arm((12, 112, 12), (1, -0.4, 0), (-0.3, 0.1, 1), RIGHT, OPEN)})
+DRAGON_SWEEP = merge(NEUTRAL, LUNGE, {"spine": (12, 8), "neck": (-4, 6), "head": (-4, 6),
+                                      "R": arm((-10, 118, 66), (-1, -0.3, 0), FWD, LEFT, OPEN),
+                                      "L": arm((10, 118, 66), (1, -0.3, 0), FWD, RIGHT, OPEN)})
+
+
+def water_dragon():
+    seals, t = seal_run(("Snake", "Ram", "Tiger"), 0.1)
+    return {
+        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.85, DRAGON_GATHER, "smooth")],
+        "Release": [(0.0, DRAGON_GATHER, "smooth"), (0.1, merge(DRAGON_GATHER, {"spine": (-6, 6)}), "snap"),
+                    (0.22, DRAGON_SWEEP, "back"), (0.7, merge(DRAGON_SWEEP, {"spine": (9, 8)}), "smooth"),
+                    (1.1, merge(NEUTRAL, READY_BODY), "smooth")],
+    }
+
+
 TIMELINES = {"Fireball": fireball(), "Chidori": chidori(), "Rasengan": rasengan(), "Amaterasu": amaterasu(),
-             "Teleport": teleport(), "Kamui": kamui(), "AlmightyPush": almighty_push(), "EarthWall": wall(), "WaterWall": wall()}
+             "Teleport": teleport(), "Kamui": kamui(), "AlmightyPush": almighty_push(), "EarthWall": wall(), "WaterWall": wall(),
+             "FireMeteor": fire_meteor(), "IceMeteor": ice_meteor(), "WaterDragon": water_dragon()}
 
 
 # ---------------------------------------------------------------------------------------------------------------

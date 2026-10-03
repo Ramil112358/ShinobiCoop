@@ -106,6 +106,10 @@ protected:
 	 * Range counts from the caster, not from the camera behind it. */
 	bool TraceAim(float Range, float Radius, FHitResult& OutHit) const;
 
+	/** Where an area jutsu lands: where the aim meets something within Range, else the ground below the end of the aim.
+	 * False (nothing to land on, e.g. the sky) means the jutsu should fail before any cost is paid. */
+	bool FindAimGround(float Range, float AimRadius, FVector& OutPoint) const;
+
 	/** Turns the caster toward Target, or to the aim's yaw when Target is null. */
 	void FaceAim(const AActor* Target) const;
 

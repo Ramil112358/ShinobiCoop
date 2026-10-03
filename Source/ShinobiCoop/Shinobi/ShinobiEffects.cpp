@@ -208,6 +208,13 @@ UGE_Kamui::UGE_Kamui()
 	UseSingleRefreshingStack();
 }
 
+UGE_Chill::UGE_Chill()
+{
+	SetDuration(Seconds);
+	GrantTag(ShinobiTags::State_Chilled);
+	UseSingleRefreshingStack();
+}
+
 UGE_TeleportMarked::UGE_TeleportMarked()
 {
 	SetDuration(Seconds);

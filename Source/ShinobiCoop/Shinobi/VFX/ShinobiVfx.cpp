@@ -53,6 +53,17 @@ namespace ShinobiVfx
 		return Flame;
 	}
 
+	UMaterialInstanceDynamic* MakeWater(UObject* Outer, const FLinearColor& Color, float Intensity)
+	{
+		UMaterialInstanceDynamic* Water = MakeInstance(Outer, TEXT("/Game/Shinobi/VFX/M_WaterWall.M_WaterWall"));
+		if (Water)
+		{
+			Water->SetVectorParameterValue(TEXT("Color"), Color);
+			Water->SetScalarParameterValue(TEXT("Intensity"), Intensity);
+		}
+		return Water;
+	}
+
 	UMaterialInstanceDynamic* MakePhased(UObject* Outer, float Opacity)
 	{
 		UMaterialInstanceDynamic* Ghost = MakeInstance(Outer, TEXT("/Game/Shinobi/VFX/M_Phased.M_Phased"));

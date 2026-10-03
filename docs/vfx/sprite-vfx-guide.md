@@ -208,3 +208,26 @@ New effects and where their look lives:
 
 Checking them: `powershell -File Scripts/shot_chakra.ps1 -Jutsu` casts everything (pages 2 and 3 are shots 12-19) and
 `Scripts/smoke_m1.ps1` checks the wall, the phase and the page over a listen-server + client pair.
+
+## 8. Elemental jutsu: Fire Meteor, Ice Meteors, Water Dragon (2026-10-02)
+
+Page 3 is Water Wall, Water Dragon, Fire Meteor, Ice Meteors. They share three small actors, all server-spawned and
+replicated, each animated on every machine's own clock (the server alone decides damage):
+
+| Actor | What it does | Look |
+|---|---|---|
+| `AShinobiTelegraph` | a ground ring that marks where a jutsu lands; an inner ring closes on the centre as the time runs out | two `Ring` sprite quads |
+| `AShinobiMeteor` (`Fire`, `Ice`) | falls from the sky onto `ImpactPoint`, then damages, applies a status, and (Fire) leaves ground fire; `StartDelay` queues a shower | glowing sphere + `M_Flame` shell (no trail yet) |
+| `AShinobiWaterDragon` | flies along the aim, catches each enemy once, breaks on world geometry (swept by object type) | 15 spheres in `M_WaterWall` swaying in a wave, two cone horns |
+
+`UShinobiJutsuAbility::FindAimGround(Range, AimRadius, OutPoint)` finds where an area jutsu lands (the aim's hit, else the
+ground below the end of the aim; false = fail before any cost). **Chill** (`UGE_Chill`, tag `State.Chilled`) slows movement to 60%
+for 3 s (`UShinobiMovementComponent::GetMaxSpeed`) and tints the body ice-blue through the aura table.
+
+New burst kinds (appended to the enum, with a row in the `Sounds[]` table, which is asserted): `MeteorImpact`, `FrostImpact`,
+`DragonSplash`. To tune a look: the numbers are in `GA_FireMeteor.h`, `GA_IceMeteor.h`, `GA_WaterDragon.h`; the dragon's body
+count, sway and colour are at the top of `ShinobiWaterDragon.cpp`.
+
+Known limits: the dragon is a chain of spheres rather than a modelled creature; the meteors have no flame trail; there is no HUD
+medallion for Chill. `Scripts/shot_chakra.ps1 -Jutsu` shots 20-24 show them; `Scripts/smoke_m1.ps1` checks the shards, the wall
+and the phase replicate.
