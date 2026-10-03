@@ -55,8 +55,8 @@ public:
 	/** Nothing to fight: it walks to its post beside the caster, which is about this far from them (a pack fans out round it). */
 	static constexpr float FollowDistance = 500.f;
 
-	/** Left this far behind (a teleport, a dragon ride, a long chase), it reappears beside the caster instead of walking. */
-	static constexpr float CatchUpDistance = 2500.f;
+	/** Left this far behind (a teleport, a dragon ride; farther than it will chase, LeashRange plus its reach), it reappears beside the caster instead of walking. */
+	static constexpr float CatchUpDistance = 4000.f;
 
 	virtual bool GetIdlePost(FVector& OutPost) const override;
 

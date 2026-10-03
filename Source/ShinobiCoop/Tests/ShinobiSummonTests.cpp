@@ -321,17 +321,17 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDogAnimTest, "ShinobiCoop.Summons.DogsI
 bool FShinobiDogAnimTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-1500.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(Caster);
-	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Dog, FVector::ZeroVector);
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Dog, FVector(300.f, 0.f, 0.f));
 	const AShinobiSummon* Dog = Pack[0];
-	W.Tick(0.2f);
+	W.Tick(3.f);
 	TestTrue(FString::Printf(TEXT("Idle with nothing to fight (%s)"), *PlayingClip(Dog)), PlayingClip(Dog).Contains(TEXT("Idle")));
 
-	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(FVector(900.f, 0.f, 0.f));
+	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(FVector(1500.f, 0.f, 0.f));
 	ShinobiTest::Hover(Ninja);
 	ShinobiTest::ApplyEffect(Ninja, UGE_Shock::StaticClass());
-	W.Tick(0.3f);
+	W.Tick(0.5f);
 	TestEqual(TEXT("Runs at the ninja"), PlayingClip(Dog), FString(TEXT("ANIM_Wolf_Run")));
 
 	bool bBit = false;
@@ -349,7 +349,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSnakeLookTest, "ShinobiCoop.Summons.Sna
 bool FShinobiSnakeLookTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-5000.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-300.f, 0.f, 0.f));
 	ShinobiTest::Hover(Caster);
 	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Snake, FVector::ZeroVector);
 	if (Pack.Num() != 1)
@@ -366,7 +366,7 @@ bool FShinobiSnakeLookTest::RunTest(const FString& Parameters)
 	const FBoxSphereBounds Bounds = Body->Bounds;
 	TestTrue(FString::Printf(TEXT("long along the way it faces (%.0f x %.0f)"), Bounds.BoxExtent.X * 2.f, Bounds.BoxExtent.Y * 2.f), Bounds.BoxExtent.X > 4.f * Bounds.BoxExtent.Y && Bounds.BoxExtent.X * 2.f > 800.f);
 	TestTrue(TEXT("and centred on the capsule"), FMath::Abs(Bounds.Origin.X - Snake->GetActorLocation().X) < 80.f);
-	W.Tick(0.1f);
+	W.Tick(4.f); // settled at its post
 	TestEqual(TEXT("It idles"), PlayingClip(Snake), FString(TEXT("ANIM_Snake_Idle")));
 
 	ShinobiTest::Damage(const_cast<AShinobiSummon*>(Snake), 999.f);
@@ -379,9 +379,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiToadLookTest, "ShinobiCoop.Summons.Toad
 bool FShinobiToadLookTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-2000.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(Caster);
-	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Toad, FVector::ZeroVector);
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Toad, FVector(500.f, 0.f, 0.f));
 	if (Pack.Num() != 1)
 	{
 		return false;
@@ -397,11 +397,11 @@ bool FShinobiToadLookTest::RunTest(const FString& Parameters)
 	TestTrue(FString::Printf(TEXT("a giant: %.0f long, %.0f tall"), Bounds.BoxExtent.X * 2.f, Bounds.BoxExtent.Z * 2.f), Bounds.BoxExtent.X * 2.f > 400.f && Bounds.BoxExtent.Z * 2.f > 300.f);
 	const float FeetGap = (Bounds.Origin.Z - Bounds.BoxExtent.Z) - (Toad->GetActorLocation().Z - Toad->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
 	TestTrue(FString::Printf(TEXT("standing on the capsule's floor (off by %.0f)"), FeetGap), FMath::Abs(FeetGap) < 20.f);
-	W.Tick(0.1f);
+	W.Tick(4.f); // settled at its post
 	TestEqual(TEXT("It idles"), PlayingClip(Toad), FString(TEXT("ANIM_Toad_Idle")));
 
 	// Something to slam: held still next to it.
-	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(FVector(300.f, 0.f, 0.f));
+	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(Toad->GetActorLocation() + FVector(300.f, 0.f, 0.f));
 	ShinobiTest::Hover(Ninja);
 	ShinobiTest::ApplyEffect(Ninja, UGE_Shock::StaticClass());
 	bool bSlamming = false;
@@ -581,11 +581,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonCrossfadeTest, "ShinobiCoop.Summo
 bool FShinobiSummonCrossfadeTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-1500.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(Caster);
-	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Dog, FVector::ZeroVector);
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Dog, FVector(300.f, 0.f, 0.f));
 	const AShinobiSummon* Dog = Pack[0];
-	W.Tick(0.6f);
+	W.Tick(3.f); // settled at its post beside the caster
 	UShinobiCreatureAnimInstance* Anim = CreatureAnim(Dog);
 	if (!TestNotNull(TEXT("The creature has its animation instance"), Anim))
 	{
@@ -603,6 +603,7 @@ bool FShinobiSummonCrossfadeTest::RunTest(const FString& Parameters)
 		bBlending = Anim->GetLayerCount() == 2;
 	}
 	TestTrue(TEXT("Setting off blends the idle out and the walk or run in, two clips at once"), bBlending);
+	W.Tick(0.05f); // one frame in, the new clip has its first share
 	float Sum = 0.f;
 	for (float Weight : Anim->GetLayerWeights())
 	{
@@ -619,11 +620,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonStrideTest, "ShinobiCoop.Summons.
 bool FShinobiSummonStrideTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-1500.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(Caster);
-	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Dog, FVector::ZeroVector);
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Dog, FVector(300.f, 0.f, 0.f));
 	const AShinobiSummon* Dog = Pack[0];
-	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(FVector(2400.f, 0.f, 0.f));
+	W.Tick(3.f);
+	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(FVector(2600.f, 0.f, 0.f));
 	ShinobiTest::Hover(Ninja);
 	ShinobiTest::ApplyEffect(Ninja, UGE_Shock::StaticClass());
 	W.Tick(0.7f);
@@ -642,11 +644,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonPoseTest, "ShinobiCoop.Summons.Th
 bool FShinobiSummonPoseTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-1500.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(Caster);
-	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Dog, FVector::ZeroVector);
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Dog, FVector(300.f, 0.f, 0.f));
 	const AShinobiSummon* Dog = Pack[0];
-	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(FVector(3000.f, 0.f, 0.f));
+	W.Tick(3.f);
+	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(FVector(2800.f, 0.f, 0.f));
 	ShinobiTest::Hover(Ninja);
 	ShinobiTest::ApplyEffect(Ninja, UGE_Shock::StaticClass());
 	W.Tick(0.5f);
@@ -673,7 +676,7 @@ bool FShinobiSummonHitReactTest::RunTest(const FString& Parameters)
 	ShinobiTest::Hover(Caster);
 	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Toad, FVector(400.f, 0.f, 0.f));
 	const AShinobiSummon* Toad = Pack[0];
-	W.Tick(0.6f);
+	W.Tick(4.f);
 	TestTrue(TEXT("Idle first"), PlayingClip(Toad).Contains(TEXT("Idle")));
 
 	ShinobiTest::Damage(const_cast<AShinobiSummon*>(Toad), 40.f);
@@ -688,11 +691,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonAttackLengthTest, "ShinobiCoop.Su
 bool FShinobiSummonAttackLengthTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-1500.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(Caster);
-	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Dog, FVector::ZeroVector);
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Dog, FVector(300.f, 0.f, 0.f));
 	const AShinobiSummon* Dog = Pack[0];
-	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(FVector(160.f, 0.f, 0.f));
+	W.Tick(3.f);
+	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(Dog->GetActorLocation() + FVector(160.f, 0.f, 0.f));
 	ShinobiTest::Hover(Ninja);
 	ShinobiTest::ApplyEffect(Ninja, UGE_Shock::StaticClass());
 	bool bBiting = false;

@@ -22,12 +22,18 @@ void AShinobiAIController::Tick(float DeltaSeconds)
 	}
 
 	RetargetClock -= DeltaSeconds;
-	if (RetargetClock <= 0.f || !Target.IsValid() || !Target->IsTargetable())
+	// (With nothing to fight the clock still gates the search: a search every tick would StopMovement every tick, and a summon
+	// walking to its post beside the caster would never get up speed.)
+	if (RetargetClock <= 0.f || (Target.IsValid() && !Target->IsTargetable()))
 	{
 		RetargetClock = RetargetInterval;
+		const bool bHadTarget = Target.IsValid();
 		Target = FindNearestPlayer(*Self);
-		bSteerDirectly = false;
-		StopMovement(); // re-path toward the (possibly new) target below
+		if (bHadTarget || Target.IsValid()) // still nobody to fight: leave a walk to the idle post alone
+		{
+			bSteerDirectly = false;
+			StopMovement(); // re-path toward the (possibly new) target below
+		}
 		if (Target.IsValid())
 		{
 			SetFocus(Target.Get());

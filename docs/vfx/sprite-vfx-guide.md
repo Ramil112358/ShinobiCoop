@@ -267,9 +267,15 @@ not counted by waves or camps (only `FShinobiEncounter::Spawn` registers kills).
 | Snake (x1) | 350 | `UGA_SnakeStrike`: 70 from up to 8 m, every 2 s | 10 s |
 | Dog (x4) | 120 each | `UGA_DogBite`: 18 in front, every 0.8 s, run speed 800 | 15 s |
 
-Looks and animation are code-driven single-node playback (no animation blueprint): `UpdateCreatureClip` picks idle, walk, run or the
-attack clip from the velocity and the replicated tag `State.SummonAttacking` (granted by the three attack abilities), so every machine
-animates the same. Dogs and toad have no physics asset to ragdoll; the toad and snake play their death clip, the wolf ragdolls.
+Animation is `UShinobiCreatureAnimInstance` (no animation blueprint): it picks the clip from replicated state (velocity, health, the tag
+`State.SummonAttacking` that the three attack abilities grant) and cross-fades between idle, walk, run, attack, flinch (when hurt) and
+death over 0.2 s instead of cutting. Walk and run play at the speed the creature actually moves (the wolf's clip speeds are read off its
+root-motion variants; the toad and snake play their one move clip at 1x at top speed), and the attack clip is stretched over
+the attack ability's wind-up plus recovery so the blow lands with the damage. The wolf has no death clip and ragdolls.
+
+Following: with nothing to fight a summon walks to a post beside its caster (`GetIdlePost`; the toad behind on one side, the snake on
+the other, the dogs fanned out round them), and if it is left more than 40 m behind (a teleport, a dragon ride) it reappears there in a
+puff of smoke. It only picks fights with enemies within 30 m of the caster.
 
 Where the creatures come from (all in `docs/world/asset-credits.md`):
 
@@ -285,9 +291,7 @@ Where the creatures come from (all in `docs/world/asset-credits.md`):
 - To add a creature: put it in `CREATURES` in `setup_creatures.py`, a look in `CreatureLookFor` and a row in `SummonStatsFor`.
 
 Shots 27-30 of `Scripts/shot_chakra.ps1 -Jutsu` show the three arrivals and the full page-4 HUD; `Scripts/smoke_m1.ps1` checks the client
-sees the four dogs. Not done: the rideable dragon (cycle E; `dragon-animations.glb` and `rig-dragon.glb` are already in
-`SourceArt/Mesh2Motion`), summons walking back to their caster when nothing is in sight (they only pick enemies within 30 m of the caster and
-otherwise stand still), and hit-reaction clips (the `Hit` clips are imported but unused). A summon leaves the moment its caster is downed,
+sees the four dogs. Not done: turn clips for the wolf (`RunTurnL/R` are in the pack). A summon leaves the moment its caster is downed,
 dies or leaves the game, and one cast next to a wall is pulled back in front of it and put on the floor.
 
 ## 11. Dragon (2026-10-03)
