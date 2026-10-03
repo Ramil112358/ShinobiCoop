@@ -4,6 +4,8 @@
 
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/Abilities/GA_Susanoo.h"
+#include "Shinobi/VFX/ShinobiBurst.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSusanooDamageTest, "ShinobiCoop.Susanoo.HalvesDamageTakenAndBoostsDamageDealt", ShinobiTestFlags)
 bool FShinobiSusanooDamageTest::RunTest(const FString& Parameters)
@@ -70,6 +72,37 @@ bool FShinobiSusanooChakraTest::RunTest(const FString& Parameters)
 	W.Tick(2.0f);
 	const float Boosted = ShinobiTest::Get(P, Chakra);
 	TestTrue(FString::Printf(TEXT("With Susanoo about 12 (%.1f)"), Boosted), Boosted > 9.f && Boosted < 15.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSusanooCastTest, "ShinobiCoop.Susanoo.CastCostsCooldownAndRaisesTheArmour", ShinobiTestFlags)
+bool FShinobiSusanooCastTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(4);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	TestEqual(TEXT("Cost 40 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 60.f);
+	TestFalse(TEXT("Not armoured during the seals"), ShinobiTest::HasTag(P, ShinobiTags::State_Susanoo));
+	W.Tick(0.9f);
+	TestTrue(TEXT("Armoured after the seals"), ShinobiTest::HasTag(P, ShinobiTags::State_Susanoo));
+	TestTrue(TEXT("Cooldown running"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Susanoo));
+	TestFalse(TEXT("The jutsu itself is over"), ShinobiTest::IsActive(P, UGA_Susanoo::StaticClass()));
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	TestFalse(TEXT("It cannot be recast while it is up"), ShinobiTest::IsActive(P, UGA_Susanoo::StaticClass()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSusanooPageTest, "ShinobiCoop.Susanoo.OnlyFiresFromPageFour", ShinobiTestFlags)
+bool FShinobiSusanooPageTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	P->ApplyJutsuPage(2); // key 1 is Teleport there
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	TestFalse(TEXT("Not on page 2"), ShinobiTest::IsActive(P, UGA_Susanoo::StaticClass()));
 	return true;
 }
 
