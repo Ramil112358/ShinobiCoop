@@ -58,11 +58,12 @@ private:
 	/** Applies Kind's numbers, size and look. Runs on every machine, before the enemy base reads them. */
 	void Configure();
 
-	/** Dogs: dresses the dog in the Animal Variety Pack wolf over the hidden mannequin. Does nothing without the pack. */
-	void WearWolf();
+	/** Dogs and snakes: dresses the summon in its creature (the Animal Variety Pack wolf, the Mesh2Motion snake) over the hidden
+	 * mannequin. Does nothing on a dedicated server or when the creature is not imported. */
+	void WearCreature();
 
-	/** Picks the wolf's clip from what the dog is doing (idle, walking, running, biting). */
-	void UpdateWolfClip();
+	/** Picks the creature's clip from what the summon is doing (idle, walking, running, biting, dying). */
+	void UpdateCreatureClip();
 
 	UPROPERTY()
 	TObjectPtr<USkeletalMeshComponent> Creature;
@@ -75,10 +76,13 @@ private:
 	TObjectPtr<UAnimSequence> RunClip;
 	UPROPERTY()
 	TObjectPtr<UAnimSequence> BiteClip;
+	UPROPERTY()
+	TObjectPtr<UAnimSequence> DeathClip;
 
 	UPROPERTY()
 	TObjectPtr<UAnimSequence> PlayingClip;
 	bool bWasBiting = false;
+	bool bDeathPlayed = false;
 
 	UPROPERTY(Replicated)
 	EShinobiSummonKind Kind = EShinobiSummonKind::Toad;

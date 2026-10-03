@@ -8,6 +8,8 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
+#include "Misc/PackageName.h"
+#include "Misc/Paths.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Enemies/GA_EnemyAttacks.h"
 #include "Shinobi/Enemies/GA_SummonAttacks.h"
@@ -15,10 +17,6 @@
 
 namespace
 {
-	constexpr float WolfCapsuleRadius = 45.f;
-	constexpr float WolfCapsuleHalfHeight = 55.f;
-	constexpr float WolfScale = 1.1f; // the model is a 2 m wolf; a ninken is a little bigger
-
 	struct FSummonStats
 	{
 		float Health;
@@ -36,10 +34,37 @@ namespace
 	{
 		static const FSummonStats Table[] = {
 			{ 600.f, 60.f, 350.f, 2.5f, 350.f, 12.f, 2.5f, FLinearColor(0.1f, 0.4f, 0.1f), 1 },
-			{ 350.f, 70.f, 600.f, 2.0f, 500.f, 10.f, 1.6f, FLinearColor(0.35f, 0.1f, 0.5f), 1 },
+			{ 350.f, 70.f, 800.f, 2.0f, 500.f, 10.f, 1.0f, FLinearColor(0.35f, 0.1f, 0.5f), 1 },
 			{ 120.f, 18.f, 170.f, 0.8f, 800.f, 15.f, 1.0f, FLinearColor(0.15f, 0.15f, 0.17f), AShinobiSummon::DogPackSize },
 		};
 		return Table[static_cast<int32>(Kind)];
+	}
+	/** What a summon wears over the mannequin. Clips are ClipPrefix + name; a null name means none (the body ragdolls instead of dying). */
+	struct FCreatureLook
+	{
+		const TCHAR* Mesh;
+		const TCHAR* ClipPrefix;
+		const TCHAR* Idle;
+		const TCHAR* Walk;
+		const TCHAR* Run;
+		const TCHAR* Bite;
+		const TCHAR* Death;
+		float Yaw;        // turns the model to face +X
+		float Scale;
+		float CapsuleRadius;
+		float CapsuleHalfHeight;
+		bool bDarkCoat;   // swap in the "...Dark" twin of each material
+	};
+
+	const FCreatureLook* CreatureLookFor(EShinobiSummonKind Kind)
+	{
+		// The Animal Variety Pack wolf faces +Y and is a 2 m wolf; a ninken is a little bigger.
+		static const FCreatureLook Dog = { TEXT("/Game/AnimalVarietyPack/Wolf/Meshes/SK_Wolf"), TEXT("/Game/AnimalVarietyPack/Wolf/Animations/ANIM_Wolf_"),
+			TEXT("IdleAggressive"), TEXT("Walk"), TEXT("Run"), TEXT("Bite"), nullptr, -90.f, 1.1f, 45.f, 55.f, true };
+		// The Mesh2Motion snake (Scripts/character/export_creature.py) faces +X, 4 m long; a summoned one is three times that.
+		static const FCreatureLook Snake = { TEXT("/Game/Shinobi/Creatures/Snake/SK_Snake"), TEXT("/Game/Shinobi/Creatures/Snake/ANIM_Snake_"),
+			TEXT("Idle"), TEXT("Move"), TEXT("Move"), TEXT("Bite"), TEXT("Death"), 0.f, 3.f, 60.f, 40.f, false };
+		return Kind == EShinobiSummonKind::Dog ? &Dog : Kind == EShinobiSummonKind::Snake ? &Snake : nullptr;
 	}
 }
 
@@ -75,62 +100,82 @@ void AShinobiSummon::Configure()
 	StartupAbilities = { AttackAbility }; // granted by the character base's BeginPlay, after this
 	GetCharacterMovement()->MaxWalkSpeed = Stats.Speed;
 	SetActorScale3D(FVector(Stats.Scale));
-	if (Kind == EShinobiSummonKind::Dog)
+	if (const FCreatureLook* Look = CreatureLookFor(Kind))
 	{
-		GetCapsuleComponent()->SetCapsuleSize(WolfCapsuleRadius, WolfCapsuleHalfHeight);
-		WearWolf();
+		GetCapsuleComponent()->SetCapsuleSize(Look->CapsuleRadius, Look->CapsuleHalfHeight);
+		WearCreature();
 	}
 }
 
-void AShinobiSummon::WearWolf()
+void AShinobiSummon::WearCreature()
 {
-	USkeletalMesh* Wolf = IsNetMode(NM_DedicatedServer) ? nullptr
-		: LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/AnimalVarietyPack/Wolf/Meshes/SK_Wolf.SK_Wolf"), nullptr, LOAD_NoWarn | LOAD_Quiet);
-	if (!Wolf)
+	const FCreatureLook* Look = CreatureLookFor(Kind);
+	USkeletalMesh* Model = Look && !IsNetMode(NM_DedicatedServer) ? LoadObject<USkeletalMesh>(nullptr, *FString::Printf(TEXT("%s.%s"), Look->Mesh, *FPaths::GetBaseFilename(Look->Mesh)), nullptr, LOAD_NoWarn | LOAD_Quiet) : nullptr;
+	if (!Model)
 	{
 		return;
 	}
-	auto Clip = [](const TCHAR* Name) { return LoadObject<UAnimSequence>(nullptr, *FString::Printf(TEXT("/Game/AnimalVarietyPack/Wolf/Animations/ANIM_Wolf_%s.ANIM_Wolf_%s"), Name, Name), nullptr, LOAD_NoWarn | LOAD_Quiet); };
-	IdleClip = Clip(TEXT("IdleAggressive"));
-	WalkClip = Clip(TEXT("Walk"));
-	RunClip = Clip(TEXT("Run"));
-	BiteClip = Clip(TEXT("Bite"));
+	auto Clip = [Look](const TCHAR* Name) -> UAnimSequence*
+	{
+		if (!Name)
+		{
+			return nullptr;
+		}
+		const FString Path = FString(Look->ClipPrefix) + Name;
+		return LoadObject<UAnimSequence>(nullptr, *(Path + TEXT(".") + FPaths::GetBaseFilename(Path)), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	};
+	IdleClip = Clip(Look->Idle);
+	WalkClip = Clip(Look->Walk);
+	RunClip = Clip(Look->Run);
+	BiteClip = Clip(Look->Bite);
+	DeathClip = Clip(Look->Death);
 
-	Creature = NewObject<USkeletalMeshComponent>(this, TEXT("Wolf"));
-	Creature->SetSkeletalMeshAsset(Wolf);
+	Creature = NewObject<USkeletalMeshComponent>(this, TEXT("Creature"));
+	Creature->SetSkeletalMeshAsset(Model);
 	Creature->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 	Creature->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	// The wolf model faces +Y with its paws on Z = 0; the actor faces +X with the capsule's floor at -half height.
+	// The model's paws (belly) rest on Z = 0; the capsule's floor is at -half height.
 	Creature->SetupAttachment(GetCapsuleComponent());
-	Creature->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -WolfCapsuleHalfHeight), FRotator(0.f, -90.f, 0.f));
-	Creature->SetRelativeScale3D(FVector(WolfScale));
-	// The dark coat: every material the wolf comes with has a "...Dark" twin beside it.
-	for (int32 Slot = 0; Slot < Creature->GetNumMaterials(); ++Slot)
+	Creature->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -Look->CapsuleHalfHeight), FRotator(0.f, Look->Yaw, 0.f));
+	Creature->SetRelativeScale3D(FVector(Look->Scale));
+	if (Look->bDarkCoat) // every material has a "...Dark" twin beside it
 	{
-		if (const UMaterialInterface* Coat = Creature->GetMaterial(Slot))
+		for (int32 Slot = 0; Slot < Creature->GetNumMaterials(); ++Slot)
 		{
-			const FString Dark = FString::Printf(TEXT("/Game/AnimalVarietyPack/Wolf/Materials/%sDark.%sDark"), *Coat->GetName(), *Coat->GetName());
-			if (UMaterialInterface* Twin = LoadObject<UMaterialInterface>(nullptr, *Dark, nullptr, LOAD_NoWarn | LOAD_Quiet))
+			if (const UMaterialInterface* Coat = Creature->GetMaterial(Slot))
 			{
-				Creature->SetMaterial(Slot, Twin);
+				const FString Dark = FString::Printf(TEXT("%s/%sDark.%sDark"), *FPackageName::GetLongPackagePath(Coat->GetPackage()->GetName()), *Coat->GetName(), *Coat->GetName());
+				if (UMaterialInterface* Twin = LoadObject<UMaterialInterface>(nullptr, *Dark, nullptr, LOAD_NoWarn | LOAD_Quiet))
+				{
+					Creature->SetMaterial(Slot, Twin);
+				}
 			}
 		}
 	}
 	Creature->RegisterComponent();
-	GetMesh()->SetVisibility(false); // the mannequin only carries the capsule's old look; hidden under the wolf
+	GetMesh()->SetVisibility(false); // the mannequin only carries the capsule's old look; hidden under the creature
 }
 
 void AShinobiSummon::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	if (Creature && IsAlive()) // a fallen dog is a ragdoll
+	if (Creature)
 	{
-		UpdateWolfClip();
+		UpdateCreatureClip();
 	}
 }
 
-void AShinobiSummon::UpdateWolfClip()
+void AShinobiSummon::UpdateCreatureClip()
 {
+	if (!IsAlive()) // a creature with a death clip plays it; one without (the wolf) is a ragdoll
+	{
+		if (DeathClip && !bDeathPlayed)
+		{
+			bDeathPlayed = true;
+			Creature->PlayAnimation(DeathClip, false);
+		}
+		return;
+	}
 	const bool bBiting = AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_SummonAttacking);
 	const float Speed = GetVelocity().Size2D();
 	UAnimSequence* Wanted = bBiting ? BiteClip.Get() : Speed > 250.f ? RunClip.Get() : Speed > 30.f ? WalkClip.Get() : IdleClip.Get();
@@ -184,7 +229,8 @@ TArray<AShinobiSummon*> AShinobiSummon::Summon(AShinobiCharacterBase* Caster, ES
 	}
 
 	const FSummonStats& Stats = SummonStatsFor(Kind);
-	const float HalfHeight = GetDefault<AShinobiSummon>()->GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() * Stats.Scale;
+	const FCreatureLook* Look = CreatureLookFor(Kind);
+	const float HalfHeight = Look ? Look->CapsuleHalfHeight : GetDefault<AShinobiSummon>()->GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() * Stats.Scale;
 	const float Yaw = Caster->GetActorRotation().Yaw;
 	for (int32 Index = 0; Index < Stats.Count; ++Index)
 	{

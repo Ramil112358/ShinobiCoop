@@ -335,4 +335,34 @@ bool FShinobiDogAnimTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSnakeLookTest, "ShinobiCoop.Summons.SnakeIsTheLongSnakeFacingForwardAndDiesAnimated", ShinobiTestFlags)
+bool FShinobiSnakeLookTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-5000.f, 0.f, 0.f));
+	ShinobiTest::Hover(Caster);
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Snake, FVector::ZeroVector);
+	if (Pack.Num() != 1)
+	{
+		return false;
+	}
+	const AShinobiSummon* Snake = Pack[0];
+	const USkeletalMeshComponent* Body = Snake->GetBodyMesh();
+	if (!TestTrue(TEXT("The snake model is the visible body (run Scripts/setup_creatures.py if not)"), Body != Snake->GetMesh() && Body->GetSkeletalMeshAsset()))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the snake"), Body->GetSkeletalMeshAsset()->GetName(), FString(TEXT("SK_Snake")));
+	const FBoxSphereBounds Bounds = Body->Bounds;
+	TestTrue(FString::Printf(TEXT("long along the way it faces (%.0f x %.0f)"), Bounds.BoxExtent.X * 2.f, Bounds.BoxExtent.Y * 2.f), Bounds.BoxExtent.X > 4.f * Bounds.BoxExtent.Y && Bounds.BoxExtent.X * 2.f > 800.f);
+	TestTrue(TEXT("and centred on the capsule"), FMath::Abs(Bounds.Origin.X - Snake->GetActorLocation().X) < 80.f);
+	W.Tick(0.1f);
+	TestEqual(TEXT("It idles"), PlayingClip(Snake), FString(TEXT("ANIM_Snake_Idle")));
+
+	ShinobiTest::Damage(const_cast<AShinobiSummon*>(Snake), 999.f);
+	W.Tick(0.2f);
+	TestEqual(TEXT("and plays its death clip when it falls"), PlayingClip(Snake), FString(TEXT("ANIM_Snake_Death")));
+	return true;
+}
+
 #endif
