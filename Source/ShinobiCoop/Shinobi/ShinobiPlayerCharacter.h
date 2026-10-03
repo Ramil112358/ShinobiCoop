@@ -145,6 +145,8 @@ private:
 	UPROPERTY()
 	TObjectPtr<UAnimMontage> SeatedMontage;
 
+	bool bBoomPulledBack = false;
+	bool bSeatedLoadTried = false;
 	bool bFlightClimb = false;
 	bool bFlightDive = false;
 

@@ -299,8 +299,7 @@ No possession swap and no second ability system; the tag replicates, so the serv
 
 - **Controls:** WASD flies along the camera's yaw; Space climbs and Control dives (A and B on a pad; `AShinobiPlayerCharacter::SetFlightClimb/Dive`).
   Melee and Dodge are blocked while mounted: the melee button breathes fire (`UGA_DragonBreath`: 5 pulses of 25 in a 20 degree 3D cone up to
-  15 m from the dragon's mouth, burning whoever is hit, 15 chakra, 4 s cooldown) and Control is the dive. The same key as the summon dismounts
-  (`UGA_DragonDismount`, free, page 5 only like Kamui's exit). Being downed or killed ends the ride; so does the timer.
+  15 m from the dragon's mouth (a fixed offset from the rider, the same on every machine), burning whoever is hit, 15 chakra, 4 s cooldown) and Control is the dive. X (D-pad down on a pad) dismounts on any page (`UGA_DragonDismountKey`); the summon's own key does it too on page 5, like Kamui's exit. Both are free. Being downed or killed ends the ride; so does the timer.
 - **Camera:** the boom eases from 450 to 900 while mounted.
 - **The dragon** is `AShinobiDragonMount`, a replicated actor with no collision or health, attached to the rider's mesh so it is smoothed on clients
   with the rider. The model is the Mesh2Motion dragon (CC0; `Scripts/character/export_creature.py`, imported by `Scripts/setup_creatures.py`):

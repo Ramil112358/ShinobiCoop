@@ -5,6 +5,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "EngineUtils.h"
 #include "Engine/SkeletalMesh.h"
+#include "GameFramework/Character.h"
 #include "Net/UnrealNetwork.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiTags.h"
@@ -16,6 +17,8 @@ namespace
 	constexpr float DragonScale = 1.4f;
 	const FVector Saddle(140.f, 0.f, 105.f);
 	constexpr float SeatBelowCapsuleCentre = 25.f; // how far under the rider's capsule centre the saddle sits
+	constexpr float MouthAhead = 220.f; // the head's mouth, ahead of and a little below the seated rider
+	constexpr float MouthBelow = -60.f;
 	constexpr float GlideSpeed = 800.f;
 	constexpr float GlideClimb = 250.f;
 }
@@ -86,15 +89,26 @@ void AShinobiDragonMount::BeginPlay()
 			Body->SetVisibility(false);
 		}
 	}
-	if (Rider)
+	AttachToRider();
+}
+
+void AShinobiDragonMount::OnRep_Rider()
+{
+	AttachToRider();
+}
+
+void AShinobiDragonMount::AttachToRider()
+{
+	if (!IsValid(Rider) || GetAttachParentActor() == Rider)
 	{
-		// On the rider's mesh, which the movement component smooths on clients; the transform cancels the mesh's own offset from the
-		// capsule so the saddle ends up just under the capsule's centre.
-		const USceneComponent* Mesh = Rider->GetMesh();
-		const FTransform Wanted(FRotator::ZeroRotator, FVector(-Saddle.X * DragonScale, 0.f, -SeatBelowCapsuleCentre - Saddle.Z * DragonScale));
-		AttachToComponent(Rider->GetMesh(), FAttachmentTransformRules::KeepRelativeTransform);
-		SetActorRelativeTransform(Wanted * Mesh->GetRelativeTransform().Inverse());
+		return;
 	}
+	// On the rider's mesh, which the movement component smooths on clients. The transform cancels the mesh's DEFAULT offset from the
+	// capsule (not its current one, which includes the smoothing nudge of the moment) so the saddle is just under the capsule's centre.
+	const FTransform MeshDefault(Rider->GetBaseRotationOffset(), Rider->GetBaseTranslationOffset());
+	const FTransform Wanted(FRotator::ZeroRotator, FVector(-Saddle.X * DragonScale, 0.f, -SeatBelowCapsuleCentre - Saddle.Z * DragonScale));
+	AttachToComponent(Rider->GetMesh(), FAttachmentTransformRules::KeepRelativeTransform);
+	SetActorRelativeTransform(Wanted * MeshDefault.Inverse());
 }
 
 void AShinobiDragonMount::Play(UAnimSequence* Clip)
@@ -109,6 +123,7 @@ void AShinobiDragonMount::Play(UAnimSequence* Clip)
 void AShinobiDragonMount::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	AttachToRider(); // a no-op once attached
 	if (!IsValid(Rider))
 	{
 		if (HasAuthority())
@@ -129,13 +144,7 @@ void AShinobiDragonMount::Tick(float DeltaSeconds)
 
 FVector AShinobiDragonMount::GetMouthLocation() const
 {
-	if (Body->GetSkeletalMeshAsset())
-	{
-		static const FName Mouth(TEXT("mouth_upper_tip"));
-		if (Body->GetBoneIndex(Mouth) != INDEX_NONE)
-		{
-			return Body->GetBoneLocation(Mouth);
-		}
-	}
-	return Rider ? Rider->GetActorLocation() + Rider->GetActorForwardVector() * 400.f : GetActorLocation();
+	// Where the head is, from the rider: the same on every machine (a dedicated server has no skeleton to ask), so the breath's cone
+	// and its flames agree everywhere.
+	return IsValid(Rider) ? Rider->GetActorLocation() + Rider->GetActorForwardVector() * MouthAhead + FVector(0.f, 0.f, MouthBelow) : GetActorLocation();
 }

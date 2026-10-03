@@ -14,6 +14,7 @@
 #include "Shinobi/ShinobiDragonMount.h"
 #include "Shinobi/Abilities/GA_Dodge.h"
 #include "Shinobi/Abilities/GA_Dragon.h"
+#include "Shinobi/Abilities/GA_Fireball.h"
 #include "Shinobi/Abilities/GA_Melee.h"
 #include "Shinobi/ShinobiCombat.h"
 
@@ -341,6 +342,96 @@ bool FShinobiMountSeatedTest::RunTest(const FString& Parameters)
 	P->GetAbilitySystemComponent()->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_Mounted));
 	W.Tick(1.f);
 	TestFalse(TEXT("Standing again after the dismount"), Anim->Montage_IsPlaying(Sit));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDragonSeatOffsetTest, "ShinobiCoop.Mount.TheSaddleDoesNotBakeInNetworkSmoothing", ShinobiTestFlags)
+bool FShinobiDragonSeatOffsetTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* A = Rider(W);
+	AShinobiPlayerCharacter* B = Rider(W, FVector(0.f, 3000.f, 0.f));
+	AShinobiDragonMount* Normal = AShinobiDragonMount::Spawn(A);
+
+	// On a client the movement component nudges the mesh every frame while smoothing; a dragon that appears mid-nudge must not keep it.
+	B->GetMesh()->AddLocalOffset(FVector(0.f, 0.f, 40.f));
+	AShinobiDragonMount* Nudged = AShinobiDragonMount::Spawn(B);
+	B->GetMesh()->AddLocalOffset(FVector(0.f, 0.f, -40.f));
+	W.Tick(0.05f);
+	const FVector Where = Normal->GetActorLocation() - A->GetActorLocation();
+	const FVector Then = Nudged->GetActorLocation() - B->GetActorLocation();
+	TestTrue(FString::Printf(TEXT("Same saddle either way (%s vs %s)"), *Where.ToString(), *Then.ToString()), Where.Equals(Then, 2.f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBreathGatesTest, "ShinobiCoop.Mount.BreathObeysTheCombatRules", ShinobiTestFlags)
+bool FShinobiBreathGatesTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	// Phased (Kamui): no attacking from the other side.
+	AShinobiPlayerCharacter* Ghost = Rider(W);
+	ShinobiTest::ApplyEffect(Ghost, UGE_Kamui::StaticClass());
+	ShinobiTest::Press(Ghost, EShinobiAbilityInputID::Melee);
+	TestFalse(TEXT("A phased rider cannot breathe"), ShinobiTest::IsActive(Ghost, UGA_DragonBreath::StaticClass()));
+
+	// Starting a jutsu cancels the breath, like a melee combo.
+	AShinobiPlayerCharacter* Caster = Rider(W, FVector(0.f, 3000.f, 0.f));
+	ShinobiTest::Hover(Caster);
+	ShinobiTest::Press(Caster, EShinobiAbilityInputID::Melee);
+	TestTrue(TEXT("Breathing"), ShinobiTest::IsActive(Caster, UGA_DragonBreath::StaticClass()));
+	ShinobiTest::Release(Caster, EShinobiAbilityInputID::Melee);
+	ShinobiTest::Tap(Caster, EShinobiAbilityInputID::Jutsu1); // page 1: Fireball
+	TestTrue(TEXT("The Fireball is being cast"), ShinobiTest::IsActive(Caster, UGA_Fireball::StaticClass()));
+	TestFalse(TEXT("and the breath stopped"), ShinobiTest::IsActive(Caster, UGA_DragonBreath::StaticClass()));
+
+	// A staggering hit puts the breath out.
+	AShinobiPlayerCharacter* Hurt = Rider(W, FVector(0.f, -3000.f, 0.f));
+	ShinobiTest::Press(Hurt, EShinobiAbilityInputID::Melee);
+	W.Tick(0.1f);
+	TestTrue(TEXT("Breathing"), ShinobiTest::IsActive(Hurt, UGA_DragonBreath::StaticClass()));
+	ShinobiTest::Damage(Hurt, 30.f);
+	TestFalse(TEXT("A staggering hit stops it"), ShinobiTest::IsActive(Hurt, UGA_DragonBreath::StaticClass()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDismountAnywhereTest, "ShinobiCoop.Mount.TheDismountKeyWorksOnAnyPage", ShinobiTestFlags)
+bool FShinobiDismountAnywhereTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = Rider(W);
+	P->ApplyJutsuPage(3); // key 1 is Fire Meteor here, so the page-5 dismount is out of reach
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Dismount);
+	TestFalse(TEXT("The dedicated key still gets the rider down"), ShinobiTest::HasTag(P, ShinobiTags::State_Mounted));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiStaleFlightKeysTest, "ShinobiCoop.Mount.HeldKeysDoNotOutliveTheRide", ShinobiTestFlags)
+bool FShinobiStaleFlightKeysTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = Rider(W);
+	P->SetFlightClimb(true); // Space held... and the ride ends before it is released
+	P->GetAbilitySystemComponent()->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_Mounted));
+	W.Tick(0.3f);
+
+	ShinobiTest::ApplyEffect(P, UGE_Mounted::StaticClass());
+	W.Tick(0.3f);
+	const float Level = P->GetActorLocation().Z;
+	W.Tick(0.6f);
+	TestTrue(FString::Printf(TEXT("A new ride starts level (%.0f)"), P->GetActorLocation().Z - Level), FMath::Abs(P->GetActorLocation().Z - Level) < 5.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBoomLeftAloneTest, "ShinobiCoop.Mount.TheBoomIsOnlyDrivenAroundARide", ShinobiTestFlags)
+bool FShinobiBoomLeftAloneTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	USpringArmComponent* Boom = P->FindComponentByClass<USpringArmComponent>();
+	Boom->TargetArmLength = 120.f; // the world tour's close-ups
+	W.Tick(1.f);
+	TestEqual(TEXT("Never mounted: someone else's setting stays"), Boom->TargetArmLength, 120.f);
 	return true;
 }
 

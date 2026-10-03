@@ -28,7 +28,7 @@ public:
 	AShinobiCharacterBase* GetRider() const { return Rider; }
 	USkeletalMeshComponent* GetBody() const { return Body; }
 
-	/** Where the breath comes from: the dragon's mouth, or in front of the rider before the model is loaded. */
+	/** Where the breath comes from: the dragon's mouth, at a fixed offset from the rider (the same on every machine). */
 	FVector GetMouthLocation() const;
 
 	virtual void Tick(float DeltaSeconds) override;
@@ -37,14 +37,20 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
+	UFUNCTION()
+	void OnRep_Rider();
+
 private:
 	void Play(UAnimSequence* Clip);
+
+	/** Rides the rider's mesh (smoothed on clients). Retried each tick until the rider is known: its channel can open after ours. */
+	void AttachToRider();
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<USkeletalMeshComponent> Body;
 
 	/** Set before FinishSpawning, so clients have it before BeginPlay. */
-	UPROPERTY(Replicated)
+	UPROPERTY(ReplicatedUsing = OnRep_Rider)
 	TObjectPtr<AShinobiCharacterBase> Rider;
 
 	UPROPERTY()

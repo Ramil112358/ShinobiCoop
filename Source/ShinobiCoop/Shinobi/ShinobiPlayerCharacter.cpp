@@ -67,7 +67,7 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 		UGA_Teleport::StaticClass(), UGA_TeleportJump::StaticClass(),
 		UGA_EarthWall::StaticClass(), UGA_WaterWall::StaticClass(), UGA_FireMeteor::StaticClass(), UGA_IceMeteor::StaticClass(), UGA_WaterDragon::StaticClass(), UGA_Susanoo::StaticClass(),
 		UGA_SummonToad::StaticClass(), UGA_SummonSnake::StaticClass(), UGA_SummonDogs::StaticClass(),
-		UGA_SummonDragon::StaticClass(), UGA_DragonDismount::StaticClass(), UGA_DragonBreath::StaticClass(),
+		UGA_SummonDragon::StaticClass(), UGA_DragonDismount::StaticClass(), UGA_DragonDismountKey::StaticClass(), UGA_DragonBreath::StaticClass(),
 	};
 	StartupEffects.Add(UGE_SubstitutionRegen::StaticClass());
 
@@ -456,7 +456,16 @@ void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 	// Riding a dragon: the camera pulls back, and Space / Control climb and dive (the owner's input; a remote rider's flight arrives in its moves).
 	const bool bMounted = AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Mounted);
-	CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, bMounted ? MountedArmLength : FootArmLength, DeltaSeconds, 2.f);
+	if (bMounted || bBoomPulledBack)
+	{
+		// Only driven around a ride, so anything else that sets the boom (the world tour's close-ups) is left alone.
+		CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, bMounted ? MountedArmLength : FootArmLength, DeltaSeconds, 2.f);
+		bBoomPulledBack = bMounted || !FMath::IsNearlyEqual(CameraBoom->TargetArmLength, FootArmLength, 1.f);
+	}
+	if (!bMounted)
+	{
+		bFlightClimb = bFlightDive = false; // keys held when the ride ended must not carry into the next one
+	}
 	if (bMounted && (IsLocallyControlled() || !GetController()) && CanMove())
 	{
 		AddMovementInput(FVector::UpVector, (bFlightClimb ? 1.f : 0.f) - (bFlightDive ? 1.f : 0.f));
@@ -496,6 +505,11 @@ void AShinobiPlayerCharacter::UpdateSeatedPose()
 	}
 	if (!SeatedMontage)
 	{
+		if (bSeatedLoadTried)
+		{
+			return;
+		}
+		bSeatedLoadTried = true; // once: a missing asset must not cost a failed load every frame
 		SeatedMontage = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Shinobi/Anims/AM_Mount_Sit.AM_Mount_Sit"), nullptr, LOAD_NoWarn | LOAD_Quiet);
 		if (!SeatedMontage)
 		{
@@ -526,6 +540,7 @@ void AShinobiPlayerCharacter::UnPossessed()
 	HeldAbilities.AddTag(ShinobiTags::Ability_Sprint);
 	HeldAbilities.AddTag(ShinobiTags::Ability_ChakraCharge);
 	AbilitySystem->CancelAbilities(&HeldAbilities);
+	bFlightClimb = bFlightDive = false; // their releases never arrive
 	Super::UnPossessed();
 }
 

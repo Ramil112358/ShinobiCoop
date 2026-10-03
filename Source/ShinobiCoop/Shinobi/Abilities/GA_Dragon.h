@@ -19,7 +19,7 @@ protected:
 	virtual void ExecuteJutsu() override;
 };
 
-/** The same key while mounted: climbs down. Not a jutsu (no seals, cost or cooldown of its own). */
+/** The same key while mounted: climbs down (page 5 only, like Kamui's exit; UGA_DragonDismountKey works on any page). Not a jutsu (no seals, cost or cooldown of its own). */
 UCLASS()
 class SHINOBICOOP_API UGA_DragonDismount : public UShinobiGameplayAbility
 {
@@ -29,6 +29,16 @@ public:
 	UGA_DragonDismount();
 
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
+};
+
+/** The dedicated dismount key (X / D-pad down): off the dragon whatever page is showing. */
+UCLASS()
+class SHINOBICOOP_API UGA_DragonDismountKey : public UGA_DragonDismount
+{
+	GENERATED_BODY()
+
+public:
+	UGA_DragonDismountKey();
 };
 
 /** While mounted, the swing button breathes fire from the dragon's mouth along the camera's aim: PulseCount pulses PulseGap apart, each
@@ -53,6 +63,12 @@ public:
 private:
 	UFUNCTION()
 	void Pulse();
+
+	/** A staggering hit puts the fire out, like it interrupts a jutsu. */
+	UFUNCTION()
+	void OnStaggered(FGameplayEventData Payload);
+
+	void Stop(bool bCancelled);
 
 	int32 Pulses = 0;
 	TSet<TWeakObjectPtr<AShinobiCharacterBase>> Ignited;
