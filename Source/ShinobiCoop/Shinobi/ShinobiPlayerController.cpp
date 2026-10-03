@@ -752,6 +752,16 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(65.3f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->SetFlightClimb(false); P->SetFlightDive(true); } });
 	At(66.6f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->SetFlightDive(false); } });
 	At(67.0f, [this]() { ShinobiCast(1); }); // the same key: dismount
-	At(68.0f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_34_HudPage5")); });
-	At(68.6f, [this]() { ConsoleCommand(TEXT("quit")); });
+	// The other dragon (page 5, slot 2): the crimson one, with ordinary orange fire.
+	At(67.6f, [CastJutsu]() { CastJutsu(2, 0.9f); }); // mounted from about 68.4
+	At(70.0f, [FaceCamera]() { FaceCamera(75.f, 60.f, 0.f, 2300.f); });
+	At(70.1f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_35_CrimsonDragon")); });
+	At(70.3f, BackToPlayer);
+	At(70.5f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->AbilityLocalInputPressed(static_cast<int32>(EShinobiAbilityInputID::Melee)); } });
+	At(71.2f, [FaceCamera]() { FaceCamera(75.f, 60.f, 500.f, 2300.f); });
+	At(71.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_35b_CrimsonBreath")); });
+	At(71.5f, BackToPlayer);
+	At(72.2f, [this]() { ShinobiCast(1); }); // the same key: dismount
+	At(73.0f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_34_HudPage5")); });
+	At(73.6f, [this]() { ConsoleCommand(TEXT("quit")); });
 }

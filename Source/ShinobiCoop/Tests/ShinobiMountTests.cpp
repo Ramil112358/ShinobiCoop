@@ -240,14 +240,14 @@ bool FShinobiDragonLookTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
-	TestEqual(TEXT("the dragon"), Dragon->GetBody()->GetSkeletalMeshAsset()->GetName(), FString(TEXT("SK_Dragon")));
+	TestEqual(TEXT("the dragon"), Dragon->GetBody()->GetSkeletalMeshAsset()->GetName(), FString(TEXT("SK_Tairn")));
 	TestTrue(TEXT("Rides on the rider"), Dragon->GetAttachParentActor() == P);
 
 	W.Tick(0.3f);
-	TestEqual(TEXT("Hovering: the idle hover"), DragonClip(Dragon), FString(TEXT("ANIM_Dragon_Idle")));
+	TestEqual(TEXT("Hovering: the idle hover"), DragonClip(Dragon), FString(TEXT("ANIM_Tairn_Idle")));
 	P->SetFlightClimb(true);
 	W.Tick(0.4f);
-	TestEqual(TEXT("Climbing: wings beating"), DragonClip(Dragon), FString(TEXT("ANIM_Dragon_Flap")));
+	TestEqual(TEXT("Climbing: wings beating"), DragonClip(Dragon), FString(TEXT("ANIM_Tairn_Flap")));
 	P->SetFlightClimb(false);
 	W.Tick(1.5f);
 	// Flying level and fast: gliding.
@@ -257,7 +257,7 @@ bool FShinobiDragonLookTest::RunTest(const FString& Parameters)
 		W.Tick(0.05f);
 	}
 	TestTrue(FString::Printf(TEXT("up to speed (%.0f)"), P->GetVelocity().Size2D()), P->GetVelocity().Size2D() > 800.f);
-	TestEqual(TEXT("Fast and level: gliding"), DragonClip(Dragon), FString(TEXT("ANIM_Dragon_Glide")));
+	TestEqual(TEXT("Fast and level: gliding"), DragonClip(Dragon), FString(TEXT("ANIM_Tairn_Glide")));
 	return true;
 }
 
@@ -497,7 +497,7 @@ bool FShinobiBreathAnimTest::RunTest(const FString& Parameters)
 	ShinobiTest::Press(P, EShinobiAbilityInputID::Melee);
 	W.Tick(0.2f);
 	TestTrue(TEXT("The breath tag is up"), ShinobiTest::HasTag(P, ShinobiTags::State_DragonBreathing));
-	TestEqual(TEXT("The dragon plays its breath clip"), DragonClip(Dragon), FString(TEXT("ANIM_Dragon_Breath")));
+	TestEqual(TEXT("The dragon plays its breath clip"), DragonClip(Dragon), FString(TEXT("ANIM_Tairn_Breath")));
 	TestEqual(TEXT("One jet of flame"), ShinobiTest::CountActors<AShinobiDragonFlame>(W), 1);
 	for (TActorIterator<AShinobiDragonFlame> It(W.World); It; ++It)
 	{
@@ -509,7 +509,82 @@ bool FShinobiBreathAnimTest::RunTest(const FString& Parameters)
 	W.Tick(UGA_DragonBreath::PulseCount * UGA_DragonBreath::PulseGap + 1.5f);
 	TestFalse(TEXT("The breath tag is down again"), ShinobiTest::HasTag(P, ShinobiTags::State_DragonBreathing));
 	TestEqual(TEXT("and the jet has burnt out"), ShinobiTest::CountActors<AShinobiDragonFlame>(W), 0);
-	TestNotEqual(TEXT("The dragon is back to hovering"), DragonClip(Dragon), FString(TEXT("ANIM_Dragon_Breath")));
+	TestNotEqual(TEXT("The dragon is back to hovering"), DragonClip(Dragon), FString(TEXT("ANIM_Tairn_Breath")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiTwoDragonsTest, "ShinobiCoop.Mount.TairnAndTheCrimsonDragonAreBothSummonable", ShinobiTestFlags)
+bool FShinobiTwoDragonsTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(5);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2); // slot 2: the crimson dragon
+	TestEqual(TEXT("Cost 70 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 30.f);
+	W.Tick(1.3f);
+	TestTrue(TEXT("Mounted"), ShinobiTest::HasTag(P, ShinobiTags::State_Mounted));
+	TestTrue(TEXT("with its own cooldown running (Tairn's is not)"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonCrimsonDragon) && !ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonDragon));
+	AShinobiDragonMount* Crimson = TheDragon(W);
+	if (!TestNotNull(TEXT("a dragon"), Crimson))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the crimson one"), Crimson->GetKind(), EShinobiDragonKind::Crimson);
+	if (TestTrue(TEXT("with its model (run Scripts/setup_creatures.py if not)"), Crimson->GetBody()->GetSkeletalMeshAsset() != nullptr))
+	{
+		TestEqual(TEXT("the crimson dragon"), Crimson->GetBody()->GetSkeletalMeshAsset()->GetName(), FString(TEXT("SK_CrimsonDragon")));
+	}
+
+	// Dismount, and Tairn can be called straight away (a different jutsu, a different cooldown).
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Dismount);
+	W.Tick(0.3f);
+	TestEqual(TEXT("The crimson dragon leaves"), ShinobiTest::CountActors<AShinobiDragonMount>(W), 0);
+	ShinobiTest::Set(P, UShinobiAttributeSet::GetChakraAttribute(), 100.f);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(1.3f);
+	AShinobiDragonMount* Tairn = TheDragon(W);
+	if (TestNotNull(TEXT("and then Tairn comes"), Tairn))
+	{
+		TestEqual(TEXT("Tairn"), Tairn->GetKind(), EShinobiDragonKind::Tairn);
+		TestEqual(TEXT("with his model"), Tairn->GetBody()->GetSkeletalMeshAsset() ? Tairn->GetBody()->GetSkeletalMeshAsset()->GetName() : FString(), FString(TEXT("SK_Tairn")));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDragonFireTest, "ShinobiCoop.Mount.EachDragonBreathesItsOwnFire", ShinobiTestFlags)
+bool FShinobiDragonFireTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* A = Rider(W);
+	AShinobiPlayerCharacter* B = Rider(W, FVector(0.f, 4000.f, 0.f));
+	AShinobiDragonMount::Spawn(A, EShinobiDragonKind::Tairn);
+	AShinobiDragonMount::Spawn(B, EShinobiDragonKind::Crimson);
+	TestFalse(TEXT("The two sit at different mouths"), AShinobiDragonMount::MouthLocation(*A, EShinobiDragonKind::Tairn).Equals(A->GetActorLocation() + (AShinobiDragonMount::MouthLocation(*B, EShinobiDragonKind::Crimson) - B->GetActorLocation()), 1.f));
+
+	ShinobiTest::Press(A, EShinobiAbilityInputID::Melee);
+	ShinobiTest::Press(B, EShinobiAbilityInputID::Melee);
+	W.Tick(0.2f);
+	int32 Blue = 0, Orange = 0;
+	for (TActorIterator<AShinobiDragonFlame> It(W.World); It; ++It)
+	{
+		Blue += It->GetKind() == EShinobiDragonKind::Tairn && It->GetRider() == A ? 1 : 0;
+		Orange += It->GetKind() == EShinobiDragonKind::Crimson && It->GetRider() == B ? 1 : 0;
+	}
+	TestEqual(TEXT("Tairn's rider has the blue-white jet"), Blue, 1);
+	TestEqual(TEXT("and the crimson dragon's rider the orange one"), Orange, 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCrimsonAssetsTest, "ShinobiCoop.Mount.CrimsonDragonJutsuHasSealsAndIcon", ShinobiTestFlags)
+bool FShinobiCrimsonAssetsTest::RunTest(const FString& Parameters)
+{
+	const UGA_SummonCrimsonDragon* Jutsu = GetDefault<UGA_SummonCrimsonDragon>();
+	TestNotNull(TEXT("seal montage"), Jutsu->SealMontage.LoadSynchronous());
+	TestNotNull(TEXT("release montage"), Jutsu->ReleaseMontage.LoadSynchronous());
+	TestNotNull(TEXT("icon (run Scripts/setup_hud.py)"), Jutsu->Icon.LoadSynchronous());
+	TestEqual(TEXT("slot 2 of page 5"), static_cast<int32>(Jutsu->InputID), static_cast<int32>(EShinobiAbilityInputID::Jutsu2));
+	TestEqual(TEXT("page 5"), Jutsu->Page, 5);
 	return true;
 }
 

@@ -10,28 +10,42 @@
 #include "Shinobi/VFX/ShinobiBurst.h"
 #include "Shinobi/VFX/ShinobiDragonFlame.h"
 
-UGA_SummonDragon::UGA_SummonDragon()
+UGA_SummonDragonBase::UGA_SummonDragonBase()
 {
-	InputID = EShinobiAbilityInputID::Jutsu1;
 	Page = 5;
-	DisplayName = INVTEXT("Summon Tairn");
-	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonDragon.T_Jutsu_SummonDragon")));
 	ChakraCost = 70.f;
 	Cooldown = 60.f;
 	WindUp = 0.8f;
-	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_SummonDragon);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Mounted); // one dragon at a time
 	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Summon_Seal.AM_Summon_Seal")));
 	ReleaseMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Summon_Release.AM_Summon_Release")));
 }
 
-void UGA_SummonDragon::ExecuteJutsu()
+UGA_SummonDragon::UGA_SummonDragon()
+{
+	InputID = EShinobiAbilityInputID::Jutsu1;
+	DisplayName = INVTEXT("Summon Tairn");
+	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonDragon.T_Jutsu_SummonDragon")));
+	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_SummonDragon);
+	DragonKind = EShinobiDragonKind::Tairn;
+}
+
+UGA_SummonCrimsonDragon::UGA_SummonCrimsonDragon()
+{
+	InputID = EShinobiAbilityInputID::Jutsu2;
+	DisplayName = INVTEXT("Summon Crimson Dragon");
+	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonCrimson.T_Jutsu_SummonCrimson")));
+	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_SummonCrimsonDragon);
+	DragonKind = EShinobiDragonKind::Crimson;
+}
+
+void UGA_SummonDragonBase::ExecuteJutsu()
 {
 	AShinobiCharacterBase* Self = GetShinobiCharacter();
 	if (Self && HasAuthority(&CurrentActivationInfo))
 	{
 		ApplyEffectToSelf(UGE_Mounted::StaticClass());
-		AShinobiDragonMount::Spawn(Self);
+		AShinobiDragonMount::Spawn(Self, DragonKind);
 		AShinobiBurst::Spawn(Self->GetWorld(), EShinobiBurst::SummonPoof, Self->GetActorLocation() - FVector(0.f, 0.f, Self->GetSimpleCollisionHalfHeight()), 2.f);
 	}
 	EndJutsu();
@@ -87,7 +101,9 @@ void UGA_DragonBreath::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 	Ignited.Reset();
 	if (HasAuthority(&ActivationInfo))
 	{
-		Flame = AShinobiDragonFlame::Spawn(GetShinobiCharacter());
+		const AShinobiDragonMount* Dragon = GetShinobiCharacter() ? AShinobiDragonMount::Find(*GetShinobiCharacter()) : nullptr;
+		BreathKind = Dragon ? Dragon->GetKind() : EShinobiDragonKind::Tairn;
+		Flame = AShinobiDragonFlame::Spawn(GetShinobiCharacter(), BreathKind);
 	}
 	UAbilityTask_WaitGameplayEvent* Interrupt = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, ShinobiTags::Event_Hit_Stagger, nullptr, true);
 	Interrupt->EventReceived.AddDynamic(this, &UGA_DragonBreath::OnStaggered);
@@ -121,7 +137,7 @@ void UGA_DragonBreath::Pulse()
 	++Pulses;
 	if (HasAuthority(&CurrentActivationInfo))
 	{
-		const FVector Mouth = AShinobiDragonMount::MouthLocation(*Self);
+		const FVector Mouth = AShinobiDragonMount::MouthLocation(*Self, BreathKind);
 		FVector ViewLocation;
 		FRotator ViewRotation;
 		GetAimViewPoint(ViewLocation, ViewRotation);
@@ -138,7 +154,8 @@ void UGA_DragonBreath::Pulse()
 			if (ApplyDamage(Target, PulseDamage) && !Ignited.Contains(Target))
 			{
 				Ignited.Add(Target);
-				AShinobiBurst::Spawn(Self->GetWorld(), EShinobiBurst::Lightning, Target->GetActorLocation(), 0.9f); // Tairn's fire is blue-white and crackles
+				// Tairn's fire is blue-white and crackles; the crimson dragon's is ordinary fire.
+				AShinobiBurst::Spawn(Self->GetWorld(), BreathKind == EShinobiDragonKind::Tairn ? EShinobiBurst::Lightning : EShinobiBurst::Fire, Target->GetActorLocation(), BreathKind == EShinobiDragonKind::Tairn ? 0.9f : 0.7f);
 				ShinobiCombat::ApplyStatus(Self->GetAbilitySystemComponent(), Target, UGE_Burn::StaticClass(), UGE_Burn::DamagePerTick);
 			}
 		}

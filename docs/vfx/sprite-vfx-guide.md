@@ -290,9 +290,11 @@ sees the four dogs. Not done: the rideable dragon (cycle E; `dragon-animations.g
 otherwise stand still), and hit-reaction clips (the `Hit` clips are imported but unused). A summon leaves the moment its caster is downed,
 dies or leaves the game, and one cast next to a wall is pulled back in front of it and put on the floor.
 
-## 11. Tairn, the dragon (2026-10-03)
+## 11. Dragons: Tairn and the crimson dragon (2026-10-03)
 
-Page 5, slot 1: Summon Tairn (70 chakra, 60 s cooldown). After the Kuchiyose seals the caster rides Tairn, the dragon of Fourth Wing, for `UGE_Mounted::Seconds`
+Page 5 has two dragons, each 70 chakra and a 60 s cooldown of its own: slot 1 Summon Tairn (the dragon of Fourth Wing) and slot 2 Summon Crimson Dragon (the
+first dragon; ordinary orange fire). They are `UGA_SummonDragon` and `UGA_SummonCrimsonDragon` over one base (`UGA_SummonDragonBase`), differing in the
+`EShinobiDragonKind` they pass to `AShinobiDragonMount::Spawn`. After the Kuchiyose seals the caster rides the dragon for `UGE_Mounted::Seconds`
 (45 s). The rider stays the player's own character: the effect grants `State.Mounted`, and `UShinobiMovementComponent::UpdateCharacterStateBeforeMovement`
 (which runs in every move on the client and the server) switches to `MOVE_Flying` at 1500 u/s while the tag is on and back to falling when it goes.
 No possession swap and no second ability system; the tag replicates, so the server and the predicting client agree. While mounted the movement
@@ -317,17 +319,24 @@ hang below the rider, so a mount from the ground is a quick lift-off and a dive 
 - **Camera:** the boom eases from 450 to 900 while mounted, and only then (anything else that sets the boom is left alone).
 - **The dragon** is `AShinobiDragonMount`, a replicated actor with no collision or health, attached to the rider's mesh so it is smoothed on clients
   with the rider (the transform uses the mesh's default offset, not its current network-smoothed one).
+- **The kind** (`EShinobiDragonKind`, replicated with the dragon and its flame) picks the model, the scale, the saddle, the mouth and the fire: a `FDragonLook`
+  table at the top of `ShinobiDragonMount.cpp` (Tairn 4x, the crimson dragon 3.5x) and the particle recipes in `AShinobiDragonFlame::BeginPlay`. Dismounting
+  and the breath work the same for both; the breath's hit burst is lightning for Tairn and fire for the crimson one. Adding a third dragon is a new
+  kind, a look row, a recipe and a jutsu subclass.
 - **Tairn's model** is a Hyper3D Rodin generation prompted from the books (a Black Morningstartail: thick ridged black scales, a mane of pointed neck
   spikes, giant golden eyes, scarred black wings, long taloned toes, a rock-hard underbelly; `SourceArt/Creatures/Tairn/rodin_tairn.glb`). Rodin
   gave him a thin curl for a tail tip, but a Morningstartail ends in a club studded with lethal spikes, so `Scripts/character/build_dragon.py` cuts the
   curl off and grafts on a Rodin-generated spiked ball (`rodin_tail_club2.glb`, from a second generation; the first came out as a fan of spikes) with 20
-  long procedural cones, and tears ragged holes out of the wing membranes for the scars. It then builds a 37-bone rig to it (spine, neck, jaw, a tail whose
+  long procedural cones, and tears ragged holes out of the wing membranes for the scars. It then builds a 34-bone rig to it (spine, neck, jaw, a tail whose
   last bone carries the club, arms, legs, five wing bones a side), weights it by distance (bone heat fails on it, like the toad), tips it nose-down about
   the hips in every flying clip so the back is level, and keys the clips: Idle (hover), Flap (climbing and slow flight), Glide (fast and level) and Breath
   (once per breath). Three material slots: the body and the ball (M_Character instances of `Tairn.png` and `TairnClub.png`) and the spikes (flat black).
   `blender -b -P Scripts/character/build_dragon.py` (add `-- preview` for pose renders in `Saved/dragon_*.png`; it prints the back height the saddle
-  is measured from), then `Scripts/setup_creatures.py`. The assets keep the name Dragon (`SK_Dragon`, `ANIM_Dragon_*`); the saddle, the mouth and the
-  4x scale are constants at the top of `ShinobiDragonMount.cpp`. The icon is a SpriteCook painting of Tairn.
+  is measured from), then `Scripts/setup_creatures.py`. The assets are `SK_Tairn`, `ANIM_Tairn_*` under `/Game/Shinobi/Creatures/Tairn`. The icon is a SpriteCook painting
+  of Tairn.
+- **The crimson dragon's model** is the first Rodin dragon (`SourceArt/Creatures/DragonRodin/rodin_dragon.glb`, a red-and-grey upright dragon), rigged
+  the same way by `Scripts/character/build_dragon_crimson.py` (the script Tairn's grew out of: the same 34-bone rig and clips, without the club or the
+  wing tears; the bone coordinates there are the original measurements). `SK_CrimsonDragon` under `/Game/Shinobi/Creatures/CrimsonDragon`.
 - **The seated pose** is the Mixamo "Sitting Idle" (`SourceArt/Mixamo/Sitting Idle.fbx`, imported by `Scripts/setup_jutsu_anims.py` as `AM_Mount_Sit`).
   `AShinobiPlayerCharacter::UpdateSeatedPose` loops it while mounted and replays it whenever no jutsu montage is playing. Without that file the script
   falls back to a pose built by `build_jutsu_anims.py` (timeline `Mount`).

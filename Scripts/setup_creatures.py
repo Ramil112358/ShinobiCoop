@@ -14,11 +14,12 @@ CREATURES = {
     # With a PNG the creature wears M_Character (the heroes' lit material).
     # The files are SourceArt/Creatures/<SOURCE.get(name, name)>/<name>*.fbx.
     "Snake": ((0.20, 0.08, 0.30), ["Idle", "Move", "Bite", "Hit", "Death"], None),
-    "Dragon": (None, ["Idle", "Flap", "Glide", "Breath"], ["Tairn.png", "TairnClub.png", (0.02, 0.02, 0.025)]),  # Tairn: body, club ball, club spikes
+    "Tairn": (None, ["Idle", "Flap", "Glide", "Breath"], ["Tairn.png", "TairnClub.png", (0.02, 0.02, 0.025)]),  # body, club ball, club spikes
+    "CrimsonDragon": (None, ["Idle", "Flap", "Glide", "Breath"], "CrimsonDragon.png"),
     "Toad": (None, ["Idle", "Move", "Slam", "Hit", "Death"], "Toad.png"),
 }
-SOURCE = {"Dragon": "Tairn"}  # Tairn, the Rodin dragon (Scripts/character/build_dragon.py)
-CLEAN = {"Dragon"}  # replaced wholesale: the first dragon (Mesh2Motion's) had other clips
+SOURCE = {"CrimsonDragon": "DragonRodin"}  # the first Rodin dragon (Scripts/character/build_dragon_crimson.py); Tairn is in SourceArt/Creatures/Tairn
+LEGACY = ["/Game/Shinobi/Creatures/Dragon"]  # the one dragon before there were two: now Tairn and CrimsonDragon
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 MEL = unreal.MaterialEditingLibrary
 
@@ -87,11 +88,12 @@ def material_for(name, colour, dest):
     return mi
 
 
+for legacy in LEGACY:
+    if unreal.EditorAssetLibrary.does_directory_exist(legacy):
+        unreal.EditorAssetLibrary.delete_directory(legacy)
 for name, (colour, clips, texture) in CREATURES.items():
     source = os.path.join(ROOT, "SourceArt", "Creatures", SOURCE.get(name, name))
     dest = f"/Game/Shinobi/Creatures/{name}"
-    if name in CLEAN and unreal.EditorAssetLibrary.does_directory_exist(dest):
-        unreal.EditorAssetLibrary.delete_directory(dest)
     unreal.EditorAssetLibrary.make_directory(dest)
     import_fbx(os.path.join(source, f"{name}.fbx"), dest, f"SK_{name}", skeletal_options(True))
     mesh = unreal.load_asset(f"{dest}/SK_{name}")

@@ -12,15 +12,28 @@
 
 namespace
 {
-	// The model (Scripts/character/build_dragon.py: Tairn, from a Rodin generation, with a morningstar club on the tail) is 1.9 m long in its
-	// rest pose, centred on the origin with its feet on the ground, facing +X; every flying clip tips it nose-down about its hips. Its back in
-	// that flying pose, between the wings (the torso's top without the spikes), is at about (0.3, 0, 0.76) m. Tairn is among the biggest
-	// dragons in the books, so it is scaled up 4x (7.6 m of body, a 9 m wingspan); the saddle goes where a seated rider's hips are.
-	constexpr float DragonScale = 4.f;
-	const FVector Saddle(30.f, 0.f, 76.f);
+	// Both models (Scripts/character/build_dragon.py for Tairn, build_dragon_crimson.py for the crimson one; each a Rodin generation) are
+	// about 1.9 m long in their rest pose, centred on the origin with their feet on the ground, facing +X; every flying clip tips them
+	// nose-down about the hips. Their backs in that flying pose, between the wings (the torso's top without the spikes), are at the Saddle
+	// points below (model centimetres, before the scale); the scale makes them dragon-sized and the saddle goes where a seated rider's hips
+	// are. Tairn is among the biggest dragons in the books, so he is the bigger.
+	struct FDragonLook
+	{
+		const TCHAR* Name;       // /Game/Shinobi/Creatures/<Name>/SK_<Name> and ANIM_<Name>_<Clip>
+		float Scale;
+		FVector Saddle;
+		float MouthAhead;        // the head's mouth, ahead of and a little above the seated rider's capsule centre
+		float MouthHeight;
+	};
+
+	const FDragonLook& DragonLookFor(EShinobiDragonKind Kind)
+	{
+		static const FDragonLook Tairn = { TEXT("Tairn"), 4.f, FVector(30.f, 0.f, 76.f), 380.f, 50.f };
+		static const FDragonLook Crimson = { TEXT("CrimsonDragon"), 3.5f, FVector(30.f, 0.f, 72.f), 330.f, 55.f };
+		return Kind == EShinobiDragonKind::Tairn ? Tairn : Crimson;
+	}
+
 	constexpr float SeatBelowCapsuleCentre = 25.f; // how far under the rider's capsule centre the saddle sits
-	constexpr float MouthAhead = 380.f; // the head's mouth, ahead of and a little above the seated rider's capsule centre
-	constexpr float MouthHeight = 50.f;
 	constexpr float GlideSpeed = 800.f;
 	constexpr float GlideClimb = 250.f;
 	constexpr float HoverSpeed = 150.f;
@@ -42,9 +55,22 @@ void AShinobiDragonMount::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME_CONDITION(AShinobiDragonMount, Rider, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AShinobiDragonMount, Kind, COND_InitialOnly);
 }
 
-AShinobiDragonMount* AShinobiDragonMount::Spawn(AShinobiCharacterBase* Rider)
+AShinobiDragonMount* AShinobiDragonMount::Find(const AShinobiCharacterBase& Rider)
+{
+	for (TActorIterator<AShinobiDragonMount> It(Rider.GetWorld()); It; ++It)
+	{
+		if (It->Rider == &Rider)
+		{
+			return *It;
+		}
+	}
+	return nullptr;
+}
+
+AShinobiDragonMount* AShinobiDragonMount::Spawn(AShinobiCharacterBase* Rider, EShinobiDragonKind Kind)
 {
 	UWorld* World = Rider ? Rider->GetWorld() : nullptr;
 	if (!World || !Rider->HasAuthority())
@@ -68,6 +94,7 @@ AShinobiDragonMount* AShinobiDragonMount::Spawn(AShinobiCharacterBase* Rider)
 	if (Dragon)
 	{
 		Dragon->Rider = Rider;
+		Dragon->Kind = Kind;
 		Dragon->FinishSpawning(Where);
 	}
 	return Dragon;
@@ -78,16 +105,19 @@ void AShinobiDragonMount::BeginPlay()
 	Super::BeginPlay();
 	if (!IsNetMode(NM_DedicatedServer))
 	{
-		USkeletalMesh* Model = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Shinobi/Creatures/Dragon/SK_Dragon.SK_Dragon"), nullptr, LOAD_NoWarn | LOAD_Quiet);
-		IdleClip = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Shinobi/Creatures/Dragon/ANIM_Dragon_Idle.ANIM_Dragon_Idle"), nullptr, LOAD_NoWarn | LOAD_Quiet);
-		FlapClip = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Shinobi/Creatures/Dragon/ANIM_Dragon_Flap.ANIM_Dragon_Flap"), nullptr, LOAD_NoWarn | LOAD_Quiet);
-		GlideClip = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Shinobi/Creatures/Dragon/ANIM_Dragon_Glide.ANIM_Dragon_Glide"), nullptr, LOAD_NoWarn | LOAD_Quiet);
-		BreathClip = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Shinobi/Creatures/Dragon/ANIM_Dragon_Breath.ANIM_Dragon_Breath"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		const FDragonLook& Look = DragonLookFor(Kind);
+		const FString Folder = FString::Printf(TEXT("/Game/Shinobi/Creatures/%s/"), Look.Name);
+		auto Clip = [&Folder, &Look](const TCHAR* Name) { return LoadObject<UAnimSequence>(nullptr, *FString::Printf(TEXT("%sANIM_%s_%s.ANIM_%s_%s"), *Folder, Look.Name, Name, Look.Name, Name), nullptr, LOAD_NoWarn | LOAD_Quiet); };
+		USkeletalMesh* Model = LoadObject<USkeletalMesh>(nullptr, *FString::Printf(TEXT("%sSK_%s.SK_%s"), *Folder, Look.Name, Look.Name), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		IdleClip = Clip(TEXT("Idle"));
+		FlapClip = Clip(TEXT("Flap"));
+		GlideClip = Clip(TEXT("Glide"));
+		BreathClip = Clip(TEXT("Breath"));
 		if (Model)
 		{
 			Body->SetSkeletalMeshAsset(Model);
 			Body->SetAnimationMode(EAnimationMode::AnimationSingleNode);
-			Body->SetRelativeScale3D(FVector(DragonScale));
+			Body->SetRelativeScale3D(FVector(Look.Scale));
 		}
 		else
 		{
@@ -111,7 +141,8 @@ void AShinobiDragonMount::AttachToRider()
 	// On the rider's mesh, which the movement component smooths on clients. The transform cancels the mesh's DEFAULT offset from the
 	// capsule (not its current one, which includes the smoothing nudge of the moment) so the saddle is just under the capsule's centre.
 	const FTransform MeshDefault(Rider->GetBaseRotationOffset(), Rider->GetBaseTranslationOffset());
-	const FTransform Wanted(FRotator::ZeroRotator, FVector(-Saddle.X * DragonScale, 0.f, -SeatBelowCapsuleCentre - Saddle.Z * DragonScale));
+	const FDragonLook& Look = DragonLookFor(Kind);
+	const FTransform Wanted(FRotator::ZeroRotator, FVector(-Look.Saddle.X * Look.Scale, 0.f, -SeatBelowCapsuleCentre - Look.Saddle.Z * Look.Scale));
 	AttachToComponent(Rider->GetMesh(), FAttachmentTransformRules::KeepRelativeTransform);
 	SetActorRelativeTransform(Wanted * MeshDefault.Inverse());
 }
@@ -157,12 +188,13 @@ void AShinobiDragonMount::Tick(float DeltaSeconds)
 
 FVector AShinobiDragonMount::GetMouthLocation() const
 {
-	return IsValid(Rider) ? MouthLocation(*Rider) : GetActorLocation();
+	return IsValid(Rider) ? MouthLocation(*Rider, Kind) : GetActorLocation();
 }
 
-FVector AShinobiDragonMount::MouthLocation(const AShinobiCharacterBase& Rider)
+FVector AShinobiDragonMount::MouthLocation(const AShinobiCharacterBase& Rider, EShinobiDragonKind Kind)
 {
+	const FDragonLook& Look = DragonLookFor(Kind);
 	// Where the head is, from the rider: the same on every machine (a dedicated server has no skeleton to ask), so the breath's cone
 	// and its flames agree everywhere.
-	return Rider.GetActorLocation() + Rider.GetActorForwardVector() * MouthAhead + FVector(0.f, 0.f, MouthHeight);
+	return Rider.GetActorLocation() + Rider.GetActorForwardVector() * Look.MouthAhead + FVector(0.f, 0.f, Look.MouthHeight);
 }

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Shinobi/ShinobiDragonMount.h"
 #include "ShinobiDragonFlame.generated.h"
 
 class AShinobiCharacterBase;
@@ -24,7 +25,9 @@ public:
 	AShinobiDragonFlame();
 
 	/** Server only: a jet from Rider's dragon's mouth along their aim. Null on a client. */
-	static AShinobiDragonFlame* Spawn(AShinobiCharacterBase* Rider);
+	static AShinobiDragonFlame* Spawn(AShinobiCharacterBase* Rider, EShinobiDragonKind Kind = EShinobiDragonKind::Tairn);
+
+	EShinobiDragonKind GetKind() const { return Kind; }
 
 	/** Server: stops feeding the jet; the last flames drift out and the actor goes. */
 	void Stop();
@@ -61,6 +64,10 @@ private:
 
 	UPROPERTY(Replicated)
 	TObjectPtr<AShinobiCharacterBase> Rider;
+
+	/** Whose fire: Tairn's is blue-white and lightning-tinged, the crimson dragon's is ordinary orange. */
+	UPROPERTY(Replicated)
+	EShinobiDragonKind Kind = EShinobiDragonKind::Tairn;
 
 	/** Set by Stop(); clients then stop feeding the jet too (they are destroyed a moment later). */
 	UPROPERTY(ReplicatedUsing = OnRep_Stopped)

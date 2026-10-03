@@ -11,8 +11,8 @@ The Rodin dragon sits upright on its haunches (tail on the ground, neck raised, 
 proportions (spine, neck, head and jaw, a five-bone tail, two arms, two legs, and a wing of five bones a side), the mesh is weighted to
 it by distance, and every flying clip tips the whole dragon nose-down about its hips so the back is level, with the neck and tail bent
 back to level: Idle (a slow hover), Flap (the fast beat, a loop), Glide (wings out, a slow sway) and Breath (rears the head back, opens the
-jaw and thrusts; played once). Writes SourceArt/Creatures/DragonRodin/Dragon.fbx (mesh + skeleton), Dragon_<Clip>.fbx per clip and
-Dragon.png (the 2k base colour). Faces +X, feet on Z = 0 in the rest pose, centred over the origin; metres.
+jaw and thrusts; played once). Writes SourceArt/Creatures/DragonRodin/Tairn.fbx (mesh + skeleton), Tairn_<Clip>.fbx per clip and
+Tairn.png (the 2k base colour). Faces +X, feet on Z = 0 in the rest pose, centred over the origin; metres.
 """
 import math
 import os
@@ -429,11 +429,11 @@ for pb in arm.pose.bones:
     pb.rotation_quaternion = (1, 0, 0, 0)
 scene.frame_set(0)
 select(arm, body)
-bpy.ops.export_scene.fbx(filepath=os.path.join(OUT, "Dragon.fbx"), use_selection=True, object_types={"ARMATURE", "MESH"}, bake_anim=False, **common)
+bpy.ops.export_scene.fbx(filepath=os.path.join(OUT, "Tairn.fbx"), use_selection=True, object_types={"ARMATURE", "MESH"}, bake_anim=False, **common)
 for name, frames, _ in CLIPS:
     use_action(actions[name])
     scene.frame_start, scene.frame_end = 0, frames
     select(arm)
-    bpy.ops.export_scene.fbx(filepath=os.path.join(OUT, f"Dragon_{name}.fbx"), use_selection=True, object_types={"ARMATURE"}, bake_anim=True,
+    bpy.ops.export_scene.fbx(filepath=os.path.join(OUT, f"Tairn_{name}.fbx"), use_selection=True, object_types={"ARMATURE"}, bake_anim=True,
                              bake_anim_use_all_actions=False, bake_anim_use_nla_strips=False, bake_anim_force_startend_keying=True, **common)
-    print(f"[build_dragon] wrote Dragon_{name}.fbx")
+    print(f"[build_dragon] wrote Tairn_{name}.fbx")
