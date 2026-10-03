@@ -231,3 +231,20 @@ count, sway and colour are at the top of `ShinobiWaterDragon.cpp`.
 Known limits: the dragon is a chain of spheres rather than a modelled creature; the meteors have no flame trail; there is no HUD
 medallion for Chill. `Scripts/shot_chakra.ps1 -Jutsu` shots 20-24 show them; `Scripts/smoke_m1.ps1` checks the shards, the wall
 and the phase replicate.
+
+## 9. Susanoo (2026-10-03)
+
+Page 4, slot 1: a power-up, not an attack. `UGE_Susanoo` (20 s, tag `State.Susanoo`) halves the damage its wearer takes and raises
+the damage they deal by 30% (`UShinobiDamageExec`: it reads the tag on the source and on the target, burning included, so
+armour against armour is x0.65), and adds a periodic +1 chakra every 0.25 s (+4/s) on top of the base regen. The jutsu is
+`UGA_Susanoo` (40 chakra, 60 s cooldown); it cannot be recast while the armour is up.
+
+The look is `UShinobiSusanooComponent` on every character: while the tag is on it fades in a 6 m ribcage guardian (`SM_Susanoo`,
+standing round the caster, facing the way they face) in the additive violet `M_Susanoo`, with a slow pulse, and fades it out
+when the armour ends. The model is procedural: `Scripts/character/make_susanoo.py` (Blender) builds spine, ribs, skull, arms
+and legs; `Scripts/setup_susanoo.py` imports it; `M_Susanoo` comes from `Scripts/setup_vfx.py`. A modelled armour can replace
+`SM_Susanoo` without code changes (origin between the feet, +X forward, about 6 m). The rising burst is
+`EShinobiBurst::SusanooRise`.
+
+Shots 25-26 of `Scripts/shot_chakra.ps1 -Jutsu` show it (the arena's walls hide the camera from one of the two angles; the other
+shows the figure). `Scripts/smoke_m1.ps1` checks that the client sees its own armour.

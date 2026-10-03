@@ -294,8 +294,8 @@ def build_susanoo():
     light drifting up the figure. Params: Color, Intensity, Fade."""
     m = fresh_material("M_Susanoo", two_sided=True)
     color = node(m, unreal.MaterialExpressionVectorParameter, -1000, -300,
-                 parameter_name="Color", default_value=unreal.LinearColor(0.45, 0.22, 1.0, 1.0))
-    intensity = node(m, unreal.MaterialExpressionScalarParameter, -1000, -150, parameter_name="Intensity", default_value=2.5)
+                 parameter_name="Color", default_value=unreal.LinearColor(0.32, 0.1, 1.0, 1.0))
+    intensity = node(m, unreal.MaterialExpressionScalarParameter, -1000, -150, parameter_name="Intensity", default_value=1.1)
     fade = node(m, unreal.MaterialExpressionScalarParameter, -1000, 0, parameter_name="Fade", default_value=1.0)
     rim = node(m, unreal.MaterialExpressionFresnel, -1000, 150, exponent=2.5, base_reflect_fraction=0.0)
     rim_part = node(m, unreal.MaterialExpressionMultiply, -800, 150, const_b=0.75)
