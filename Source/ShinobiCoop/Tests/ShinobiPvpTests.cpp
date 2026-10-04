@@ -5,6 +5,7 @@
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiLook.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/Pvp/ShinobiPvpMatch.h"
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 #include "Shinobi/Enemies/ShinobiSummon.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -94,6 +95,93 @@ bool FShinobiPvpOutlineTest::RunTest(const FString& Parameters)
 	B1->ApplyOutlineFor(A1);
 	TestEqual(TEXT("The viewer's own side is friendly"), A1->GetBodyMesh()->CustomDepthStencilValue, int32(ShinobiLook::StencilFriendly));
 	TestEqual(TEXT("The opposing side is outlined as an enemy"), B1->GetBodyMesh()->CustomDepthStencilValue, int32(ShinobiLook::StencilEnemy));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpJudgeWipeTest, "ShinobiCoop.Pvp.Match.JudgeWinsWhenOneSideWiped", ShinobiTestFlags)
+bool FShinobiPvpJudgeWipeTest::RunTest(const FString& Parameters)
+{
+	const FShinobiTeamStatus Dead{0, 0.f};
+	const FShinobiTeamStatus Alive{1, 0.5f};
+	TestEqual(TEXT("A wiped: B wins"), FShinobiPvpMatch::Judge(Dead, Alive, false), EShinobiRoundResult::TeamBWins);
+	TestEqual(TEXT("B wiped: A wins"), FShinobiPvpMatch::Judge(Alive, Dead, false), EShinobiRoundResult::TeamAWins);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpJudgeTradeTest, "ShinobiCoop.Pvp.Match.JudgeSimultaneousWipeIsTie", ShinobiTestFlags)
+bool FShinobiPvpJudgeTradeTest::RunTest(const FString& Parameters)
+{
+	const FShinobiTeamStatus Dead{0, 0.f};
+	TestEqual(TEXT("Both wiped is a tie"), FShinobiPvpMatch::Judge(Dead, Dead, false), EShinobiRoundResult::Tie);
+	TestEqual(TEXT("Both wiped at time up is still a tie"), FShinobiPvpMatch::Judge(Dead, Dead, true), EShinobiRoundResult::Tie);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpJudgeTimeUpTest, "ShinobiCoop.Pvp.Match.JudgeOngoingUntilTimeUp", ShinobiTestFlags)
+bool FShinobiPvpJudgeTimeUpTest::RunTest(const FString& Parameters)
+{
+	const FShinobiTeamStatus Healthy{1, 0.9f};
+	const FShinobiTeamStatus Hurt{1, 0.2f};
+	TestEqual(TEXT("Both fighting before the cap"), FShinobiPvpMatch::Judge(Healthy, Hurt, false), EShinobiRoundResult::Ongoing);
+	TestEqual(TEXT("Time up: more health wins"), FShinobiPvpMatch::Judge(Healthy, Hurt, true), EShinobiRoundResult::TeamAWins);
+	TestEqual(TEXT("Time up mirrored"), FShinobiPvpMatch::Judge(Hurt, Healthy, true), EShinobiRoundResult::TeamBWins);
+	TestEqual(TEXT("Time up with equal health is a tie"), FShinobiPvpMatch::Judge(Healthy, Healthy, true), EShinobiRoundResult::Tie);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpRecordFlowTest, "ShinobiCoop.Pvp.Match.RecordFlow", ShinobiTestFlags)
+bool FShinobiPvpRecordFlowTest::RunTest(const FString& Parameters)
+{
+	FShinobiPvpMatch M;
+	M.Record(EShinobiRoundResult::Ongoing);
+	TestEqual(TEXT("Ongoing is ignored"), M.Round, 1);
+	M.Record(EShinobiRoundResult::TeamAWins);
+	TestEqual(TEXT("Round 2 after A wins"), M.Round, 2);
+	TestFalse(TEXT("Not over at 1-0"), M.IsOver());
+	TestEqual(TEXT("No result yet"), M.MatchResult(), EShinobiRoundResult::Ongoing);
+	M.Record(EShinobiRoundResult::TeamBWins);
+	TestEqual(TEXT("Round 3 after B wins"), M.Round, 3);
+	TestFalse(TEXT("Not over at 1-1"), M.IsOver());
+	M.Record(EShinobiRoundResult::TeamAWins);
+	TestEqual(TEXT("A has two wins"), M.WinsA, 2);
+	TestTrue(TEXT("Over at 2-1"), M.IsOver());
+	TestEqual(TEXT("A wins the match"), M.MatchResult(), EShinobiRoundResult::TeamAWins);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpTwoTiesTest, "ShinobiCoop.Pvp.Match.TwoTiesInARowIsADraw", ShinobiTestFlags)
+bool FShinobiPvpTwoTiesTest::RunTest(const FString& Parameters)
+{
+	FShinobiPvpMatch Draw;
+	Draw.Record(EShinobiRoundResult::Tie);
+	TestFalse(TEXT("One tie replays the round"), Draw.IsOver());
+	TestEqual(TEXT("A tie awards no round"), Draw.Round, 1);
+	Draw.Record(EShinobiRoundResult::Tie);
+	TestTrue(TEXT("Two ties end the match"), Draw.IsOver());
+	TestEqual(TEXT("As a draw"), Draw.MatchResult(), EShinobiRoundResult::Tie);
+
+	FShinobiPvpMatch Broken;
+	Broken.Record(EShinobiRoundResult::Tie);
+	Broken.Record(EShinobiRoundResult::TeamAWins);
+	Broken.Record(EShinobiRoundResult::Tie);
+	TestFalse(TEXT("A win in between resets the tie streak"), Broken.IsOver());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpTeamForJoinTest, "ShinobiCoop.Pvp.Match.TeamForJoinFillsBalanced", ShinobiTestFlags)
+bool FShinobiPvpTeamForJoinTest::RunTest(const FString& Parameters)
+{
+	using M = FShinobiPvpMatch;
+	const EShinobiPvpFormat Two = EShinobiPvpFormat::TwoVsTwo;
+	TestEqual(TEXT("2v2 empty -> A"), M::TeamForJoin(Two, 0, 0).Get(EShinobiTeam::Enemies), EShinobiTeam::TeamA);
+	TestEqual(TEXT("2v2 1-0 -> B"), M::TeamForJoin(Two, 1, 0).Get(EShinobiTeam::Enemies), EShinobiTeam::TeamB);
+	TestEqual(TEXT("2v2 1-1 -> A"), M::TeamForJoin(Two, 1, 1).Get(EShinobiTeam::Enemies), EShinobiTeam::TeamA);
+	TestEqual(TEXT("2v2 2-1 -> B"), M::TeamForJoin(Two, 2, 1).Get(EShinobiTeam::Enemies), EShinobiTeam::TeamB);
+	TestFalse(TEXT("2v2 full -> unset"), M::TeamForJoin(Two, 2, 2).IsSet());
+	TestFalse(TEXT("1v1 full -> unset"), M::TeamForJoin(EShinobiPvpFormat::OneVsOne, 1, 1).IsSet());
+	TestEqual(TEXT("1v1 slots"), M::SlotsPerTeam(EShinobiPvpFormat::OneVsOne), 1);
+	TestEqual(TEXT("2v2 slots"), M::SlotsPerTeam(Two), 2);
+	TestEqual(TEXT("None slots"), M::SlotsPerTeam(EShinobiPvpFormat::None), 0);
 	return true;
 }
 
