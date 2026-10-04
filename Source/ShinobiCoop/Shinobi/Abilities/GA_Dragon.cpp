@@ -33,7 +33,7 @@ UGA_SummonDragon::UGA_SummonDragon()
 UGA_SummonCrimsonDragon::UGA_SummonCrimsonDragon()
 {
 	InputID = EShinobiAbilityInputID::Jutsu2;
-	DisplayName = INVTEXT("Summon Crimson Dragon");
+	DisplayName = INVTEXT("Crimson Dragon");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonCrimson.T_Jutsu_SummonCrimson")));
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_SummonCrimsonDragon);
 	DragonKind = EShinobiDragonKind::Crimson;
@@ -138,10 +138,7 @@ void UGA_DragonBreath::Pulse()
 	if (HasAuthority(&CurrentActivationInfo))
 	{
 		const FVector Mouth = AShinobiDragonMount::MouthLocation(*Self, BreathKind);
-		FVector ViewLocation;
-		FRotator ViewRotation;
-		GetAimViewPoint(ViewLocation, ViewRotation);
-		const FVector Aim = ViewRotation.Vector();
+		const FVector Aim = AShinobiDragonMount::BreathDirection(*Self); // where the dragon faces, not where the camera looks
 
 		const float Cos = FMath::Cos(FMath::DegreesToRadians(HalfAngle));
 		for (AShinobiCharacterBase* Target : ShinobiCombat::FindHostilesInRadius(Self, Mouth + Aim * (Range * 0.5f), Range * 0.5f + 150.f))

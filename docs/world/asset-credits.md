@@ -98,5 +98,5 @@ remaining trademarks: the TX4 taxi and double-decker bus shapes, London Eye and 
   and are unused (the rideable dragon is the Rodin Tairn below).
 - **Hyper3D Rodin** (generated for this project): the toad (`SourceArt/Creatures/Toad/rodin_toad.glb`, rigged and animated in
   Blender by `Scripts/character/build_toad.py`) and the crimson dragon (`SourceArt/Creatures/DragonRodin/rodin_dragon.glb`, `build_dragon_crimson.py`) and Tairn, the second rideable dragon (`SourceArt/Creatures/Tairn/rodin_tairn.glb`, with a tail club from `rodin_tail_club2.glb`, `build_dragon.py`; Tairn is a character from Rebecca Yarros's *Fourth Wing*, so he is a fan tribute: check before any public release).
-- **SpriteCook** (generated for this project): the summon jutsu icons (toad, snake, dogs, Tairn, the crimson dragon).
+- **SpriteCook** (generated for this project): the summon jutsu icons (toad, snake, dogs, Tairn, the crimson dragon) and the two dragon-fire sprite sheets.
 

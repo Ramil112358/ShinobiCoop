@@ -77,7 +77,7 @@ public:
 	static constexpr float PulseDamage = 25.f;
 	static constexpr int32 PulseCount = 5;
 	static constexpr float PulseGap = 0.3f;
-	static constexpr float Range = 1500.f;
+	static constexpr float Range = AShinobiDragonMount::BreathRange;
 	static constexpr float HalfAngle = 20.f;
 	static constexpr float CooldownSeconds = 4.f;
 

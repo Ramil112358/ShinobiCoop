@@ -744,6 +744,7 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(62.2f, BackToPlayer);
 	At(62.4f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->AbilityLocalInputPressed(static_cast<int32>(EShinobiAbilityInputID::Melee)); } }); // breath
 	At(62.8f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_32_DragonBreath")); });
+	At(62.85f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_32c_DragonCrosshair")); }); // with the HUD: the crosshair where the fire goes
 	At(63.1f, [FaceCamera]() { FaceCamera(75.f, 60.f, 500.f, 2300.f); });
 	At(63.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_32b_DragonBreath")); });
 	At(63.4f, BackToPlayer);
@@ -756,6 +757,8 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(67.6f, [CastJutsu]() { CastJutsu(2, 0.9f); }); // mounted from about 68.4
 	At(70.0f, [FaceCamera]() { FaceCamera(75.f, 60.f, 0.f, 2300.f); });
 	At(70.1f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_35_CrimsonDragon")); });
+	At(70.2f, [FaceCamera]() { FaceCamera(45.f, 70.f, 0.f, 800.f); }); // the rider close up
+	At(70.25f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_35c_CrimsonRider")); });
 	At(70.3f, BackToPlayer);
 	At(70.5f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->AbilityLocalInputPressed(static_cast<int32>(EShinobiAbilityInputID::Melee)); } });
 	At(71.2f, [FaceCamera]() { FaceCamera(75.f, 60.f, 500.f, 2300.f); });

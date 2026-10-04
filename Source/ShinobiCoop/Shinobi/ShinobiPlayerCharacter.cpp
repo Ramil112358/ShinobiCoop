@@ -462,6 +462,15 @@ void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
 		CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, bMounted ? MountedArmLength : FootArmLength, DeltaSeconds, 2.f);
 		bBoomPulledBack = bMounted || !FMath::IsNearlyEqual(CameraBoom->TargetArmLength, FootArmLength, 1.f);
 	}
+	if (bMounted != bSteeringByCamera)
+	{
+		// Riding, the character (and so the dragon) faces where the camera looks, so the fire is aimed by turning; on foot it turns with its movement.
+		bSteeringByCamera = bMounted;
+		UCharacterMovementComponent* Movement = GetCharacterMovement();
+		Movement->bOrientRotationToMovement = !bMounted;
+		Movement->bUseControllerDesiredRotation = bMounted;
+		Movement->RotationRate = FRotator(0.f, bMounted ? 360.f : 720.f, 0.f);
+	}
 	if (!bMounted)
 	{
 		bFlightClimb = bFlightDive = false; // keys held when the ride ended must not carry into the next one

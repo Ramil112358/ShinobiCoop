@@ -6,6 +6,7 @@
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimSingleNodeInstance.h"
+#include "AIController.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/StaticMesh.h"
@@ -585,6 +586,83 @@ bool FShinobiCrimsonAssetsTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("icon (run Scripts/setup_hud.py)"), Jutsu->Icon.LoadSynchronous());
 	TestEqual(TEXT("slot 2 of page 5"), static_cast<int32>(Jutsu->InputID), static_cast<int32>(EShinobiAbilityInputID::Jutsu2));
 	TestEqual(TEXT("page 5"), Jutsu->Page, 5);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMountSteerTest, "ShinobiCoop.Mount.TheDragonFacesWhereTheCameraLooks", ShinobiTestFlags)
+bool FShinobiMountSteerTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Mounted = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiPlayerCharacter* OnFoot = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, 4000.f, 0.f));
+	AAIController* A = W.Spawn<AAIController>();
+	AAIController* B = W.Spawn<AAIController>();
+	A->bSetControlRotationFromPawnOrientation = false; // else the AI controller keeps resetting its rotation to the pawn's
+	B->bSetControlRotationFromPawnOrientation = false;
+	A->Possess(Mounted);
+	B->Possess(OnFoot);
+	ShinobiTest::Hover(OnFoot);
+	ShinobiTest::ApplyEffect(Mounted, UGE_Mounted::StaticClass());
+	W.Tick(0.2f);
+	A->SetControlRotation(FRotator(0.f, 90.f, 0.f));
+	B->SetControlRotation(FRotator(0.f, 90.f, 0.f));
+	W.Tick(1.5f);
+	TestTrue(FString::Printf(TEXT("A mounted rider turns to the camera's yaw (%.0f)"), Mounted->GetActorRotation().Yaw), FMath::Abs(FRotator::NormalizeAxis(Mounted->GetActorRotation().Yaw - 90.f)) < 8.f);
+	TestTrue(FString::Printf(TEXT("a rider on foot does not (%.0f)"), OnFoot->GetActorRotation().Yaw), FMath::Abs(FRotator::NormalizeAxis(OnFoot->GetActorRotation().Yaw)) < 8.f);
+
+	Mounted->GetAbilitySystemComponent()->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_Mounted));
+	W.Tick(0.3f);
+	A->SetControlRotation(FRotator(0.f, -90.f, 0.f));
+	W.Tick(1.f);
+	TestTrue(FString::Printf(TEXT("and after the dismount it goes back to turning with its movement (%.0f)"), Mounted->GetActorRotation().Yaw), FMath::Abs(FRotator::NormalizeAxis(Mounted->GetActorRotation().Yaw - 90.f)) < 8.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBreathAimTest, "ShinobiCoop.Mount.TheBreathGoesWhereTheDragonFacesNotWhereTheCameraLooks", ShinobiTestFlags)
+bool FShinobiBreathAimTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = Rider(W);
+	AAIController* Eyes = W.Spawn<AAIController>();
+	Eyes->bSetControlRotationFromPawnOrientation = false;
+	Eyes->Possess(P);
+	P->SetActorRotation(FRotator(0.f, 90.f, 0.f)); // facing +Y
+	Eyes->SetControlRotation(FRotator(30.f, 0.f, 0.f)); // the camera looks along +X and down: the breath ignores it
+	AShinobiCharacterBase* Ahead = W.Spawn<AShinobiCharacterBase>(FVector(0.f, 900.f, 0.f));
+	AShinobiCharacterBase* WhereTheCameraLooks = W.Spawn<AShinobiCharacterBase>(FVector(900.f, 0.f, 0.f));
+	ShinobiTest::Hover(Ahead);
+	ShinobiTest::Hover(WhereTheCameraLooks);
+
+	TestTrue(TEXT("The direction is the facing, level"), (AShinobiDragonMount::BreathDirection(*P) - FVector(0.f, 1.f, 0.f)).IsNearlyZero(0.01f));
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Melee); // the first pulse fires at once
+	W.Tick(0.05f);
+	TestTrue(TEXT("What the dragon faces is burnt"), ShinobiTest::Get(Ahead, UShinobiAttributeSet::GetHealthAttribute()) < 500.f);
+	TestEqual(TEXT("what the camera looks at is not"), ShinobiTest::Get(WhereTheCameraLooks, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBreathTargetTest, "ShinobiCoop.Mount.TheCrosshairMarksWhereTheFireEnds", ShinobiTestFlags)
+bool FShinobiBreathTargetTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	if (!TestNotNull(TEXT("engine cube"), Cube))
+	{
+		return false;
+	}
+	AShinobiPlayerCharacter* P = Rider(W);
+	const FVector Mouth = AShinobiDragonMount::MouthLocation(*P);
+	const FVector Open = AShinobiDragonMount::BreathTarget(*P);
+	TestTrue(FString::Printf(TEXT("In the open it is the full reach ahead (%.0f)"), (Open - Mouth).Size()), FMath::IsNearlyEqual((Open - Mouth).Size(), UGA_DragonBreath::Range, 5.f));
+
+	// A wall 6 m ahead stops it there.
+	AStaticMeshActor* Wall = W.World->SpawnActor<AStaticMeshActor>(Mouth + FVector(650.f, 0.f, 0.f), FRotator::ZeroRotator);
+	Wall->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+	Wall->GetStaticMeshComponent()->SetStaticMesh(Cube);
+	Wall->SetActorScale3D(FVector(1.f, 30.f, 30.f));
+	Wall->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+	const FVector Blocked = AShinobiDragonMount::BreathTarget(*P);
+	TestTrue(FString::Printf(TEXT("and at a wall it ends on it (%.0f ahead)"), (Blocked - Mouth).Size()), FMath::Abs((Blocked - Mouth).Size() - 600.f) < 30.f);
 	return true;
 }
 

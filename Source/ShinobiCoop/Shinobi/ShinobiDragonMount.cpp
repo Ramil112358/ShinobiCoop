@@ -6,6 +6,7 @@
 #include "EngineUtils.h"
 #include "Engine/SkeletalMesh.h"
 #include "GameFramework/Character.h"
+#include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiTags.h"
@@ -28,12 +29,12 @@ namespace
 
 	const FDragonLook& DragonLookFor(EShinobiDragonKind Kind)
 	{
-		static const FDragonLook Tairn = { TEXT("Tairn"), 4.f, FVector(30.f, 0.f, 76.f), 380.f, 50.f };
-		static const FDragonLook Crimson = { TEXT("CrimsonDragon"), 3.5f, FVector(30.f, 0.f, 72.f), 330.f, 55.f };
+		static const FDragonLook Tairn = { TEXT("Tairn"), 4.f, FVector(16.f, 0.f, 84.f), 380.f, 50.f };
+		static const FDragonLook Crimson = { TEXT("CrimsonDragon"), 3.5f, FVector(16.f, 0.f, 80.f), 330.f, 55.f };
 		return Kind == EShinobiDragonKind::Tairn ? Tairn : Crimson;
 	}
 
-	constexpr float SeatBelowCapsuleCentre = 25.f; // how far under the rider's capsule centre the saddle sits
+	constexpr float SeatBelowCapsuleCentre = 15.f; // how far under the rider's capsule centre the saddle sits
 	constexpr float GlideSpeed = 800.f;
 	constexpr float GlideClimb = 250.f;
 	constexpr float HoverSpeed = 150.f;
@@ -189,6 +190,21 @@ void AShinobiDragonMount::Tick(float DeltaSeconds)
 FVector AShinobiDragonMount::GetMouthLocation() const
 {
 	return IsValid(Rider) ? MouthLocation(*Rider, Kind) : GetActorLocation();
+}
+
+FVector AShinobiDragonMount::BreathDirection(const AShinobiCharacterBase& Rider)
+{
+	const FVector Ahead = Rider.GetActorForwardVector().GetSafeNormal2D();
+	return Ahead.IsNearlyZero() ? FVector::ForwardVector : Ahead;
+}
+
+FVector AShinobiDragonMount::BreathTarget(const AShinobiCharacterBase& Rider, EShinobiDragonKind Kind)
+{
+	const FVector Mouth = MouthLocation(Rider, Kind);
+	const FVector End = Mouth + BreathDirection(Rider) * BreathRange;
+	FHitResult Hit;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(BreathTarget), false, &Rider);
+	return Rider.GetWorld() && Rider.GetWorld()->LineTraceSingleByChannel(Hit, Mouth, End, ECC_Visibility, Params) ? Hit.ImpactPoint : End;
 }
 
 FVector AShinobiDragonMount::MouthLocation(const AShinobiCharacterBase& Rider, EShinobiDragonKind Kind)

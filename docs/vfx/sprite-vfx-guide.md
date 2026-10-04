@@ -309,13 +309,19 @@ hang below the rider, so a mount from the ground is a quick lift-off and a dive 
   mouth, burning whoever is hit (and a fire burst on them), 15 chakra, 4 s cooldown. It is a melee-class ability for the gates: not while phased or
   charging, a jutsu cancels it, a staggering hit puts it out. The mouth is a fixed offset from the rider (`AShinobiDragonMount::MouthLocation`), the same on
   every machine, so the cone and the flames agree.
-- **The jet** is `AShinobiDragonFlame` (`VFX/`): one replicated actor the server turns with the aim; every machine animates its own particles from the
-  clock (about 75 billboard sprites) streaming from the mouth, widening and drifting apart, with a blue light riding it. Tairn's fire colour is not
-  stated anywhere in the books or the fan wikis, so it is **blue-white and lightning-tinged** (the user's choice; Violet wields lightning through
-  Tairn): the stock Flame sheet is orange and a tint only darkens it, so the jet is built from the BlackFlame sheet (its tint is its glow colour: the
-  ragged flame shape), the additive Vortex sheet (the bright blue-white body and the mouth flash) and Lightning forks. Targets that are hit get a
-  lightning burst; the Burn status they catch is still the ordinary orange one. `State.DragonBreathing` (granted by the ability) plays the dragon's
-  head clip on every machine.
+- **Where it goes:** straight out of the dragon's mouth, in the direction the dragon faces, level. While mounted the character (so the dragon) turns to the
+  camera's yaw instead of its movement (`AShinobiPlayerCharacter::Tick` swaps `bOrientRotationToMovement` for `bUseControllerDesiredRotation`), so you aim the fire
+  by turning, and climb or dive with Space and Control to bring it onto a target. `AShinobiDragonMount::BreathDirection` and `BreathTarget` give the
+  direction and the point where the fire ends (`BreathRange` ahead, or the first thing it meets); the damage cone, the jet and the HUD all use them.
+  The HUD (`UShinobiHUDWidget::UpdateDragonCrosshair`) draws a ring with a dot at that point while you are mounted, in the dragon's fire colour.
+- **The jet** is `AShinobiDragonFlame` (`VFX/`): one replicated actor the server turns with the dragon's facing; every machine animates its own particles
+  from the clock (about 60-70 billboard sprites). Each dragon has its own SpriteCook sheet (`tairn_fire_sheet.png`: blue-white plasma flame laced with
+  lightning; `crimson_fire_sheet.png`: orange dragonfire with embers; `ESprite::TairnFire` / `CrimsonFire`, 8 tall jets in a 4x2 atlas, imported by
+  `Scripts/setup_sprite_vfx.py`). A tongue is born at the mouth, flies down the fire with its long axis along it (a billboard that turns about the jet's
+  axis to face the camera) and widens as it goes in a narrow cone, so the overlapping tongues read as one stream; hot core tongues, a muzzle flash and, per
+  dragon, lightning forks (Tairn) or embers and smoke (crimson) ride with it, under a coloured light. Tairn's fire colour is not stated anywhere in the
+  books or the fan wikis, so it is blue-white and lightning-tinged (the user's choice; Violet wields lightning through him). Targets that are hit get a
+  lightning burst (Tairn) or fire burst (crimson); the Burn status they catch is the ordinary orange one. `State.DragonBreathing` plays the dragon's head clip.
 - **Camera:** the boom eases from 450 to 900 while mounted, and only then (anything else that sets the boom is left alone).
 - **The dragon** is `AShinobiDragonMount`, a replicated actor with no collision or health, attached to the rider's mesh so it is smoothed on clients
   with the rider (the transform uses the mesh's default offset, not its current network-smoothed one).
@@ -343,4 +349,4 @@ hang below the rider, so a mount from the ground is a quick lift-off and a dive 
 
 Shots 31-34 of `Scripts/shot_chakra.ps1 -Jutsu` show the ride, the rider close up, the breath, a climb and the page-5 HUD; `Scripts/smoke_m1.ps1` checks
 the client sees itself mounted and the dragon actor. Not done: the rider cannot steer by pitch (Space and Control are the only vertical control), the
-dragon does not bank with the flight, and the jet is built from stock sprite sheets (a blue dragon-fire SpriteCook sheet would sharpen it), and the eyes are Rodin's small golden ones.
+dragon does not bank with the flight, and the eyes are Rodin's small golden ones.

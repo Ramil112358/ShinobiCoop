@@ -5,6 +5,8 @@ Sources (SourceArt/SpriteCook/VFX/, 1024 px, each a 4 x 2 atlas of 256 x 512 cel
   smoke_embers_sheet.png  -> /Game/Shinobi/VFX/T_SmokeEmbers   top row 4 smoke plumes, bottom row 4 ember sprays
   energy_sheet.png        -> /Game/Shinobi/VFX/T_Energy        top row 4 lightning bolts; bottom: ring, vortex, slash, burst
   scorch_rgba.png         -> /Game/Shinobi/VFX/T_Scorch        a charred ground mark (alpha cut from scorch.png, which was on white)
+  tairn_fire_sheet.png    -> /Game/Shinobi/VFX/T_TairnFire     8 tall blue-white lightning-fire jets (ESprite::TairnFire)
+  crimson_fire_sheet.png  -> /Game/Shinobi/VFX/T_CrimsonFire   8 tall orange dragon-fire jets with embers (ESprite::CrimsonFire)
 
 Materials (params: Atlas, CellU 0-3, CellV 0-1, Tint, Intensity, Fade):
   M_Sprite       additive, unlit: fire, embers, lightning. Black is "nothing", so the sheets need no alpha.
@@ -26,6 +28,8 @@ SHEETS = {
     "smoke_embers_sheet.png": "T_SmokeEmbers",
     "energy_sheet.png": "T_Energy",
     "scorch_rgba.png": "T_Scorch",
+    "tairn_fire_sheet.png": "T_TairnFire",      # 8 tall jets of blue-white lightning fire (Tairn's breath)
+    "crimson_fire_sheet.png": "T_CrimsonFire",  # 8 tall jets of orange dragon fire with embers (the crimson dragon's breath)
 }
 
 

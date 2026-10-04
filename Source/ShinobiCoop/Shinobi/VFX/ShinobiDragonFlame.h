@@ -35,7 +35,7 @@ public:
 	AShinobiCharacterBase* GetRider() const { return Rider; }
 	int32 GetParticleCount() const { return Particles.Num(); }
 
-	static constexpr float Reach = 1500.f;
+	static constexpr float Reach = AShinobiDragonMount::BreathRange;
 
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

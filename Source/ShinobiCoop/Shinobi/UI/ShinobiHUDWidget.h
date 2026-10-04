@@ -30,6 +30,12 @@ class SHINOBICOOP_API UShinobiHUDWidget : public UUserWidget
 public:
 	static constexpr int32 NumJutsuSlots = 4;
 
+	/** The width the jutsu slot Index takes up (its icon and its name); every slot is the same, whatever the name. For tests. */
+	float GetJutsuSlotWidth(int32 Index) const;
+
+	/** Whether the dragon crosshair is showing, and where (viewport pixels). For tests. */
+	bool IsDragonCrosshairShown() const;
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
@@ -49,6 +55,10 @@ private:
 	void UpdateJutsuSlots(const UAbilitySystemComponent& ASC, int32 Page, const class AShinobiPlayerCharacter* Player);
 	/** One small diamond per jutsu page under the slots; the current page is lit. */
 	void BuildPagePips(UCanvasPanel* Root);
+
+	/** While riding a dragon: a ring at the point where its fire will end (straight ahead of the dragon, or the first thing in the way). */
+	void BuildDragonCrosshair(UCanvasPanel* Root);
+	void UpdateDragonCrosshair(const class AShinobiPlayerCharacter* Player);
 	UTextBlock* AddCanvasText(UCanvasPanel* Root, FName Name, const FAnchors& Anchors, const FVector2D& Alignment, const FVector2D& Position, int32 FontSize, ETextJustify::Type Justify);
 	void UpdateArena(const class AShinobiPlayerCharacter* Player);
 	/** Open world: the compass strip (cardinal points, village, camps, boss) around the camera's yaw. */
@@ -141,6 +151,11 @@ private:
 	/** Each slot's column (frame + name): hidden when the current page has no jutsu there. */
 	UPROPERTY()
 	TArray<TObjectPtr<UVerticalBox>> SlotColumns;
+
+	UPROPERTY()
+	TObjectPtr<class USizeBox> DragonCrosshair;
+	UPROPERTY()
+	TArray<TObjectPtr<class UBorder>> DragonCrosshairParts;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UBorder>> PagePips;
