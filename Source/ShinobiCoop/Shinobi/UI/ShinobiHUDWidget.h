@@ -20,7 +20,8 @@ struct FGameplayTagContainer;
 /**
  * Bottom-left unit frame (portrait, name, health / chakra / stamina bars, Substitution pips) and the four jutsu
  * slots (painted icon, key, chakra cost, name); the arena's wave line, teammates,
- * banners (downed, dead, wipe, victory), revive progress and lock-on. Built in code; polled each tick.
+ * banners (downed, dead, wipe, victory), revive progress and lock-on; in a PvP arena the score strip, round banners,
+ * opponents and active boosts take their place. Built in code; polled each tick.
  */
 UCLASS()
 class SHINOBICOOP_API UShinobiHUDWidget : public UUserWidget
@@ -51,6 +52,10 @@ private:
 	void BuildPagePips(UCanvasPanel* Root);
 	UTextBlock* AddCanvasText(UCanvasPanel* Root, FName Name, const FAnchors& Anchors, const FVector2D& Alignment, const FVector2D& Position, int32 FontSize, ETextJustify::Type Justify);
 	void UpdateArena(const class AShinobiPlayerCharacter* Player);
+	/** PvP: the opposing side, one "name  hp / max" line each (players and bots, never summons). */
+	FString OpponentList(const class AShinobiPlayerCharacter* Player) const;
+	/** PvP: "Attack boost 12s" per active pickup boost on Player. */
+	FString BoostList(const class AShinobiPlayerCharacter* Player) const;
 	/** Open world: the compass strip (cardinal points, village, camps, boss) around the camera's yaw. */
 	void UpdateCompass();
 	UTextBlock* CompassLabel(int32 Index);
@@ -76,6 +81,14 @@ private:
 	/** Top-left: teammates' names and health. */
 	UPROPERTY()
 	TObjectPtr<UTextBlock> TeamText;
+
+	/** Top-right, PvP: the opposing side's names and health. */
+	UPROPERTY()
+	TObjectPtr<UTextBlock> OpponentText;
+
+	/** Below the hint, PvP: the active pickup boosts and their seconds left. */
+	UPROPERTY()
+	TObjectPtr<UTextBlock> BoostText;
 
 	/** Centre: downed / dead / wipe / victory. */
 	UPROPERTY()

@@ -8,6 +8,7 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/Pvp/ShinobiPvpGameMode.h"
 #include "Shinobi/Pvp/ShinobiPvpMatch.h"
+#include "Shinobi/Pvp/ShinobiPvpText.h"
 #include "Shinobi/Abilities/GA_Revive.h"
 #include "Shinobi/Abilities/GA_Sprint.h"
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
@@ -378,6 +379,69 @@ bool FShinobiPvpFallPveTest::RunTest(const FString& Parameters)
 	static_cast<AActor*>(P)->FellOutOfWorld(*GetDefault<UDamageType>()); // public on AActor
 	TestTrue(TEXT("Co-op: the faller survives"), IsValid(P) && !P->IsActorBeingDestroyed());
 	TestTrue(TEXT("Back at the PlayerStart"), FVector::Dist2D(P->GetActorLocation(), Start->GetActorLocation()) < 1.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpTextCountdownTest, "ShinobiCoop.Pvp.Text.CountdownBannerIsTheCeilingOfTheTimeLeft", ShinobiTestFlags)
+bool FShinobiPvpTextCountdownTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiGameState* State = W.Spawn<AShinobiGameState>();
+	State->PvpPhase = EShinobiPvpPhase::Countdown;
+	TestEqual(TEXT("2.4 s left shows 3"), ShinobiPvp::BannerText(*State, EShinobiTeam::TeamA, 2.4f), FString(TEXT("3")));
+	TestEqual(TEXT("0.5 s left shows 1"), ShinobiPvp::BannerText(*State, EShinobiTeam::TeamA, 0.5f), FString(TEXT("1")));
+	TestEqual(TEXT("3 s left shows 3"), ShinobiPvp::BannerText(*State, EShinobiTeam::TeamB, 3.f), FString(TEXT("3")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpTextFightTest, "ShinobiCoop.Pvp.Text.FightShowsForTheFirstSecondOnly", ShinobiTestFlags)
+bool FShinobiPvpTextFightTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiGameState* State = W.Spawn<AShinobiGameState>();
+	State->PvpPhase = EShinobiPvpPhase::Fighting;
+	TestEqual(TEXT("The round just began"), ShinobiPvp::BannerText(*State, EShinobiTeam::TeamA, FShinobiPvpMatch::RoundSeconds - 0.4f), FString(TEXT("FIGHT")));
+	TestEqual(TEXT("A second in, nothing"), ShinobiPvp::BannerText(*State, EShinobiTeam::TeamA, FShinobiPvpMatch::RoundSeconds - 1.5f), FString());
+	TestEqual(TEXT("Mid-round, nothing"), ShinobiPvp::BannerText(*State, EShinobiTeam::TeamA, 60.f), FString());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpTextResultTest, "ShinobiCoop.Pvp.Text.RoundAndMatchBannersReadFromTheLocalSide", ShinobiTestFlags)
+bool FShinobiPvpTextResultTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiGameState* State = W.Spawn<AShinobiGameState>();
+	State->PvpPhase = EShinobiPvpPhase::RoundEnd;
+	State->PvpRoundResult = EShinobiRoundResult::TeamAWins;
+	TestEqual(TEXT("A won, seen from A"), ShinobiPvp::BannerText(*State, EShinobiTeam::TeamA, 3.f), FString(TEXT("ROUND WON")));
+	TestEqual(TEXT("A won, seen from B"), ShinobiPvp::BannerText(*State, EShinobiTeam::TeamB, 3.f), FString(TEXT("ROUND LOST")));
+	State->PvpRoundResult = EShinobiRoundResult::TeamBWins;
+	TestEqual(TEXT("B won, seen from B"), ShinobiPvp::BannerText(*State, EShinobiTeam::TeamB, 3.f), FString(TEXT("ROUND WON")));
+	State->PvpRoundResult = EShinobiRoundResult::Tie;
+	TestEqual(TEXT("A tied round"), ShinobiPvp::BannerText(*State, EShinobiTeam::TeamA, 3.f), FString(TEXT("ROUND DRAWN")));
+
+	State->PvpPhase = EShinobiPvpPhase::MatchEnd;
+	State->PvpRoundResult = EShinobiRoundResult::TeamAWins;
+	TestEqual(TEXT("Match won"), ShinobiPvp::BannerText(*State, EShinobiTeam::TeamA, 8.f), FString(TEXT("VICTORY")));
+	TestEqual(TEXT("Match lost"), ShinobiPvp::BannerText(*State, EShinobiTeam::TeamB, 8.f), FString(TEXT("DEFEAT")));
+	State->PvpRoundResult = EShinobiRoundResult::Tie;
+	TestEqual(TEXT("Match drawn"), ShinobiPvp::BannerText(*State, EShinobiTeam::TeamA, 8.f), FString(TEXT("DRAW")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpTextScoreTest, "ShinobiCoop.Pvp.Text.ScoreStripShowsWinsRoundAndTimer", ShinobiTestFlags)
+bool FShinobiPvpTextScoreTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiGameState* State = W.Spawn<AShinobiGameState>();
+	State->PvpPhase = EShinobiPvpPhase::Fighting;
+	State->PvpRound = 2;
+	State->PvpWinsA = 1;
+	State->PvpWinsB = 0;
+	TestEqual(TEXT("Round 2, 1-0, 102 s left"), ShinobiPvp::ScoreText(*State, 102.f), FString(TEXT("A 1  -  Round 2  -  B 0  -  1:42")));
+	TestEqual(TEXT("Seconds are padded"), ShinobiPvp::ScoreText(*State, 65.f), FString(TEXT("A 1  -  Round 2  -  B 0  -  1:05")));
+	State->PvpPhase = EShinobiPvpPhase::Countdown;
+	TestEqual(TEXT("No timer outside the fight"), ShinobiPvp::ScoreText(*State, 2.f), FString(TEXT("A 1  -  Round 2  -  B 0  -  --:--")));
 	return true;
 }
 
