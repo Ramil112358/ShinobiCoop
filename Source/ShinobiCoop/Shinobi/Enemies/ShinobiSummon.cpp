@@ -15,6 +15,7 @@
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Enemies/GA_EnemyAttacks.h"
 #include "Shinobi/Enemies/GA_SummonAttacks.h"
+#include "Shinobi/Enemies/ShinobiAIController.h"
 #include "Shinobi/Enemies/ShinobiCreatureAnimInstance.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
 
@@ -216,7 +217,9 @@ FVector AShinobiSummon::GetPostBesideCaster() const
 void AShinobiSummon::CatchUpWithCaster()
 {
 	const AShinobiCharacterBase* Caster = Summoner.Get();
-	if (!Caster || IsBusy() || FVector::Dist2D(GetActorLocation(), Caster->GetActorLocation()) <= CatchUpDistance)
+	const AShinobiAIController* AI = Cast<AShinobiAIController>(GetController());
+	const float Limit = AI && !AI->HasTarget() ? IdleCatchUpDistance : CatchUpDistance;
+	if (!Caster || IsBusy() || FVector::Dist2D(GetActorLocation(), Caster->GetActorLocation()) <= Limit)
 	{
 		return;
 	}
@@ -226,6 +229,14 @@ void AShinobiSummon::CatchUpWithCaster()
 	TeleportTo(Post, FRotator(0.f, (Caster->GetActorLocation() - Post).Rotation().Yaw, 0.f));
 	GetCharacterMovement()->Velocity = FVector::ZeroVector;
 	AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::SummonPoof, Post - Floor, GetActorScale3D().X);
+}
+
+void AShinobiSummon::HurryToPost()
+{
+	const AShinobiAIController* AI = Cast<AShinobiAIController>(GetController());
+	FVector Post;
+	const bool bHurry = AI && !AI->HasTarget() && !IsBusy() && GetIdlePost(Post) && FVector::Dist2D(GetActorLocation(), Post) > HurryDistance;
+	GetCharacterMovement()->MaxWalkSpeed = SummonStatsFor(Kind).Speed * (bHurry ? CatchUpSpeedScale : 1.f);
 }
 
 void AShinobiSummon::Tick(float DeltaSeconds)
@@ -241,6 +252,7 @@ void AShinobiSummon::Tick(float DeltaSeconds)
 			return;
 		}
 		CatchUpWithCaster();
+		HurryToPost();
 	}
 }
 

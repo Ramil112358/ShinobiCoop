@@ -25,6 +25,9 @@ public:
 
 	static constexpr float RetargetInterval = 0.5f;
 
+	/** Whether it is going after (or fighting) someone, as opposed to idling. */
+	bool HasTarget() const { return Target.IsValid(); }
+
 private:
 	AShinobiCharacterBase* FindNearestPlayer(const AShinobiEnemyCharacter& Self) const;
 

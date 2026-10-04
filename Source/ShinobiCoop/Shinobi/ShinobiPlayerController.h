@@ -86,6 +86,9 @@ private:
 
 	/** With -ShinobiShot: turn the camera to face the pawn, hold chakra charge (screenshots), release, then throw a
 	 * Fireball and retry it on cooldown for a HUD screenshot (cooldown + red flash), quit. Used by Scripts/shot_chakra.ps1. */
+	/** -ShinobiFollowTest: summons a pack on whatever map this is, walks away from it, and logs how far each summon is (Scripts/follow_london.ps1). */
+	void RunFollowTest();
+
 	void RunShotTest();
 
 	/** With -ShinobiJutsuShot: casts each jutsu at the dummy ahead and screenshots every effect, then quits.

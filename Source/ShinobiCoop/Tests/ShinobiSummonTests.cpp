@@ -539,7 +539,13 @@ bool FShinobiSummonFollowTest::RunTest(const FString& Parameters)
 	}
 
 	Caster->SetActorLocation(FVector(1500.f, 800.f, 0.f), false, nullptr, ETeleportType::TeleportPhysics);
-	W.Tick(5.f);
+	float ToadTop = 0.f;
+	for (int32 Step = 0; Step < 20; ++Step)
+	{
+		W.Tick(0.25f);
+		ToadTop = FMath::Max(ToadTop, Toad[0]->GetVelocity().Size2D());
+	}
+	TestTrue(FString::Printf(TEXT("The toad hurried, faster than its usual 350 (%.0f)"), ToadTop), ToadTop > 500.f);
 	const float ToadGap = FVector::Dist2D(Toad[0]->GetActorLocation(), Caster->GetActorLocation());
 	TestTrue(FString::Printf(TEXT("The toad caught up (%.0f from the caster)"), ToadGap), ToadGap < AShinobiSummon::FollowDistance + 300.f);
 	FVector Min(FLT_MAX), Max(-FLT_MAX);
@@ -714,6 +720,24 @@ bool FShinobiSummonAttackLengthTest::RunTest(const FString& Parameters)
 	// The bite is 0.67 s long and the attack (wind-up and recovery) 0.75 s: the clip is stretched over the lot.
 	TestEqual(TEXT("with the bite clip"), PlayingClip(Dog), FString(TEXT("ANIM_Wolf_Bite")));
 	TestTrue(FString::Printf(TEXT("slowed to fit the attack (rate %.2f)"), Anim->GetCurrentRate()), Anim->GetCurrentRate() > 0.8f && Anim->GetCurrentRate() < 0.95f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonIdleCatchUpTest, "ShinobiCoop.Summons.JumpToTheirCasterWhenBlockedFarOff", ShinobiTestFlags)
+bool FShinobiSummonIdleCatchUpTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	const TArray<AShinobiSummon*> Toad = Summon(Caster, EShinobiSummonKind::Toad, FVector(400.f, 0.f, 0.f));
+	if (Toad.Num() != 1)
+	{
+		return false;
+	}
+	Caster->SetActorLocation(FVector(2400.f, 0.f, 0.f), false, nullptr, ETeleportType::TeleportPhysics); // not far enough to jump if it were fighting
+	W.Tick(0.5f);
+	const float Gap = FVector::Dist2D(Toad[0]->GetActorLocation(), Caster->GetActorLocation());
+	TestTrue(FString::Printf(TEXT("Idle and 24 m off, the toad is back beside its caster (%.0f away)"), Gap), Gap < AShinobiSummon::FollowDistance + 400.f);
 	return true;
 }
 

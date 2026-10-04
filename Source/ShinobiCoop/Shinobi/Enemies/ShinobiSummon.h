@@ -58,6 +58,13 @@ public:
 	/** Left this far behind (a teleport, a dragon ride; farther than it will chase, LeashRange plus its reach), it reappears beside the caster instead of walking. */
 	static constexpr float CatchUpDistance = 4000.f;
 
+	/** Idle (nothing to fight) and this far off, it reappears too: a street of buildings can block the straight walk back. */
+	static constexpr float IdleCatchUpDistance = 1800.f;
+
+	/** Idle and this far from its post, it hurries (a summon is slower than a running player): its speed times CatchUpSpeedScale. */
+	static constexpr float HurryDistance = 600.f;
+	static constexpr float CatchUpSpeedScale = 2.f;
+
 	virtual bool GetIdlePost(FVector& OutPost) const override;
 
 	/** Server: leaves in a puff of smoke now. Does nothing for one that has already fallen. */
@@ -83,6 +90,9 @@ private:
 
 	/** Server: the summon's post in the world: its place beside the caster, on the ground under it when there is ground. */
 	FVector GetPostBesideCaster() const;
+
+	/** Server: runs at CatchUpSpeedScale while idle and far from the post, at its own speed otherwise. */
+	void HurryToPost();
 
 	/** Direction (radians, world) from the caster to this summon's post, and how far out it stands; a pack fans out round them. */
 	float FollowAngle = 0.f;
