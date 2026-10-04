@@ -613,14 +613,14 @@ void UShinobiHUDWidget::UpdateArena(const AShinobiPlayerCharacter* Player)
 		}
 	}
 
-	// Teammates: every other player in the session.
+	// Teammates: every other player on our side (in a PvP arena the opposing side is not listed).
 	FString Team;
 	if (State)
 	{
 		for (const APlayerState* Mate : State->PlayerArray)
 		{
 			const AShinobiCharacterBase* Body = Mate ? Cast<AShinobiCharacterBase>(Mate->GetPawn()) : nullptr;
-			if (!Body || Body == Player)
+			if (!Body || Body == Player || (Player && Player->IsHostileTo(Body)))
 			{
 				continue;
 			}

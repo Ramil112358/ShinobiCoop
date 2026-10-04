@@ -58,6 +58,8 @@ protected:
 	virtual void SetupInputComponent() override;
 	/** Server: the new pawn plays the character this player picked (so the pick survives respawns). */
 	virtual void OnPossess(APawn* InPawn) override;
+	/** Local: the pawn we control changed, so every character's outline (hostile = red) is redrawn. */
+	virtual void AcknowledgePossession(APawn* P) override;
 
 private:
 	UFUNCTION(Server, Reliable)

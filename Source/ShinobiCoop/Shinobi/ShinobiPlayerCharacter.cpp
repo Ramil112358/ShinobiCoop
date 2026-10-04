@@ -186,7 +186,7 @@ void AShinobiPlayerCharacter::ApplyOutfit()
 	// outfit's would carry the outfit off by the difference: shift it back by the two hips' reference-pose offset.
 	OutfitMesh->SetRelativeLocation(RefHipsLocation(Cloth) - RefHipsLocation(Body));
 	OutfitMesh->SetLeaderPoseComponent(HeroMesh);
-	ShinobiLook::EnableOutline(OutfitMesh, Team == EShinobiTeam::Enemies ? ShinobiLook::StencilEnemy : ShinobiLook::StencilFriendly);
+	RefreshOutline();
 	// Scripts/smoke_m4.ps1 style check: both machines log what they see.
 	UE_LOG(LogShinobiCoop, Log, TEXT("%s wears %s"), *GetName(), Outfits[OutfitIndex].Name);
 }
@@ -210,6 +210,12 @@ bool AShinobiPlayerCharacter::ApplyCharacter()
 		}
 	}
 	return false;
+}
+
+void AShinobiPlayerCharacter::ApplyOutlineFor(const AShinobiCharacterBase* Viewer)
+{
+	Super::ApplyOutlineFor(Viewer);
+	ShinobiLook::EnableOutline(OutfitMesh, OutlineStencilFor(Viewer)); // the cloak is its own mesh
 }
 
 void AShinobiPlayerCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

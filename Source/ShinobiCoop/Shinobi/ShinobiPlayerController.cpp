@@ -112,6 +112,12 @@ void AShinobiPlayerController::TogglePauseMenu()
 	SetShowMouseCursor(true);
 }
 
+void AShinobiPlayerController::AcknowledgePossession(APawn* P)
+{
+	Super::AcknowledgePossession(P);
+	AShinobiCharacterBase::RefreshAllOutlines(GetWorld()); // every outline is relative to the pawn we now control
+}
+
 void AShinobiPlayerController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
