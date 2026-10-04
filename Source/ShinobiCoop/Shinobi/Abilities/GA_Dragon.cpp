@@ -9,6 +9,7 @@
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
 #include "Shinobi/VFX/ShinobiDragonFlame.h"
+#include "Shinobi/VFX/ShinobiFirePatch.h"
 
 UGA_SummonDragonBase::UGA_SummonDragonBase()
 {
@@ -99,6 +100,7 @@ void UGA_DragonBreath::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 	}
 	Pulses = 0;
 	Ignited.Reset();
+	LastPatchAt = FVector(TNumericLimits<float>::Max());
 	if (HasAuthority(&ActivationInfo))
 	{
 		const AShinobiDragonMount* Dragon = GetShinobiCharacter() ? AShinobiDragonMount::Find(*GetShinobiCharacter()) : nullptr;
@@ -139,6 +141,18 @@ void UGA_DragonBreath::Pulse()
 	{
 		const FVector Mouth = AShinobiDragonMount::MouthLocation(*Self, BreathKind);
 		const FVector Aim = AShinobiDragonMount::BreathDirection(*Self); // where the dragon faces, not where the camera looks
+
+		// Where the fire falls on the ground it leaves flames, smoke and embers burning for a few seconds, like a Fireball or Amaterasu: the
+		// floor within a few metres below the end of the jet (a dragon flying high leaves none). Sweeping the fire lays a trail.
+		FHitResult Floor;
+		const FVector End = AShinobiDragonMount::BreathTarget(*Self, BreathKind);
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(BreathGroundFire), false, Self);
+		if (Self->GetWorld()->LineTraceSingleByChannel(Floor, End + FVector(0.f, 0.f, 30.f), End - FVector(0.f, 0.f, 400.f), ECC_WorldStatic, Params)
+			&& Floor.ImpactNormal.Z > 0.5f && FVector::Dist2D(Floor.ImpactPoint, LastPatchAt) > 140.f)
+		{
+			LastPatchAt = Floor.ImpactPoint;
+			AShinobiFirePatch::Spawn(Self->GetWorld(), BreathKind == EShinobiDragonKind::Tairn ? EShinobiFirePatch::TairnFire : EShinobiFirePatch::CrimsonFire, Floor.ImpactPoint, Self, 1.3f, UGE_Burn::DamagePerTick);
+		}
 
 		const float Cos = FMath::Cos(FMath::DegreesToRadians(HalfAngle));
 		for (AShinobiCharacterBase* Target : ShinobiCombat::FindHostilesInRadius(Self, Mouth + Aim * (Range * 0.5f), Range * 0.5f + 150.f))

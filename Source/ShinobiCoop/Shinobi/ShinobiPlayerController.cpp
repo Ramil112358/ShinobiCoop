@@ -748,6 +748,9 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(63.1f, [FaceCamera]() { FaceCamera(75.f, 60.f, 500.f, 2300.f); });
 	At(63.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_32b_DragonBreath")); });
 	At(63.4f, BackToPlayer);
+	At(63.9f, [FaceCamera]() { FaceCamera(75.f, 80.f, 900.f, 2400.f); }); // the ground where the fire fell
+	At(64.0f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_32d_DragonGroundFire")); });
+	At(64.1f, BackToPlayer);
 	At(63.6f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->AbilityLocalInputReleased(static_cast<int32>(EShinobiAbilityInputID::Melee)); P->SetFlightClimb(true); } });
 	At(65.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_33_DragonClimb")); });
 	At(65.3f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->SetFlightClimb(false); P->SetFlightDive(true); } });
@@ -763,7 +766,9 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(70.5f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->AbilityLocalInputPressed(static_cast<int32>(EShinobiAbilityInputID::Melee)); } });
 	At(71.2f, [FaceCamera]() { FaceCamera(75.f, 60.f, 500.f, 2300.f); });
 	At(71.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_35b_CrimsonBreath")); });
-	At(71.5f, BackToPlayer);
+	At(71.6f, [FaceCamera]() { FaceCamera(75.f, 80.f, 900.f, 2400.f); });
+	At(71.7f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_35d_CrimsonGroundFire")); });
+	At(71.9f, BackToPlayer);
 	At(72.2f, [this]() { ShinobiCast(1); }); // the same key: dismount
 	At(73.0f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_34_HudPage5")); });
 	At(73.6f, [this]() { ConsoleCommand(TEXT("quit")); });

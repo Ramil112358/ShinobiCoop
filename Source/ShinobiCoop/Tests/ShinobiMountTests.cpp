@@ -18,6 +18,7 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiDragonMount.h"
 #include "Shinobi/VFX/ShinobiDragonFlame.h"
+#include "Shinobi/VFX/ShinobiFirePatch.h"
 #include "Shinobi/Abilities/GA_Dodge.h"
 #include "Shinobi/Abilities/GA_Dragon.h"
 #include "Shinobi/Abilities/GA_Fireball.h"
@@ -633,7 +634,9 @@ bool FShinobiBreathAimTest::RunTest(const FString& Parameters)
 	ShinobiTest::Hover(Ahead);
 	ShinobiTest::Hover(WhereTheCameraLooks);
 
-	TestTrue(TEXT("The direction is the facing, level"), (AShinobiDragonMount::BreathDirection(*P) - FVector(0.f, 1.f, 0.f)).IsNearlyZero(0.01f));
+	const FVector Direction = AShinobiDragonMount::BreathDirection(*P);
+	TestTrue(TEXT("The direction is the facing..."), FVector(Direction.X, Direction.Y, 0.f).GetSafeNormal().Equals(FVector(0.f, 1.f, 0.f), 0.01f));
+	TestTrue(FString::Printf(TEXT("...tilted slightly down, %.0f degrees (z %.2f)"), AShinobiDragonMount::BreathPitch, Direction.Z), FMath::IsNearlyEqual(Direction.Z, -FMath::Sin(FMath::DegreesToRadians(AShinobiDragonMount::BreathPitch)), 0.01f));
 	ShinobiTest::Press(P, EShinobiAbilityInputID::Melee); // the first pulse fires at once
 	W.Tick(0.05f);
 	TestTrue(TEXT("What the dragon faces is burnt"), ShinobiTest::Get(Ahead, UShinobiAttributeSet::GetHealthAttribute()) < 500.f);
@@ -663,6 +666,68 @@ bool FShinobiBreathTargetTest::RunTest(const FString& Parameters)
 	Wall->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
 	const FVector Blocked = AShinobiDragonMount::BreathTarget(*P);
 	TestTrue(FString::Printf(TEXT("and at a wall it ends on it (%.0f ahead)"), (Blocked - Mouth).Size()), FMath::Abs((Blocked - Mouth).Size() - 600.f) < 30.f);
+	return true;
+}
+
+namespace
+{
+	AStaticMeshActor* FloorAt(FShinobiTestWorld& W, float TopZ)
+	{
+		UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+		AStaticMeshActor* Floor = W.World->SpawnActor<AStaticMeshActor>(FVector(0.f, 0.f, TopZ - 50.f), FRotator::ZeroRotator);
+		Floor->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+		Floor->GetStaticMeshComponent()->SetStaticMesh(Cube);
+		Floor->SetActorScale3D(FVector(400.f, 400.f, 1.f));
+		Floor->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+		return Floor;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBreathGroundFireTest, "ShinobiCoop.Mount.TheDragonsFireLeavesBurningGroundWithSmokeAndEmbers", ShinobiTestFlags)
+bool FShinobiBreathGroundFireTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	FloorAt(W, -330.f); // the fire (tilted down) ends about 2 m above this, and the flames fall to it
+	AShinobiPlayerCharacter* Tairn = Rider(W);
+	AShinobiDragonMount::Spawn(Tairn, EShinobiDragonKind::Tairn);
+	ShinobiTest::Press(Tairn, EShinobiAbilityInputID::Melee);
+	W.Tick(UGA_DragonBreath::PulseCount * UGA_DragonBreath::PulseGap + 0.3f);
+
+	int32 Patches = 0;
+	for (TActorIterator<AShinobiFirePatch> It(W.World); It; ++It)
+	{
+		++Patches;
+		TestEqual(TEXT("Tairn leaves blue-white fire"), It->GetKind(), EShinobiFirePatch::TairnFire);
+		TestTrue(FString::Printf(TEXT("on the ground (z %.0f)"), It->GetActorLocation().Z), FMath::Abs(It->GetActorLocation().Z + 330.f) < 15.f);
+	}
+	TestTrue(FString::Printf(TEXT("a patch, not a heap of them (%d)"), Patches), Patches >= 1 && Patches <= 3);
+
+	W.Tick(AShinobiFirePatch::DragonDuration + 0.5f);
+	TestEqual(TEXT("and it burns out"), ShinobiTest::CountActors<AShinobiFirePatch>(W), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBreathGroundFireKindTest, "ShinobiCoop.Mount.TheCrimsonDragonLeavesOrangeFireAndNothingFarFromTheGround", ShinobiTestFlags)
+bool FShinobiBreathGroundFireKindTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	FloorAt(W, -330.f);
+	AShinobiPlayerCharacter* Crimson = Rider(W);
+	AShinobiDragonMount::Spawn(Crimson, EShinobiDragonKind::Crimson);
+	AShinobiPlayerCharacter* High = Rider(W, FVector(0.f, 3000.f, 3000.f)); // 30 m up: the fire never gets near the floor
+	AShinobiDragonMount::Spawn(High, EShinobiDragonKind::Tairn);
+	ShinobiTest::Press(Crimson, EShinobiAbilityInputID::Melee);
+	ShinobiTest::Press(High, EShinobiAbilityInputID::Melee);
+	W.Tick(UGA_DragonBreath::PulseCount * UGA_DragonBreath::PulseGap + 0.3f);
+
+	int32 Orange = 0, Blue = 0;
+	for (TActorIterator<AShinobiFirePatch> It(W.World); It; ++It)
+	{
+		Orange += It->GetKind() == EShinobiFirePatch::CrimsonFire ? 1 : 0;
+		Blue += It->GetKind() == EShinobiFirePatch::TairnFire ? 1 : 0;
+	}
+	TestTrue(TEXT("The crimson dragon leaves orange fire"), Orange >= 1);
+	TestEqual(TEXT("and the one flying high leaves none"), Blue, 0);
 	return true;
 }
 

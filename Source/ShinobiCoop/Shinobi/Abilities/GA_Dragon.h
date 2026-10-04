@@ -95,6 +95,7 @@ private:
 
 	int32 Pulses = 0;
 	EShinobiDragonKind BreathKind = EShinobiDragonKind::Tairn;
+	FVector LastPatchAt = FVector(TNumericLimits<float>::Max());
 	TWeakObjectPtr<class AShinobiDragonFlame> Flame;
 	TSet<TWeakObjectPtr<AShinobiCharacterBase>> Ignited;
 };

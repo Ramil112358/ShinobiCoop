@@ -48,7 +48,10 @@ public:
 	/** How far the fire reaches from the mouth. */
 	static constexpr float BreathRange = 1500.f;
 
-	/** The way the fire goes: straight ahead of the dragon, level. The rider faces the camera's yaw while mounted, so you aim it by turning. */
+	/** How far the fire is tipped down from level, in degrees: enough to bring it onto things below a flying dragon. */
+	static constexpr float BreathPitch = 10.f;
+
+	/** The way the fire goes: straight ahead of the dragon, tipped down by BreathPitch. The rider faces the camera's yaw while mounted, so you aim it by turning. */
 	static FVector BreathDirection(const AShinobiCharacterBase& Rider);
 
 	/** Where the fire ends: BreathRange ahead of the mouth, or the first thing it meets. The HUD's crosshair marks this point. */

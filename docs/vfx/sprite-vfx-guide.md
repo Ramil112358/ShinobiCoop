@@ -309,11 +309,16 @@ hang below the rider, so a mount from the ground is a quick lift-off and a dive 
   mouth, burning whoever is hit (and a fire burst on them), 15 chakra, 4 s cooldown. It is a melee-class ability for the gates: not while phased or
   charging, a jutsu cancels it, a staggering hit puts it out. The mouth is a fixed offset from the rider (`AShinobiDragonMount::MouthLocation`), the same on
   every machine, so the cone and the flames agree.
-- **Where it goes:** straight out of the dragon's mouth, in the direction the dragon faces, level. While mounted the character (so the dragon) turns to the
+- **Where it goes:** straight out of the dragon's mouth, in the direction the dragon faces, tipped down 10 degrees (`AShinobiDragonMount::BreathPitch`, enough to bring it
+  onto things below a flying dragon). While mounted the character (so the dragon) turns to the
   camera's yaw instead of its movement (`AShinobiPlayerCharacter::Tick` swaps `bOrientRotationToMovement` for `bUseControllerDesiredRotation`), so you aim the fire
   by turning, and climb or dive with Space and Control to bring it onto a target. `AShinobiDragonMount::BreathDirection` and `BreathTarget` give the
   direction and the point where the fire ends (`BreathRange` ahead, or the first thing it meets); the damage cone, the jet and the HUD all use them.
   The HUD (`UShinobiHUDWidget::UpdateDragonCrosshair`) draws a ring with a dot at that point while you are mounted, in the dragon's fire colour.
+- **Ground fire:** where the fire falls on the ground (the floor within 4 m below the jet's end; a dragon flying high leaves none) each pulse lays an
+  `AShinobiFirePatch` of kind `TairnFire` (blue-white flames cut from the dragon's own sheet, dark blue-grey smoke, blue embers) or `CrimsonFire` (orange
+  flames, smoke, embers): 4 s (`DragonDuration`), scale 1.3, catching enemies in it with Burn every half second, and a scorch mark on the ground afterwards,
+  like a Fireball's or Amaterasu's. Pulses closer than 1.4 m to the last patch add none, so a still breath leaves one and a sweeping one leaves a trail.
 - **The jet** is `AShinobiDragonFlame` (`VFX/`): one replicated actor the server turns with the dragon's facing; every machine animates its own particles
   from the clock (about 60-70 billboard sprites). Each dragon has its own SpriteCook sheet (`tairn_fire_sheet.png`: blue-white plasma flame laced with
   lightning; `crimson_fire_sheet.png`: orange dragonfire with embers; `ESprite::TairnFire` / `CrimsonFire`, 8 tall jets in a 4x2 atlas, imported by

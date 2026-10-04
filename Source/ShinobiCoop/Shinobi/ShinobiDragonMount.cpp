@@ -195,7 +195,7 @@ FVector AShinobiDragonMount::GetMouthLocation() const
 FVector AShinobiDragonMount::BreathDirection(const AShinobiCharacterBase& Rider)
 {
 	const FVector Ahead = Rider.GetActorForwardVector().GetSafeNormal2D();
-	return Ahead.IsNearlyZero() ? FVector::ForwardVector : Ahead;
+	return FRotator(-BreathPitch, (Ahead.IsNearlyZero() ? FVector::ForwardVector : Ahead).Rotation().Yaw, 0.f).Vector();
 }
 
 FVector AShinobiDragonMount::BreathTarget(const AShinobiCharacterBase& Rider, EShinobiDragonKind Kind)
