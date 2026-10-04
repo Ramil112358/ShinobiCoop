@@ -58,6 +58,10 @@ void AShinobiPlayerController::BeginPlay()
 	{
 		RunSmokeTest();
 	}
+	if (FParse::Param(FCommandLine::Get(), TEXT("ShinobiFollowTest")))
+	{
+		RunFollowTest();
+	}
 	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiShot")))
 	{
 		RunShotTest();
@@ -316,6 +320,66 @@ void AShinobiPlayerController::RunSmokeTest()
 	At(14.2f, [this]() { ShinobiDrainChakra(-100.f); ShinobiPage(5); });
 	At(14.4f, [this]() { ShinobiCast(1); });
 	At(15.8f, [this]() { ShinobiDumpStats(); ConsoleCommand(TEXT("quit")); });
+}
+
+void AShinobiPlayerController::RunFollowTest()
+{
+	auto At = [this](float Seconds, TFunction<void()> Fn)
+	{
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
+	};
+	auto Log = [this](const TCHAR* When)
+	{
+		const APawn* Me = GetPawn();
+		FString Line;
+		for (TActorIterator<AShinobiSummon> It(GetWorld()); It; ++It)
+		{
+			Line += FString::Printf(TEXT(" [%d gap=%.0f speed=%.0f]"), static_cast<int32>(It->GetKind()), Me ? FVector::Dist2D(It->GetActorLocation(), Me->GetActorLocation()) : -1.f, It->GetVelocity().Size2D());
+		}
+		UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiFollow %s player=(%.0f,%.0f)%s"), When, Me ? Me->GetActorLocation().X : 0.f, Me ? Me->GetActorLocation().Y : 0.f, *Line);
+	};
+	At(4.f, [this]() { ShinobiPage(4); });
+	At(4.3f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(4); }); // Dogs
+	At(5.5f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(2); }); // Toad
+	At(6.7f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(3); }); // Snake
+	At(9.f, [Log]() { Log(TEXT("settled")); });
+	// Walk four seconds along the freest direction (the London start is hemmed in by buildings).
+	TSharedRef<FTimerHandle> Walk = MakeShared<FTimerHandle>();
+	TSharedRef<FVector> WalkDirection = MakeShared<FVector>(FVector::ForwardVector);
+	At(10.f, [this, Walk, WalkDirection]()
+	{
+		if (const APawn* Me = GetPawn())
+		{
+			float Best = -1.f;
+			for (int32 Step = 0; Step < 16; ++Step)
+			{
+				const FVector Direction = FVector(1.f, 0.f, 0.f).RotateAngleAxis(Step * 22.5f, FVector::UpVector);
+				FHitResult Hit;
+				FCollisionQueryParams Params(SCENE_QUERY_STAT(FollowTest), false, Me);
+				const FVector From = Me->GetActorLocation();
+				const float Free = GetWorld()->LineTraceSingleByChannel(Hit, From, From + Direction * 4000.f, ECC_WorldStatic, Params) ? Hit.Distance : 4000.f;
+				if (Free > Best)
+				{
+					Best = Free;
+					*WalkDirection = Direction;
+				}
+			}
+			UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiFollow walking %s for %.0f free"), *WalkDirection->ToString(), Best);
+		}
+		GetWorldTimerManager().SetTimer(*Walk, FTimerDelegate::CreateWeakLambda(this, [this, WalkDirection]()
+		{
+			if (APawn* Me = GetPawn())
+			{
+				Me->SetActorLocation(Me->GetActorLocation() + *WalkDirection * 12.f, false, nullptr, ETeleportType::None); // 600 u/s; input is not honoured on this map's start
+			}
+		}), 0.02f, true, 0.f);
+	});
+	At(12.f, [Log]() { Log(TEXT("walking 2s")); });
+	At(14.f, [Log]() { Log(TEXT("walking 4s")); });
+	At(14.2f, [this, Walk]() { GetWorldTimerManager().ClearTimer(*Walk); });
+	At(17.f, [Log]() { Log(TEXT("stopped 3s")); });
+	At(19.f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
 
 void AShinobiPlayerController::RunShotTest()

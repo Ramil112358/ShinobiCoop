@@ -5,6 +5,7 @@
 #include "NavigationInvokerComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Net/UnrealNetwork.h"
@@ -14,6 +15,8 @@
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Enemies/GA_EnemyAttacks.h"
 #include "Shinobi/Enemies/GA_SummonAttacks.h"
+#include "Shinobi/Enemies/ShinobiAIController.h"
+#include "Shinobi/Enemies/ShinobiCreatureAnimInstance.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
 
 namespace
@@ -36,38 +39,44 @@ namespace
 		static const FSummonStats Table[] = {
 			{ 600.f, 60.f, 350.f, 2.5f, 350.f, 12.f, 1.0f, FLinearColor(0.1f, 0.4f, 0.1f), 1 },
 			{ 350.f, 70.f, 800.f, 2.0f, 500.f, 10.f, 1.0f, FLinearColor(0.35f, 0.1f, 0.5f), 1 },
-			{ 120.f, 18.f, 170.f, 0.8f, 800.f, 15.f, 1.0f, FLinearColor(0.15f, 0.15f, 0.17f), AShinobiSummon::DogPackSize },
+			{ 120.f, 18.f, 170.f, 0.8f, 650.f, 15.f, 1.0f, FLinearColor(0.15f, 0.15f, 0.17f), AShinobiSummon::DogPackSize },
 		};
 		return Table[static_cast<int32>(Kind)];
 	}
-	/** What a summon wears over the mannequin. Clips are ClipPrefix + name; a null name means none (the body ragdolls instead of dying). */
+	/** What a summon wears over the mannequin. Clips are ClipPrefix + name; a null name means none (a creature with no death clip ragdolls). */
 	struct FCreatureLook
 	{
 		const TCHAR* Mesh;
 		const TCHAR* ClipPrefix;
 		const TCHAR* Idle;
 		const TCHAR* Walk;
-		const TCHAR* Run;
-		const TCHAR* Bite;
+		const TCHAR* Run;     // null: it walks faster instead
+		const TCHAR* Attack;
+		const TCHAR* Hit;
 		const TCHAR* Death;
-		float Yaw;        // turns the model to face +X
+		float WalkSpeed;      // world cm/s at which each clip covers the ground at play rate 1 (the model's scale included)
+		float RunSpeed;
+		float Yaw;            // turns the model to face +X
 		FVector Scale;
 		float CapsuleRadius;
 		float CapsuleHalfHeight;
-		bool bDarkCoat;   // swap in the "...Dark" twin of each material
+		bool bDarkCoat;       // swap in the "...Dark" twin of each material
 	};
 
 	const FCreatureLook& CreatureLookFor(EShinobiSummonKind Kind)
 	{
-		// The Animal Variety Pack wolf faces +Y and is a 2 m wolf; a ninken is a little bigger.
+		// The Animal Variety Pack wolf faces +Y and is a 2 m wolf; a ninken is a little bigger. Its Walk covers 93 cm/s and its Run 444
+		// (read off the root-motion variants of the clips), times the 1.1 scale.
 		static const FCreatureLook Dog = { TEXT("/Game/AnimalVarietyPack/Wolf/Meshes/SK_Wolf"), TEXT("/Game/AnimalVarietyPack/Wolf/Animations/ANIM_Wolf_"),
-			TEXT("IdleAggressive"), TEXT("Walk"), TEXT("Run"), TEXT("Bite"), nullptr, -90.f, FVector(1.1f), 45.f, 55.f, true };
-		// The Mesh2Motion snake (Scripts/character/export_creature.py) faces +X, 4 m long; a summoned one is two and a half times as long and five times as thick.
+			TEXT("IdleAggressive"), TEXT("Walk"), TEXT("Run"), TEXT("Bite"), TEXT("GetHitFront"), nullptr, 102.f, 488.f, -90.f, FVector(1.1f), 45.f, 55.f, true };
+		// The Mesh2Motion snake (Scripts/character/export_creature.py) faces +X, 4 m long; a summoned one is two and a half times as long and
+		// five times as thick. One winding clip, played at 1 when it moves at its top speed.
 		static const FCreatureLook Snake = { TEXT("/Game/Shinobi/Creatures/Snake/SK_Snake"), TEXT("/Game/Shinobi/Creatures/Snake/ANIM_Snake_"),
-			TEXT("Idle"), TEXT("Move"), TEXT("Move"), TEXT("Bite"), TEXT("Death"), 0.f, FVector(2.5f, 5.f, 5.f), 60.f, 40.f, false };
+			TEXT("Idle"), TEXT("Move"), nullptr, TEXT("Bite"), TEXT("Hit"), TEXT("Death"), 500.f, 500.f, 0.f, FVector(2.5f, 5.f, 5.f), 60.f, 40.f, false };
 		// The Rodin toad (Scripts/character/build_toad.py) faces +X, 1.9 m long and 1.5 m tall; a summoned one is two and a half times that.
+		// One hop clip, played at 1 when it moves at its top speed.
 		static const FCreatureLook Toad = { TEXT("/Game/Shinobi/Creatures/Toad/SK_Toad"), TEXT("/Game/Shinobi/Creatures/Toad/ANIM_Toad_"),
-			TEXT("Idle"), TEXT("Move"), TEXT("Move"), TEXT("Slam"), TEXT("Death"), 0.f, FVector(2.5f), 170.f, 190.f, false };
+			TEXT("Idle"), TEXT("Move"), nullptr, TEXT("Slam"), TEXT("Hit"), TEXT("Death"), 350.f, 350.f, 0.f, FVector(2.5f), 170.f, 190.f, false };
 		return Kind == EShinobiSummonKind::Dog ? Dog : Kind == EShinobiSummonKind::Snake ? Snake : Toad;
 	}
 }
@@ -126,15 +135,24 @@ void AShinobiSummon::WearCreature()
 		const FString Path = FString(Look->ClipPrefix) + Name;
 		return LoadObject<UAnimSequence>(nullptr, *(Path + TEXT(".") + FPaths::GetBaseFilename(Path)), nullptr, LOAD_NoWarn | LOAD_Quiet);
 	};
-	IdleClip = Clip(Look->Idle);
-	WalkClip = Clip(Look->Walk);
-	RunClip = Clip(Look->Run);
-	BiteClip = Clip(Look->Bite);
-	DeathClip = Clip(Look->Death);
+	FShinobiCreatureClips Clips;
+	Clips.Idle = Clip(Look->Idle);
+	Clips.Walk = Clip(Look->Walk);
+	Clips.Run = Clip(Look->Run);
+	Clips.Attack = Clip(Look->Attack);
+	Clips.Hit = Clip(Look->Hit);
+	Clips.Death = Clip(Look->Death);
+	Clips.WalkSpeed = Look->WalkSpeed;
+	Clips.RunSpeed = Look->RunSpeed;
+	if (const UGA_EnemyAttack* Attack = AttackAbility ? Cast<UGA_EnemyAttack>(AttackAbility->GetDefaultObject()) : nullptr)
+	{
+		Clips.AttackSeconds = Attack->WindUp + Attack->Recovery; // the clip spans the whole attack, so its blow lands with the ability's
+	}
 
 	Creature = NewObject<USkeletalMeshComponent>(this, TEXT("Creature"));
 	Creature->SetSkeletalMeshAsset(Model);
-	Creature->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+	Creature->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+	Creature->SetAnimInstanceClass(UShinobiCreatureAnimInstance::StaticClass());
 	Creature->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	// The model's paws (belly) rest on Z = 0; the capsule's floor is at -half height, and it faces +X. It rides GetMesh(), which the
 	// movement component smooths on clients (a capsule child would snap to every network update); the transform below cancels the
@@ -158,24 +176,67 @@ void AShinobiSummon::WearCreature()
 		}
 	}
 	Creature->RegisterComponent();
+	if (UShinobiCreatureAnimInstance* Anim = Cast<UShinobiCreatureAnimInstance>(Creature->GetAnimInstance()))
+	{
+		Anim->Setup(Clips);
+	}
 	GetMesh()->SetVisibility(false); // the mannequin only carries the capsule's old look; hidden under the creature
-}
-
-const AShinobiCharacterBase* AShinobiSummon::GetFollowTarget() const
-{
-	const AShinobiCharacterBase* Caster = Summoner.Get();
-	return Caster && Caster->IsAlive() ? Caster : nullptr;
-}
-
-float AShinobiSummon::GetFollowDistance() const
-{
-	return GetCapsuleComponent()->GetScaledCapsuleRadius() * 4.f + 150.f; // the dog beside them, the toad a toad-length off
 }
 
 bool AShinobiSummon::CanTarget(const AShinobiCharacterBase& Candidate) const
 {
 	const AShinobiCharacterBase* Caster = Summoner.Get();
 	return Caster && FVector::Dist2D(Candidate.GetActorLocation(), Caster->GetActorLocation()) <= LeashRange;
+}
+
+bool AShinobiSummon::GetIdlePost(FVector& OutPost) const
+{
+	const AShinobiCharacterBase* Caster = Summoner.Get();
+	if (!Caster)
+	{
+		return false;
+	}
+	OutPost = Caster->GetActorLocation() + FVector(FMath::Cos(FollowAngle), FMath::Sin(FollowAngle), 0.f) * FollowRadius;
+	return true;
+}
+
+FVector AShinobiSummon::GetPostBesideCaster() const
+{
+	FVector Post = GetActorLocation();
+	GetIdlePost(Post);
+	// On the ground there (a caster on a dragon is high above it), standing as tall as this summon's capsule.
+	FHitResult Hit;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(SummonPost), false, this);
+	if (GetWorld()->LineTraceSingleByChannel(Hit, Post + FVector(0.f, 0.f, 400.f), Post - FVector(0.f, 0.f, 3000.f), ECC_WorldStatic, Params))
+	{
+		Post = Hit.ImpactPoint + FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	}
+	return Post;
+}
+
+void AShinobiSummon::CatchUpWithCaster()
+{
+	const AShinobiCharacterBase* Caster = Summoner.Get();
+	const AShinobiAIController* AI = Cast<AShinobiAIController>(GetController());
+	const float Limit = AI && !AI->HasTarget() ? IdleCatchUpDistance : CatchUpDistance;
+	if (!Caster || IsBusy() || FVector::Dist2D(GetActorLocation(), Caster->GetActorLocation()) <= Limit)
+	{
+		return;
+	}
+	const FVector Floor = FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::SummonPoof, GetActorLocation() - Floor, GetActorScale3D().X);
+	const FVector Post = GetPostBesideCaster();
+	TeleportTo(Post, FRotator(0.f, (Caster->GetActorLocation() - Post).Rotation().Yaw, 0.f));
+	GetCharacterMovement()->Velocity = FVector::ZeroVector;
+	AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::SummonPoof, Post - Floor, GetActorScale3D().X);
+}
+
+void AShinobiSummon::HurryToPost()
+{
+	const AShinobiAIController* AI = Cast<AShinobiAIController>(GetController());
+	FVector Post;
+	const bool bHurry = AI && !AI->HasTarget() && !IsBusy() && GetIdlePost(Post) && FVector::Dist2D(GetActorLocation(), Post) > HurryDistance;
+	GetCharacterMovement()->MaxWalkSpeed = SummonStatsFor(Kind).Speed * (bHurry ? CatchUpSpeedScale : 1.f);
 }
 
 void AShinobiSummon::Tick(float DeltaSeconds)
@@ -190,33 +251,9 @@ void AShinobiSummon::Tick(float DeltaSeconds)
 			Dismiss();
 			return;
 		}
+		CatchUpWithCaster();
+		HurryToPost();
 	}
-	if (Creature)
-	{
-		UpdateCreatureClip();
-	}
-}
-
-void AShinobiSummon::UpdateCreatureClip()
-{
-	if (!IsAlive()) // a creature with a death clip plays it; one without (the wolf) is a ragdoll
-	{
-		if (DeathClip && !bDeathPlayed)
-		{
-			bDeathPlayed = true;
-			Creature->PlayAnimation(DeathClip, false);
-		}
-		return;
-	}
-	const bool bBiting = AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_SummonAttacking);
-	const float Speed = GetVelocity().Size2D();
-	UAnimSequence* Wanted = bBiting ? BiteClip.Get() : Speed > 250.f ? RunClip.Get() : Speed > 30.f ? WalkClip.Get() : IdleClip.Get();
-	if (Wanted && (Wanted != PlayingClip || (bBiting && !bWasBiting)))
-	{
-		PlayingClip = Wanted;
-		Creature->PlayAnimation(Wanted, !bBiting);
-	}
-	bWasBiting = bBiting;
 }
 
 void AShinobiSummon::BeginPlay()
@@ -274,6 +311,9 @@ TArray<AShinobiSummon*> AShinobiSummon::Summon(AShinobiCharacterBase* Caster, ES
 			continue;
 		}
 		Summon->Kind = Kind;
+		// Where it waits beside the caster: the toad behind on one side, the snake on the other, the dogs fanned out all round.
+		Summon->FollowAngle = Kind == EShinobiSummonKind::Toad ? PI * 1.25f : Kind == EShinobiSummonKind::Snake ? PI * 0.75f : Angle;
+		Summon->FollowRadius = Kind == EShinobiSummonKind::Dog ? 330.f : FollowDistance * 0.85f;
 		Summon->Summoner = Caster;
 		Summon->FinishSpawning(Where);
 		Pack.Add(Summon);

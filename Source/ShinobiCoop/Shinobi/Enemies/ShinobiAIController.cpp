@@ -22,22 +22,23 @@ void AShinobiAIController::Tick(float DeltaSeconds)
 	}
 
 	RetargetClock -= DeltaSeconds;
-	// Look again every interval, and at once when the target is lost (not while there simply is nobody: that waits for the interval).
-	if (RetargetClock <= 0.f || (bHadTarget && (!Target.IsValid() || !Target->IsTargetable())))
+	// (With nothing to fight the clock still gates the search: a search every tick would StopMovement every tick, and a summon
+	// walking to its post beside the caster would never get up speed.)
+	if (RetargetClock <= 0.f || (Target.IsValid() && !Target->IsTargetable()))
 	{
 		RetargetClock = RetargetInterval;
+		const bool bHadTarget = Target.IsValid();
 		Target = FindNearestPlayer(*Self);
-		bHadTarget = Target.IsValid();
-		bSteerDirectly = false;
-		if (Target.IsValid() || !Self->GetFollowTarget())
+		if (bHadTarget || Target.IsValid()) // still nobody to fight: leave a walk to the idle post alone
 		{
-			StopMovement(); // re-path toward the (possibly new) target below; a summon walking back to its caster keeps walking
+			bSteerDirectly = false;
+			StopMovement(); // re-path toward the (possibly new) target below
 		}
 		if (Target.IsValid())
 		{
 			SetFocus(Target.Get());
 		}
-		else if (!Self->GetFollowTarget())
+		else
 		{
 			ClearFocus(EAIFocusPriority::Gameplay);
 		}
@@ -45,9 +46,10 @@ void AShinobiAIController::Tick(float DeltaSeconds)
 	const AShinobiCharacterBase* Victim = Target.Get();
 	UAbilitySystemComponent* ASC = Self->GetAbilitySystemComponent();
 	const bool bHeld = Self->IsBusy() || ASC->HasMatchingGameplayTag(ShinobiTags::State_Shocked) || ASC->HasMatchingGameplayTag(ShinobiTags::State_Staggered);
-	if (!Victim && !bHeld && Self->GetFollowTarget())
+	FVector Post;
+	if (!Victim && !bHeld && Self->GetIdlePost(Post))
 	{
-		FollowLeader(*Self);
+		GoToPost(*Self, Post);
 		return;
 	}
 	if (!Victim || bHeld)
@@ -98,24 +100,25 @@ void AShinobiAIController::Tick(float DeltaSeconds)
 	}
 }
 
-void AShinobiAIController::FollowLeader(AShinobiEnemyCharacter& Self)
+void AShinobiAIController::GoToPost(AShinobiEnemyCharacter& Self, const FVector& Post)
 {
-	const AShinobiCharacterBase* Leader = Self.GetFollowTarget();
-	const float Distance = FVector::Dist2D(Leader->GetActorLocation(), Self.GetActorLocation());
-	if (Distance <= Self.GetFollowDistance())
+	constexpr float ArriveWithin = 120.f;
+	const FVector ToPost = (Post - Self.GetActorLocation()) * FVector(1.f, 1.f, 0.f);
+	if (ToPost.Size() <= ArriveWithin)
 	{
 		StopMovement();
 		bSteerDirectly = false;
 		return;
 	}
-	SetFocus(const_cast<AShinobiCharacterBase*>(Leader)); // faces them as it comes
-	if (!bSteerDirectly && GetMoveStatus() == EPathFollowingStatus::Idle)
+	if (!bSteerDirectly && (GetMoveStatus() == EPathFollowingStatus::Idle || FVector::Dist2D(PostGoal, Post) > 200.f))
 	{
-		bSteerDirectly = MoveToActor(const_cast<AShinobiCharacterBase*>(Leader), Self.GetFollowDistance() * 0.6f, true, true, true) == EPathFollowingRequestResult::Failed;
+		PostGoal = Post;
+		bSteerDirectly = MoveToLocation(Post, ArriveWithin * 0.5f, true, true, false, false) == EPathFollowingRequestResult::Failed;
 	}
 	if (bSteerDirectly)
 	{
-		Self.AddMovementInput((Leader->GetActorLocation() - Self.GetActorLocation()).GetSafeNormal2D());
+		SetFocalPoint(Post, EAIFocusPriority::Move);
+		Self.AddMovementInput(ToPost.GetSafeNormal());
 	}
 }
 
