@@ -12,7 +12,10 @@
 #include "Shinobi/Abilities/GA_Sprint.h"
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 #include "Shinobi/Enemies/ShinobiSummon.h"
+#include "AIController.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "GameFramework/DamageType.h"
+#include "GameFramework/PlayerStart.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpTeamsHostileTest, "ShinobiCoop.Pvp.TeamsAreHostileAcrossAAndB", ShinobiTestFlags)
 bool FShinobiPvpTeamsHostileTest::RunTest(const FString& Parameters)
@@ -212,6 +215,12 @@ bool FShinobiPvpGatherStatusTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Both team A players alive (the toad is not counted)"), Full.Alive, 2);
 	TestEqual(TEXT("Full health"), Full.HealthFraction, 1.f, 0.001f);
 
+	// Downed is out, whatever health it still shows (here full).
+	ShinobiTest::ApplyEffect(A1, UGE_Downed::StaticClass());
+	const FShinobiTeamStatus OneDown = Mode->GatherStatus(EShinobiTeam::TeamA);
+	TestEqual(TEXT("The downed player is not alive"), OneDown.Alive, 1);
+	TestEqual(TEXT("And adds no health"), OneDown.HealthFraction, 0.5f, 0.001f);
+
 	const float MaxHealth = A2->GetAttributes()->GetMaxHealth();
 	ShinobiTest::Set(A2, UShinobiAttributeSet::GetHealthAttribute(), MaxHealth * 0.5f);
 	A1->Destroy(); // a human who left, or fell out of the world
@@ -276,6 +285,99 @@ bool FShinobiPvpReviveOffTest::RunTest(const FString& Parameters)
 	State->PvpPhase = EShinobiPvpPhase::Fighting;
 	TestTrue(TEXT("The game state is in a match"), State->IsPvp());
 	TestNull(TEXT("In a match nobody is revived"), UGA_Revive::FindDownedAllyFor(*Reviver));
+	return true;
+}
+
+namespace
+{
+	APlayerStart* SpawnStart(FShinobiTestWorld& W, const FVector& Where, FName Tag)
+	{
+		APlayerStart* Start = W.Spawn<APlayerStart>(Where);
+		if (!Tag.IsNone())
+		{
+			Start->Tags.Add(Tag);
+		}
+		return Start;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpStartsTest, "ShinobiCoop.Pvp.Mode.PlayersSpawnAtTheirSidesStarts", ShinobiTestFlags)
+bool FShinobiPvpStartsTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPvpGameMode* Mode = W.Spawn<AShinobiPvpGameMode>();
+	Mode->PvpFormat = EShinobiPvpFormat::TwoVsTwo;
+	APlayerStart* StartB = SpawnStart(W, FVector(0.f, -5000.f, 0.f), AShinobiPvpGameMode::TeamStartTagB);
+	APlayerStart* StartA = SpawnStart(W, FVector(0.f, 5000.f, 0.f), AShinobiPvpGameMode::TeamStartTagA);
+
+	TestEqual(TEXT("One team A start"), Mode->GetTeamStarts(EShinobiTeam::TeamA).Num(), 1);
+	TestTrue(TEXT("It is the tagged one"), Mode->GetTeamStarts(EShinobiTeam::TeamA).Contains(StartA));
+	TestTrue(TEXT("Team B's is its own"), Mode->GetTeamStarts(EShinobiTeam::TeamB).Contains(StartB));
+	TestEqual(TEXT("No starts for a side-less team"), Mode->GetTeamStarts(EShinobiTeam::Players).Num(), 0);
+
+	AAIController* First = W.Spawn<AAIController>();
+	AAIController* Second = W.Spawn<AAIController>();
+	// Login caches a start before the side is known (here team B's for the team A joiner): it must not stick.
+	First->StartSpot = StartB;
+	Mode->AssignTeam(First);
+	Mode->AssignTeam(Second);
+	TestFalse(TEXT("The start Login cached is not reused"), Mode->ShouldSpawnAtStartSpot(First));
+	TestTrue(TEXT("A spawn (FindPlayerStart) picks team A's start"), Mode->FindPlayerStart(First) == StartA);
+	TestEqual(TEXT("First joiner on A"), Mode->GetTeamOf(First), EShinobiTeam::TeamA);
+	TestEqual(TEXT("Second on B"), Mode->GetTeamOf(Second), EShinobiTeam::TeamB);
+	TestTrue(TEXT("A spawns at the team A start"), Mode->ChoosePlayerStart(First) == StartA);
+	TestTrue(TEXT("B spawns at the team B start"), Mode->ChoosePlayerStart(Second) == StartB);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpFallTest, "ShinobiCoop.Pvp.Mode.FallingOutOfTheWorldIsDeathInARound", ShinobiTestFlags)
+bool FShinobiPvpFallTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPvpGameMode* Mode = W.Spawn<AShinobiPvpGameMode>(); // also spawns and registers the game state
+	Mode->PvpFormat = EShinobiPvpFormat::TwoVsTwo;
+	AShinobiGameState* State = Mode->GetGameState<AShinobiGameState>();
+	TestNotNull(TEXT("The mode brought its game state"), State);
+	if (!State)
+	{
+		return false;
+	}
+	SpawnStart(W, FVector(0.f, -5000.f, 0.f), AShinobiPvpGameMode::TeamStartTagB);
+	APlayerStart* StartA = SpawnStart(W, FVector(0.f, 5000.f, 0.f), AShinobiPvpGameMode::TeamStartTagA);
+	AShinobiPlayerCharacter* A1 = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiPlayerCharacter* A2 = W.Spawn<AShinobiPlayerCharacter>(FVector(500.f, 0.f, 0.f));
+	A1->SetTeam(EShinobiTeam::TeamA);
+	A2->SetTeam(EShinobiTeam::TeamA);
+	ShinobiTest::Hover(A1);
+	ShinobiTest::Hover(A2);
+
+	// Warmup: back to the faller's own side.
+	State->PvpPhase = EShinobiPvpPhase::Warmup;
+	static_cast<AActor*>(A2)->FellOutOfWorld(*GetDefault<UDamageType>()); // public on AActor
+	TestTrue(TEXT("In warmup the faller survives"), IsValid(A2));
+	TestTrue(TEXT("At its own team's start"), FVector::Dist2D(A2->GetActorLocation(), StartA->GetActorLocation()) < 1.f);
+
+	// A round: out for it.
+	State->PvpPhase = EShinobiPvpPhase::Fighting;
+	TestEqual(TEXT("Both standing"), Mode->GatherStatus(EShinobiTeam::TeamA).Alive, 2);
+	static_cast<AActor*>(A1)->FellOutOfWorld(*GetDefault<UDamageType>()); // public on AActor
+	TestEqual(TEXT("The faller is dead for the round"), Mode->GatherStatus(EShinobiTeam::TeamA).Alive, 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpFallPveTest, "ShinobiCoop.Pvp.Mode.FallingOutOfTheWorldOutsidePvpTeleports", ShinobiTestFlags)
+bool FShinobiPvpFallPveTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiGameState* State = W.Spawn<AShinobiGameState>();
+	W.World->SetGameState(State);
+	APlayerStart* Start = SpawnStart(W, FVector(3000.f, 0.f, 0.f), NAME_None);
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, 0.f, -5000.f));
+	ShinobiTest::Hover(P);
+
+	static_cast<AActor*>(P)->FellOutOfWorld(*GetDefault<UDamageType>()); // public on AActor
+	TestTrue(TEXT("Co-op: the faller survives"), IsValid(P) && !P->IsActorBeingDestroyed());
+	TestTrue(TEXT("Back at the PlayerStart"), FVector::Dist2D(P->GetActorLocation(), Start->GetActorLocation()) < 1.f);
 	return true;
 }
 

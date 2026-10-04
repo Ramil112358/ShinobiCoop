@@ -156,6 +156,10 @@ int32 AShinobiPvpGameMode::CountHumans(EShinobiTeam Team) const
 TArray<APlayerStart*> AShinobiPvpGameMode::GetTeamStarts(EShinobiTeam Team) const
 {
 	TArray<APlayerStart*> Starts;
+	if (!IsPvpTeam(Team))
+	{
+		return Starts; // not on a side yet (Login picks a start before PostLogin picks the side)
+	}
 	const FName Tag = Team == EShinobiTeam::TeamA ? TeamStartTagA : TeamStartTagB;
 	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
 	{
@@ -168,12 +172,17 @@ TArray<APlayerStart*> AShinobiPvpGameMode::GetTeamStarts(EShinobiTeam Team) cons
 	return Starts;
 }
 
+bool AShinobiPvpGameMode::ShouldSpawnAtStartSpot(AController* Player)
+{
+	return false;
+}
+
 AActor* AShinobiPvpGameMode::ChoosePlayerStart_Implementation(AController* Player)
 {
 	const TArray<APlayerStart*> Starts = GetTeamStarts(GetTeamOf(Player));
 	if (Starts.Num() == 0)
 	{
-		return Super::ChoosePlayerStart_Implementation(Player); // an untagged map: any start
+		return Super::ChoosePlayerStart_Implementation(Player); // no side yet, or an untagged map: any start
 	}
 	// The first of the side's starts nobody stands on, so teammates don't spawn inside each other.
 	for (APlayerStart* Start : Starts)

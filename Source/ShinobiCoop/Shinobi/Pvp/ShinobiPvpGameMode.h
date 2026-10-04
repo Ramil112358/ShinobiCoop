@@ -41,6 +41,18 @@ public:
 	 * dead and summons are never counted. HealthFraction is over all the side's slots (an empty slot counts 0). */
 	FShinobiTeamStatus GatherStatus(EShinobiTeam Team) const;
 
+	/** Team's tagged PlayerStarts (Team:A / Team:B), by name; none for a team that is neither side. */
+	TArray<APlayerStart*> GetTeamStarts(EShinobiTeam Team) const;
+
+	/** Gives Controller a side if it has none (TeamForJoin), and puts its pawn on it. */
+	void AssignTeam(AController* Controller);
+
+	/** The side a controller plays on (picked at login); Players when it has none. */
+	EShinobiTeam GetTeamOf(AController* Controller) const;
+
+	/** Always false: Login caches a start before the side is picked, so the start is chosen afresh at each spawn. */
+	virtual bool ShouldSpawnAtStartSpot(AController* Player) override;
+
 	/** Resets everyone (ResetCharacters, OnRoundReset), holds them and starts the round's countdown. */
 	void StartRound();
 
@@ -63,12 +75,6 @@ protected:
 	/** The fighters on Team, in world order: players (and, later, bots), never summons. */
 	TArray<AShinobiCharacterBase*> GetTeamMembers(EShinobiTeam Team) const;
 
-	/** Team's tagged PlayerStarts, by name. */
-	TArray<APlayerStart*> GetTeamStarts(EShinobiTeam Team) const;
-
-	/** The side a controller plays on (picked at login); Players when it has none. */
-	EShinobiTeam GetTeamOf(AController* Controller) const;
-
 	/** Humans per side among the logged-in players. */
 	int32 CountHumans(EShinobiTeam Team) const;
 
@@ -80,8 +86,6 @@ private:
 	void EndRound(EShinobiRoundResult Result);
 	void EndMatch();
 	void Rematch();
-	/** Gives Controller a side if it has none (TeamForJoin), and puts its pawn on it. */
-	void AssignTeam(AController* Controller);
 	void SetHold(bool bHold);
 
 	FShinobiPvpMatch Match;
