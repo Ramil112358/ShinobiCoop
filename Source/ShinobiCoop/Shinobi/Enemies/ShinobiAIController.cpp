@@ -20,6 +20,16 @@ void AShinobiAIController::Tick(float DeltaSeconds)
 		ClearFocus(EAIFocusPriority::Gameplay);
 		return;
 	}
+	UAbilitySystemComponent* ASC = Self->GetAbilitySystemComponent();
+	// A PvP round's countdown (bots): no path, no input, nobody picked (the hold already blocks abilities, and the round's
+	// reset already stopped the body); retarget on release.
+	if (ASC->HasMatchingGameplayTag(ShinobiTags::State_PvpHold))
+	{
+		Target = nullptr;
+		ClearFocus(EAIFocusPriority::Gameplay);
+		StopMovement();
+		return;
+	}
 
 	RetargetClock -= DeltaSeconds;
 	if (RetargetClock <= 0.f || !Target.IsValid() || !Target->IsTargetable())
@@ -38,7 +48,6 @@ void AShinobiAIController::Tick(float DeltaSeconds)
 		}
 	}
 	const AShinobiCharacterBase* Victim = Target.Get();
-	UAbilitySystemComponent* ASC = Self->GetAbilitySystemComponent();
 	if (!Victim || Self->IsBusy() || ASC->HasMatchingGameplayTag(ShinobiTags::State_Shocked) || ASC->HasMatchingGameplayTag(ShinobiTags::State_Staggered))
 	{
 		StopMovement();
@@ -58,8 +67,9 @@ void AShinobiAIController::Tick(float DeltaSeconds)
 			return;
 		}
 	}
-	else if (Self->SpecialAbility && Distance <= Self->SpecialRange && ASC->TryActivateAbilityByClass(*Self->SpecialAbility))
+	else if (Self->SpecialAbility && Distance <= Self->SpecialRange && Now >= NextSpecialTime && ASC->TryActivateAbilityByClass(*Self->SpecialAbility))
 	{
+		NextSpecialTime = Now + Self->SpecialInterval;
 		return;
 	}
 

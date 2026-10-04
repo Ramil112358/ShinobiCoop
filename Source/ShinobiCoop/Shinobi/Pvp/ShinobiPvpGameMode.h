@@ -4,8 +4,10 @@
 #include "GameFramework/GameModeBase.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/Pvp/ShinobiPvpMatch.h"
+#include "Shinobi/World/ShinobiEncounter.h"
 #include "ShinobiPvpGameMode.generated.h"
 
+class AShinobiBotFighter;
 class AShinobiGameState;
 class APlayerStart;
 
@@ -63,20 +65,24 @@ public:
 	 * round's leftovers (mount, summons, boosts, shields, the hold, statuses, running abilities). */
 	void ResetCharacters();
 
+	/** A bot (AShinobiBotFighter) for each empty slot: per side, SlotsPerTeam minus the side's humans, less the bots it already
+	 * has, each at a free start of its side. End of warmup, and each round's reset (OnRoundReset). */
+	virtual void FillBots();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
 	virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
 
-	/** Hook at each round's reset, after ResetCharacters: every pickup is back (bots later). */
+	/** Hook at each round's reset, after ResetCharacters: every pickup is back, and the bots are replaced by fresh ones (the
+	 * dead are destroyed 3 s after dying; a human who joined since takes a bot's slot). */
 	virtual void OnRoundReset();
 
-	/** End of warmup: a bot for each empty slot. */
-	// ponytail: stub until the bot fighters exist (bots task)
-	virtual void FillBots() {}
-
-	/** The fighters on Team, in world order: players (and, later, bots), never summons. */
+	/** The fighters on Team, in world order: players and bots, never summons or ordinary enemies. */
 	TArray<AShinobiCharacterBase*> GetTeamMembers(EShinobiTeam Team) const;
+
+	/** The first of Starts nobody stands on, else any of them; null when there are none. */
+	APlayerStart* PickFreeStart(const TArray<APlayerStart*>& Starts) const;
 
 	/** Humans per side among the logged-in players. */
 	int32 CountHumans(EShinobiTeam Team) const;
@@ -90,8 +96,12 @@ private:
 	void EndMatch();
 	void Rematch();
 	void SetHold(bool bHold);
+	void DespawnBots();
 
 	FShinobiPvpMatch Match;
 	TMap<TWeakObjectPtr<AController>, EShinobiTeam> Teams;
+	/** Spawns the bots (HP scale of one player, so a bot has a player's health). */
+	FShinobiEncounter BotSpawner;
+	TArray<TWeakObjectPtr<AShinobiBotFighter>> Bots;
 	bool bTravelling = false;
 };

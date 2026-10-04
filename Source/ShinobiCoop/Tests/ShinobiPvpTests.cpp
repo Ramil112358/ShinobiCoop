@@ -14,6 +14,7 @@
 #include "Shinobi/Abilities/GA_Sprint.h"
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 #include "Shinobi/Enemies/ShinobiSummon.h"
+#include "Shinobi/UI/ShinobiOverheadTextComponent.h"
 #include "AIController.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/TargetPoint.h"
@@ -693,6 +694,214 @@ bool FShinobiPickupSpawnTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("One attack"), Counts.FindRef(EShinobiPickupType::Attack), 1);
 	TestEqual(TEXT("One speed"), Counts.FindRef(EShinobiPickupType::Speed), 1);
 	TestEqual(TEXT("One shield"), Counts.FindRef(EShinobiPickupType::Shield), 1);
+	return true;
+}
+
+namespace
+{
+	TArray<AShinobiBotFighter*> BotsOn(const FShinobiTestWorld& W, EShinobiTeam Team)
+	{
+		TArray<AShinobiBotFighter*> Found;
+		for (TActorIterator<AShinobiBotFighter> It(W.World); It; ++It)
+		{
+			if (It->GetTeam() == Team)
+			{
+				Found.Add(*It);
+			}
+		}
+		return Found;
+	}
+
+	AActor* FocusOf(const AShinobiCharacterBase* Character)
+	{
+		const AAIController* AI = Cast<AAIController>(Character->GetController());
+		return AI ? AI->GetFocusActor() : nullptr;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpBotHealthTest, "ShinobiCoop.Pvp.Bot.BotHasPlayerHealth", ShinobiTestFlags)
+bool FShinobiPvpBotHealthTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPvpGameMode* Mode = W.Spawn<AShinobiPvpGameMode>();
+	Mode->PvpFormat = EShinobiPvpFormat::OneVsOne;
+	SpawnStart(W, FVector(0.f, 5000.f, 0.f), AShinobiPvpGameMode::TeamStartTagA);
+	SpawnStart(W, FVector(0.f, -5000.f, 0.f), AShinobiPvpGameMode::TeamStartTagB);
+	Mode->AssignTeam(W.Spawn<AAIController>()); // the one human, on A
+	Mode->FillBots();
+
+	const TArray<AShinobiBotFighter*> Bots = BotsOn(W, EShinobiTeam::TeamB);
+	TestEqual(TEXT("One bot, on B"), Bots.Num(), 1);
+	if (Bots.Num() != 1)
+	{
+		return false;
+	}
+	const AShinobiPlayerCharacter* Player = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, 0.f, 3000.f));
+	const float PlayerMax = Player->GetAttributes()->GetMaxHealth();
+	TestEqual(TEXT("A player's max health"), Bots[0]->GetAttributes()->GetMaxHealth(), PlayerMax);
+	TestEqual(TEXT("Starts full"), Bots[0]->GetAttributes()->GetHealth(), PlayerMax);
+	const UShinobiOverheadTextComponent* Label = Bots[0]->FindComponentByClass<UShinobiOverheadTextComponent>();
+	TestTrue(TEXT("Labelled Bot"), Label && Label->Text.ToString() == TEXT("Bot"));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpBotTargetTest, "ShinobiCoop.Pvp.Bot.BotTargetsOpposingPlayerNotTeammate", ShinobiTestFlags)
+bool FShinobiPvpBotTargetTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiBotFighter* Bot = W.Spawn<AShinobiBotFighter>();
+	AShinobiPlayerCharacter* Mate = W.Spawn<AShinobiPlayerCharacter>(FVector(300.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Foe = W.Spawn<AShinobiPlayerCharacter>(FVector(-900.f, 0.f, 0.f));
+	Bot->SetTeam(EShinobiTeam::TeamA);
+	Mate->SetTeam(EShinobiTeam::TeamA);
+	Foe->SetTeam(EShinobiTeam::TeamB);
+	ShinobiTest::Hover(Bot);
+	ShinobiTest::Hover(Mate);
+	ShinobiTest::Hover(Foe);
+	TestNotNull(TEXT("AI controller spawned"), Bot->GetController());
+
+	W.Tick(0.1f);
+	TestTrue(TEXT("The opposing player is the target, though the teammate is closer"), FocusOf(Bot) == Foe);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpBotKunaiTest, "ShinobiCoop.Pvp.Bot.ThrowsKunaiAtRangeThenClosesIn", ShinobiTestFlags)
+bool FShinobiPvpBotKunaiTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiBotFighter* Bot = W.Spawn<AShinobiBotFighter>();
+	AShinobiPlayerCharacter* Foe = W.Spawn<AShinobiPlayerCharacter>(FVector(1000.f, 0.f, 0.f));
+	Bot->SetTeam(EShinobiTeam::TeamA);
+	Foe->SetTeam(EShinobiTeam::TeamB);
+	ShinobiTest::Hover(Bot);
+	ShinobiTest::Hover(Foe);
+	const float Full = Foe->GetAttributes()->GetMaxHealth();
+
+	W.Tick(1.2f); // 0.6 s wind-up + ~0.35 s flight, from 1000 away: no melee could have reached yet
+	TestEqual(TEXT("A kunai for the bot's attack damage"), ShinobiTest::Get(Foe, UShinobiAttributeSet::GetHealthAttribute()), Full - Bot->AttackDamage);
+	TestTrue(TEXT("Thrown from range"), FVector::Dist2D(Bot->GetActorLocation(), Foe->GetActorLocation()) > 700.f);
+
+	W.Tick(1.3f); // the next throw is not before SpecialInterval: the bot walks in meanwhile instead of standing and throwing
+	const float Distance = FVector::Dist2D(Bot->GetActorLocation(), Foe->GetActorLocation());
+	TestTrue(FString::Printf(TEXT("Closed in between throws (%.0f)"), Distance), Distance < 600.f);
+	TestEqual(TEXT("Still just the one kunai"), ShinobiTest::Get(Foe, UShinobiAttributeSet::GetHealthAttribute()), Full - Bot->AttackDamage);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpBotHoldTest, "ShinobiCoop.Pvp.Bot.HeldBotNeitherMovesNorAttacks", ShinobiTestFlags)
+bool FShinobiPvpBotHoldTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiBotFighter* Bot = W.Spawn<AShinobiBotFighter>();
+	AShinobiPlayerCharacter* Foe = W.Spawn<AShinobiPlayerCharacter>(FVector(600.f, 0.f, 0.f));
+	Bot->SetTeam(EShinobiTeam::TeamA);
+	Foe->SetTeam(EShinobiTeam::TeamB);
+	ShinobiTest::Hover(Bot);
+	ShinobiTest::Hover(Foe);
+	ShinobiTest::ApplyEffect(Bot, UGE_PvpHold::StaticClass());
+	const FVector Start = Bot->GetActorLocation();
+	const float Full = Foe->GetAttributes()->GetMaxHealth();
+
+	W.Tick(1.5f);
+	TestTrue(FString::Printf(TEXT("Held in place (moved %.0f)"), FVector::Dist2D(Start, Bot->GetActorLocation())), FVector::Dist2D(Start, Bot->GetActorLocation()) < 5.f);
+	TestEqual(TEXT("No attack landed"), ShinobiTest::Get(Foe, UShinobiAttributeSet::GetHealthAttribute()), Full);
+	TestNull(TEXT("Nobody picked as a target"), FocusOf(Bot));
+
+	Bot->GetAbilitySystemComponent()->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_PvpHold));
+	W.Tick(1.2f);
+	TestTrue(TEXT("Released, it goes for the foe"), FocusOf(Bot) == Foe);
+	TestTrue(TEXT("And hits it"), ShinobiTest::Get(Foe, UShinobiAttributeSet::GetHealthAttribute()) < Full);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpBotStatusTest, "ShinobiCoop.Pvp.Bot.GatherStatusCountsBotsNeverSummonsOrEnemies", ShinobiTestFlags)
+bool FShinobiPvpBotStatusTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPvpGameMode* Mode = W.Spawn<AShinobiPvpGameMode>();
+	Mode->PvpFormat = EShinobiPvpFormat::TwoVsTwo;
+	AShinobiPlayerCharacter* Human = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiBotFighter* Bot = W.Spawn<AShinobiBotFighter>(FVector(0.f, 500.f, 0.f));
+	AShinobiBotFighter* OtherSide = W.Spawn<AShinobiBotFighter>(FVector(0.f, -3000.f, 0.f));
+	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(FVector(0.f, 3000.f, 0.f));
+	Human->SetTeam(EShinobiTeam::TeamA);
+	Bot->SetTeam(EShinobiTeam::TeamA);
+	OtherSide->SetTeam(EShinobiTeam::TeamB);
+	Ninja->SetTeam(EShinobiTeam::TeamA); // an ordinary enemy on the side is still not a fighter slot
+	for (AShinobiCharacterBase* Body : TArray<AShinobiCharacterBase*>{ Human, Bot, OtherSide, Ninja })
+	{
+		ShinobiTest::Hover(Body);
+	}
+	const TArray<AShinobiSummon*> Toad = AShinobiSummon::Summon(Human, EShinobiSummonKind::Toad, FVector(0.f, 900.f, 0.f));
+	TestEqual(TEXT("A toad on team A"), Toad.Num(), 1);
+
+	const FShinobiTeamStatus Full = Mode->GatherStatus(EShinobiTeam::TeamA);
+	TestEqual(TEXT("The human and the bot (not the toad, not the ninja)"), Full.Alive, 2);
+	TestEqual(TEXT("Full health"), Full.HealthFraction, 1.f, 0.001f);
+	TestEqual(TEXT("Team B's bot counts for B"), Mode->GatherStatus(EShinobiTeam::TeamB).Alive, 1);
+
+	ShinobiTest::Damage(Bot, Bot->GetAttributes()->GetMaxHealth() + 10.f);
+	TestFalse(TEXT("The bot died"), Bot->IsAlive());
+	const FShinobiTeamStatus OneDead = Mode->GatherStatus(EShinobiTeam::TeamA);
+	TestEqual(TEXT("The dead bot is out"), OneDead.Alive, 1);
+	TestEqual(TEXT("Half the slots' health left"), OneDead.HealthFraction, 0.5f, 0.001f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpFillBotsTest, "ShinobiCoop.Pvp.Bot.FillBotsTopsUpEmptySlots", ShinobiTestFlags)
+bool FShinobiPvpFillBotsTest::RunTest(const FString& Parameters)
+{
+	{
+		FShinobiTestWorld W;
+		AShinobiPvpGameMode* Mode = W.Spawn<AShinobiPvpGameMode>();
+		Mode->PvpFormat = EShinobiPvpFormat::TwoVsTwo;
+		const APlayerStart* StartA = SpawnStart(W, FVector(0.f, 5000.f, 0.f), AShinobiPvpGameMode::TeamStartTagA);
+		const APlayerStart* StartB = SpawnStart(W, FVector(0.f, -5000.f, 0.f), AShinobiPvpGameMode::TeamStartTagB);
+		Mode->AssignTeam(W.Spawn<AAIController>()); // a human on A
+		Mode->AssignTeam(W.Spawn<AAIController>()); // and one on B
+
+		Mode->FillBots();
+		TestEqual(TEXT("2v2, one human each: one bot on A"), BotsOn(W, EShinobiTeam::TeamA).Num(), 1);
+		TestEqual(TEXT("And one on B"), BotsOn(W, EShinobiTeam::TeamB).Num(), 1);
+		if (BotsOn(W, EShinobiTeam::TeamA).Num() == 1 && BotsOn(W, EShinobiTeam::TeamB).Num() == 1)
+		{
+			TestTrue(TEXT("A's bot at A's start"), FVector::Dist2D(BotsOn(W, EShinobiTeam::TeamA)[0]->GetActorLocation(), StartA->GetActorLocation()) < 1.f);
+			TestTrue(TEXT("B's bot at B's start"), FVector::Dist2D(BotsOn(W, EShinobiTeam::TeamB)[0]->GetActorLocation(), StartB->GetActorLocation()) < 1.f);
+		}
+		Mode->FillBots();
+		TestEqual(TEXT("Filling again adds nobody"), BotsOn(W, EShinobiTeam::TeamA).Num() + BotsOn(W, EShinobiTeam::TeamB).Num(), 2);
+
+		Mode->StartRound(); // ResetCharacters, then OnRoundReset: bots despawned and respawned
+		TestEqual(TEXT("After a round reset: still one on A"), BotsOn(W, EShinobiTeam::TeamA).Num(), 1);
+		TestEqual(TEXT("Still one on B"), BotsOn(W, EShinobiTeam::TeamB).Num(), 1);
+		const TArray<AShinobiBotFighter*> Respawned = BotsOn(W, EShinobiTeam::TeamB);
+		TestTrue(TEXT("Respawned at B's start, held for the countdown"), Respawned.Num() == 1
+			&& FVector::Dist2D(Respawned[0]->GetActorLocation(), StartB->GetActorLocation()) < 1.f && ShinobiTest::HasTag(Respawned[0], ShinobiTags::State_PvpHold));
+
+		// A dead bot is replaced at the next reset (it would be destroyed 3 s after dying anyway).
+		if (Respawned.Num() == 1)
+		{
+			ShinobiTest::Damage(Respawned[0], 10000.f);
+		}
+		Mode->AssignTeam(W.Spawn<AAIController>()); // a human joins mid-round, on A
+		Mode->StartRound();
+		TestEqual(TEXT("The joiner took A's bot slot"), BotsOn(W, EShinobiTeam::TeamA).Num(), 0);
+		const TArray<AShinobiBotFighter*> Fresh = BotsOn(W, EShinobiTeam::TeamB);
+		TestTrue(TEXT("B has one fresh, living bot"), Fresh.Num() == 1 && Fresh[0]->IsAlive());
+	}
+	{
+		FShinobiTestWorld W;
+		AShinobiPvpGameMode* Mode = W.Spawn<AShinobiPvpGameMode>();
+		Mode->PvpFormat = EShinobiPvpFormat::OneVsOne;
+		SpawnStart(W, FVector(0.f, 5000.f, 0.f), AShinobiPvpGameMode::TeamStartTagA);
+		SpawnStart(W, FVector(0.f, -5000.f, 0.f), AShinobiPvpGameMode::TeamStartTagB);
+		Mode->AssignTeam(W.Spawn<AAIController>());
+		Mode->FillBots();
+		TestEqual(TEXT("1v1, one human: no bot on the human's side"), BotsOn(W, EShinobiTeam::TeamA).Num(), 0);
+		TestEqual(TEXT("One bot on the other"), BotsOn(W, EShinobiTeam::TeamB).Num(), 1);
+		Mode->StartRound();
+		TestEqual(TEXT("Not doubled by the reset"), BotsOn(W, EShinobiTeam::TeamB).Num(), 1);
+	}
 	return true;
 }
 

@@ -13,15 +13,16 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiPlayerController.h"
 #include "Shinobi/ShinobiTags.h"
+#include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 #include "Shinobi/Enemies/ShinobiSummon.h"
 #include "Shinobi/Pvp/ShinobiPickup.h"
 
 namespace
 {
-	/** A fighter slot: a player (bots join them later), never a summon on the side. */
+	/** A fighter slot: a player or a bot, never a summon (nor any other enemy) on the side. */
 	bool IsFighter(const AShinobiCharacterBase* Character)
 	{
-		return Character && Character->IsA<AShinobiPlayerCharacter>();
+		return Character && (Character->IsA<AShinobiPlayerCharacter>() || Character->IsA<AShinobiBotFighter>());
 	}
 
 	/** What a round's reset takes off every fighter: the mount, armour, statuses, pickup boosts and shield, and the hold. */
@@ -188,7 +189,12 @@ AActor* AShinobiPvpGameMode::ChoosePlayerStart_Implementation(AController* Playe
 	{
 		return Super::ChoosePlayerStart_Implementation(Player); // no side yet, or an untagged map: any start
 	}
-	// The first of the side's starts nobody stands on, so teammates don't spawn inside each other.
+	return PickFreeStart(Starts);
+}
+
+APlayerStart* AShinobiPvpGameMode::PickFreeStart(const TArray<APlayerStart*>& Starts) const
+{
+	// The first nobody stands on, so teammates don't spawn inside each other.
 	for (APlayerStart* Start : Starts)
 	{
 		bool bTaken = false;
@@ -201,7 +207,7 @@ AActor* AShinobiPvpGameMode::ChoosePlayerStart_Implementation(AController* Playe
 			return Start;
 		}
 	}
-	return Starts[FMath::RandRange(0, Starts.Num() - 1)];
+	return Starts.Num() > 0 ? Starts[FMath::RandRange(0, Starts.Num() - 1)] : nullptr;
 }
 
 TArray<AShinobiCharacterBase*> AShinobiPvpGameMode::GetTeamMembers(EShinobiTeam Team) const
@@ -429,6 +435,58 @@ void AShinobiPvpGameMode::OnRoundReset()
 	{
 		It->ResetNow();
 	}
+	// ponytail: every bot is replaced, alive or not, rather than resetting the living ones and topping up the rest
+	DespawnBots();
+	FillBots();
+}
+
+void AShinobiPvpGameMode::FillBots()
+{
+	Bots.RemoveAll([](const TWeakObjectPtr<AShinobiBotFighter>& Bot) { return !Bot.IsValid(); });
+	for (const EShinobiTeam Team : { EShinobiTeam::TeamA, EShinobiTeam::TeamB })
+	{
+		int32 Have = 0;
+		for (const TWeakObjectPtr<AShinobiBotFighter>& Bot : Bots)
+		{
+			Have += Bot->GetTeam() == Team ? 1 : 0;
+		}
+		const int32 Wanted = FShinobiPvpMatch::SlotsPerTeam(PvpFormat) - CountHumans(Team) - Have;
+		const TArray<APlayerStart*> Starts = GetTeamStarts(Team);
+		for (int32 Index = 0; Index < Wanted; ++Index)
+		{
+			// The side's tagged starts (an untagged map: any start); the bot isn't in Teams, so it is placed here, by its side.
+			const AActor* Start = Starts.Num() > 0 ? PickFreeStart(Starts) : Super::ChoosePlayerStart_Implementation(nullptr);
+			if (!Start)
+			{
+				UE_LOG(LogShinobiCoop, Warning, TEXT("Pvp: no PlayerStart to put a bot at"));
+				return;
+			}
+			const FVector Spot = Start->GetActorLocation();
+			AShinobiBotFighter* Bot = Cast<AShinobiBotFighter>(BotSpawner.Spawn(this, AShinobiBotFighter::StaticClass(), Spot,
+				Spot + Start->GetActorForwardVector(), 1));
+			if (!Bot)
+			{
+				continue;
+			}
+			Bot->SetTeam(Team);
+			Bots.Add(Bot);
+			UE_LOG(LogShinobiCoop, Log, TEXT("Pvp: %s fills a slot on team %s"), *Bot->GetName(), Team == EShinobiTeam::TeamA ? TEXT("A") : TEXT("B"));
+		}
+	}
+}
+
+void AShinobiPvpGameMode::DespawnBots()
+{
+	// Through Bots, not BotSpawner.DespawnAll: the spawner forgets a bot when it dies, and its body lingers 3 s.
+	for (const TWeakObjectPtr<AShinobiBotFighter>& Bot : Bots)
+	{
+		if (Bot.IsValid())
+		{
+			Bot->Destroy();
+		}
+	}
+	Bots.Reset();
+	BotSpawner.Prune();
 }
 
 void AShinobiPvpGameMode::ResetCharacters()
