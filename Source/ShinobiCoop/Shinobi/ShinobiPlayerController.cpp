@@ -754,6 +754,10 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(63.6f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->AbilityLocalInputReleased(static_cast<int32>(EShinobiAbilityInputID::Melee)); P->SetFlightClimb(true); } });
 	At(65.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_33_DragonClimb")); });
 	At(65.3f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->SetFlightClimb(false); P->SetFlightDive(true); } });
+	At(65.5f, [this]() { SetControlRotation(GetControlRotation() + FRotator(0.f, 120.f, 0.f)); }); // a sharp turn to the right: the dragon banks into it
+	At(65.62f, [FaceCamera]() { FaceCamera(70.f, 0.f, 0.f, 2200.f); }); // from the front
+	At(65.7f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_33b_DragonBank")); });
+	At(65.85f, BackToPlayer);
 	At(66.6f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->SetFlightDive(false); } });
 	At(67.0f, [this]() { ShinobiCast(1); }); // the same key: dismount
 	// The other dragon (page 5, slot 2): the crimson one, with ordinary orange fire.

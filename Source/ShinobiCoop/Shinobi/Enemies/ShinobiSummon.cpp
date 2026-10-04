@@ -161,6 +161,17 @@ void AShinobiSummon::WearCreature()
 	GetMesh()->SetVisibility(false); // the mannequin only carries the capsule's old look; hidden under the creature
 }
 
+const AShinobiCharacterBase* AShinobiSummon::GetFollowTarget() const
+{
+	const AShinobiCharacterBase* Caster = Summoner.Get();
+	return Caster && Caster->IsAlive() ? Caster : nullptr;
+}
+
+float AShinobiSummon::GetFollowDistance() const
+{
+	return GetCapsuleComponent()->GetScaledCapsuleRadius() * 4.f + 150.f; // the dog beside them, the toad a toad-length off
+}
+
 bool AShinobiSummon::CanTarget(const AShinobiCharacterBase& Candidate) const
 {
 	const AShinobiCharacterBase* Caster = Summoner.Get();

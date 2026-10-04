@@ -315,7 +315,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDogAnimTest, "ShinobiCoop.Summons.DogsI
 bool FShinobiDogAnimTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-1500.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-100.f, 0.f, 0.f)); // beside the dog: it has no reason to move
 	ShinobiTest::Hover(Caster);
 	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Dog, FVector::ZeroVector);
 	const AShinobiSummon* Dog = Pack[0];
@@ -325,7 +325,7 @@ bool FShinobiDogAnimTest::RunTest(const FString& Parameters)
 	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(FVector(900.f, 0.f, 0.f));
 	ShinobiTest::Hover(Ninja);
 	ShinobiTest::ApplyEffect(Ninja, UGE_Shock::StaticClass());
-	W.Tick(0.3f);
+	W.Tick(0.7f); // it looks for enemies every half second
 	TestEqual(TEXT("Runs at the ninja"), PlayingClip(Dog), FString(TEXT("ANIM_Wolf_Run")));
 
 	bool bBit = false;
@@ -343,7 +343,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSnakeLookTest, "ShinobiCoop.Summons.Sna
 bool FShinobiSnakeLookTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-5000.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, -300.f, 0.f)); // beside the snake
 	ShinobiTest::Hover(Caster);
 	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Snake, FVector::ZeroVector);
 	if (Pack.Num() != 1)
@@ -373,7 +373,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiToadLookTest, "ShinobiCoop.Summons.Toad
 bool FShinobiToadLookTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-2000.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, -400.f, 0.f)); // beside the toad
 	ShinobiTest::Hover(Caster);
 	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Toad, FVector::ZeroVector);
 	if (Pack.Num() != 1)
@@ -516,6 +516,48 @@ bool FShinobiSummonWallTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	TestTrue(FString::Printf(TEXT("and stands clear of the wall, its 1.7 m radius short of X = 300 (X %.0f)"), Toad->GetActorLocation().X), Toad->GetActorLocation().X < 300.f - 150.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonFollowTest, "ShinobiCoop.Summons.WalkBackToTheirCasterWhenIdle", ShinobiTestFlags)
+bool FShinobiSummonFollowTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	// A dog 20 m from its caster, with nothing to fight: it runs back.
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Dog, FVector(2000.f, 0.f, 0.f));
+	W.Tick(0.2f);
+	const float Start = FVector::Dist2D(Pack[0]->GetActorLocation(), Caster->GetActorLocation());
+	W.Tick(4.5f); // hovering in the test world, so at the flying speed
+	const float Later = FVector::Dist2D(Pack[0]->GetActorLocation(), Caster->GetActorLocation());
+	TestTrue(FString::Printf(TEXT("It came back to its caster (%.0f -> %.0f)"), Start, Later), Start > 1500.f && Later < 700.f);
+
+	// And does not crowd them: once near, it stays put.
+	W.Tick(1.f);
+	const FVector Settled = Pack[0]->GetActorLocation();
+	W.Tick(1.f);
+	TestTrue(TEXT("and then idles beside them"), FVector::Dist2D(Settled, Pack[0]->GetActorLocation()) < 60.f);
+
+	// The caster walks off: it follows.
+	Caster->SetActorLocation(FVector(0.f, 2000.f, 0.f));
+	W.Tick(5.f);
+	TestTrue(FString::Printf(TEXT("and follows when the caster moves away (%.0f)"), FVector::Dist2D(Pack[0]->GetActorLocation(), Caster->GetActorLocation())), FVector::Dist2D(Pack[0]->GetActorLocation(), Caster->GetActorLocation()) < 700.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonFightsFirstTest, "ShinobiCoop.Summons.FightAnEnemyInsteadOfFollowing", ShinobiTestFlags)
+bool FShinobiSummonFightsFirstTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(FVector(2500.f, 0.f, 0.f));
+	ShinobiTest::Hover(Ninja);
+	ShinobiTest::ApplyEffect(Ninja, UGE_Shock::StaticClass());
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Dog, FVector(1500.f, 0.f, 0.f));
+	W.Tick(1.2f);
+	TestTrue(TEXT("With an enemy in reach it goes for it, not back to the caster"), Pack[0]->GetActorLocation().X > 1500.f);
 	return true;
 }
 

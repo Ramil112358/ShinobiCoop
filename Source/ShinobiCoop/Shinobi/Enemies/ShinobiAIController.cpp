@@ -22,24 +22,35 @@ void AShinobiAIController::Tick(float DeltaSeconds)
 	}
 
 	RetargetClock -= DeltaSeconds;
-	if (RetargetClock <= 0.f || !Target.IsValid() || !Target->IsTargetable())
+	// Look again every interval, and at once when the target is lost (not while there simply is nobody: that waits for the interval).
+	if (RetargetClock <= 0.f || (bHadTarget && (!Target.IsValid() || !Target->IsTargetable())))
 	{
 		RetargetClock = RetargetInterval;
 		Target = FindNearestPlayer(*Self);
+		bHadTarget = Target.IsValid();
 		bSteerDirectly = false;
-		StopMovement(); // re-path toward the (possibly new) target below
+		if (Target.IsValid() || !Self->GetFollowTarget())
+		{
+			StopMovement(); // re-path toward the (possibly new) target below; a summon walking back to its caster keeps walking
+		}
 		if (Target.IsValid())
 		{
 			SetFocus(Target.Get());
 		}
-		else
+		else if (!Self->GetFollowTarget())
 		{
 			ClearFocus(EAIFocusPriority::Gameplay);
 		}
 	}
 	const AShinobiCharacterBase* Victim = Target.Get();
 	UAbilitySystemComponent* ASC = Self->GetAbilitySystemComponent();
-	if (!Victim || Self->IsBusy() || ASC->HasMatchingGameplayTag(ShinobiTags::State_Shocked) || ASC->HasMatchingGameplayTag(ShinobiTags::State_Staggered))
+	const bool bHeld = Self->IsBusy() || ASC->HasMatchingGameplayTag(ShinobiTags::State_Shocked) || ASC->HasMatchingGameplayTag(ShinobiTags::State_Staggered);
+	if (!Victim && !bHeld && Self->GetFollowTarget())
+	{
+		FollowLeader(*Self);
+		return;
+	}
+	if (!Victim || bHeld)
 	{
 		StopMovement();
 		return;
@@ -84,6 +95,27 @@ void AShinobiAIController::Tick(float DeltaSeconds)
 	else
 	{
 		StopMovement();
+	}
+}
+
+void AShinobiAIController::FollowLeader(AShinobiEnemyCharacter& Self)
+{
+	const AShinobiCharacterBase* Leader = Self.GetFollowTarget();
+	const float Distance = FVector::Dist2D(Leader->GetActorLocation(), Self.GetActorLocation());
+	if (Distance <= Self.GetFollowDistance())
+	{
+		StopMovement();
+		bSteerDirectly = false;
+		return;
+	}
+	SetFocus(const_cast<AShinobiCharacterBase*>(Leader)); // faces them as it comes
+	if (!bSteerDirectly && GetMoveStatus() == EPathFollowingStatus::Idle)
+	{
+		bSteerDirectly = MoveToActor(const_cast<AShinobiCharacterBase*>(Leader), Self.GetFollowDistance() * 0.6f, true, true, true) == EPathFollowingRequestResult::Failed;
+	}
+	if (bSteerDirectly)
+	{
+		Self.AddMovementInput((Leader->GetActorLocation() - Self.GetActorLocation()).GetSafeNormal2D());
 	}
 }
 

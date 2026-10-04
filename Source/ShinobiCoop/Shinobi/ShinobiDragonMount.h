@@ -72,6 +72,9 @@ private:
 	/** Rides the rider's mesh (smoothed on clients). Retried each tick until the rider is known: its channel can open after ours. */
 	void AttachToRider();
 
+	/** Leans the dragon about the seat: the right wing drops in a right turn, the nose rises in a climb. Cosmetic, computed on each machine. */
+	void UpdateBank(float DeltaSeconds);
+
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<USkeletalMeshComponent> Body;
 
@@ -92,4 +95,10 @@ private:
 	TObjectPtr<UAnimSequence> GlideClip;
 	UPROPERTY()
 	TObjectPtr<UAnimSequence> Playing;
+
+	FTransform MeshDefaultInverse = FTransform::Identity;
+	float LastRiderYaw = 0.f;
+	bool bHaveRiderYaw = false;
+	float BankRoll = 0.f;
+	float BankPitch = 0.f;
 };

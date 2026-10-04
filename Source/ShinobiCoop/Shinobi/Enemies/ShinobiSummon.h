@@ -52,6 +52,10 @@ public:
 
 	static constexpr float LeashRange = 3000.f;
 
+	/** Idle, a summon walks back to its caster and waits within a few body-lengths of them. */
+	virtual const AShinobiCharacterBase* GetFollowTarget() const override;
+	virtual float GetFollowDistance() const override;
+
 	/** Server: leaves in a puff of smoke now. Does nothing for one that has already fallen. */
 	void Dismiss();
 

@@ -28,8 +28,12 @@ public:
 private:
 	AShinobiCharacterBase* FindNearestPlayer(const AShinobiEnemyCharacter& Self) const;
 
+	/** With nothing to fight: walk back to the Self's follow target (a summon's caster) and wait beside it. */
+	void FollowLeader(AShinobiEnemyCharacter& Self);
+
 	TWeakObjectPtr<AShinobiCharacterBase> Target;
 	float RetargetClock = 0.f;
+	bool bHadTarget = false;
 	float NextAttackTime = 0.f;
 	/** The last MoveToActor failed (no navmesh or no path): steer directly until the next retarget. */
 	bool bSteerDirectly = false;

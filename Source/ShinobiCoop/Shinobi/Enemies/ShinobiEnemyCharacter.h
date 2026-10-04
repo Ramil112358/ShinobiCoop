@@ -78,6 +78,10 @@ public:
 	/** Whether the AI may pick Candidate as a target (it is already hostile and targetable). Summons stay near their caster. */
 	virtual bool CanTarget(const AShinobiCharacterBase& Candidate) const { return true; }
 
+	/** Who this enemy walks back to when it has nothing to fight (a summon's caster), and how close it keeps to them. Null for the rest. */
+	virtual const AShinobiCharacterBase* GetFollowTarget() const { return nullptr; }
+	virtual float GetFollowDistance() const { return 0.f; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

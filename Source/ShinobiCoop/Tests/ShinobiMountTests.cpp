@@ -731,4 +731,54 @@ bool FShinobiBreathGroundFireKindTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDragonBankTest, "ShinobiCoop.Mount.TheDragonBanksIntoTurnsAndLevelsOut", ShinobiTestFlags)
+bool FShinobiDragonBankTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = Rider(W);
+	AShinobiDragonMount* Dragon = AShinobiDragonMount::Spawn(P, EShinobiDragonKind::Tairn);
+	W.Tick(0.5f);
+	TestTrue(TEXT("Level to begin with"), FMath::Abs(Dragon->GetActorRightVector().Z) < 0.05f);
+
+	// A turn to the right (yaw increasing) at 200 degrees a second: the right wing drops.
+	for (int32 Step = 0; Step < 24; ++Step)
+	{
+		P->SetActorRotation(FRotator(0.f, 10.f * (Step + 1), 0.f));
+		W.Tick(0.05f);
+	}
+	TestTrue(FString::Printf(TEXT("Turning right it banks right: right wing down (%.2f)"), Dragon->GetActorRightVector().Z), Dragon->GetActorRightVector().Z < -0.15f);
+	TestTrue(TEXT("but not past the limit"), Dragon->GetActorRightVector().Z > -0.7f);
+
+	// A turn to the left.
+	for (int32 Step = 0; Step < 24; ++Step)
+	{
+		P->SetActorRotation(FRotator(0.f, 240.f - 10.f * (Step + 1), 0.f));
+		W.Tick(0.05f);
+	}
+	TestTrue(FString::Printf(TEXT("Turning left it banks left (%.2f)"), Dragon->GetActorRightVector().Z), Dragon->GetActorRightVector().Z > 0.15f);
+
+	W.Tick(2.f);
+	TestTrue(FString::Printf(TEXT("Flying straight again it levels out (%.2f)"), Dragon->GetActorRightVector().Z), FMath::Abs(Dragon->GetActorRightVector().Z) < 0.05f);
+	TestTrue(TEXT("The rider stays upright on it"), FMath::Abs(P->GetActorUpVector().Z - 1.f) < 0.01f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDragonPitchTest, "ShinobiCoop.Mount.TheDragonPitchesWithAClimbAndADive", ShinobiTestFlags)
+bool FShinobiDragonPitchTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = Rider(W);
+	AShinobiDragonMount* Dragon = AShinobiDragonMount::Spawn(P, EShinobiDragonKind::Tairn);
+	W.Tick(0.3f);
+	P->SetFlightClimb(true);
+	W.Tick(0.6f);
+	TestTrue(FString::Printf(TEXT("Climbing, the nose comes up (%.2f)"), Dragon->GetActorForwardVector().Z), Dragon->GetActorForwardVector().Z > 0.1f);
+	P->SetFlightClimb(false);
+	W.Tick(2.f);
+	P->SetFlightDive(true);
+	W.Tick(0.8f);
+	TestTrue(FString::Printf(TEXT("Diving, it drops (%.2f)"), Dragon->GetActorForwardVector().Z), Dragon->GetActorForwardVector().Z < -0.1f);
+	return true;
+}
+
 #endif

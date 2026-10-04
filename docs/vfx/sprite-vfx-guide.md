@@ -286,8 +286,9 @@ Where the creatures come from (all in `docs/world/asset-credits.md`):
 
 Shots 27-30 of `Scripts/shot_chakra.ps1 -Jutsu` show the three arrivals and the full page-4 HUD; `Scripts/smoke_m1.ps1` checks the client
 sees the four dogs. Not done: the rideable dragon (cycle E; `dragon-animations.glb` and `rig-dragon.glb` are already in
-`SourceArt/Mesh2Motion`), summons walking back to their caster when nothing is in sight (they only pick enemies within 30 m of the caster and
-otherwise stand still), and hit-reaction clips (the `Hit` clips are imported but unused). A summon leaves the moment its caster is downed,
+`SourceArt/Mesh2Motion`), hit-reaction clips (the `Hit` clips are imported but unused). With nothing to fight a summon walks back to its caster and waits beside them (`AShinobiAIController::FollowLeader`, via the
+`GetFollowTarget` / `GetFollowDistance` hooks on `AShinobiEnemyCharacter`; a few body-widths, `4 x capsule radius + 150`); it looks for enemies every half
+second, so a new one pulls it off at once. A summon leaves the moment its caster is downed,
 dies or leaves the game, and one cast next to a wall is pulled back in front of it and put on the floor.
 
 ## 11. Dragons: Tairn and the crimson dragon (2026-10-03)
@@ -327,6 +328,10 @@ hang below the rider, so a mount from the ground is a quick lift-off and a dive 
   dragon, lightning forks (Tairn) or embers and smoke (crimson) ride with it, under a coloured light. Tairn's fire colour is not stated anywhere in the
   books or the fan wikis, so it is blue-white and lightning-tinged (the user's choice; Violet wields lightning through him). Targets that are hit get a
   lightning burst (Tairn) or fire burst (crimson); the Burn status they catch is the ordinary orange one. `State.DragonBreathing` plays the dragon's head clip.
+- **Banking:** the dragon leans into turns and pitches with climbs and dives, about the seat so the rider stays on it and upright: the actor sits at the seat
+  and the body hangs off it by the saddle offset, so `AShinobiDragonMount::UpdateBank` just rotates the actor. Roll follows the rider's yaw rate (0.12 degrees of roll
+  per degree a second, 35 degrees at most; right wing down in a right turn), pitch follows the vertical speed (25 degrees at full flight speed); both ease in at 4 a
+  second. Cosmetic and computed on each machine from the replicated rotation and velocity. The fire and the crosshair still use the rider's facing, not the lean.
 - **Camera:** the boom eases from 450 to 900 while mounted, and only then (anything else that sets the boom is left alone).
 - **The dragon** is `AShinobiDragonMount`, a replicated actor with no collision or health, attached to the rider's mesh so it is smoothed on clients
   with the rider (the transform uses the mesh's default offset, not its current network-smoothed one).
@@ -353,5 +358,4 @@ hang below the rider, so a mount from the ground is a quick lift-off and a dive 
   falls back to a pose built by `build_jutsu_anims.py` (timeline `Mount`).
 
 Shots 31-34 of `Scripts/shot_chakra.ps1 -Jutsu` show the ride, the rider close up, the breath, a climb and the page-5 HUD; `Scripts/smoke_m1.ps1` checks
-the client sees itself mounted and the dragon actor. Not done: the rider cannot steer by pitch (Space and Control are the only vertical control), the
-dragon does not bank with the flight, and the eyes are Rodin's small golden ones.
+the client sees itself mounted and the dragon actor. Not done: the rider cannot steer by pitch (Space and Control are the only vertical control), and the eyes are Rodin's small golden ones.

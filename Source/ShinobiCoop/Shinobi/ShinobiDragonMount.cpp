@@ -8,6 +8,7 @@
 #include "GameFramework/Character.h"
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
+#include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiTags.h"
 
@@ -34,7 +35,11 @@ namespace
 		return Kind == EShinobiDragonKind::Tairn ? Tairn : Crimson;
 	}
 
-	constexpr float SeatBelowCapsuleCentre = 15.f; // how far under the rider's capsule centre the saddle sits
+	constexpr float SeatBelowCapsuleCentre = 15.f;
+	constexpr float BankPerYawRate = 0.12f; // degrees of roll per degree a second of turn: a 300 degree a second turn banks 36 degrees
+	constexpr float MaxBank = 35.f;
+	constexpr float MaxPitch = 25.f;        // at full flight speed straight up or down
+	constexpr float BankSpeed = 4.f;        // how quickly the lean follows // how far under the rider's capsule centre the saddle sits
 	constexpr float GlideSpeed = 800.f;
 	constexpr float GlideClimb = 250.f;
 	constexpr float HoverSpeed = 150.f;
@@ -119,6 +124,7 @@ void AShinobiDragonMount::BeginPlay()
 			Body->SetSkeletalMeshAsset(Model);
 			Body->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 			Body->SetRelativeScale3D(FVector(Look.Scale));
+			Body->SetRelativeLocation(-Look.Saddle * Look.Scale); // the saddle is at the actor's origin: the actor leans, the dragon hangs from the seat
 		}
 		else
 		{
@@ -142,10 +148,28 @@ void AShinobiDragonMount::AttachToRider()
 	// On the rider's mesh, which the movement component smooths on clients. The transform cancels the mesh's DEFAULT offset from the
 	// capsule (not its current one, which includes the smoothing nudge of the moment) so the saddle is just under the capsule's centre.
 	const FTransform MeshDefault(Rider->GetBaseRotationOffset(), Rider->GetBaseTranslationOffset());
-	const FDragonLook& Look = DragonLookFor(Kind);
-	const FTransform Wanted(FRotator::ZeroRotator, FVector(-Look.Saddle.X * Look.Scale, 0.f, -SeatBelowCapsuleCentre - Look.Saddle.Z * Look.Scale));
+	// The actor sits at the seat (just under the capsule's centre) and the dragon's body hangs off it by the saddle offset, so banking the actor
+	// leans the dragon about the seat, and the rider stays on it.
+	MeshDefaultInverse = MeshDefault.Inverse();
 	AttachToComponent(Rider->GetMesh(), FAttachmentTransformRules::KeepRelativeTransform);
-	SetActorRelativeTransform(Wanted * MeshDefault.Inverse());
+	SetActorRelativeTransform(FTransform(FRotator(BankPitch, 0.f, BankRoll), FVector(0.f, 0.f, -SeatBelowCapsuleCentre)) * MeshDefaultInverse);
+}
+
+void AShinobiDragonMount::UpdateBank(float DeltaSeconds)
+{
+	if (DeltaSeconds <= 0.f || GetAttachParentActor() != Rider)
+	{
+		return;
+	}
+	const float Yaw = Rider->GetActorRotation().Yaw;
+	const float YawRate = bHaveRiderYaw ? FRotator::NormalizeAxis(Yaw - LastRiderYaw) / DeltaSeconds : 0.f; // degrees a second, positive turning right
+	LastRiderYaw = Yaw;
+	bHaveRiderYaw = true;
+	const float TargetRoll = FMath::Clamp(YawRate * BankPerYawRate, -MaxBank, MaxBank);
+	const float TargetPitch = FMath::Clamp(Rider->GetVelocity().Z / UShinobiMovementComponent::FlightSpeed * MaxPitch, -MaxPitch, MaxPitch);
+	BankRoll = FMath::FInterpTo(BankRoll, TargetRoll, DeltaSeconds, BankSpeed);
+	BankPitch = FMath::FInterpTo(BankPitch, TargetPitch, DeltaSeconds, BankSpeed);
+	SetActorRelativeTransform(FTransform(FRotator(BankPitch, 0.f, BankRoll), FVector(0.f, 0.f, -SeatBelowCapsuleCentre)) * MeshDefaultInverse);
 }
 
 void AShinobiDragonMount::Play(UAnimSequence* Clip, bool bLoop)
@@ -173,6 +197,10 @@ void AShinobiDragonMount::Tick(float DeltaSeconds)
 	{
 		Destroy(); // dismounted, downed, dead or timed out
 		return;
+	}
+	if (!IsNetMode(NM_DedicatedServer))
+	{
+		UpdateBank(DeltaSeconds);
 	}
 	// Breathing fire rears the head back and thrusts it forward (once per breath); otherwise hover, beat the wings to climb or move
 	// slowly, and glide when fast and level.
