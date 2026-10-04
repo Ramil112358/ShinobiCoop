@@ -246,6 +246,17 @@ public:
 	UGE_TeleportMarked();
 };
 
+/** A PvP round's countdown: State.PvpHold (no moving, no abilities) a little past it; AShinobiPvpGameMode removes it at the
+ * fight, the margin only covers a late tick. */
+UCLASS()
+class SHINOBICOOP_API UGE_PvpHold : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	static constexpr float Seconds = 3.5f; // FShinobiPvpMatch::CountdownSeconds + 0.5 (asserted in the .cpp)
+	UGE_PvpHold();
+};
+
 /** Jutsu cooldown. Duration: SetByCaller Data.Cooldown. The jutsu's Cooldown.Jutsu.* tag is added to each spec as a
  * dynamic granted tag (UShinobiJutsuAbility::ApplyCooldown), so one class serves all four jutsu. */
 UCLASS()

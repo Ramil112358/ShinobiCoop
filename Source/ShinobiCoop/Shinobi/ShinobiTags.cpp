@@ -34,6 +34,7 @@ namespace ShinobiTags
 	UE_DEFINE_GAMEPLAY_TAG(State_SummonAttacking, "State.SummonAttacking");
 	UE_DEFINE_GAMEPLAY_TAG(State_Chilled, "State.Chilled");
 	UE_DEFINE_GAMEPLAY_TAG(State_TeleportMarked, "State.TeleportMarked");
+	UE_DEFINE_GAMEPLAY_TAG(State_PvpHold, "State.PvpHold");
 	UE_DEFINE_GAMEPLAY_TAG(State_JutsuPage_1, "State.JutsuPage.1");
 	UE_DEFINE_GAMEPLAY_TAG(State_JutsuPage_2, "State.JutsuPage.2");
 	UE_DEFINE_GAMEPLAY_TAG(State_JutsuPage_3, "State.JutsuPage.3");

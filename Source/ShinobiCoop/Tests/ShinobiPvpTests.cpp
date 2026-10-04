@@ -3,9 +3,13 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Shinobi/ShinobiCombat.h"
+#include "Shinobi/ShinobiGameState.h"
 #include "Shinobi/ShinobiLook.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/Pvp/ShinobiPvpGameMode.h"
 #include "Shinobi/Pvp/ShinobiPvpMatch.h"
+#include "Shinobi/Abilities/GA_Revive.h"
+#include "Shinobi/Abilities/GA_Sprint.h"
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 #include "Shinobi/Enemies/ShinobiSummon.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -182,6 +186,96 @@ bool FShinobiPvpTeamForJoinTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("1v1 slots"), M::SlotsPerTeam(EShinobiPvpFormat::OneVsOne), 1);
 	TestEqual(TEXT("2v2 slots"), M::SlotsPerTeam(Two), 2);
 	TestEqual(TEXT("None slots"), M::SlotsPerTeam(EShinobiPvpFormat::None), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpGatherStatusTest, "ShinobiCoop.Pvp.Mode.GatherStatusCountsDestroyedPawnAsDead", ShinobiTestFlags)
+bool FShinobiPvpGatherStatusTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPvpGameMode* Mode = W.Spawn<AShinobiPvpGameMode>();
+	Mode->PvpFormat = EShinobiPvpFormat::TwoVsTwo;
+	AShinobiPlayerCharacter* A1 = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiPlayerCharacter* A2 = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, 500.f, 0.f));
+	AShinobiPlayerCharacter* B1 = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, -3000.f, 0.f));
+	A1->SetTeam(EShinobiTeam::TeamA);
+	A2->SetTeam(EShinobiTeam::TeamA);
+	B1->SetTeam(EShinobiTeam::TeamB);
+	ShinobiTest::Hover(A1);
+	ShinobiTest::Hover(A2);
+	ShinobiTest::Hover(B1);
+	// A team A summon shares the side but is not a fighter slot.
+	const TArray<AShinobiSummon*> Toad = AShinobiSummon::Summon(A2, EShinobiSummonKind::Toad, FVector(0.f, 900.f, 0.f));
+	TestEqual(TEXT("A toad on team A"), Toad.Num(), 1);
+
+	const FShinobiTeamStatus Full = Mode->GatherStatus(EShinobiTeam::TeamA);
+	TestEqual(TEXT("Both team A players alive (the toad is not counted)"), Full.Alive, 2);
+	TestEqual(TEXT("Full health"), Full.HealthFraction, 1.f, 0.001f);
+
+	const float MaxHealth = A2->GetAttributes()->GetMaxHealth();
+	ShinobiTest::Set(A2, UShinobiAttributeSet::GetHealthAttribute(), MaxHealth * 0.5f);
+	A1->Destroy(); // a human who left, or fell out of the world
+	const FShinobiTeamStatus Status = Mode->GatherStatus(EShinobiTeam::TeamA);
+	TestEqual(TEXT("The destroyed pawn counts as dead"), Status.Alive, 1);
+	TestEqual(TEXT("Half the team's slots at half health"), Status.HealthFraction, 0.5f * 0.5f, 0.001f);
+	TestEqual(TEXT("Team B is apart"), Mode->GatherStatus(EShinobiTeam::TeamB).Alive, 1);
+
+	B1->Destroy();
+	const FShinobiTeamStatus Empty = Mode->GatherStatus(EShinobiTeam::TeamB);
+	TestEqual(TEXT("An empty team has nobody alive"), Empty.Alive, 0);
+	TestEqual(TEXT("And no health"), Empty.HealthFraction, 0.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpResetTest, "ShinobiCoop.Pvp.Mode.ResetClearsBoostsAndShield", ShinobiTestFlags)
+bool FShinobiPvpResetTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPvpGameMode* Mode = W.Spawn<AShinobiPvpGameMode>();
+	Mode->PvpFormat = EShinobiPvpFormat::OneVsOne;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	P->SetTeam(EShinobiTeam::TeamA);
+	ShinobiTest::Hover(P);
+
+	ShinobiTest::ApplyEffect(P, UGE_PvpHold::StaticClass());
+	ShinobiTest::ApplyEffect(P, UGE_Susanoo::StaticClass());
+	ShinobiTest::ApplyEffect(P, UGE_Mounted::StaticClass());
+	const float MaxHealth = P->GetAttributes()->GetMaxHealth();
+	ShinobiTest::Set(P, UShinobiAttributeSet::GetHealthAttribute(), MaxHealth * 0.4f);
+	TestTrue(TEXT("Held"), ShinobiTest::HasTag(P, ShinobiTags::State_PvpHold));
+	TestFalse(TEXT("A held fighter can't move"), P->CanMove());
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Sprint);
+	TestFalse(TEXT("Nor act"), ShinobiTest::IsActive(P, UGA_Sprint::StaticClass()));
+	ShinobiTest::Release(P, EShinobiAbilityInputID::Sprint);
+	TestTrue(TEXT("Susanoo up"), ShinobiTest::HasTag(P, ShinobiTags::State_Susanoo));
+
+	Mode->ResetCharacters();
+	TestFalse(TEXT("Hold cleared"), ShinobiTest::HasTag(P, ShinobiTags::State_PvpHold));
+	TestFalse(TEXT("Susanoo cleared"), ShinobiTest::HasTag(P, ShinobiTags::State_Susanoo));
+	TestFalse(TEXT("Dismounted"), ShinobiTest::HasTag(P, ShinobiTags::State_Mounted));
+	TestEqual(TEXT("Health full"), ShinobiTest::Get(P, UShinobiAttributeSet::GetHealthAttribute()), MaxHealth);
+	TestTrue(TEXT("Free to move again"), P->CanMove());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpReviveOffTest, "ShinobiCoop.Pvp.Mode.ReviveIsOffInPvp", ShinobiTestFlags)
+bool FShinobiPvpReviveOffTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiGameState* State = W.Spawn<AShinobiGameState>();
+	W.World->SetGameState(State);
+	AShinobiPlayerCharacter* Reviver = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiPlayerCharacter* Downed = W.Spawn<AShinobiPlayerCharacter>(FVector(100.f, 0.f, 0.f));
+	Reviver->SetTeam(EShinobiTeam::TeamA);
+	Downed->SetTeam(EShinobiTeam::TeamA);
+	ShinobiTest::Hover(Reviver);
+	ShinobiTest::Hover(Downed);
+	ShinobiTest::ApplyEffect(Downed, UGE_Downed::StaticClass());
+
+	TestTrue(TEXT("Outside a match the downed ally is found"), UGA_Revive::FindDownedAllyFor(*Reviver) == Downed);
+	State->PvpPhase = EShinobiPvpPhase::Fighting;
+	TestTrue(TEXT("The game state is in a match"), State->IsPvp());
+	TestNull(TEXT("In a match nobody is revived"), UGA_Revive::FindDownedAllyFor(*Reviver));
 	return true;
 }
 

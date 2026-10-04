@@ -55,7 +55,8 @@ public:
 	UShinobiSusanooComponent* GetSusanoo() const { return Susanoo; }
 
 	EShinobiTeam GetTeam() const { return Team; }
-	/** Server: changes sides (replicated), and re-outlines for every viewer. */
+	/** Server: changes sides, at any time (replicated to every client, also after the pawn first replicated), and re-outlines
+	 * for every viewer. */
 	void SetTeam(EShinobiTeam NewTeam);
 	bool IsHostileTo(const AShinobiCharacterBase* Other) const { return Other && Other != this && Other->Team != Team; }
 

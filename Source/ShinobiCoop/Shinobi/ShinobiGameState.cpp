@@ -14,6 +14,12 @@ void AShinobiGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(AShinobiGameState, VillageLocation);
 	DOREPLIFETIME(AShinobiGameState, HubName);
 	DOREPLIFETIME(AShinobiGameState, VictoryText);
+	DOREPLIFETIME(AShinobiGameState, PvpPhase);
+	DOREPLIFETIME(AShinobiGameState, PvpFormat);
+	DOREPLIFETIME(AShinobiGameState, PvpRound);
+	DOREPLIFETIME(AShinobiGameState, PvpWinsA);
+	DOREPLIFETIME(AShinobiGameState, PvpWinsB);
+	DOREPLIFETIME(AShinobiGameState, PvpRoundResult);
 }
 
 float AShinobiGameState::GetPhaseTimeRemaining() const

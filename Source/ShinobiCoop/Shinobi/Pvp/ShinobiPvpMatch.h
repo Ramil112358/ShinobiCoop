@@ -2,13 +2,39 @@
 
 #include "CoreMinimal.h"
 #include "Shinobi/ShinobiCharacterBase.h"
+#include "ShinobiPvpMatch.generated.h"
+
+// UENUMs (not plain enums) so AShinobiGameState can replicate them.
 
 /** How many fighters each side fields in a PvP arena match. */
-enum class EShinobiPvpFormat : uint8 { None, OneVsOne, TwoVsTwo };
+UENUM()
+enum class EShinobiPvpFormat : uint8
+{
+	None,
+	OneVsOne,
+	TwoVsTwo
+};
 
-enum class EShinobiPvpPhase : uint8 { None, Warmup, Countdown, Fighting, RoundEnd, MatchEnd };
+UENUM()
+enum class EShinobiPvpPhase : uint8
+{
+	/** Not a PvP match. */
+	None,
+	Warmup,
+	Countdown,
+	Fighting,
+	RoundEnd,
+	MatchEnd
+};
 
-enum class EShinobiRoundResult : uint8 { Ongoing, TeamAWins, TeamBWins, Tie };
+UENUM()
+enum class EShinobiRoundResult : uint8
+{
+	Ongoing,
+	TeamAWins,
+	TeamBWins,
+	Tie
+};
 
 /** One side's standing in a round. HealthFraction = sum HP / sum max HP of the team's slots (a missing or dead slot counts 0). */
 struct FShinobiTeamStatus

@@ -250,6 +250,7 @@ bool AShinobiPlayerCharacter::CanMove() const
 		Tags.AddTag(ShinobiTags::State_Reviving);
 		Tags.AddTag(ShinobiTags::State_Downed);
 		Tags.AddTag(ShinobiTags::State_Dead);
+		Tags.AddTag(ShinobiTags::State_PvpHold);
 		return Tags;
 	}();
 	return !AbilitySystem->HasAnyMatchingGameplayTags(Blockers);

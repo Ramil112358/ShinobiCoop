@@ -12,11 +12,12 @@ UShinobiGameplayAbility::UShinobiGameplayAbility()
 {
 	InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
 	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
-	// Shared blockers: a stunned or staggered character can't act. Subclasses add their own.
+	// Shared blockers: a stunned or staggered character can't act, nor one held for a PvP countdown. Subclasses add their own.
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Shocked);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Staggered);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Downed);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Dead);
+	ActivationBlockedTags.AddTag(ShinobiTags::State_PvpHold);
 }
 
 AShinobiCharacterBase* UShinobiGameplayAbility::GetShinobiCharacter() const

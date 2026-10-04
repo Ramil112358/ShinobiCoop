@@ -4,6 +4,7 @@
 #include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiDamageExec.h"
 #include "Shinobi/ShinobiTags.h"
+#include "Shinobi/Pvp/ShinobiPvpMatch.h"
 
 void UShinobiEffect::AddModifier(const FGameplayAttribute& Attribute, float Magnitude)
 {
@@ -250,6 +251,15 @@ UGE_TeleportMarked::UGE_TeleportMarked()
 {
 	SetDuration(Seconds);
 	GrantTag(ShinobiTags::State_TeleportMarked);
+	UseSingleRefreshingStack();
+}
+
+static_assert(UGE_PvpHold::Seconds == FShinobiPvpMatch::CountdownSeconds + 0.5f, "The hold outlasts the countdown by a little");
+
+UGE_PvpHold::UGE_PvpHold()
+{
+	SetDuration(Seconds);
+	GrantTag(ShinobiTags::State_PvpHold);
 	UseSingleRefreshingStack();
 }
 

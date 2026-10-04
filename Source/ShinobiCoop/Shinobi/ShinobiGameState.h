@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameStateBase.h"
+#include "Shinobi/Pvp/ShinobiPvpMatch.h"
 #include "ShinobiGameState.generated.h"
 
 UENUM(BlueprintType)
@@ -19,7 +20,7 @@ enum class EShinobiArenaPhase : uint8
 	OpenWorld
 };
 
-/** Arena progress for every machine's HUD, set by AShinobiArenaGameMode on the server. */
+/** Arena progress for every machine's HUD, set by AShinobiArenaGameMode (or AShinobiPvpGameMode) on the server. */
 UCLASS()
 class SHINOBICOOP_API AShinobiGameState : public AGameStateBase
 {
@@ -28,7 +29,7 @@ class SHINOBICOOP_API AShinobiGameState : public AGameStateBase
 public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	/** Seconds until the current phase ends (Break, Wiped); 0 for open-ended phases. */
+	/** Seconds until the current phase ends (Break, Wiped; a PvP phase); 0 for open-ended phases. */
 	float GetPhaseTimeRemaining() const;
 
 	/** 1-based; the wave being fought, or the next one during a break. */
@@ -66,4 +67,28 @@ public:
 	/** Open world: the banner when the boss camp falls (the boss marker's Victory:<text> tag). */
 	UPROPERTY(Replicated)
 	FString VictoryText = TEXT("VALLEY CLEARED");
+
+	/** A PvP arena match (AShinobiPvpGameMode) is on: teams fight rounds, nobody is revived. */
+	bool IsPvp() const { return PvpPhase != EShinobiPvpPhase::None; }
+
+	/** PvP: where the match stands; PhaseEndTime is when this phase ends. */
+	UPROPERTY(Replicated)
+	EShinobiPvpPhase PvpPhase = EShinobiPvpPhase::None;
+
+	UPROPERTY(Replicated)
+	EShinobiPvpFormat PvpFormat = EShinobiPvpFormat::None;
+
+	/** PvP: 1-based; the round being fought (or just fought, during its RoundEnd banner). */
+	UPROPERTY(Replicated)
+	int32 PvpRound = 0;
+
+	UPROPERTY(Replicated)
+	int32 PvpWinsA = 0;
+
+	UPROPERTY(Replicated)
+	int32 PvpWinsB = 0;
+
+	/** PvP: the round's result for the RoundEnd banner; at MatchEnd, the match's. Ongoing otherwise. */
+	UPROPERTY(Replicated)
+	EShinobiRoundResult PvpRoundResult = EShinobiRoundResult::Ongoing;
 };

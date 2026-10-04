@@ -43,6 +43,7 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Susanoo); // the armour is up: damage taken halved, dealt x1.3, chakra comes back faster
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Chilled); // Ice Meteor Shower: moves slower
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_TeleportMarked);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_PvpHold); // a PvP round's countdown: no moving, no abilities
 
 	// Jutsu pages: exactly one is on a player's ability system (loose tag, set per machine); keys 1-4 fire that page's jutsu.
 	constexpr int32 NumJutsuPages = 5;

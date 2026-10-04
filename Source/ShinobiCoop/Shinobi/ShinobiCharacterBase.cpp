@@ -87,7 +87,8 @@ void AShinobiCharacterBase::BeginPlay()
 void AShinobiCharacterBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-	DOREPLIFETIME_CONDITION(AShinobiCharacterBase, Team, COND_InitialOnly);
+	// Not initial-only: the PvP mode picks a joining player's side after the pawn has already replicated.
+	DOREPLIFETIME(AShinobiCharacterBase, Team);
 }
 
 void AShinobiCharacterBase::SetTeam(EShinobiTeam NewTeam)
