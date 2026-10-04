@@ -26,13 +26,18 @@ JUTSU = {
     "AlmightyPush": ALL_PHASES,
     "Teleport": ("Seal", "Release"), "Kamui": ("Seal", "Release"), "EarthWall": ("Seal", "Release"), "WaterWall": ("Seal", "Release"),
     "FireMeteor": ("Seal", "Release"), "IceMeteor": ("Seal", "Release"), "WaterDragon": ("Seal", "Release"), "Susanoo": ("Seal", "Release"),
-    "Summon": ("Seal", "Release"),  # shared by the toad, snake and dogs
+    "Summon": ("Seal", "Release"),  # shared by the toad, snake, dogs and dragon
+    "Mount": ("Sit",),  # the rider's seated loop (AShinobiPlayerCharacter)
 }
 # Phase -> (blend in, blend out) seconds. The seals and the charge hand over to the next phase quickly; the release
 # blends back out to locomotion more slowly.
-PHASES = {"Seal": (0.1, 0.1), "Charge": (0.1, 0.1), "Release": (0.05, 0.25)}
+PHASES = {"Seal": (0.1, 0.1), "Charge": (0.1, 0.1), "Release": (0.05, 0.25), "Sit": (0.3, 0.3)}
 
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
+
+# A Mixamo "Sitting Idle" (FBX, without skin, on the Power Up character) saved as SourceArt/Mixamo/Sitting Idle.fbx replaces the
+# generated seated loop (build_jutsu_anims.py, timeline Mount).
+MIXAMO_SIT = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir() + "SourceArt/Mixamo/Sitting Idle.fbx")
 
 
 def load(path):
@@ -109,8 +114,16 @@ def remove_old_single_clip(jutsu):
 def build_montage(jutsu, anim, blends):
     path = f"{ANIM_DIR}/AM_{jutsu}"
     if unreal.EditorAssetLibrary.does_asset_exist(path):
-        montage = load(path)
+        # A montage keeps the length its clip had when it was made, so a clip that changed length needs a new one.
+        existing = load(path)
+        if abs(existing.get_play_length() - anim.get_play_length()) < 0.01:
+            montage = existing
+        else:
+            unreal.EditorAssetLibrary.delete_asset(path)
+            montage = None
     else:
+        montage = None
+    if montage is None:
         factory = unreal.AnimMontageFactory()
         factory.set_editor_property("source_animation", anim)
         montage = TOOLS.create_asset(f"AM_{jutsu}", ANIM_DIR, unreal.AnimMontage, factory)
@@ -131,7 +144,14 @@ mixamo_mesh = load(MIXAMO_MESH_PATH)
 skeleton = load(MIXAMO_SKELETON_PATH)
 manny_mesh = load(MANNY_MESH_PATH)
 retargeter = load(RETARGETER_PATH)
+if os.path.exists(MIXAMO_SIT):
+    import shutil
+    shutil.copyfile(MIXAMO_SIT, os.path.join(SOURCE_DIR, "Mount_Sit.fbx"))
+    unreal.log("[setup_jutsu_anims] seated loop: using the Mixamo Sitting Idle")
+ONLY = os.environ.get("JUTSU_ONLY")  # e.g. Mount: re-import just that jutsu
 for jutsu, phases in JUTSU.items():
+    if ONLY and jutsu != ONLY:
+        continue
     remove_old_single_clip(jutsu)
     for phase in phases:
         blends = PHASES[phase]

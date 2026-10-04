@@ -32,6 +32,7 @@
 #include "Shinobi/Abilities/GA_Revive.h"
 #include "Shinobi/Abilities/GA_Sprint.h"
 #include "Shinobi/Abilities/GA_Substitution.h"
+#include "Shinobi/Abilities/GA_Dragon.h"
 #include "Shinobi/Abilities/GA_Summons.h"
 #include "Shinobi/Abilities/GA_Susanoo.h"
 #include "Shinobi/Abilities/GA_Teleport.h"
@@ -66,6 +67,7 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 		UGA_Teleport::StaticClass(), UGA_TeleportJump::StaticClass(),
 		UGA_EarthWall::StaticClass(), UGA_WaterWall::StaticClass(), UGA_FireMeteor::StaticClass(), UGA_IceMeteor::StaticClass(), UGA_WaterDragon::StaticClass(), UGA_Susanoo::StaticClass(),
 		UGA_SummonToad::StaticClass(), UGA_SummonSnake::StaticClass(), UGA_SummonDogs::StaticClass(),
+		UGA_SummonDragon::StaticClass(), UGA_SummonCrimsonDragon::StaticClass(), UGA_DragonDismount::StaticClass(), UGA_DragonDismountKey::StaticClass(), UGA_DragonBreath::StaticClass(),
 	};
 	StartupEffects.Add(UGE_SubstitutionRegen::StaticClass());
 
@@ -84,7 +86,7 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->TargetArmLength = 450.f;
+	CameraBoom->TargetArmLength = FootArmLength;
 	CameraBoom->SocketOffset = FVector(0.f, 60.f, 60.f);
 	CameraBoom->bUsePawnControlRotation = true;
 
@@ -452,6 +454,32 @@ void AShinobiPlayerCharacter::ToggleLockOn()
 void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	// Riding a dragon: the camera pulls back, and Space / Control climb and dive (the owner's input; a remote rider's flight arrives in its moves).
+	const bool bMounted = AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Mounted);
+	if (bMounted || bBoomPulledBack)
+	{
+		// Only driven around a ride, so anything else that sets the boom (the world tour's close-ups) is left alone.
+		CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, bMounted ? MountedArmLength : FootArmLength, DeltaSeconds, 2.f);
+		bBoomPulledBack = bMounted || !FMath::IsNearlyEqual(CameraBoom->TargetArmLength, FootArmLength, 1.f);
+	}
+	if (bMounted != bSteeringByCamera)
+	{
+		// Riding, the character (and so the dragon) faces where the camera looks, so the fire is aimed by turning; on foot it turns with its movement.
+		bSteeringByCamera = bMounted;
+		UCharacterMovementComponent* Movement = GetCharacterMovement();
+		Movement->bOrientRotationToMovement = !bMounted;
+		Movement->bUseControllerDesiredRotation = bMounted;
+		Movement->RotationRate = FRotator(0.f, bMounted ? 360.f : 720.f, 0.f);
+	}
+	if (!bMounted)
+	{
+		bFlightClimb = bFlightDive = false; // keys held when the ride ended must not carry into the next one
+	}
+	if (bMounted && (IsLocallyControlled() || !GetController()) && CanMove())
+	{
+		AddMovementInput(FVector::UpVector, (bFlightClimb ? 1.f : 0.f) - (bFlightDive ? 1.f : 0.f));
+	}
+	UpdateSeatedPose();
 	// Possession and the player state can arrive after BeginPlay, so keep the tag current here.
 	NameTag->SetVisibility(!IsLocallyControlled());
 	if (const APlayerState* State = GetPlayerState())
@@ -477,6 +505,40 @@ void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
 	Controller->SetControlRotation(FMath::RInterpTo(Controller->GetControlRotation(), Desired, DeltaSeconds, 10.f));
 }
 
+void AShinobiPlayerCharacter::UpdateSeatedPose()
+{
+	UAnimInstance* Anim = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!Anim || IsNetMode(NM_DedicatedServer))
+	{
+		return;
+	}
+	if (!SeatedMontage)
+	{
+		if (bSeatedLoadTried)
+		{
+			return;
+		}
+		bSeatedLoadTried = true; // once: a missing asset must not cost a failed load every frame
+		SeatedMontage = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Shinobi/Anims/AM_Mount_Sit.AM_Mount_Sit"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		if (!SeatedMontage)
+		{
+			return;
+		}
+	}
+	if (AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Mounted))
+	{
+		if (!Anim->IsAnyMontagePlaying()) // a jutsu's montage takes the pose for its moment, then the rider sits again
+		{
+			Anim->Montage_Play(SeatedMontage);
+			Anim->Montage_SetNextSection(TEXT("Default"), TEXT("Default"), SeatedMontage); // a loop
+		}
+	}
+	else if (Anim->Montage_IsPlaying(SeatedMontage))
+	{
+		Anim->Montage_Stop(0.3f, SeatedMontage);
+	}
+}
+
 void AShinobiPlayerCharacter::UnPossessed()
 {
 	// A lost controller (unpossess, disconnect) never sends the release for held inputs, and chakra charge never
@@ -487,6 +549,7 @@ void AShinobiPlayerCharacter::UnPossessed()
 	HeldAbilities.AddTag(ShinobiTags::Ability_Sprint);
 	HeldAbilities.AddTag(ShinobiTags::Ability_ChakraCharge);
 	AbilitySystem->CancelAbilities(&HeldAbilities);
+	bFlightClimb = bFlightDive = false; // their releases never arrive
 	Super::UnPossessed();
 }
 
@@ -509,7 +572,7 @@ void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 	Input->BindAction(InputConfig.Move, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Move);
 	Input->BindAction(InputConfig.Look, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Look);
 	Input->BindAction(InputConfig.Jump, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::JumpPressed);
-	Input->BindAction(InputConfig.Jump, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
+	Input->BindAction(InputConfig.Jump, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::JumpReleased);
 	for (const TPair<EShinobiAbilityInputID, TObjectPtr<UInputAction>>& Pair : InputConfig.AbilityActions)
 	{
 		Input->BindAction(Pair.Value, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::AbilityInputPressed, Pair.Key);
@@ -551,16 +614,32 @@ void AShinobiPlayerCharacter::JumpPressed()
 	{
 		return;
 	}
+	if (AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Mounted))
+	{
+		bFlightClimb = true; // on a dragon Space climbs
+		return;
+	}
 	Jump();
+}
+
+void AShinobiPlayerCharacter::JumpReleased()
+{
+	bFlightClimb = false;
+	StopJumping();
 }
 
 void AShinobiPlayerCharacter::AbilityInputPressed(EShinobiAbilityInputID InputID)
 {
+	bFlightDive |= InputID == EShinobiAbilityInputID::Dodge && AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Mounted); // Control dives
 	AbilitySystem->AbilityLocalInputPressed(static_cast<int32>(InputID));
 }
 
 void AShinobiPlayerCharacter::AbilityInputReleased(EShinobiAbilityInputID InputID)
 {
+	if (InputID == EShinobiAbilityInputID::Dodge)
+	{
+		bFlightDive = false;
+	}
 	AbilitySystem->AbilityLocalInputReleased(static_cast<int32>(InputID));
 }
 

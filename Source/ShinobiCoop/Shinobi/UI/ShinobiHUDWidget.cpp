@@ -10,6 +10,7 @@
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "Components/ProgressBar.h"
+#include "Components/ScaleBox.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
@@ -25,7 +26,9 @@
 #include "Shinobi/World/ShinobiCamp.h"
 #include "Camera/PlayerCameraManager.h"
 #include "EngineUtils.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Shinobi/ShinobiAttributeSet.h"
+#include "Shinobi/ShinobiDragonMount.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/Abilities/ShinobiJutsuAbility.h"
 
@@ -115,6 +118,7 @@ TSharedRef<SWidget> UShinobiHUDWidget::RebuildWidget()
 		BuildUnitFrame(Root);
 		BuildJutsuSlots(Root);
 		BuildPagePips(Root);
+		BuildDragonCrosshair(Root);
 
 		WaveText = AddCanvasText(Root, TEXT("WaveText"), FAnchors(0.5f, 0.f), FVector2D(0.5f, 0.f), FVector2D(0.f, 24.f), 22, ETextJustify::Center);
 		RootCanvas = Root;
@@ -366,8 +370,17 @@ void UShinobiHUDWidget::BuildJutsuSlots(UCanvasPanel* Root)
 		KeySlot->SetPadding(FMargin(bFrameArt ? 0.f : 2.f)); // the art frame has its own margin
 		UTextBlock* CostText = AddLabel(Layers, 12, HAlign_Right, VAlign_Bottom, CostColor);
 
+		// The name sits in a box a little wider than the slot and shrinks to fit it, so a long one ("Summon Crimson Dragon") cannot stretch
+		// its column and make that slot wider than the others.
 		UTextBlock* Name = MakeText(12, NameColor, true);
-		UVerticalBoxSlot* NameSlot = Column->AddChildToVerticalBox(Name);
+		USizeBox* NameBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		NameBox->SetWidthOverride(SlotSize + 12.f);
+		UScaleBox* NameScale = WidgetTree->ConstructWidget<UScaleBox>(UScaleBox::StaticClass());
+		NameScale->SetStretch(EStretch::ScaleToFit);
+		NameScale->SetStretchDirection(EStretchDirection::DownOnly);
+		NameScale->AddChild(Name);
+		NameBox->AddChild(NameScale);
+		UVerticalBoxSlot* NameSlot = Column->AddChildToVerticalBox(NameBox);
 		NameSlot->SetHorizontalAlignment(HAlign_Center);
 		NameSlot->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
 
@@ -382,6 +395,72 @@ void UShinobiHUDWidget::BuildJutsuSlots(UCanvasPanel* Root)
 	}
 	SlotFlashUntil.Init(0.0, NumJutsuSlots);
 	SlotJutsu.Init(nullptr, NumJutsuSlots);
+}
+
+float UShinobiHUDWidget::GetJutsuSlotWidth(int32 Index) const
+{
+	return SlotColumns.IsValidIndex(Index) ? SlotColumns[Index]->GetDesiredSize().X : 0.f;
+}
+
+bool UShinobiHUDWidget::IsDragonCrosshairShown() const
+{
+	return DragonCrosshair && DragonCrosshair->GetVisibility() != ESlateVisibility::Collapsed;
+}
+
+void UShinobiHUDWidget::BuildDragonCrosshair(UCanvasPanel* Root)
+{
+	// A ring with a dot in it, drawn in the dragon's fire colour; positioned each frame by UpdateDragonCrosshair.
+	DragonCrosshair = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("DragonCrosshair"));
+	DragonCrosshair->SetWidthOverride(44.f);
+	DragonCrosshair->SetHeightOverride(44.f);
+	DragonCrosshair->SetVisibility(ESlateVisibility::Collapsed);
+	UOverlay* Layers = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass());
+	DragonCrosshair->AddChild(Layers);
+	UBorder* Ring = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+	Ring->SetBrush(RoundedBrush(FLinearColor(0.f, 0.f, 0.f, 0.12f), 22.f, FLinearColor::White, 2.5f));
+	UOverlaySlot* RingSlot = Layers->AddChildToOverlay(Ring);
+	RingSlot->SetHorizontalAlignment(HAlign_Fill);
+	RingSlot->SetVerticalAlignment(VAlign_Fill);
+	UBorder* Dot = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+	Dot->SetBrush(RoundedBrush(FLinearColor::White, 4.f));
+	USizeBox* DotBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+	DotBox->SetWidthOverride(7.f);
+	DotBox->SetHeightOverride(7.f);
+	DotBox->AddChild(Dot);
+	UOverlaySlot* DotSlot = Layers->AddChildToOverlay(DotBox);
+	DotSlot->SetHorizontalAlignment(HAlign_Center);
+	DotSlot->SetVerticalAlignment(VAlign_Center);
+	DragonCrosshairParts = { Ring, Dot };
+	UCanvasPanelSlot* CanvasSlot = Root->AddChildToCanvas(DragonCrosshair);
+	CanvasSlot->SetAnchors(FAnchors(0.f, 0.f));
+	CanvasSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+	CanvasSlot->SetAutoSize(true);
+}
+
+void UShinobiHUDWidget::UpdateDragonCrosshair(const AShinobiPlayerCharacter* Player)
+{
+	if (!DragonCrosshair)
+	{
+		return;
+	}
+	const AShinobiDragonMount* Dragon = Player && Player->IsLocallyControlled() && Player->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Mounted)
+		? AShinobiDragonMount::Find(*Player) : nullptr;
+	FVector2D Screen;
+	if (!Dragon || !UWidgetLayoutLibrary::ProjectWorldLocationToWidgetPosition(GetOwningPlayer(), AShinobiDragonMount::BreathTarget(*Player, Dragon->GetKind()), Screen, true))
+	{
+		DragonCrosshair->SetVisibility(ESlateVisibility::Collapsed);
+		return;
+	}
+	DragonCrosshair->SetVisibility(ESlateVisibility::HitTestInvisible);
+	if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(DragonCrosshair->Slot))
+	{
+		CanvasSlot->SetPosition(Screen);
+	}
+	const FLinearColor Colour = Dragon->GetKind() == EShinobiDragonKind::Tairn ? FLinearColor(0.55f, 0.8f, 1.f) : FLinearColor(1.f, 0.62f, 0.2f);
+	for (UBorder* Part : DragonCrosshairParts)
+	{
+		Part->SetBrushColor(Colour);
+	}
 }
 
 void UShinobiHUDWidget::BuildPagePips(UCanvasPanel* Root)
@@ -456,6 +535,7 @@ void UShinobiHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	BindFailureFlash(ASC);
 	if (!Stats || !ASC || !HealthBar)
 	{
+		UpdateDragonCrosshair(nullptr);
 		return;
 	}
 	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
@@ -507,6 +587,7 @@ void UShinobiHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	UpdateJutsuSlots(*ASC, Player ? Player->GetJutsuPage() : 1, Player);
 	UpdateArena(Player);
 	UpdateCompass();
+	UpdateDragonCrosshair(Player);
 }
 
 UTextBlock* UShinobiHUDWidget::CompassLabel(int32 Index)

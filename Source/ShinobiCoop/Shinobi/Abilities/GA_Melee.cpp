@@ -15,6 +15,7 @@ UGA_Melee::UGA_Melee()
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Dodging);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_ChakraCharging);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Phased);
+	ActivationBlockedTags.AddTag(ShinobiTags::State_Mounted); // the same button breathes fire from a dragon
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);
 	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_ChakraCharge);
 	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);

@@ -141,7 +141,7 @@ void AShinobiSummon::WearCreature()
 	// mannequin mesh's own offset so the creature ends up where the capsule says.
 	const FTransform Wanted(FRotator(0.f, Look->Yaw, 0.f), FVector(0.f, 0.f, -Look->CapsuleHalfHeight));
 	Creature->SetupAttachment(GetMesh());
-	Creature->SetRelativeTransform(Wanted * GetMesh()->GetRelativeTransform().Inverse());
+	Creature->SetRelativeTransform(Wanted * FTransform(GetBaseRotationOffset(), GetBaseTranslationOffset()).Inverse()); // the default offset: the mesh's current one includes network smoothing
 	Creature->SetRelativeScale3D(Look->Scale);
 	if (Look->bDarkCoat) // every material has a "...Dark" twin beside it
 	{

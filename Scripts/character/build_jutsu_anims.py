@@ -425,9 +425,22 @@ def summon():
     }
 
 
+# Riding the dragon: seated, thighs level, feet forward, leaning a little and gripping ahead. A loop, not a jutsu: held while State.Mounted
+# lasts (AShinobiPlayerCharacter replays it). A Mixamo "Sitting Idle" at SourceArt/Mixamo/Sitting Idle.fbx replaces it
+# (Scripts/setup_jutsu_anims.py).
+SEATED = merge(NEUTRAL, {"hips": (46, 0, 0), "feet": {"R": (-14, 42, 0), "L": (14, 42, 0)}, "spine": (6, 0), "neck": (-4, 0), "head": (-6, 0),
+                         "R": arm((-17, 70, 38), (-1, -0.2, 0), (0, -0.5, 1), LEFT, FIST),
+                         "L": arm((17, 70, 38), (1, -0.2, 0), (0, -0.5, 1), RIGHT, FIST)})
+SEATED_BREATH = merge(SEATED, {"spine": (8, 0), "neck": (-5, 0), "head": (-5, 0)})
+
+
+def mount():
+    return {"Sit": [(0.0, SEATED, "smooth"), (1.2, SEATED_BREATH, "smooth"), (2.4, SEATED, "smooth")]}
+
+
 TIMELINES = {"Fireball": fireball(), "Chidori": chidori(), "Rasengan": rasengan(), "Amaterasu": amaterasu(),
              "Teleport": teleport(), "Kamui": kamui(), "AlmightyPush": almighty_push(), "EarthWall": wall(), "WaterWall": wall(),
-             "FireMeteor": fire_meteor(), "IceMeteor": ice_meteor(), "WaterDragon": water_dragon(), "Susanoo": susanoo(), "Summon": summon()}
+             "FireMeteor": fire_meteor(), "IceMeteor": ice_meteor(), "WaterDragon": water_dragon(), "Susanoo": susanoo(), "Summon": summon(), "Mount": mount()}
 
 
 # ---------------------------------------------------------------------------------------------------------------

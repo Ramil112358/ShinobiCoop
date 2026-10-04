@@ -1,5 +1,7 @@
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "AbilitySystemComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Engine/World.h"
 #include "GameFramework/Character.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiEffects.h"
@@ -77,14 +79,48 @@ UShinobiMovementComponent::UShinobiMovementComponent()
 {
 	bWantsToSprint = false;
 	MaxWalkSpeed = 600.f;
+	BrakingDecelerationFlying = 2500.f; // a dragon stops and turns quickly
 	// Uncontrolled characters (dummies, knocked-back pawns, test actors) still need physics and root motion.
 	bRunPhysicsWithNoController = true;
+}
+
+void UShinobiMovementComponent::UpdateCharacterStateBeforeMovement(float DeltaSeconds)
+{
+	const AShinobiCharacterBase* Character = Cast<AShinobiCharacterBase>(GetOwner());
+	const bool bMounted = Character && Character->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Mounted);
+	if (bMounted && MovementMode != MOVE_Flying)
+	{
+		SetMovementMode(MOVE_Flying);
+	}
+	else if (!bMounted && bWasMounted && MovementMode == MOVE_Flying)
+	{
+		SetMovementMode(MOVE_Falling);
+	}
+	bWasMounted = bMounted;
+	if (bMounted && MovementMode == MOVE_Flying && CharacterOwner)
+	{
+		// Keep the dragon off the ground: from the capsule's floor, look down; too close pushes up, harder the closer it is (so a
+		// mount from the ground is a quick lift-off, and a dive eases out above the floor).
+		const UCapsuleComponent* Capsule = CharacterOwner->GetCapsuleComponent();
+		const FVector Feet = CharacterOwner->GetActorLocation() - FVector(0.f, 0.f, Capsule->GetScaledCapsuleHalfHeight());
+		FHitResult Hit;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(MountClearance), false, CharacterOwner);
+		if (GetWorld()->LineTraceSingleByChannel(Hit, Feet, Feet - FVector(0.f, 0.f, MountedGroundClearance * 2.f), ECC_WorldStatic, Params) && Hit.Distance < MountedGroundClearance)
+		{
+			Velocity.Z = FMath::Max(Velocity.Z, (MountedGroundClearance - Hit.Distance) * 8.f);
+		}
+	}
+	Super::UpdateCharacterStateBeforeMovement(DeltaSeconds);
 }
 
 float UShinobiMovementComponent::GetMaxSpeed() const
 {
 	float Speed = (bWantsToSprint && MovementMode == MOVE_Walking) ? SprintSpeed : Super::GetMaxSpeed();
 	const AShinobiCharacterBase* Character = Cast<AShinobiCharacterBase>(GetOwner());
+	if (MovementMode == MOVE_Flying && Character && Character->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Mounted))
+	{
+		Speed = FlightSpeed;
+	}
 	if (Character && Character->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Chilled))
 	{
 		Speed *= UGE_Chill::SpeedScale;

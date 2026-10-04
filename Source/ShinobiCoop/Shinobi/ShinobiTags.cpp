@@ -30,6 +30,8 @@ namespace ShinobiTags
 	UE_DEFINE_GAMEPLAY_TAG(State_Casting_Charging, "State.Casting.Charging");
 	UE_DEFINE_GAMEPLAY_TAG(State_Phased, "State.Phased");
 	UE_DEFINE_GAMEPLAY_TAG(State_Susanoo, "State.Susanoo");
+	UE_DEFINE_GAMEPLAY_TAG(State_DragonBreathing, "State.DragonBreathing");
+	UE_DEFINE_GAMEPLAY_TAG(State_Mounted, "State.Mounted");
 	UE_DEFINE_GAMEPLAY_TAG(State_SummonAttacking, "State.SummonAttacking");
 	UE_DEFINE_GAMEPLAY_TAG(State_Chilled, "State.Chilled");
 	UE_DEFINE_GAMEPLAY_TAG(State_TeleportMarked, "State.TeleportMarked");
@@ -66,9 +68,12 @@ namespace ShinobiTags
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_IceMeteor, "Cooldown.Jutsu.IceMeteor");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_WaterDragon, "Cooldown.Jutsu.WaterDragon");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_Susanoo, "Cooldown.Jutsu.Susanoo");
+	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_SummonDragon, "Cooldown.Jutsu.SummonDragon");
+	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_SummonCrimsonDragon, "Cooldown.Jutsu.SummonCrimsonDragon");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_SummonToad, "Cooldown.Jutsu.SummonToad");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_SummonSnake, "Cooldown.Jutsu.SummonSnake");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_SummonDogs, "Cooldown.Jutsu.SummonDogs");
+	UE_DEFINE_GAMEPLAY_TAG(Cooldown_DragonBreath, "Cooldown.DragonBreath");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Substitution, "Cooldown.Substitution");
 
 	UE_DEFINE_GAMEPLAY_TAG(Fail_NoTarget, "Fail.NoTarget");

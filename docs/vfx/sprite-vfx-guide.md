@@ -289,3 +289,69 @@ sees the four dogs. Not done: the rideable dragon (cycle E; `dragon-animations.g
 `SourceArt/Mesh2Motion`), summons walking back to their caster when nothing is in sight (they only pick enemies within 30 m of the caster and
 otherwise stand still), and hit-reaction clips (the `Hit` clips are imported but unused). A summon leaves the moment its caster is downed,
 dies or leaves the game, and one cast next to a wall is pulled back in front of it and put on the floor.
+
+## 11. Dragons: Tairn and the crimson dragon (2026-10-03)
+
+Page 5 has two dragons, each 70 chakra and a 60 s cooldown of its own: slot 1 Summon Tairn (the dragon of Fourth Wing) and slot 2 Summon Crimson Dragon (the
+first dragon; ordinary orange fire). They are `UGA_SummonDragon` and `UGA_SummonCrimsonDragon` over one base (`UGA_SummonDragonBase`), differing in the
+`EShinobiDragonKind` they pass to `AShinobiDragonMount::Spawn`. After the Kuchiyose seals the caster rides the dragon for `UGE_Mounted::Seconds`
+(45 s). The rider stays the player's own character: the effect grants `State.Mounted`, and `UShinobiMovementComponent::UpdateCharacterStateBeforeMovement`
+(which runs in every move on the client and the server) switches to `MOVE_Flying` at 1500 u/s while the tag is on and back to falling when it goes.
+No possession swap and no second ability system; the tag replicates, so the server and the predicting client agree. While mounted the movement
+component also keeps the capsule floor at least `MountedGroundClearance` (200) above the ground (a downward trace in each move): the dragon's legs
+hang below the rider, so a mount from the ground is a quick lift-off and a dive eases out above the floor.
+
+- **Controls:** WASD flies along the camera's yaw; Space climbs and Control dives (A and B on a pad; `AShinobiPlayerCharacter::SetFlightClimb/Dive`).
+  Melee and Dodge are blocked while mounted: the melee button breathes fire and Control is the dive. X (D-pad down on a pad) dismounts on any page
+  (`UGA_DragonDismountKey`); the summon's own key does it too on page 5, like Kamui's exit. Both are free. Being downed or killed ends the ride;
+  so does the timer.
+- **Fire-breath** (`UGA_DragonBreath`, melee input): 5 pulses 0.3 s apart, each 25 to every hostile in a 20 degree 3D cone up to 15 m from the dragon's
+  mouth, burning whoever is hit (and a fire burst on them), 15 chakra, 4 s cooldown. It is a melee-class ability for the gates: not while phased or
+  charging, a jutsu cancels it, a staggering hit puts it out. The mouth is a fixed offset from the rider (`AShinobiDragonMount::MouthLocation`), the same on
+  every machine, so the cone and the flames agree.
+- **Where it goes:** straight out of the dragon's mouth, in the direction the dragon faces, tipped down 10 degrees (`AShinobiDragonMount::BreathPitch`, enough to bring it
+  onto things below a flying dragon). While mounted the character (so the dragon) turns to the
+  camera's yaw instead of its movement (`AShinobiPlayerCharacter::Tick` swaps `bOrientRotationToMovement` for `bUseControllerDesiredRotation`), so you aim the fire
+  by turning, and climb or dive with Space and Control to bring it onto a target. `AShinobiDragonMount::BreathDirection` and `BreathTarget` give the
+  direction and the point where the fire ends (`BreathRange` ahead, or the first thing it meets); the damage cone, the jet and the HUD all use them.
+  The HUD (`UShinobiHUDWidget::UpdateDragonCrosshair`) draws a ring with a dot at that point while you are mounted, in the dragon's fire colour.
+- **Ground fire:** where the fire falls on the ground (the floor within 4 m below the jet's end; a dragon flying high leaves none) each pulse lays an
+  `AShinobiFirePatch` of kind `TairnFire` (blue-white flames cut from the dragon's own sheet, dark blue-grey smoke, blue embers) or `CrimsonFire` (orange
+  flames, smoke, embers): 4 s (`DragonDuration`), scale 1.3, catching enemies in it with Burn every half second, and a scorch mark on the ground afterwards,
+  like a Fireball's or Amaterasu's. Pulses closer than 1.4 m to the last patch add none, so a still breath leaves one and a sweeping one leaves a trail.
+- **The jet** is `AShinobiDragonFlame` (`VFX/`): one replicated actor the server turns with the dragon's facing; every machine animates its own particles
+  from the clock (about 60-70 billboard sprites). Each dragon has its own SpriteCook sheet (`tairn_fire_sheet.png`: blue-white plasma flame laced with
+  lightning; `crimson_fire_sheet.png`: orange dragonfire with embers; `ESprite::TairnFire` / `CrimsonFire`, 8 tall jets in a 4x2 atlas, imported by
+  `Scripts/setup_sprite_vfx.py`). A tongue is born at the mouth, flies down the fire with its long axis along it (a billboard that turns about the jet's
+  axis to face the camera) and widens as it goes in a narrow cone, so the overlapping tongues read as one stream; hot core tongues, a muzzle flash and, per
+  dragon, lightning forks (Tairn) or embers and smoke (crimson) ride with it, under a coloured light. Tairn's fire colour is not stated anywhere in the
+  books or the fan wikis, so it is blue-white and lightning-tinged (the user's choice; Violet wields lightning through him). Targets that are hit get a
+  lightning burst (Tairn) or fire burst (crimson); the Burn status they catch is the ordinary orange one. `State.DragonBreathing` plays the dragon's head clip.
+- **Camera:** the boom eases from 450 to 900 while mounted, and only then (anything else that sets the boom is left alone).
+- **The dragon** is `AShinobiDragonMount`, a replicated actor with no collision or health, attached to the rider's mesh so it is smoothed on clients
+  with the rider (the transform uses the mesh's default offset, not its current network-smoothed one).
+- **The kind** (`EShinobiDragonKind`, replicated with the dragon and its flame) picks the model, the scale, the saddle, the mouth and the fire: a `FDragonLook`
+  table at the top of `ShinobiDragonMount.cpp` (Tairn 4x, the crimson dragon 3.5x) and the particle recipes in `AShinobiDragonFlame::BeginPlay`. Dismounting
+  and the breath work the same for both; the breath's hit burst is lightning for Tairn and fire for the crimson one. Adding a third dragon is a new
+  kind, a look row, a recipe and a jutsu subclass.
+- **Tairn's model** is a Hyper3D Rodin generation prompted from the books (a Black Morningstartail: thick ridged black scales, a mane of pointed neck
+  spikes, giant golden eyes, scarred black wings, long taloned toes, a rock-hard underbelly; `SourceArt/Creatures/Tairn/rodin_tairn.glb`). Rodin
+  gave him a thin curl for a tail tip, but a Morningstartail ends in a club studded with lethal spikes, so `Scripts/character/build_dragon.py` cuts the
+  curl off and grafts on a Rodin-generated spiked ball (`rodin_tail_club2.glb`, from a second generation; the first came out as a fan of spikes) with 20
+  long procedural cones, and tears ragged holes out of the wing membranes for the scars. It then builds a 34-bone rig to it (spine, neck, jaw, a tail whose
+  last bone carries the club, arms, legs, five wing bones a side), weights it by distance (bone heat fails on it, like the toad), tips it nose-down about
+  the hips in every flying clip so the back is level, and keys the clips: Idle (hover), Flap (climbing and slow flight), Glide (fast and level) and Breath
+  (once per breath). Three material slots: the body and the ball (M_Character instances of `Tairn.png` and `TairnClub.png`) and the spikes (flat black).
+  `blender -b -P Scripts/character/build_dragon.py` (add `-- preview` for pose renders in `Saved/dragon_*.png`; it prints the back height the saddle
+  is measured from), then `Scripts/setup_creatures.py`. The assets are `SK_Tairn`, `ANIM_Tairn_*` under `/Game/Shinobi/Creatures/Tairn`. The icon is a SpriteCook painting
+  of Tairn.
+- **The crimson dragon's model** is the first Rodin dragon (`SourceArt/Creatures/DragonRodin/rodin_dragon.glb`, a red-and-grey upright dragon), rigged
+  the same way by `Scripts/character/build_dragon_crimson.py` (the script Tairn's grew out of: the same 34-bone rig and clips, without the club or the
+  wing tears; the bone coordinates there are the original measurements). `SK_CrimsonDragon` under `/Game/Shinobi/Creatures/CrimsonDragon`.
+- **The seated pose** is the Mixamo "Sitting Idle" (`SourceArt/Mixamo/Sitting Idle.fbx`, imported by `Scripts/setup_jutsu_anims.py` as `AM_Mount_Sit`).
+  `AShinobiPlayerCharacter::UpdateSeatedPose` loops it while mounted and replays it whenever no jutsu montage is playing. Without that file the script
+  falls back to a pose built by `build_jutsu_anims.py` (timeline `Mount`).
+
+Shots 31-34 of `Scripts/shot_chakra.ps1 -Jutsu` show the ride, the rider close up, the breath, a climb and the page-5 HUD; `Scripts/smoke_m1.ps1` checks
+the client sees itself mounted and the dragon actor. Not done: the rider cannot steer by pitch (Space and Control are the only vertical control), the
+dragon does not bank with the flight, and the eyes are Rodin's small golden ones.

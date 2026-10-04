@@ -76,6 +76,11 @@ bpy.ops.object.transform_apply(location=True, rotation=False, scale=False)
 bpy.context.view_layer.update()
 print(f"[export_creature] dimensions {tuple(round(c, 2) for c in mesh.dimensions)} (metres), shifted {tuple(round(c, 2) for c in shift)}")
 
+for bone in arm.data.bones:  # where the saddle goes, for creatures that are ridden (metres, after centring, facing +X)
+    if bone.name.lower() in ("hips", "spine_0", "spine_1", "spine_2", "spine_3", "head", "root"):
+        position = arm.matrix_world @ bone.head_local
+        print(f"[export_creature] bone {bone.name}: {tuple(round(c, 2) for c in position)}")
+
 common = dict(axis_forward="-Y", axis_up="Z", global_scale=1.0, apply_unit_scale=True, add_leaf_bones=False, armature_nodetype="NULL", path_mode="COPY")
 
 # Mesh + skeleton, bound to the rest pose.

@@ -68,7 +68,9 @@ void AShinobiFirePatch::BeginPlay()
 {
 	Super::BeginPlay();
 	const bool bBlack = Kind == EShinobiFirePatch::BlackFlame;
-	Duration = bBlack ? 5.f : 3.f;
+	const bool bTairn = Kind == EShinobiFirePatch::TairnFire;
+	const bool bDragon = bTairn || Kind == EShinobiFirePatch::CrimsonFire;
+	Duration = bBlack ? 5.f : bDragon ? DragonDuration : 3.f;
 	if (HasAuthority())
 	{
 		SetLifeSpan(Duration); // the server's destruction removes it everywhere
@@ -80,11 +82,11 @@ void AShinobiFirePatch::BeginPlay()
 		return;
 	}
 
-	const FLinearColor Color = bBlack ? ShinobiVfx::Colors::BlackFlame : ShinobiVfx::Colors::Fire;
+	const FLinearColor Color = bBlack ? ShinobiVfx::Colors::BlackFlame : bTairn ? FLinearColor(0.45f, 0.65f, 1.f) : ShinobiVfx::Colors::Fire;
 	using ShinobiVfx::ESprite;
 	UStaticMesh* Plane = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
 	FRandomStream Random(GetUniqueID()); // cosmetic: each machine may scatter the cards differently
-	const ESprite FlameKind = bBlack ? ESprite::BlackFlame : ESprite::Flame;
+	const ESprite FlameKind = FlameSprite();
 	for (int32 Index = 0; Index < PatchFlameCount; ++Index)
 	{
 		// Spread over most of the radius, taller in the middle.
@@ -95,20 +97,31 @@ void AShinobiFirePatch::BeginPlay()
 	}
 	if (!bBlack)
 	{
-		for (int32 Index = 0; Index < PatchSmokeCount; ++Index)
+		for (int32 Index = 0; Index < (bDragon ? PatchSmokeCount + 2 : PatchSmokeCount); ++Index)
 		{
-			Smokes.Add(MakeCard(Plane, ShinobiVfx::MakeSprite(this, ESprite::Smoke, Index, FLinearColor(0.08f, 0.08f, 0.09f), 1.f), FVector::ZeroVector, Index / static_cast<float>(PatchSmokeCount), Index));
+			Smokes.Add(MakeCard(Plane, ShinobiVfx::MakeSprite(this, ESprite::Smoke, Index, bTairn ? FLinearColor(0.07f, 0.08f, 0.12f) : FLinearColor(0.08f, 0.08f, 0.09f), 1.f), FVector::ZeroVector, Index / static_cast<float>(PatchSmokeCount), Index));
 		}
 	}
-	for (int32 Index = 0; Index < PatchEmberCount; ++Index)
+	for (int32 Index = 0; Index < (bDragon ? PatchEmberCount + 3 : PatchEmberCount); ++Index)
 	{
-		UMaterialInstanceDynamic* Material = ShinobiVfx::MakeSprite(this, ESprite::Ember, Index, bBlack ? FLinearColor(0.6f, 0.3f, 1.f) : FLinearColor::White, 2.f);
+		UMaterialInstanceDynamic* Material = ShinobiVfx::MakeSprite(this, ESprite::Ember, Index, bBlack ? FLinearColor(0.6f, 0.3f, 1.f) : bTairn ? FLinearColor(0.55f, 0.75f, 1.f) : FLinearColor::White, 2.f);
 		Embers.Add(MakeCard(Plane, Material, FVector(Random.FRandRange(-0.3f, 0.3f) * GetRadius(), Random.FRandRange(-0.3f, 0.3f) * GetRadius(), 0.f), Random.FRand(), Index));
 	}
 	Light->SetLightColor(Color);
 	Light->SetAttenuationRadius(GetRadius() * 3.f);
 	// The ground stays charred a good while after the flames go out; Amaterasu leaves a longer, cooler scar.
-	ShinobiVfx::SpawnScorch(GetWorld(), GetActorLocation(), GetRadius() * 1.3f, bBlack ? FLinearColor(0.75f, 0.65f, 1.f) : FLinearColor::White, Duration + (bBlack ? 14.f : 9.f));
+	ShinobiVfx::SpawnScorch(GetWorld(), GetActorLocation(), GetRadius() * 1.3f, bBlack ? FLinearColor(0.75f, 0.65f, 1.f) : bTairn ? FLinearColor(0.8f, 0.88f, 1.f) : FLinearColor::White, Duration + (bBlack ? 14.f : 9.f));
+}
+
+ShinobiVfx::ESprite AShinobiFirePatch::FlameSprite() const
+{
+	switch (Kind)
+	{
+	case EShinobiFirePatch::BlackFlame: return ShinobiVfx::ESprite::BlackFlame;
+	case EShinobiFirePatch::TairnFire: return ShinobiVfx::ESprite::TairnFire;
+	case EShinobiFirePatch::CrimsonFire: return ShinobiVfx::ESprite::CrimsonFire;
+	default: return ShinobiVfx::ESprite::Flame;
+	}
 }
 
 AShinobiFirePatch::FCard AShinobiFirePatch::MakeCard(UStaticMesh* Plane, UMaterialInstanceDynamic* Material, const FVector& Where, float Phase, int32 Variant)
@@ -184,7 +197,7 @@ void AShinobiFirePatch::Tick(float DeltaSeconds)
 
 	for (FCard& Card : Flames)
 	{
-		Swap(Card, bBlack ? ESprite::BlackFlame : ESprite::Flame, FlameSwapTime);
+		Swap(Card, FlameSprite(), FlameSwapTime);
 		const float Centre = 1.f - Card.Mesh->GetRelativeLocation().Size2D() / FMath::Max(GetRadius(), 1.f);
 		const float Flicker = 1.f + 0.08f * FMath::Sin(Age * 9.f + Card.Phase * 2.f * PI);
 		const FVector2D Size = FlameCardSize * Scale * Life * FVector2D(0.9f + 0.2f * Centre, Flicker * (0.6f + 0.6f * Centre));

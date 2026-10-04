@@ -13,6 +13,7 @@ UGA_Dodge::UGA_Dodge()
 	SetAssetTags(FGameplayTagContainer(ShinobiTags::Ability_Dodge));
 	ActivationOwnedTags.AddTag(ShinobiTags::State_Dodging);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Dodging);
+	ActivationBlockedTags.AddTag(ShinobiTags::State_Mounted); // Control dives on a dragon
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_ChakraCharge);
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Melee);
