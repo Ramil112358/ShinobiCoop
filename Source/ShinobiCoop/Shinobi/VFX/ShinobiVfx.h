@@ -47,6 +47,8 @@ namespace ShinobiVfx
 		Vortex,     // spiral energy, additive
 		Slash,      // curved streak, additive
 		Burst,      // radial light rays, additive
+		TairnFire,  // tall jets of blue-white lightning fire, additive (8): Tairn's breath
+		CrimsonFire, // tall jets of orange dragon fire with embers, additive (8): the crimson dragon's breath
 	};
 
 	/** How many variants the sprite has (the Variant argument below wraps around this). */

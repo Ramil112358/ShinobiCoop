@@ -146,6 +146,7 @@ private:
 	TObjectPtr<UAnimMontage> SeatedMontage;
 
 	bool bBoomPulledBack = false;
+	bool bSteeringByCamera = false;
 	bool bSeatedLoadTried = false;
 	bool bFlightClimb = false;
 	bool bFlightDive = false;

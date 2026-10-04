@@ -67,7 +67,7 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 		UGA_Teleport::StaticClass(), UGA_TeleportJump::StaticClass(),
 		UGA_EarthWall::StaticClass(), UGA_WaterWall::StaticClass(), UGA_FireMeteor::StaticClass(), UGA_IceMeteor::StaticClass(), UGA_WaterDragon::StaticClass(), UGA_Susanoo::StaticClass(),
 		UGA_SummonToad::StaticClass(), UGA_SummonSnake::StaticClass(), UGA_SummonDogs::StaticClass(),
-		UGA_SummonDragon::StaticClass(), UGA_DragonDismount::StaticClass(), UGA_DragonDismountKey::StaticClass(), UGA_DragonBreath::StaticClass(),
+		UGA_SummonDragon::StaticClass(), UGA_SummonCrimsonDragon::StaticClass(), UGA_DragonDismount::StaticClass(), UGA_DragonDismountKey::StaticClass(), UGA_DragonBreath::StaticClass(),
 	};
 	StartupEffects.Add(UGE_SubstitutionRegen::StaticClass());
 
@@ -461,6 +461,15 @@ void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
 		// Only driven around a ride, so anything else that sets the boom (the world tour's close-ups) is left alone.
 		CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, bMounted ? MountedArmLength : FootArmLength, DeltaSeconds, 2.f);
 		bBoomPulledBack = bMounted || !FMath::IsNearlyEqual(CameraBoom->TargetArmLength, FootArmLength, 1.f);
+	}
+	if (bMounted != bSteeringByCamera)
+	{
+		// Riding, the character (and so the dragon) faces where the camera looks, so the fire is aimed by turning; on foot it turns with its movement.
+		bSteeringByCamera = bMounted;
+		UCharacterMovementComponent* Movement = GetCharacterMovement();
+		Movement->bOrientRotationToMovement = !bMounted;
+		Movement->bUseControllerDesiredRotation = bMounted;
+		Movement->RotationRate = FRotator(0.f, bMounted ? 360.f : 720.f, 0.f);
 	}
 	if (!bMounted)
 	{

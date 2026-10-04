@@ -20,7 +20,10 @@
     {"asset_id": "0e4956cf-2cba-4581-8028-ab3ff925b524", "file": "UI/jutsu_summontoad.png", "label": "Summon Toad jutsu icon, gpt-image-2 low 1K, Susanoo icon as style reference (2 credits); copy in SourceArt/UI"},
     {"asset_id": "1e9e8e1d-3ec2-463d-9d0a-f12d0b3908e6", "file": "UI/jutsu_summonsnake.png", "label": "Summon Snake jutsu icon, gpt-image-2 low 1K, Susanoo icon as style reference (2 credits); copy in SourceArt/UI"},
     {"asset_id": "a63fbe91-d077-44d4-ad2a-acacbd8a04db", "file": "UI/jutsu_summondogs.png", "label": "Summon Dogs jutsu icon, gpt-image-2 low 1K, Susanoo icon as style reference (2 credits); copy in SourceArt/UI"},
-    {"asset_id": "d176df33-b86e-436e-85c3-25ddfaec775c", "file": "UI/jutsu_summondragon.png", "label": "Summon Dragon jutsu icon, gpt-image-2 low 1K, Susanoo icon as style reference (2 credits); copy in SourceArt/UI"}
+    {"asset_id": "4b3913f1-64b4-4358-a254-5f6210af3299", "file": "UI/jutsu_summondragon.png", "label": "Summon Tairn jutsu icon (replaces the first, crimson dragon one), gpt-image-2 low 1K, Susanoo icon as style reference (2 credits); copy in SourceArt/UI"},
+    {"asset_id": "d176df33-b86e-436e-85c3-25ddfaec775c", "file": "UI/jutsu_summoncrimson.png", "label": "Summon Crimson Dragon jutsu icon, gpt-image-2 low 1K, Susanoo icon as style reference (2 credits); copy in SourceArt/UI"},
+    {"asset_id": "5abcf57f-c7ce-4180-924f-e9493a55c2ce", "file": "VFX/tairn_fire_sheet.png", "label": "Tairn dragon-fire sheet: 8 tall blue-white lightning-fire jets in a 4x2 atlas on black, gpt-image-2 low 1K (2 credits)"},
+    {"asset_id": "d47e5ce4-b1ac-4070-b5a4-d0bdaa67f688", "file": "VFX/crimson_fire_sheet.png", "label": "Crimson dragon-fire sheet: 8 tall orange dragonfire jets with embers in a 4x2 atlas on black, gpt-image-2 low 1K (2 credits)"}
   ],
   "ui_kits": [
     {"ui_kit_id": "9b4146da-7bb2-489d-a6ca-65bcee0ef703", "name": "Shinobi HUD"}

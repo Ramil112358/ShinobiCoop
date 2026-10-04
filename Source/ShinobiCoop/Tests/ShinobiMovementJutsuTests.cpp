@@ -13,6 +13,7 @@
 #include "Shinobi/Abilities/GA_Teleport.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/Abilities/GA_Chidori.h"
+#include "Shinobi/Abilities/GA_Rasengan.h"
 #include "Shinobi/Abilities/GA_Fireball.h"
 #include "Animation/AnimMontage.h"
 #include "Engine/Texture2D.h"
@@ -34,18 +35,18 @@ bool FShinobiOffPageJutsuTest::RunTest(const FString& Parameters)
 	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
 
 	TestTrue(TEXT("Starts on page 1"), ShinobiTest::HasTag(P, ShinobiTags::JutsuPage(1)));
-	P->ApplyJutsuPage(5); // key 2 is empty there (only the Dragon lives on page 5, on key 1)
+	P->ApplyJutsuPage(5); // keys 3 and 4 are empty there (the two dragons live on keys 1 and 2)
 	TestFalse(TEXT("Page 1 tag removed"), ShinobiTest::HasTag(P, ShinobiTags::JutsuPage(1)));
 	TestEqual(TEXT("On page 5"), P->GetJutsuPage(), 5);
 
-	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
-	TestFalse(TEXT("Chidori is on page 1: key 2 does nothing on page 5"), ShinobiTest::IsActive(P, UGA_Chidori::StaticClass()));
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
+	TestFalse(TEXT("Rasengan is on page 1: key 3 does nothing on page 5"), ShinobiTest::IsActive(P, UGA_Rasengan::StaticClass()));
 	TestEqual(TEXT("Nothing spent"), ShinobiTest::Get(P, Chakra), 100.f);
 
 	P->ApplyJutsuPage(1);
-	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
-	TestTrue(TEXT("Back on page 1 the Chidori fires"), ShinobiTest::IsActive(P, UGA_Chidori::StaticClass()));
-	TestEqual(TEXT("Cost paid"), ShinobiTest::Get(P, Chakra), 70.f);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
+	TestTrue(TEXT("Back on page 1 the Rasengan fires"), ShinobiTest::IsActive(P, UGA_Rasengan::StaticClass()));
+	TestEqual(TEXT("Cost paid"), ShinobiTest::Get(P, Chakra), 65.f);
 	return true;
 }
 
