@@ -6,6 +6,7 @@
 #include "Shinobi/ShinobiGameState.h"
 #include "Shinobi/ShinobiLook.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/Pvp/ShinobiPickup.h"
 #include "Shinobi/Pvp/ShinobiPvpGameMode.h"
 #include "Shinobi/Pvp/ShinobiPvpMatch.h"
 #include "Shinobi/Pvp/ShinobiPvpText.h"
@@ -15,6 +16,7 @@
 #include "Shinobi/Enemies/ShinobiSummon.h"
 #include "AIController.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/TargetPoint.h"
 #include "GameFramework/DamageType.h"
 #include "GameFramework/PlayerStart.h"
 
@@ -259,10 +261,20 @@ bool FShinobiPvpResetTest::RunTest(const FString& Parameters)
 	ShinobiTest::Release(P, EShinobiAbilityInputID::Sprint);
 	TestTrue(TEXT("Susanoo up"), ShinobiTest::HasTag(P, ShinobiTags::State_Susanoo));
 
+	for (const EShinobiPickupType Type : { EShinobiPickupType::Attack, EShinobiPickupType::Speed, EShinobiPickupType::Shield })
+	{
+		AShinobiPickup::Apply(*P, Type);
+	}
+	TestTrue(TEXT("Boosted and shielded"), ShinobiTest::HasTag(P, ShinobiTags::State_AttackBoost) && ShinobiTest::HasTag(P, ShinobiTags::State_SpeedBoost)
+		&& ShinobiTest::HasTag(P, ShinobiTags::State_Shield));
+
 	Mode->ResetCharacters();
 	TestFalse(TEXT("Hold cleared"), ShinobiTest::HasTag(P, ShinobiTags::State_PvpHold));
 	TestFalse(TEXT("Susanoo cleared"), ShinobiTest::HasTag(P, ShinobiTags::State_Susanoo));
 	TestFalse(TEXT("Dismounted"), ShinobiTest::HasTag(P, ShinobiTags::State_Mounted));
+	TestFalse(TEXT("Boosts cleared"), ShinobiTest::HasTag(P, ShinobiTags::State_AttackBoost) || ShinobiTest::HasTag(P, ShinobiTags::State_SpeedBoost));
+	TestFalse(TEXT("Shield cleared"), ShinobiTest::HasTag(P, ShinobiTags::State_Shield));
+	TestEqual(TEXT("No shield left over"), ShinobiTest::Get(P, UShinobiAttributeSet::GetShieldAttribute()), 0.f);
 	TestEqual(TEXT("Health full"), ShinobiTest::Get(P, UShinobiAttributeSet::GetHealthAttribute()), MaxHealth);
 	TestTrue(TEXT("Free to move again"), P->CanMove());
 	return true;
@@ -442,6 +454,245 @@ bool FShinobiPvpTextScoreTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Seconds are padded"), ShinobiPvp::ScoreText(*State, 65.f), FString(TEXT("A 1  -  Round 2  -  B 0  -  1:05")));
 	State->PvpPhase = EShinobiPvpPhase::Countdown;
 	TestEqual(TEXT("No timer outside the fight"), ShinobiPvp::ScoreText(*State, 2.f), FString(TEXT("A 1  -  Round 2  -  B 0  -  --:--")));
+	return true;
+}
+
+namespace
+{
+	/** What the HUD's boost list shows: the longest time left on an effect granting Tag. */
+	float BoostSecondsLeft(const AShinobiCharacterBase* Character, const FGameplayTag& Tag)
+	{
+		float Left = 0.f;
+		for (const float Seconds : Character->GetAbilitySystemComponent()->GetActiveEffectsTimeRemaining(
+			FGameplayEffectQuery::MakeQuery_MatchAnyOwningTags(FGameplayTagContainer(Tag))))
+		{
+			Left = FMath::Max(Left, Seconds);
+		}
+		return Left;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPickupHealthTest, "ShinobiCoop.Pvp.Pickup.HealthRestoresFortyPercentAndClamps", ShinobiTestFlags)
+bool FShinobiPickupHealthTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+	const float MaxHealth = P->GetAttributes()->GetMaxHealth();
+
+	ShinobiTest::Set(P, Health, MaxHealth * 0.5f);
+	TestTrue(TEXT("Taken"), AShinobiPickup::Apply(*P, EShinobiPickupType::Health));
+	TestEqual(TEXT("Half health becomes 90%"), ShinobiTest::Get(P, Health), MaxHealth * 0.9f, 0.01f);
+	ShinobiTest::Set(P, Health, MaxHealth * 0.8f);
+	AShinobiPickup::Apply(*P, EShinobiPickupType::Health);
+	TestEqual(TEXT("80% is capped at full"), ShinobiTest::Get(P, Health), MaxHealth, 0.01f);
+
+	ShinobiTest::Set(P, Health, MaxHealth * 0.1f);
+	ShinobiTest::ApplyEffect(P, UGE_Downed::StaticClass());
+	TestFalse(TEXT("The downed can't take it"), AShinobiPickup::Apply(*P, EShinobiPickupType::Health));
+	TestEqual(TEXT("And are not healed"), ShinobiTest::Get(P, Health), MaxHealth * 0.1f, 0.01f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPickupAttackTest, "ShinobiCoop.Pvp.Pickup.AttackBoostScalesOutgoingDamage", ShinobiTestFlags)
+bool FShinobiPickupAttackTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* Target = W.Spawn<AShinobiCharacterBase>(FVector(300.f, 0.f, 0.f));
+	ShinobiTest::Hover(P);
+	ShinobiTest::Hover(Target);
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+
+	TestTrue(TEXT("Taken"), AShinobiPickup::Apply(*P, EShinobiPickupType::Attack));
+	TestTrue(TEXT("Boosted"), ShinobiTest::HasTag(P, ShinobiTags::State_AttackBoost));
+	TestEqual(TEXT("The HUD shows 15 s left"), BoostSecondsLeft(P, ShinobiTags::State_AttackBoost), UGE_AttackBoost::Seconds, 0.1f);
+	ShinobiCombat::ApplyDamage(P->GetAbilitySystemComponent(), Target, 100.f);
+	TestEqual(TEXT("100 hits for 150"), ShinobiTest::Get(Target, Health), 350.f);
+	ShinobiCombat::ApplyDamage(Target->GetAbilitySystemComponent(), P, 100.f);
+	TestEqual(TEXT("Damage taken is not boosted"), ShinobiTest::Get(P, Health), 400.f);
+
+	W.Tick(15.1f);
+	TestFalse(TEXT("Over after 15 s"), ShinobiTest::HasTag(P, ShinobiTags::State_AttackBoost));
+	ShinobiCombat::ApplyDamage(P->GetAbilitySystemComponent(), Target, 100.f);
+	TestEqual(TEXT("Then 100 is 100"), ShinobiTest::Get(Target, Health), 250.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPickupSpeedTest, "ShinobiCoop.Pvp.Pickup.SpeedBoostScalesMaxSpeed", ShinobiTestFlags)
+bool FShinobiPickupSpeedTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	const float Base = P->GetCharacterMovement()->GetMaxSpeed();
+	TestTrue(TEXT("A speed to scale"), Base > 0.f);
+
+	TestTrue(TEXT("Taken"), AShinobiPickup::Apply(*P, EShinobiPickupType::Speed));
+	TestEqual(TEXT("35% faster"), P->GetCharacterMovement()->GetMaxSpeed(), Base * 1.35f, 0.01f);
+	TestEqual(TEXT("The HUD shows 12 s left"), BoostSecondsLeft(P, ShinobiTags::State_SpeedBoost), UGE_SpeedBoost::Seconds, 0.1f);
+	W.Tick(12.1f);
+	TestFalse(TEXT("Over after 12 s"), ShinobiTest::HasTag(P, ShinobiTags::State_SpeedBoost));
+	TestEqual(TEXT("Back to normal"), P->GetCharacterMovement()->GetMaxSpeed(), Base, 0.01f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPickupShieldTest, "ShinobiCoop.Pvp.Pickup.ShieldAbsorbsExactlySixtyThenEnds", ShinobiTestFlags)
+bool FShinobiPickupShieldTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* Enemy = W.Spawn<AShinobiCharacterBase>(FVector(300.f, 0.f, 0.f));
+	ShinobiTest::Hover(P);
+	ShinobiTest::Hover(Enemy);
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+	const FGameplayAttribute Shield = UShinobiAttributeSet::GetShieldAttribute();
+	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
+	UAbilitySystemComponent* EnemyASC = Enemy->GetAbilitySystemComponent();
+	ShinobiTest::FEventCounter Staggers(P, ShinobiTags::Event_Hit_Stagger);
+
+	ShinobiTest::Set(P, Chakra, 10.f);
+	TestTrue(TEXT("Taken"), AShinobiPickup::Apply(*P, EShinobiPickupType::Shield));
+	TestEqual(TEXT("Chakra refilled"), ShinobiTest::Get(P, Chakra), P->GetAttributes()->GetMaxChakra());
+	TestEqual(TEXT("60 of shield"), ShinobiTest::Get(P, Shield), UGE_Shield::Absorb);
+	TestEqual(TEXT("The HUD shows 10 s left"), BoostSecondsLeft(P, ShinobiTags::State_Shield), UGE_Shield::Seconds, 0.1f);
+
+	// A 30 hit: all absorbed, and no stagger (30 would stagger an unshielded target).
+	ShinobiCombat::ApplyDamage(EnemyASC, P, 30.f);
+	TestEqual(TEXT("No damage"), ShinobiTest::Get(P, Health), 500.f);
+	TestEqual(TEXT("30 shield left"), ShinobiTest::Get(P, Shield), 30.f);
+	TestTrue(TEXT("Still shielded"), ShinobiTest::HasTag(P, ShinobiTags::State_Shield));
+	TestEqual(TEXT("A fully absorbed hit doesn't stagger"), Staggers.Count, 0);
+
+	// Fresh shield, a 100 hit: 60 absorbed, 40 through, and the shield is gone.
+	AShinobiPickup::Apply(*P, EShinobiPickupType::Shield);
+	TestEqual(TEXT("Refilled to 60"), ShinobiTest::Get(P, Shield), UGE_Shield::Absorb);
+	ShinobiCombat::ApplyDamage(EnemyASC, P, 100.f);
+	TestEqual(TEXT("40 taken"), ShinobiTest::Get(P, Health), 460.f);
+	TestEqual(TEXT("Shield spent"), ShinobiTest::Get(P, Shield), 0.f);
+	TestFalse(TEXT("Shield ended"), ShinobiTest::HasTag(P, ShinobiTags::State_Shield));
+	TestEqual(TEXT("What got through staggers"), Staggers.Count, 1);
+	ShinobiCombat::ApplyDamage(EnemyASC, P, 100.f);
+	TestEqual(TEXT("Then hits land in full"), ShinobiTest::Get(P, Health), 360.f);
+
+	// Burning eats the shield too; unspent, it runs out after 10 s and leaves nothing behind.
+	AShinobiPickup::Apply(*P, EShinobiPickupType::Shield);
+	ShinobiTest::ApplySetByCaller(P, UGE_Burn::StaticClass(), ShinobiTags::Data_Damage, 10.f);
+	W.Tick(1.5f); // one tick, at 1 s
+	TestEqual(TEXT("A burn tick is absorbed"), ShinobiTest::Get(P, Health), 360.f);
+	TestEqual(TEXT("And spends 10 of shield"), ShinobiTest::Get(P, Shield), 50.f);
+	P->GetAbilitySystemComponent()->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_Burning));
+	W.Tick(8.6f);
+	TestFalse(TEXT("Over after 10 s"), ShinobiTest::HasTag(P, ShinobiTags::State_Shield));
+	TestEqual(TEXT("No shield value left behind"), ShinobiTest::Get(P, Shield), 0.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPickupOnceTest, "ShinobiCoop.Pvp.Pickup.PickupAppliesOnce", ShinobiTestFlags)
+bool FShinobiPickupOnceTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	// Far from the pickup, so only the direct calls below touch it.
+	AShinobiPlayerCharacter* A = W.Spawn<AShinobiPlayerCharacter>(FVector(2000.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* B = W.Spawn<AShinobiPlayerCharacter>(FVector(-2000.f, 0.f, 0.f));
+	ShinobiTest::Hover(A);
+	ShinobiTest::Hover(B);
+	AShinobiPickup* Pickup = AShinobiPickup::Spawn(W.World, EShinobiPickupType::Attack, FVector::ZeroVector);
+	TestNotNull(TEXT("Spawned"), Pickup);
+	if (!Pickup)
+	{
+		return false;
+	}
+	TestEqual(TEXT("Of its type"), Pickup->GetType(), EShinobiPickupType::Attack);
+	TestFalse(TEXT("Available"), Pickup->IsTaken());
+
+	// Both reach it in the same frame: the first one wins.
+	TestTrue(TEXT("A takes it"), Pickup->TryTake(A));
+	TestFalse(TEXT("B is too late"), Pickup->TryTake(B));
+	TestTrue(TEXT("A is boosted"), ShinobiTest::HasTag(A, ShinobiTags::State_AttackBoost));
+	TestFalse(TEXT("B is not"), ShinobiTest::HasTag(B, ShinobiTags::State_AttackBoost));
+	TestTrue(TEXT("Taken"), Pickup->IsTaken());
+	TestTrue(TEXT("Hidden while taken"), Pickup->IsHidden());
+	TestFalse(TEXT("And untouchable"), Pickup->GetActorEnableCollision());
+
+	Pickup->ResetNow();
+	TestFalse(TEXT("Available again"), Pickup->IsTaken());
+	TestFalse(TEXT("Shown"), Pickup->IsHidden());
+
+	// Only the living take it, and a refused taker leaves it there.
+	ShinobiTest::ApplyEffect(B, UGE_Downed::StaticClass());
+	TestFalse(TEXT("The downed can't"), Pickup->TryTake(B));
+	TestFalse(TEXT("Still available"), Pickup->IsTaken());
+	TestFalse(TEXT("Nor can a non-character"), Pickup->TryTake(Pickup));
+
+	// Taken, it comes back by itself after 25 s.
+	Pickup->TryTake(A);
+	W.Tick(AShinobiPickup::RespawnSeconds - 0.2f);
+	TestTrue(TEXT("Still gone just before 25 s"), Pickup->IsTaken());
+	W.Tick(0.3f);
+	TestFalse(TEXT("Back after 25 s"), Pickup->IsTaken());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPickupResetTest, "ShinobiCoop.Pvp.Pickup.GameModeResetRestoresPickups", ShinobiTestFlags)
+bool FShinobiPickupResetTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPvpGameMode* Mode = W.Spawn<AShinobiPvpGameMode>();
+	Mode->PvpFormat = EShinobiPvpFormat::OneVsOne;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>(FVector(2000.f, 0.f, 0.f));
+	P->SetTeam(EShinobiTeam::TeamA);
+	ShinobiTest::Hover(P);
+	AShinobiPickup* Speed = AShinobiPickup::Spawn(W.World, EShinobiPickupType::Speed, FVector::ZeroVector);
+	AShinobiPickup* Shield = AShinobiPickup::Spawn(W.World, EShinobiPickupType::Shield, FVector(0.f, 1000.f, 0.f));
+	TestTrue(TEXT("Spawned"), Speed && Shield);
+	if (!Speed || !Shield)
+	{
+		return false;
+	}
+	Speed->TryTake(P);
+	Shield->TryTake(P);
+	TestTrue(TEXT("Both taken"), Speed->IsTaken() && Shield->IsTaken());
+
+	Mode->StartRound(); // ResetCharacters, then OnRoundReset
+	TestFalse(TEXT("Speed pickup back"), Speed->IsTaken());
+	TestFalse(TEXT("Shield pickup back"), Shield->IsTaken());
+	TestFalse(TEXT("Boost cleared"), ShinobiTest::HasTag(P, ShinobiTags::State_SpeedBoost));
+	TestFalse(TEXT("Shield cleared"), ShinobiTest::HasTag(P, ShinobiTags::State_Shield));
+	TestEqual(TEXT("Shield value cleared"), ShinobiTest::Get(P, UShinobiAttributeSet::GetShieldAttribute()), 0.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPickupSpawnTest, "ShinobiCoop.Pvp.Pickup.GameModeSpawnsAtTaggedTargetPoints", ShinobiTestFlags)
+bool FShinobiPickupSpawnTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPvpGameMode* Mode = W.Spawn<AShinobiPvpGameMode>(); // its BeginPlay finds no points yet
+	const FName Tags[] = { TEXT("Pickup:Health"), TEXT("Pickup:Attack"), TEXT("Pickup:Speed"), TEXT("Pickup:Shield"), TEXT("Pickup:Health"), NAME_None };
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Tags); ++Index)
+	{
+		ATargetPoint* Point = W.Spawn<ATargetPoint>(FVector(1000.f * Index, 5000.f, 0.f));
+		if (!Tags[Index].IsNone())
+		{
+			Point->Tags.Add(Tags[Index]);
+		}
+	}
+	Mode->SpawnPickups();
+
+	TMap<EShinobiPickupType, int32> Counts;
+	int32 Total = 0;
+	for (TActorIterator<AShinobiPickup> It(W.World); It; ++It)
+	{
+		++Counts.FindOrAdd(It->GetType());
+		++Total;
+		TestEqual(TEXT("At its point"), It->GetActorLocation().Y, 5000.0, 1.0);
+	}
+	TestEqual(TEXT("One per tagged point"), Total, 5);
+	TestEqual(TEXT("Two health"), Counts.FindRef(EShinobiPickupType::Health), 2);
+	TestEqual(TEXT("One attack"), Counts.FindRef(EShinobiPickupType::Attack), 1);
+	TestEqual(TEXT("One speed"), Counts.FindRef(EShinobiPickupType::Speed), 1);
+	TestEqual(TEXT("One shield"), Counts.FindRef(EShinobiPickupType::Shield), 1);
 	return true;
 }
 

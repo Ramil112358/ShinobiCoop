@@ -1,6 +1,7 @@
 #include "Shinobi/Pvp/ShinobiPvpGameMode.h"
 #include "AbilitySystemComponent.h"
 #include "EngineUtils.h"
+#include "Engine/TargetPoint.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerStart.h"
@@ -13,6 +14,7 @@
 #include "Shinobi/ShinobiPlayerController.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Enemies/ShinobiSummon.h"
+#include "Shinobi/Pvp/ShinobiPickup.h"
 
 namespace
 {
@@ -22,7 +24,7 @@ namespace
 		return Character && Character->IsA<AShinobiPlayerCharacter>();
 	}
 
-	/** What a round's reset takes off every fighter: the mount, armour, statuses and the hold. */
+	/** What a round's reset takes off every fighter: the mount, armour, statuses, pickup boosts and shield, and the hold. */
 	const FGameplayTagContainer& RoundClearedTags()
 	{
 		static const FGameplayTagContainer Tags = []
@@ -32,7 +34,8 @@ namespace
 				ShinobiTags::State_PvpHold.GetTag(), ShinobiTags::State_Mounted.GetTag(), ShinobiTags::State_Susanoo.GetTag(),
 				ShinobiTags::State_Phased.GetTag(), ShinobiTags::State_TeleportMarked.GetTag(), ShinobiTags::State_Burning.GetTag(),
 				ShinobiTags::State_Shocked.GetTag(), ShinobiTags::State_ShockBonus.GetTag(), ShinobiTags::State_Staggered.GetTag(),
-				ShinobiTags::State_Chilled.GetTag() })
+				ShinobiTags::State_Chilled.GetTag(), ShinobiTags::State_AttackBoost.GetTag(), ShinobiTags::State_SpeedBoost.GetTag(),
+				ShinobiTags::State_Shield.GetTag() })
 			{
 				Container.AddTag(Tag);
 			}
@@ -83,6 +86,7 @@ void AShinobiPvpGameMode::InitGame(const FString& MapName, const FString& Option
 void AShinobiPvpGameMode::BeginPlay()
 {
 	Super::BeginPlay();
+	SpawnPickups();
 	if (PvpFormat != EShinobiPvpFormat::None && GetPvpState())
 	{
 		StartWarmup();
@@ -392,6 +396,41 @@ void AShinobiPvpGameMode::SetHold(bool bHold)
 	}
 }
 
+void AShinobiPvpGameMode::SpawnPickups()
+{
+	static const TPair<FName, EShinobiPickupType> Kinds[] = {
+		{ TEXT("Pickup:Health"), EShinobiPickupType::Health },
+		{ TEXT("Pickup:Attack"), EShinobiPickupType::Attack },
+		{ TEXT("Pickup:Speed"), EShinobiPickupType::Speed },
+		{ TEXT("Pickup:Shield"), EShinobiPickupType::Shield },
+	};
+	TArray<const ATargetPoint*> Points;
+	for (TActorIterator<ATargetPoint> It(GetWorld()); It; ++It)
+	{
+		Points.Add(*It);
+	}
+	int32 Spawned = 0;
+	for (const ATargetPoint* Point : Points)
+	{
+		for (const TPair<FName, EShinobiPickupType>& Kind : Kinds)
+		{
+			if (Point->ActorHasTag(Kind.Key) && AShinobiPickup::Spawn(GetWorld(), Kind.Value, Point->GetActorLocation()))
+			{
+				++Spawned;
+			}
+		}
+	}
+	UE_LOG(LogShinobiCoop, Log, TEXT("Pvp: %d pickups"), Spawned);
+}
+
+void AShinobiPvpGameMode::OnRoundReset()
+{
+	for (TActorIterator<AShinobiPickup> It(GetWorld()); It; ++It)
+	{
+		It->ResetNow();
+	}
+}
+
 void AShinobiPvpGameMode::ResetCharacters()
 {
 	// The dead and the missing (a body that fell out of the world) get a fresh pawn at their side's start.
@@ -446,6 +485,7 @@ void AShinobiPvpGameMode::ResetCharacters()
 			ASC->SetNumericAttributeBase(UShinobiAttributeSet::GetHealthAttribute(), Stats->GetMaxHealth());
 			ASC->SetNumericAttributeBase(UShinobiAttributeSet::GetChakraAttribute(), Stats->GetMaxChakra());
 			ASC->SetNumericAttributeBase(UShinobiAttributeSet::GetStaminaAttribute(), Stats->GetMaxStamina());
+			ASC->SetNumericAttributeBase(UShinobiAttributeSet::GetShieldAttribute(), 0.f);
 			if (Starts.Num() == 0)
 			{
 				continue;

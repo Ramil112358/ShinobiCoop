@@ -45,13 +45,18 @@ void UShinobiDamageExec::Execute_Implementation(const FGameplayEffectCustomExecu
 	{
 		Damage *= UGE_Susanoo::DamageTakenScale;
 	}
+	// The attack pickup, the same way (burning included).
+	if (Source && Source->HasMatchingGameplayTag(ShinobiTags::State_AttackBoost))
+	{
+		Damage *= UGE_AttackBoost::DamageDealtScale;
+	}
 
 	// Only direct hits send events. They come from instant effects, whose spec is the applier's own copy, so a
 	// listener that removes effects from the target (e.g. chakra charge ending) can't invalidate it mid-execution.
 	const bool bPeriodic = Spec.GetPeriod() > 0.f;
+	const AActor* Attacker = Source ? Source->GetAvatarActor() : nullptr;
 	if (!bPeriodic)
 	{
-		const AActor* Attacker = Source ? Source->GetAvatarActor() : nullptr;
 		if (Target->HasMatchingGameplayTag(ShinobiTags::State_Invulnerable))
 		{
 			const bool bHitByOther = Attacker && Attacker != Target->GetAvatarActor();
@@ -66,10 +71,29 @@ void UShinobiDamageExec::Execute_Implementation(const FGameplayEffectCustomExecu
 			Damage *= ShockBonusMultiplier;
 			Target->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_ShockBonus));
 		}
-		if (Damage >= StaggerThreshold)
+	}
+
+	// The shield pickup soaks the final damage (burning too) before health; what it fully soaks doesn't stagger. Removing
+	// the spent shield is safe mid-tick: a periodic execution holds the effects container's scope lock.
+	if (Target->HasMatchingGameplayTag(ShinobiTags::State_Shield))
+	{
+		const float Shield = Target->GetNumericAttribute(UShinobiAttributeSet::GetShieldAttribute());
+		const float Absorbed = FMath::Min(Shield, Damage);
+		Damage -= Absorbed;
+		Target->SetNumericAttributeBase(UShinobiAttributeSet::GetShieldAttribute(), Shield - Absorbed);
+		if (Shield - Absorbed <= 0.f)
 		{
-			SendEvent(Target, ShinobiTags::Event_Hit_Stagger, Attacker, Damage);
+			Target->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_Shield));
 		}
+		if (Damage <= 0.f)
+		{
+			return;
+		}
+	}
+
+	if (!bPeriodic && Damage >= StaggerThreshold)
+	{
+		SendEvent(Target, ShinobiTags::Event_Hit_Stagger, Attacker, Damage);
 	}
 	OutExecutionOutput.AddOutputModifier(FGameplayModifierEvaluatedData(UShinobiAttributeSet::GetIncomingDamageAttribute(), EGameplayModOp::Additive, Damage));
 }

@@ -257,6 +257,40 @@ public:
 	UGE_PvpHold();
 };
 
+/** Attack pickup: 15 s of State.AttackBoost; UShinobiDamageExec makes the holder's damage x1.5. Another pickup refreshes it. */
+UCLASS()
+class SHINOBICOOP_API UGE_AttackBoost : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	static constexpr float Seconds = 15.f;
+	static constexpr float DamageDealtScale = 1.5f; // read by UShinobiDamageExec
+	UGE_AttackBoost();
+};
+
+/** Speed pickup: 12 s of State.SpeedBoost, 35% faster movement. Another pickup refreshes it. */
+UCLASS()
+class SHINOBICOOP_API UGE_SpeedBoost : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	static constexpr float Seconds = 12.f;
+	static constexpr float SpeedScale = 1.35f; // read by UShinobiMovementComponent::GetMaxSpeed
+	UGE_SpeedBoost();
+};
+
+/** Shield pickup: 10 s of State.Shield. AShinobiPickup::Apply sets the Shield attribute to Absorb; UShinobiDamageExec spends it
+ * before health and removes this effect when it runs out. Another pickup refills it and refreshes the time. */
+UCLASS()
+class SHINOBICOOP_API UGE_Shield : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	static constexpr float Seconds = 10.f;
+	static constexpr float Absorb = 60.f;
+	UGE_Shield();
+};
+
 /** Jutsu cooldown. Duration: SetByCaller Data.Cooldown. The jutsu's Cooldown.Jutsu.* tag is added to each spec as a
  * dynamic granted tag (UShinobiJutsuAbility::ApplyCooldown), so one class serves all four jutsu. */
 UCLASS()

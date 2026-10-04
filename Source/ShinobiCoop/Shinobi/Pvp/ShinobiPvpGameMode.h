@@ -14,7 +14,7 @@ class APlayerStart;
  * 3 s countdown with everyone held at their team's starts, then a fight until one side has nobody standing (downed is out,
  * revive is off) or the 120 s cap (more team health wins). A 5 s banner and a full reset between rounds, a 10 s result,
  * then the same map reloads for a rematch. The rules live in FShinobiPvpMatch; this drives them and the world.
- * PlayerStarts tagged Team:A / Team:B are the sides' spawns.
+ * PlayerStarts tagged Team:A / Team:B are the sides' spawns; TargetPoints tagged Pickup:<Type> are the power-ups' spots.
  */
 UCLASS()
 class SHINOBICOOP_API AShinobiPvpGameMode : public AGameModeBase
@@ -53,6 +53,9 @@ public:
 	/** Always false: Login caches a start before the side is picked, so the start is chosen afresh at each spawn. */
 	virtual bool ShouldSpawnAtStartSpot(AController* Player) override;
 
+	/** A pickup (AShinobiPickup) at each TargetPoint tagged Pickup:<Type>. Once, at BeginPlay; the points are map data. */
+	void SpawnPickups();
+
 	/** Resets everyone (ResetCharacters, OnRoundReset), holds them and starts the round's countdown. */
 	void StartRound();
 
@@ -65,8 +68,8 @@ protected:
 	virtual void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
 	virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
 
-	/** Hook at each round's reset, after ResetCharacters (pickups, bots). */
-	virtual void OnRoundReset() {}
+	/** Hook at each round's reset, after ResetCharacters: every pickup is back (bots later). */
+	virtual void OnRoundReset();
 
 	/** End of warmup: a bot for each empty slot. */
 	// ponytail: stub until the bot fighters exist (bots task)

@@ -263,6 +263,27 @@ UGE_PvpHold::UGE_PvpHold()
 	UseSingleRefreshingStack();
 }
 
+UGE_AttackBoost::UGE_AttackBoost()
+{
+	SetDuration(Seconds);
+	GrantTag(ShinobiTags::State_AttackBoost);
+	UseSingleRefreshingStack();
+}
+
+UGE_SpeedBoost::UGE_SpeedBoost()
+{
+	SetDuration(Seconds);
+	GrantTag(ShinobiTags::State_SpeedBoost);
+	UseSingleRefreshingStack();
+}
+
+UGE_Shield::UGE_Shield()
+{
+	SetDuration(Seconds);
+	GrantTag(ShinobiTags::State_Shield);
+	UseSingleRefreshingStack();
+}
+
 UGE_JutsuCooldown::UGE_JutsuCooldown()
 {
 	DurationPolicy = EGameplayEffectDurationType::HasDuration;

@@ -44,6 +44,10 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Chilled); // Ice Meteor Shower: moves slower
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_TeleportMarked);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_PvpHold); // a PvP round's countdown: no moving, no abilities
+	// PvP pickups (AShinobiPickup): hits harder, moves faster, a shield that soaks damage before health.
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_AttackBoost);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_SpeedBoost);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Shield);
 
 	// Jutsu pages: exactly one is on a player's ability system (loose tag, set per machine); keys 1-4 fire that page's jutsu.
 	constexpr int32 NumJutsuPages = 5;
