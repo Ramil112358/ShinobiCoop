@@ -9,6 +9,8 @@ the terrain stage: the landscape layer merge renders). Stage from SHINOBI_LONDON
            villager and tour markers (AShinobiWorldGameMode's tag format); invisible walls round the playable edge
   mood     ambient sound: the city bed, the river along the Thames
 Every actor a stage spawns carries its stage tag (LondonCity, LondonDress) and re-running the stage replaces them.
+build_arenas.py reuses make_world, place_city, place_streets and place_landmarks with a chunk filter and its own map
+(save and load_map take the map path; MAP is the default).
 """
 import json
 import math
@@ -53,9 +55,10 @@ def load_json(name):
 _doomed = []  # external actor packages of actors this run destroyed
 
 
-def save(world):
-    if not unreal.EditorLoadingAndSavingUtils.save_map(world, MAP):
-        raise RuntimeError(f"failed to save {MAP}")
+def save(world, map_path=None):
+    map_path = map_path or MAP
+    if not unreal.EditorLoadingAndSavingUtils.save_map(world, map_path):
+        raise RuntimeError(f"failed to save {map_path}")
     unreal.EditorLoadingAndSavingUtils.save_dirty_packages(True, True)
     # The commandlet's save leaves a destroyed actor's external package (OFPA) on disk, so World Partition would bring
     # it back on the next load: delete the files ourselves.
@@ -70,10 +73,11 @@ def save(world):
         log(f"removed {removed} stale actor packages")
 
 
-def load_map():
+def load_map(map_path=None):
+    map_path = map_path or MAP
     level_editor = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
-    if not level_editor.load_level(MAP):
-        raise RuntimeError(f"could not load {MAP} (run the terrain stage first)")
+    if not level_editor.load_level(map_path):
+        raise RuntimeError(f"could not load {map_path} (run the terrain stage first)")
     world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
     unreal.WorldPartitionBlueprintLibrary.load_actors([d.guid for d in unreal.WorldPartitionBlueprintLibrary.get_actor_descs()])
     return world
@@ -96,19 +100,24 @@ def tagged(actor, *tags, always_loaded=False):
 
 
 # ------------------------------------------------------------------------------------------------------------ terrain
-def stage_terrain():
-    meta = load_json("terrain.json")
-    markers = load_json("placements.json")["markers"]
-    if unreal.EditorAssetLibrary.does_asset_exist(MAP):
-        unreal.EditorAssetLibrary.delete_asset(MAP)
+def make_world(map_path, game_mode, fresh_material=True, layer_info=f"{ROOT}/LayerInfo"):
+    """A new World Partition map with London's ground and sky: the landscape (M_LandscapeLondon, rebuilt unless
+    fresh_material is False and it exists; layer infos created in layer_info), sun, sky, fog, clouds, post; world
+    settings game_mode (a class path) and kill_z. Returns the world, unsaved."""
+    if unreal.EditorAssetLibrary.does_asset_exist(map_path):
+        unreal.EditorAssetLibrary.delete_asset(map_path)
     level_editor = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
-    if not level_editor.new_level(MAP, True):
-        raise RuntimeError(f"could not create World Partition map {MAP}")
+    if not level_editor.new_level(map_path, True):
+        raise RuntimeError(f"could not create World Partition map {map_path}")
     world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
     weightmaps = {name: os.path.join(ART, f"weight_{name.lower()}.png") for name in LAYERS}
-    material = bw.build_landscape_material("M_LandscapeLondon", LAYERS, GRASS)
+    material_path = f"{bw.WORLD_DIR}/M_LandscapeLondon"
+    if fresh_material or not unreal.EditorAssetLibrary.does_asset_exist(material_path):
+        material = bw.build_landscape_material("M_LandscapeLondon", LAYERS, GRASS)
+    else:
+        material = unreal.load_asset(material_path)
     landscape = unreal.ShinobiWorldBuilderLibrary.create_landscape(
-        world, os.path.join(ART, "height.png"), material, weightmaps, f"{ROOT}/LayerInfo", 4)
+        world, os.path.join(ART, "height.png"), material, weightmaps, layer_info, 4)
     if landscape is None:
         raise RuntimeError("landscape creation failed (see LogShinobiCoop)")
 
@@ -129,13 +138,19 @@ def stage_terrain():
         look.outline_material()
     post = bw.spawn_class(unreal.PostProcessVolume, (0, 0, 0), label=look.VOLUME_LABEL)
     look.apply_post(post)
+    settings = world.get_world_settings()
+    settings.set_editor_property("default_game_mode", unreal.load_class(None, game_mode))
+    settings.set_editor_property("kill_z", -3000.0)
+    return world
 
+
+def stage_terrain():
+    meta = load_json("terrain.json")
+    markers = load_json("placements.json")["markers"]
+    world = make_world(MAP, "/Script/ShinobiCoop.ShinobiWorldGameMode")
     hub = markers["hub"]
     start = bw.spawn_class(unreal.PlayerStart, (uu(hub["x"]), uu(hub["y"]), uu(hub["z"]) + 120), yaw=0, label="HubStart")
     tagged(start, f"Hub:{hub['name']}")
-    settings = world.get_world_settings()
-    settings.set_editor_property("default_game_mode", unreal.load_class(None, "/Script/ShinobiCoop.ShinobiWorldGameMode"))
-    settings.set_editor_property("kill_z", -3000.0)
     save(world)
     log(f"terrain: {MAP} ({meta['pixels']} px landscape), hub at {hub['name']}")
 
@@ -144,6 +159,15 @@ def stage_terrain():
 def stage_city():
     world = load_map()
     clear(world, "LondonCity")
+    count = place_city()
+    check_axes()
+    save(world)
+    log(f"city: {count} chunk actors")
+
+
+def place_city(keep=None, tag="LondonCity"):
+    """One StaticMeshActor per imported chunk mesh City/<Kind>/<Kind>_<cx>_<cy> whose 128 m cell passes keep(cx, cy)
+    (every chunk when keep is None). Returns the actor count."""
     count = 0
     for kind in ("G", "B", "K", "W", "X"):
         folder = f"{ROOT}/City/{kind}"
@@ -151,6 +175,10 @@ def stage_city():
             data = unreal.EditorAssetLibrary.find_asset_data(path)
             if str(data.asset_class_path.asset_name) != "StaticMesh":
                 continue
+            if keep is not None:
+                _, cx, cy = str(data.asset_name).split("_")
+                if not keep(int(cx), int(cy)):
+                    continue
             mesh = data.get_asset()
             actor = EAS.spawn_actor_from_class(unreal.StaticMeshActor, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
             actor.static_mesh_component.set_static_mesh(mesh)
@@ -165,11 +193,9 @@ def stage_city():
                 actor.static_mesh_component.set_collision_profile_name("InvisibleWall")
             # Always loaded: London is seen across kilometres (skyline, river, bridges), and Nanite streams the
             # detail anyway; streamed cells left the distant city empty with landmarks floating over the void.
-            tagged(actor, "LondonCity", f"City:{kind}", always_loaded=True)
+            tagged(actor, tag, f"City:{kind}", always_loaded=True)
             count += 1
-    check_axes()
-    save(world)
-    log(f"city: {count} chunk actors")
+    return count
 
 
 def check_axes():
@@ -191,12 +217,11 @@ def check_axes():
 
 
 # -------------------------------------------------------------------------------------------------------------- dress
-def stage_dress():
+def mesh_loader():
+    """mesh(key, variant=0) -> the london_catalog.json StaticMesh for a furniture or landmark key, loaded once, or None
+    (the key is added to mesh.missing). mesh.catalog is the catalog."""
     with open(os.path.join(HERE, "london_catalog.json"), encoding="utf-8") as f:
         catalog = json.load(f)
-    placements = load_json("placements.json")
-    world = load_map()
-    clear(world, "LondonDress")
     meshes, missing = {}, set()
 
     def mesh(key, variant=0):
@@ -212,42 +237,18 @@ def stage_dress():
             meshes[path] = unreal.load_asset(path.split(".")[0])
         return meshes[path]
 
-    chunks = {}
-    for i, it in enumerate(placements["items"]):
-        variant = int((it["x"] * 7.31 + it["y"] * 3.17)) & 0xff
-        m = mesh(it["key"], variant)
-        if m is None:
-            continue
-        key = (math.floor(it["x"] / 128), math.floor(it["y"] / 128))
-        scale = it["scale"]
-        if it["key"] == "tree_plane" and catalog.get("_tree_variants"):  # street trees ~14 m whatever the source size
-            entry = catalog["_tree_variants"][variant % len(catalog["_tree_variants"])]
-            scale *= TREE_HEIGHT_M / max(entry["height_m"], 1.0)
-        t = unreal.Transform(unreal.Vector(uu(it["x"]), uu(it["y"]), uu(it["z"])), unreal.Rotator(0, 0, it["yaw"]),
-                             unreal.Vector(scale, scale, scale))
-        chunks.setdefault(key, {}).setdefault((m.get_path_name(), it["key"]), []).append(t)
-    instances = 0
-    for (cx, cy), groups in chunks.items():
-        actor = EAS.spawn_actor_from_class(unreal.ShinobiScatterActor, unreal.Vector(uu(cx * 128 + 64), uu(cy * 128 + 64), 0),
-                                           unreal.Rotator(0, 0, 0))
-        actor.set_actor_label(f"Street_{cx}_{cy}")
-        tagged(actor, "LondonDress")
-        for (path, key), transforms in groups.items():
-            actor.add_instances(meshes[path], transforms, CULL.get(key, DEFAULT_CULL))
-        instances += actor.get_instance_count()
+    mesh.catalog, mesh.missing = catalog, missing
+    return mesh
 
+
+def stage_dress():
+    placements = load_json("placements.json")
+    world = load_map()
+    clear(world, "LondonDress")
+    mesh = mesh_loader()
+    instances, chunk_count = place_streets(world, None, "LondonDress", placements, mesh)
     m = placements["markers"]
-    landmarks = 0
-    for lm in landmark_poses(m):
-        lm_mesh = mesh(lm["id"])
-        if lm_mesh is None:
-            continue
-        actor = EAS.spawn_actor_from_class(unreal.StaticMeshActor, unreal.Vector(uu(lm["x"]), uu(lm["y"]), uu(lm.get("z", 0.15))),
-                                           unreal.Rotator(0, 0, lm.get("yaw", 0)))
-        actor.static_mesh_component.set_static_mesh(lm_mesh)
-        actor.set_actor_label(f"Landmark_{lm['id']}")
-        tagged(actor, "LondonDress", "Landmark", always_loaded=True)
-        landmarks += 1
+    landmarks = place_landmarks(world, None, "LondonDress", m, mesh)
 
     def point(x, y, z, label, *tags, always_loaded=True):
         p = EAS.spawn_actor_from_class(unreal.TargetPoint, unreal.Vector(x, y, z + 50), unreal.Rotator(0, 0, 0))
@@ -327,8 +328,64 @@ def stage_dress():
         wall.static_mesh_component.set_collision_profile_name("InvisibleWall")
         tagged(wall, "LondonDress", always_loaded=True)
     save(world)
-    log(f"dress: {instances} instances in {len(chunks)} chunks, {landmarks} landmarks, {len(m['camps'])} camps, "
-        f"{len(m['villagers'])} Londoners + {len(m.get('pedestrians', []))} crowd, {len(m['tour'])} tour points; no mesh for {sorted(missing)}")
+    log(f"dress: {instances} instances in {chunk_count} chunks, {landmarks} landmarks, {len(m['camps'])} camps, "
+        f"{len(m['villagers'])} Londoners + {len(m.get('pedestrians', []))} crowd, {len(m['tour'])} tour points; no mesh for {sorted(mesh.missing)}")
+
+
+def place_streets(world, keep=None, tag="LondonDress", placements=None, mesh=None):
+    """Street furniture, vehicles and trees as one AShinobiScatterActor (Street_<cx>_<cy>) per 128 m chunk that passes
+    keep(cx, cy) (every chunk when keep is None). Returns (instance count, chunk count)."""
+    placements = placements or load_json("placements.json")
+    mesh = mesh or mesh_loader()
+    catalog = mesh.catalog
+    chunks, meshes = {}, {}
+    for it in placements["items"]:
+        key = (math.floor(it["x"] / 128), math.floor(it["y"] / 128))
+        if keep is not None and not keep(*key):
+            continue
+        variant = int((it["x"] * 7.31 + it["y"] * 3.17)) & 0xff
+        m = mesh(it["key"], variant)
+        if m is None:
+            continue
+        scale = it["scale"]
+        if it["key"] == "tree_plane" and catalog.get("_tree_variants"):  # street trees ~14 m whatever the source size
+            entry = catalog["_tree_variants"][variant % len(catalog["_tree_variants"])]
+            scale *= TREE_HEIGHT_M / max(entry["height_m"], 1.0)
+        t = unreal.Transform(unreal.Vector(uu(it["x"]), uu(it["y"]), uu(it["z"])), unreal.Rotator(0, 0, it["yaw"]),
+                             unreal.Vector(scale, scale, scale))
+        meshes[m.get_path_name()] = m
+        chunks.setdefault(key, {}).setdefault((m.get_path_name(), it["key"]), []).append(t)
+    instances = 0
+    for (cx, cy), groups in chunks.items():
+        actor = EAS.spawn_actor_from_class(unreal.ShinobiScatterActor, unreal.Vector(uu(cx * 128 + 64), uu(cy * 128 + 64), 0),
+                                           unreal.Rotator(0, 0, 0))
+        actor.set_actor_label(f"Street_{cx}_{cy}")
+        tagged(actor, tag)
+        for (path, key), transforms in groups.items():
+            actor.add_instances(meshes[path], transforms, CULL.get(key, DEFAULT_CULL))
+        instances += actor.get_instance_count()
+    return instances, len(chunks)
+
+
+def place_landmarks(world, keep=None, tag="LondonDress", markers=None, mesh=None):
+    """The landmark and skyline meshes at their final pose (landmark_poses), those whose 128 m cell passes keep(cx, cy)
+    (all when keep is None). Returns the count."""
+    markers = markers or load_json("placements.json")["markers"]
+    mesh = mesh or mesh_loader()
+    landmarks = 0
+    for lm in landmark_poses(markers):
+        if keep is not None and not keep(math.floor(lm["x"] / 128), math.floor(lm["y"] / 128)):
+            continue
+        lm_mesh = mesh(lm["id"])
+        if lm_mesh is None:
+            continue
+        actor = EAS.spawn_actor_from_class(unreal.StaticMeshActor, unreal.Vector(uu(lm["x"]), uu(lm["y"]), uu(lm.get("z", 0.15))),
+                                           unreal.Rotator(0, 0, lm.get("yaw", 0)))
+        actor.static_mesh_component.set_static_mesh(lm_mesh)
+        actor.set_actor_label(f"Landmark_{lm['id']}")
+        tagged(actor, tag, "Landmark", always_loaded=True)
+        landmarks += 1
+    return landmarks
 
 
 BRIDGES = {"tower_bridge": "Tower Bridge", "westminster_bridge": "Westminster Bridge"}

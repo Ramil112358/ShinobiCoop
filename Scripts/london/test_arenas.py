@@ -146,6 +146,28 @@ def test_pickups():
             assert off_line <= 30, f"{a['id']}: {p['type']} is {off_line:.0f} m off the centre line"
 
 
+def test_chunk_touches():
+    """The builder keeps a 128 m chunk when its cell touches the arena rect (in offset-applied map metres)."""
+    import build_arenas as ba
+    for a in load():
+        rect = ba.map_rect(a["rect"])
+        cx, cy = (math.floor(v / ba.CHUNK_M) for v in centre(rect))
+        assert ba.chunk_touches(rect, cx, cy), f"{a['id']}: the centre cell ({cx}, {cy}) must be kept"
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):  # 3 cells beyond each side of the rect
+            ox = math.floor((rect[0] if dx < 0 else rect[2]) / ba.CHUNK_M) + 3 * dx if dx else cx
+            oy = math.floor((rect[1] if dy < 0 else rect[3]) / ba.CHUNK_M) + 3 * dy if dy else cy
+            assert not ba.chunk_touches(rect, ox, oy), f"{a['id']}: cell ({ox}, {oy}) is 3 cells outside"
+    # Westminster, worked by hand: raw [-650, 885, -310, 1185] + origin_offset_m [-330, -232] = [-980, 653, -640, 953]
+    # -> cells x -8..-6, y 5..7 (the chunk meshes City/*/<Kind>_-8_5 .. _-6_7); x = -640 is exactly the edge of cell -5,
+    # which only the backdrop margin brings in (the Thames and the bridge east of the wall).
+    west = next(a for a in load() if a["id"] == "Westminster")
+    rect = ba.map_rect(west["rect"])
+    assert rect == [-980, 653, -640, 953], rect
+    assert ba.cells(rect) == [(x, y) for x in range(-8, -5) for y in range(5, 8)], ba.cells(rect)
+    assert not ba.chunk_touches([0, 0, 128, 128], 1, 0), "a cell that only shares an edge is not kept"
+    assert ba.cells(ba.grow(rect, ba.BACKDROP_M)) == [(x, y) for x in range(-8, -4) for y in range(4, 8)]  # + north row
+
+
 def ground():
     """(footprints STRtree-ish list, open ground, water) in raw map metres, or None when the OSM data is absent."""
     import arena_plan
