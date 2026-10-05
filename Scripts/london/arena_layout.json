@@ -1,0 +1,337 @@
+{
+ "_doc": "PvP arena layouts cut from Lvl_London (docs/superpowers/specs/2026-10-04-pvp-arena-design.md). Map metres, +X east, +Y SOUTH, the same space as london_layout.json: origin_offset_m is NOT applied here, the arena builder adds it (as build_london.py does). rect = [x0, y0, x1, y1]. starts: per team [x, y, yaw degrees], yaw faces the rect centre (UE yaw: 0 = +X, 90 = +Y/south). pickups: 2 Health (180-degree rotation partners about the rect centre), Attack/Speed/Shield on the centre line halfway between the teams. Checked by test_arenas.py; drawn by arena_plan.py.",
+ "arenas": [
+  {
+   "id": "WestEnd",
+   "map": "/Game/Shinobi/Maps/Lvl_Arena_WestEnd",
+   "rect": [
+    -440,
+    -170,
+    -90,
+    130
+   ],
+   "starts": {
+    "A": [
+     [
+      -416,
+      -116,
+      32.4
+     ],
+     [
+      -383,
+      -107,
+      36.4
+     ],
+     [
+      -397,
+      -67,
+      19.6
+     ],
+     [
+      -379,
+      -94,
+      33.0
+     ]
+    ],
+    "B": [
+     [
+      -154,
+      65,
+      -142.6
+     ],
+     [
+      -148,
+      78,
+      -140.1
+     ],
+     [
+      -153,
+      82,
+      -137.7
+     ],
+     [
+      -128,
+      86,
+      -142.3
+     ]
+    ]
+   },
+   "pickups": [
+    {
+     "type": "Health",
+     "x": -336,
+     "y": -106
+    },
+    {
+     "type": "Health",
+     "x": -194.0,
+     "y": 66.0
+    },
+    {
+     "type": "Attack",
+     "x": -262,
+     "y": -16
+    },
+    {
+     "type": "Speed",
+     "x": -220,
+     "y": -71
+    },
+    {
+     "type": "Shield",
+     "x": -306,
+     "y": 24
+    }
+   ]
+  },
+  {
+   "id": "Camden",
+   "map": "/Game/Shinobi/Maps/Lvl_Arena_Camden",
+   "rect": [
+    -350,
+    -830,
+    -50,
+    -530
+   ],
+   "starts": {
+    "A": [
+     [
+      -328,
+      -600,
+      -32.0
+     ],
+     [
+      -311,
+      -599,
+      -36.1
+     ],
+     [
+      -328,
+      -583,
+      -37.2
+     ],
+     [
+      -311,
+      -581,
+      -41.7
+     ]
+    ],
+    "B": [
+     [
+      -94,
+      -619,
+      -150.1
+     ],
+     [
+      -76,
+      -619,
+      -153.8
+     ],
+     [
+      -89,
+      -606,
+      -146.3
+     ],
+     [
+      -76,
+      -601,
+      -147.5
+     ]
+    ]
+   },
+   "pickups": [
+    {
+     "type": "Health",
+     "x": -252,
+     "y": -676
+    },
+    {
+     "type": "Health",
+     "x": -148.0,
+     "y": -684.0
+    },
+    {
+     "type": "Attack",
+     "x": -184,
+     "y": -662
+    },
+    {
+     "type": "Speed",
+     "x": -205,
+     "y": -616
+    },
+    {
+     "type": "Shield",
+     "x": -193,
+     "y": -736
+    }
+   ]
+  },
+  {
+   "id": "Westminster",
+   "map": "/Game/Shinobi/Maps/Lvl_Arena_Westminster",
+   "rect": [
+    -650,
+    885,
+    -310,
+    1185
+   ],
+   "starts": {
+    "A": [
+     [
+      -610,
+      1062,
+      -11.7
+     ],
+     [
+      -591,
+      1061,
+      -13.2
+     ],
+     [
+      -609,
+      1079,
+      -18.8
+     ],
+     [
+      -591,
+      1079,
+      -21.6
+     ]
+    ],
+    "B": [
+     [
+      -369,
+      1037,
+      -179.0
+     ],
+     [
+      -368,
+      1031,
+      178.0
+     ],
+     [
+      -419,
+      1034,
+      179.1
+     ],
+     [
+      -404,
+      1031,
+      177.0
+     ]
+    ]
+   },
+   "pickups": [
+    {
+     "type": "Health",
+     "x": -504,
+     "y": 981
+    },
+    {
+     "type": "Health",
+     "x": -456.0,
+     "y": 1089.0
+    },
+    {
+     "type": "Attack",
+     "x": -480,
+     "y": 1035
+    },
+    {
+     "type": "Speed",
+     "x": -478,
+     "y": 1000
+    },
+    {
+     "type": "Shield",
+     "x": -484,
+     "y": 1076
+    }
+   ]
+  },
+  {
+   "id": "Tower",
+   "map": "/Game/Shinobi/Maps/Lvl_Arena_Tower",
+   "rect": [
+    890,
+    323,
+    1190,
+    583
+   ],
+   "starts": {
+    "A": [
+     [
+      982,
+      382,
+      50.8
+     ],
+     [
+      996,
+      379,
+      59.3
+     ],
+     [
+      978,
+      397,
+      42.1
+     ],
+     [
+      994,
+      394,
+      52.1
+     ]
+    ],
+    "B": [
+     [
+      1085,
+      492,
+      -139.1
+     ],
+     [
+      1103,
+      490,
+      -149.6
+     ],
+     [
+      1086,
+      509,
+      -129.4
+     ],
+     [
+      1102,
+      507,
+      -138.9
+     ]
+    ]
+   },
+   "pickups": [
+    {
+     "type": "Health",
+     "x": 1063,
+     "y": 402
+    },
+    {
+     "type": "Health",
+     "x": 1017.0,
+     "y": 504.0
+    },
+    {
+     "type": "Attack",
+     "x": 1035,
+     "y": 448
+    },
+    {
+     "type": "Speed",
+     "x": 1087,
+     "y": 420
+    },
+    {
+     "type": "Shield",
+     "x": 996,
+     "y": 480
+    }
+   ]
+  }
+ ]
+}
