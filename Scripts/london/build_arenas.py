@@ -3,29 +3,34 @@ and arena_layout.json. UE Python commandlet, -Render for the landscape layer mer
   $env:SHINOBI_ARENA = "Westminster"   # WestEnd | Camden | Westminster | Tower | all
   Scripts/run_python.ps1 -Render -TimeoutSec 3600 Scripts/london/build_arenas.py
 
-Per arena a fresh World Partition map /Game/Shinobi/Maps/Lvl_Arena_<Id> (build_london.make_world: London's landscape,
-sun, sky, fog, post; game mode AShinobiPvpGameMode, kill_z -3000) with:
-  the chunk actors, Street_ scatter actors and landmarks of every 128 m cell that touches the rect (cells crossing the
-  edge stay as backdrop behind the wall); a ring of invisible walls on the rect edge, 60 m tall (the dragon mount
+Per arena a fresh World Partition map /Game/Shinobi/Maps/Lvl_Arena_<Id> (build_london.make_world: sun, sky, fog, post;
+game mode AShinobiPvpGameMode, kill_z -3000) with:
+  London's landscape cropped to the rect + CROP_MARGIN_M (crop_terrain, system Python with PIL, into Saved/ArenaTerrain)
+  and moved to where that piece lies in London (checked against the full heightmap);
+  the chunk actors, Street_ scatter actors and landmarks of every 128 m cell within BACKDROP_M of the rect (cells
+  crossing the edge stay as backdrop behind the wall); a ring of invisible walls on the rect edge, 60 m tall (the dragon mount
   flies); PlayerStarts tagged Team:A / Team:B at the layout yaw; TargetPoints tagged Pickup:<Type>; a NavMeshBoundsVolume
   over the rect and the RecastNavMesh; Tour points for Scripts/shot_chakra.ps1 -Tour (top-down, team views, edges).
 arena_layout.json is in raw map metres (origin_offset_m not applied); the chunk grid, placements.json and the meshes are
 in offset-applied map metres, so every rect, start and pickup gets london_layout.json's origin_offset_m added here.
-Every actor carries the stage tag Arena<Id>. chunk_touches, map_rect and cells are pure (test_arenas.py).
+Every actor carries the stage tag Arena<Id>. chunk_touches, map_rect, cells and crop_window are pure (test_arenas.py).
+SHINOBI_ARENA_VERIFY=1 reloads a built arena and reruns the landscape and ground checks; probe_arena.py checks the walls
+in a game session.
 """
 import json
 import math
 import os
 import shutil
+import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 try:
     import unreal
-    import build_london as bl
 except ImportError:  # the pure checks run without the editor
-    unreal = bl = None
+    unreal = None
+bl = None  # build_london, imported by main(): the pure helpers also serve the in-game probe (probe_arena.py)
 
 CHUNK_M = 128.0
 GAME_MODE = "/Script/ShinobiCoop.ShinobiPvpGameMode"
@@ -34,6 +39,10 @@ PICKUP_TYPES = ("Health", "Attack", "Speed", "Shield")
 # Cells within this of the rect are kept too, so the view over a wall never ends at the wall: a rect edge that falls on a
 # cell edge (Westminster's east wall is exactly x = -5 * 128) would otherwise drop the Thames and the bridge behind it.
 BACKDROP_M = 30.0
+# Each arena's landscape is London's heightmap cropped to the rect plus this on every side (the backdrop band and some
+# ground beyond it); past it is fog. 1 m per pixel like London, sides of N * 63 quads.
+CROP_MARGIN_M = 150.0
+QUADS_PER_SECTION = 63
 
 
 def uu(m):
@@ -73,6 +82,49 @@ def cells(rect):
     """Every (cx, cy) that touches rect, x-major."""
     return [(cx, cy) for cx in range(math.floor(rect[0] / CHUNK_M), math.floor(rect[2] / CHUNK_M) + 1)
             for cy in range(math.floor(rect[1] / CHUNK_M), math.floor(rect[3] / CHUNK_M) + 1) if chunk_touches(rect, cx, cy)]
+
+
+def crop_window(rect, pixels, margin_m=None):
+    """(i0, j0, n): the square window of London's heightmap (1 m per pixel; pixel i sits at x = i - (pixels - 1) / 2,
+    make_city.terrain) covering rect + margin_m, n = k * 63 + 1 pixels (UShinobiWorldBuilderLibrary::CreateLandscape),
+    kept inside the image."""
+    margin_m = CROP_MARGIN_M if margin_m is None else margin_m
+    half = (pixels - 1) / 2
+    quads = math.ceil((max(rect[2] - rect[0], rect[3] - rect[1]) + 2 * margin_m) / QUADS_PER_SECTION) * QUADS_PER_SECTION
+    n = quads + 1
+    i0 = round((rect[0] + rect[2]) / 2 + half - quads / 2)
+    j0 = round((rect[1] + rect[3]) / 2 + half - quads / 2)
+    return min(max(i0, 0), pixels - n), min(max(j0, 0), pixels - n), n
+
+
+def crop_terrain(art, rect, out_dir):
+    """Writes the arena's crops of height.png and weight_<layer>.png to out_dir (system Python: needs PIL) and returns
+    {window: [i0, j0, n], samples: [[x_m, y_m, z_m], ...]}: landscape heights inside the rect from the full heightmap,
+    the lowest first (river and canal beds), for the placement check in the editor."""
+    import numpy as np
+    from PIL import Image
+    with open(os.path.join(art, "terrain.json"), encoding="utf-8") as f:
+        pixels = json.load(f)["pixels"]
+    i0, j0, n = crop_window(rect, pixels)
+    os.makedirs(out_dir, exist_ok=True)
+    for name in ["height.png"] + [f"weight_{layer}.png" for layer in ("grass", "soil", "riverbed")]:
+        Image.open(os.path.join(art, name)).crop((i0, j0, i0 + n, j0 + n)).save(os.path.join(out_dir, name))
+    h = np.asarray(Image.open(os.path.join(art, "height.png")), dtype=np.float64)
+    half = (pixels - 1) / 2
+    # On landscape vertices (pixel centres sit on half metres), every 10 m inside the rect.
+    spots = [(i, j) for i in range(math.ceil(rect[0] + half), math.floor(rect[2] + half), 10)
+             for j in range(math.ceil(rect[1] + half), math.floor(rect[3] + half), 10)]
+    z = [((h[j, i] - 32768) / 128, i - half, j - half) for i, j in spots]
+    samples = [[x, y, float(zz)] for zz, x, y in sorted(z)[:12] + sorted(z)[-4:]]
+    # plus the steepest vertices (bed edges), where a one-pixel shift would show as metres
+    ia, ja = math.ceil(rect[0] + half), math.ceil(rect[1] + half)
+    win = h[ja:math.floor(rect[3] + half), ia:math.floor(rect[2] + half)]
+    grad = np.abs(np.diff(win, axis=1))[:-1, :] + np.abs(np.diff(win, axis=0))[:, :-1]
+    for flat in np.argsort(grad, axis=None)[::-1][:8 * 50:50]:
+        j, i = np.unravel_index(flat, grad.shape)
+        if grad[j, i] > 0:
+            samples.append([float(ia + i - half), float(ja + j - half), float((win[j, i] - 32768) / 128)])
+    return {"window": [i0, j0, n], "samples": samples}
 
 
 # ---------------------------------------------------------------------------------------------------------- the build
@@ -218,6 +270,39 @@ def tour_points(rect, starts, tag):
         point(x + 60 * dx, y + 60 * dy, 3, f"Edge{side}", (uu(-95 * dx), uu(-95 * dy), 600))
 
 
+def place_landscape(world, crop):
+    """CreateLandscape centres the cropped landscape on the origin: move it (and its World Partition streaming proxies,
+    by the same offset, so their transforms stay in step) to where the crop lies in London, then check heights."""
+    pixels = bl.load_json("terrain.json")["pixels"]
+    i0, j0, n = crop["window"]
+    half = (pixels - 1) / 2
+    proxies = list(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.LandscapeProxy))
+    landscape = next(p for p in proxies if isinstance(p, unreal.Landscape))
+    at = landscape.get_actor_location()
+    delta = unreal.Vector(uu(i0 - half) - at.x, uu(j0 - half) - at.y, 0)
+    # ponytail: no Python access to ALandscape::PostEditMove (it re-aligns the proxies); moving all of them by one
+    # offset leaves them where FixupProxiesTransform would put them on the next load.
+    for proxy in proxies:
+        proxy.set_actor_location(proxy.get_actor_location() + delta, False, True)
+    corner = landscape.get_actor_location()
+    log(f"landscape: {n} px crop at pixel ({i0}, {j0}), corner ({corner.x / 100:.1f}, {corner.y / 100:.1f}) m, {len(proxies)} actors moved")
+    check_landscape(world, crop)
+
+
+def check_landscape(world, crop):
+    """The landscape alone (everything else ignored) must match London's heightmap at the crop's sample vertices."""
+    others =[a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.Actor) if not isinstance(a, unreal.LandscapeProxy)]
+    worst = 0.0
+    for x, y, z in crop["samples"]:
+        hit = unreal.SystemLibrary.line_trace_single(world, unreal.Vector(uu(x), uu(y), uu(50)), unreal.Vector(uu(x), uu(y), uu(-50)),
+                                                     unreal.TraceTypeQuery.ECC_VISIBILITY, True, others, unreal.DrawDebugTrace.NONE, True)
+        got = hit_info(hit)[0].z / 100 if hit else None
+        worst = max(worst, abs(got - z) if got is not None else 99.0)
+    log(f"landscape check: {len(crop['samples'])} heights vs London's heightmap, worst {worst:.2f} m")
+    if worst > 0.5:
+        raise RuntimeError("the cropped landscape is not where London's is")
+
+
 def clean_old(map_path):
     """Delete a previous build of the map and its external actor/object packages (World Partition would load stale ones)."""
     if unreal.EditorAssetLibrary.does_asset_exist(map_path):
@@ -246,8 +331,14 @@ def build_arena(arena, offset):
     keep = lambda cx, cy: chunk_touches(backdrop, cx, cy)  # noqa: E731
     log(f"{aid}: rect {rect} m (offset {offset}), cells {cells(backdrop)} ({len(cells(rect))} touch the rect itself)")
     clean_old(map_path)
+    # The landscape: London's heightmap and weightmaps cropped to the rect + CROP_MARGIN_M (system Python has PIL),
+    # into Saved/ (gitignored).
+    terrain_dir = os.path.join(bl.PROJECT, "Saved", "ArenaTerrain", aid)
+    crop = json.loads(subprocess.run(["python", os.path.join(HERE, "build_arenas.py"), "crop", aid, terrain_dir],
+                                     check=True, capture_output=True, text=True).stdout)
     # Own layer infos next to the map: re-creating London's would rewrite /Game/Shinobi/London/LayerInfo.
-    world = bl.make_world(map_path, GAME_MODE, fresh_material=False, layer_info=f"{map_path}_LayerInfo")
+    world = bl.make_world(map_path, GAME_MODE, fresh_material=False, layer_info=f"{map_path}_LayerInfo", terrain_dir=terrain_dir)
+    place_landscape(world, crop)
     check_cells(backdrop)
     chunk_actors = bl.place_city(keep, tag)
     mesh = bl.mesh_loader()
@@ -289,7 +380,27 @@ def build_arena(arena, offset):
         f"8 starts, {len(arena['pickups'])} pickups, {len(holes)} ground holes; no mesh for {sorted(mesh.missing)}")
 
 
+def verify_arena(arena, offset):
+    """SHINOBI_ARENA_VERIFY=1: reload a built arena (World Partition re-aligns the landscape proxies on load) and rerun
+    the landscape and ground checks; nothing is saved."""
+    rect = map_rect(arena["rect"], offset)
+    world = bl.load_map(arena["map"])
+    crop = json.loads(subprocess.run(["python", os.path.join(HERE, "build_arenas.py"), "crop", arena["id"],
+                                      os.path.join(bl.PROJECT, "Saved", "ArenaTerrain", arena["id"])],
+                                     check=True, capture_output=True, text=True).stdout)
+    check_landscape(world, crop)
+    check_ground(world, rect)
+    # ponytail: no check_walls here; static mesh collision of a reloaded map is absent in the commandlet (probe_arena.py
+    # checks the walls in a game session)
+    starts = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.PlayerStart)]
+    pickups = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.TargetPoint)
+               if any(str(t).startswith("Pickup:") for t in a.tags)]
+    log(f"{arena['id']} verified after reload: {len(starts)} starts, {len(pickups)} pickup points")
+
+
 def main():
+    global bl
+    import build_london as bl
     which = os.environ.get("SHINOBI_ARENA")
     arenas = load_arenas()
     ids = [a["id"] for a in arenas]
@@ -298,8 +409,16 @@ def main():
     offset = origin_offset()
     for arena in arenas:
         if which in ("all", arena["id"]):
-            build_arena(arena, offset)
+            if os.environ.get("SHINOBI_ARENA_VERIFY") == "1":
+                verify_arena(arena, offset)
+            else:
+                build_arena(arena, offset)
 
 
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:2] == ["crop"]:  # system Python, from build_arena: python build_arenas.py crop <Id> <out_dir>
+        arena = next(a for a in load_arenas() if a["id"] == sys.argv[2])
+        art = os.path.join(HERE, "..", "..", "SourceArt", "World", "London")
+        print(json.dumps(crop_terrain(art, map_rect(arena["rect"]), sys.argv[3])))
+    else:
+        main()

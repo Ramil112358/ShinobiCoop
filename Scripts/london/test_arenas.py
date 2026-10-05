@@ -168,6 +168,22 @@ def test_chunk_touches():
     assert ba.cells(ba.grow(rect, ba.BACKDROP_M)) == [(x, y) for x in range(-8, -4) for y in range(4, 8)]  # + north row
 
 
+def test_crop_window():
+    """Each arena's landscape is a square crop of London's 1 m heightmap over the rect + margin, a valid landscape size."""
+    import build_arenas as ba
+    pixels = 2836  # London's height.png
+    half = (pixels - 1) / 2
+    for a in load():
+        rect = ba.map_rect(a["rect"])
+        i0, j0, n = ba.crop_window(rect, pixels)
+        assert (n - 1) % 63 == 0 and n > 1, f"{a['id']}: {n} px is not N*63+1"
+        assert 0 <= i0 and 0 <= j0 and i0 + n <= pixels and j0 + n <= pixels, f"{a['id']}: crop leaves the image"
+        x0, y0, x1, y1 = (i0 - half, j0 - half, i0 + n - 1 - half, j0 + n - 1 - half)  # metres of the crop's edge vertices
+        m = ba.CROP_MARGIN_M
+        assert x0 <= rect[0] - m and y0 <= rect[1] - m and x1 >= rect[2] + m and y1 >= rect[3] + m, f"{a['id']}: crop too small"
+        assert n < 1000, f"{a['id']}: crop of {n} px is barely smaller than London"
+
+
 def ground():
     """(footprints STRtree-ish list, open ground, water) in raw map metres, or None when the OSM data is absent."""
     import arena_plan

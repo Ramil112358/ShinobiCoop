@@ -100,24 +100,25 @@ def tagged(actor, *tags, always_loaded=False):
 
 
 # ------------------------------------------------------------------------------------------------------------ terrain
-def make_world(map_path, game_mode, fresh_material=True, layer_info=f"{ROOT}/LayerInfo"):
-    """A new World Partition map with London's ground and sky: the landscape (M_LandscapeLondon, rebuilt unless
-    fresh_material is False and it exists; layer infos created in layer_info), sun, sky, fog, clouds, post; world
-    settings game_mode (a class path) and kill_z. Returns the world, unsaved."""
+def make_world(map_path, game_mode, fresh_material=True, layer_info=f"{ROOT}/LayerInfo", terrain_dir=ART):
+    """A new World Partition map with London's ground and sky: the landscape from terrain_dir's height.png and
+    weight_<layer>.png, centred on the origin (M_LandscapeLondon, rebuilt unless fresh_material is False and it exists;
+    layer infos created in layer_info), sun, sky, fog, clouds, post; world settings game_mode (a class path) and
+    kill_z. Returns the world, unsaved."""
     if unreal.EditorAssetLibrary.does_asset_exist(map_path):
         unreal.EditorAssetLibrary.delete_asset(map_path)
     level_editor = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
     if not level_editor.new_level(map_path, True):
         raise RuntimeError(f"could not create World Partition map {map_path}")
     world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
-    weightmaps = {name: os.path.join(ART, f"weight_{name.lower()}.png") for name in LAYERS}
+    weightmaps = {name: os.path.join(terrain_dir, f"weight_{name.lower()}.png") for name in LAYERS}
     material_path = f"{bw.WORLD_DIR}/M_LandscapeLondon"
     if fresh_material or not unreal.EditorAssetLibrary.does_asset_exist(material_path):
         material = bw.build_landscape_material("M_LandscapeLondon", LAYERS, GRASS)
     else:
         material = unreal.load_asset(material_path)
     landscape = unreal.ShinobiWorldBuilderLibrary.create_landscape(
-        world, os.path.join(ART, "height.png"), material, weightmaps, layer_info, 4)
+        world, os.path.join(terrain_dir, "height.png"), material, weightmaps, layer_info, 4)
     if landscape is None:
         raise RuntimeError("landscape creation failed (see LogShinobiCoop)")
 
