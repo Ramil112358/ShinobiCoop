@@ -459,8 +459,9 @@ void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
 	if (bMounted || bBoomPulledBack)
 	{
 		// Only driven around a ride, so anything else that sets the boom (the world tour's close-ups) is left alone.
-		CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, bMounted ? MountedArmLength : FootArmLength, DeltaSeconds, 2.f);
-		bBoomPulledBack = bMounted || !FMath::IsNearlyEqual(CameraBoom->TargetArmLength, FootArmLength, 1.f);
+		const float TargetArmLength = CameraZoomDistance + (bMounted ? MountedArmLength - FootArmLength : 0.f);
+		CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, TargetArmLength, DeltaSeconds, 2.f);
+		bBoomPulledBack = bMounted || !FMath::IsNearlyEqual(CameraBoom->TargetArmLength, CameraZoomDistance, 1.f);
 	}
 	if (bMounted != bSteeringByCamera)
 	{
@@ -571,6 +572,7 @@ void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 	UEnhancedInputComponent* Input = CastChecked<UEnhancedInputComponent>(PlayerInputComponent);
 	Input->BindAction(InputConfig.Move, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Move);
 	Input->BindAction(InputConfig.Look, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Look);
+	Input->BindAction(InputConfig.CameraZoom, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::ZoomCamera);
 	Input->BindAction(InputConfig.Jump, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::JumpPressed);
 	Input->BindAction(InputConfig.Jump, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::JumpReleased);
 	for (const TPair<EShinobiAbilityInputID, TObjectPtr<UInputAction>>& Pair : InputConfig.AbilityActions)
@@ -606,6 +608,25 @@ void AShinobiPlayerCharacter::Look(const FInputActionValue& Value)
 	const FVector2D Axis = Value.Get<FVector2D>();
 	AddControllerYawInput(Axis.X);
 	AddControllerPitchInput(Axis.Y);
+}
+
+void AShinobiPlayerCharacter::ZoomCamera(const FInputActionValue& Value)
+{
+	const float ZoomAxis = Value.Get<float>();
+	if (FMath::IsNearlyZero(ZoomAxis))
+	{
+		return;
+	}
+
+	CameraZoomDistance = FMath::Clamp(
+		CameraZoomDistance - ZoomAxis * CameraZoomStep,
+		MinCameraArmLength,
+		MaxCameraArmLength);
+
+	if (!AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Mounted))
+	{
+		CameraBoom->TargetArmLength = CameraZoomDistance;
+	}
 }
 
 void AShinobiPlayerCharacter::JumpPressed()

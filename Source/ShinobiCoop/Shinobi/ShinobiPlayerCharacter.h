@@ -153,9 +153,14 @@ private:
 
 	static constexpr float FootArmLength = 450.f;
 	static constexpr float MountedArmLength = 900.f;
+	static constexpr float MinCameraArmLength = 200.f;
+	static constexpr float MaxCameraArmLength = 1200.f;
+	static constexpr float CameraZoomStep = 100.f;
+	float CameraZoomDistance = FootArmLength;
 
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
+	void ZoomCamera(const FInputActionValue& Value);
 	/** Ignores the jump input while CanMove() is false. */
 	void JumpPressed();
 	void JumpReleased();
