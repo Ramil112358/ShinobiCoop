@@ -14,6 +14,7 @@
 const FName UShinobiSessionSubsystem::GameKey(TEXT("SHINOBICOOP"));
 const TCHAR* UShinobiSessionSubsystem::MenuMap = TEXT("/Game/Shinobi/Maps/Lvl_MainMenu");
 const FName UShinobiSessionSubsystem::MapKey(TEXT("SHINOBIMAP"));
+const FName UShinobiSessionSubsystem::FormatKey(TEXT("SHINOBIFORMAT"));
 
 const TArray<FShinobiMap>& UShinobiSessionSubsystem::GetMaps()
 {
@@ -23,8 +24,23 @@ const TArray<FShinobiMap>& UShinobiSessionSubsystem::GetMaps()
 		{ TEXT("Training Grounds"), TEXT("/Game/Shinobi/Maps/Lvl_TrainingGrounds") },
 		{ TEXT("Test Level"), TEXT("/Game/ThirdPerson/Lvl_ThirdPerson") },
 		{ TEXT("Combat Level"), TEXT("/Game/Variant_Combat/Lvl_Combat") },
+		// Appended after the co-op maps so their indices (and the default) don't move.
+		{ TEXT("Arena: West End"), TEXT("/Game/Shinobi/Maps/Lvl_Arena_WestEnd"), true },
+		{ TEXT("Arena: Camden"), TEXT("/Game/Shinobi/Maps/Lvl_Arena_Camden"), true },
+		{ TEXT("Arena: Westminster"), TEXT("/Game/Shinobi/Maps/Lvl_Arena_Westminster"), true },
+		{ TEXT("Arena: Tower"), TEXT("/Game/Shinobi/Maps/Lvl_Arena_Tower"), true },
 	};
 	return Maps;
+}
+
+FString UShinobiSessionSubsystem::MakeTravelOptions(const FShinobiMap& Map, EShinobiPvpFormat Format)
+{
+	if (!Map.bArena)
+	{
+		return TEXT("listen");
+	}
+	return FString(TEXT("listen?game=/Script/ShinobiCoop.ShinobiPvpGameMode?Format="))
+		+ (Format == EShinobiPvpFormat::TwoVsTwo ? TEXT("2v2") : TEXT("1v1"));
 }
 
 void UShinobiSessionSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -101,9 +117,12 @@ void UShinobiSessionSubsystem::WithoutSession(TFunction<void()> Then)
 	Then();
 }
 
-void UShinobiSessionSubsystem::HostGame(int32 MapIndex)
+void UShinobiSessionSubsystem::HostGame(int32 MapIndex, EShinobiPvpFormat Format)
 {
 	HostMapIndex = GetMaps().IsValidIndex(MapIndex) ? MapIndex : 0;
+	// Co-op has no format; an arena with none given is 1v1, which is also what the game mode defaults to.
+	HostFormat = !GetMaps()[HostMapIndex].bArena ? EShinobiPvpFormat::None
+		: Format == EShinobiPvpFormat::TwoVsTwo ? EShinobiPvpFormat::TwoVsTwo : EShinobiPvpFormat::OneVsOne;
 	const IOnlineSessionPtr Sessions = GetSessions();
 	if (!Sessions || bBusy)
 	{
@@ -114,7 +133,7 @@ void UShinobiSessionSubsystem::HostGame(int32 MapIndex)
 	WithoutSession([this]
 	{
 		FOnlineSessionSettings Settings;
-		Settings.NumPublicConnections = MaxPlayers;
+		Settings.NumPublicConnections = HostFormat == EShinobiPvpFormat::OneVsOne ? 2 : MaxPlayers;
 		Settings.bShouldAdvertise = true;
 		Settings.bAllowJoinInProgress = true;
 		Settings.bIsLANMatch = IsLanMode();
@@ -124,6 +143,8 @@ void UShinobiSessionSubsystem::HostGame(int32 MapIndex)
 		Settings.bAllowInvites = true;
 		Settings.Set(GameKey, true, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
 		Settings.Set(MapKey, FString(GetMaps()[HostMapIndex].DisplayName), EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
+		Settings.Set(FormatKey, FString(HostFormat == EShinobiPvpFormat::TwoVsTwo ? TEXT("2v2") : HostFormat == EShinobiPvpFormat::OneVsOne ? TEXT("1v1") : TEXT("")),
+			EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
 		if (!GetSessions()->CreateSession(0, NAME_GameSession, Settings))
 		{
 			SetMessage(TEXT("Couldn't create the game"), false);
@@ -139,7 +160,7 @@ void UShinobiSessionSubsystem::OnCreated(FName SessionName, bool bOk)
 		return;
 	}
 	SetMessage(FString(), false);
-	UGameplayStatics::OpenLevel(GetWorld(), FName(GetMaps()[HostMapIndex].Path), true, TEXT("listen"));
+	UGameplayStatics::OpenLevel(GetWorld(), FName(GetMaps()[HostMapIndex].Path), true, MakeTravelOptions(GetMaps()[HostMapIndex], HostFormat));
 }
 
 void UShinobiSessionSubsystem::FindGames()
@@ -178,7 +199,9 @@ void UShinobiSessionSubsystem::OnFound(bool bOk)
 			const int32 Max = Result.Session.SessionSettings.NumPublicConnections;
 			FString MapName;
 			Result.Session.SessionSettings.Get(MapKey, MapName);
-			FoundGames.Add({ Result.Session.OwningUserName, MapName, Max - Result.Session.NumOpenPublicConnections, Max, Result.PingInMs });
+			FString Format;
+			Result.Session.SessionSettings.Get(FormatKey, Format);
+			FoundGames.Add({ Result.Session.OwningUserName, MapName, Max - Result.Session.NumOpenPublicConnections, Max, Result.PingInMs, Format });
 			Results.Add(Result);
 		}
 	}

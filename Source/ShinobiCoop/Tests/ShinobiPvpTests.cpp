@@ -14,6 +14,7 @@
 #include "Shinobi/Abilities/GA_Sprint.h"
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 #include "Shinobi/Enemies/ShinobiSummon.h"
+#include "Shinobi/Online/ShinobiSessionSubsystem.h"
 #include "Shinobi/UI/ShinobiOverheadTextComponent.h"
 #include "AIController.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -902,6 +903,43 @@ bool FShinobiPvpFillBotsTest::RunTest(const FString& Parameters)
 		Mode->StartRound();
 		TestEqual(TEXT("Not doubled by the reset"), BotsOn(W, EShinobiTeam::TeamB).Num(), 1);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpTravelOptionsTest, "ShinobiCoop.Pvp.Session.TravelOptions", ShinobiTestFlags)
+bool FShinobiPvpTravelOptionsTest::RunTest(const FString& Parameters)
+{
+	using S = UShinobiSessionSubsystem;
+	const TArray<FShinobiMap>& Maps = S::GetMaps();
+	TestEqual(TEXT("A co-op map just listens"), S::MakeTravelOptions(Maps[0], EShinobiPvpFormat::None), FString(TEXT("listen")));
+	TestEqual(TEXT("The default map is still Hidden Leaf Valley"), FString(Maps[0].DisplayName), FString(TEXT("Hidden Leaf Valley")));
+
+	const FShinobiMap* Arena = Maps.FindByPredicate([](const FShinobiMap& M) { return M.bArena; });
+	if (!TestNotNull(TEXT("There is an arena entry"), Arena))
+	{
+		return false;
+	}
+	const FString OneVsOne = S::MakeTravelOptions(*Arena, EShinobiPvpFormat::OneVsOne);
+	TestTrue(TEXT("1v1 carries the format"), OneVsOne.Contains(TEXT("?Format=1v1")));
+	TestTrue(TEXT("1v1 selects the PvP game mode"), OneVsOne.Contains(TEXT("/Script/ShinobiCoop.ShinobiPvpGameMode")));
+	TestTrue(TEXT("1v1 still listens"), OneVsOne.StartsWith(TEXT("listen")));
+	TestTrue(TEXT("2v2 carries the format"), S::MakeTravelOptions(*Arena, EShinobiPvpFormat::TwoVsTwo).Contains(TEXT("?Format=2v2")));
+
+	for (const TCHAR* Name : { TEXT("Arena: West End"), TEXT("Arena: Camden"), TEXT("Arena: Westminster"), TEXT("Arena: Tower") })
+	{
+		const FShinobiMap* Found = Maps.FindByPredicate([Name](const FShinobiMap& M) { return FCString::Strcmp(M.DisplayName, Name) == 0; });
+		TestTrue(FString::Printf(TEXT("%s is listed as an arena"), Name), Found && Found->bArena);
+	}
+	int32 ArenaCount = 0;
+	for (const FShinobiMap& M : Maps)
+	{
+		ArenaCount += M.bArena ? 1 : 0;
+		if (!M.bArena)
+		{
+			TestEqual(FString::Printf(TEXT("%s (co-op) listens"), M.DisplayName), S::MakeTravelOptions(M, EShinobiPvpFormat::None), FString(TEXT("listen")));
+		}
+	}
+	TestEqual(TEXT("Exactly four arenas"), ArenaCount, 4);
 	return true;
 }
 

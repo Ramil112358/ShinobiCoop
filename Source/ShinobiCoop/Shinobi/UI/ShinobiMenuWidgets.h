@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/Button.h"
+#include "Shinobi/Pvp/ShinobiPvpMatch.h"
 #include "ShinobiMenuWidgets.generated.h"
 
 class UShinobiSessionSubsystem;
@@ -81,7 +82,16 @@ protected:
 
 private:
 	void OnJoinRow(int32 Index);
+	/** Index into HostRows. */
 	void OnMapRow(int32 Index);
+
+	/** One Host Game row: a map and, for an arena, its format. Rebuilt by Refresh. */
+	struct FHostRow
+	{
+		int32 MapIndex;
+		EShinobiPvpFormat Format;
+	};
+	TArray<FHostRow> HostRows;
 
 	/** Host Game was pressed: the list shows maps to host on instead of found games. */
 	bool bPickingMap = false;
