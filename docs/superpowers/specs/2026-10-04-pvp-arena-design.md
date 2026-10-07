@@ -1,5 +1,7 @@
 # PvP arena: 1v1 / 2v2 on four small London maps
 
+Status (2026-10-07): implemented on feature/pvp-arena; see the plan; open playtest items listed in the final review.
+
 ## Context
 
 You asked (2026-10-03) for smaller maps cut from four parts of `Lvl_London` (the original stays) and 1v1 and 2v2 arena fights on them, with power-ups (HP, attack boost, speed boost and more).
@@ -45,7 +47,7 @@ You asked (2026-10-03) for smaller maps cut from four parts of `Lvl_London` (the
 ### 2. Teams
 
 - `EShinobiTeam` gains `TeamA`, `TeamB`. `Players` and `Enemies` keep their meaning, so co-op and the PvE arena are unchanged.
-- `AShinobiCharacterBase::Team` becomes replicated (`COND_InitialOnly`), so clients agree on hostility for HUD, lock-on and feedback.
+- `AShinobiCharacterBase::Team` becomes replicated (plain replication, so a team change after the first replication reaches clients too), so clients agree on hostility for HUD, lock-on and feedback.
 - `IsHostileTo` is unchanged: different team = hostile. Existing damage, AoE, projectile, AI targeting and lock-on code then works for PvP with no further edits.
 - Friendly fire is off between teammates (same team is not hostile). Summons and the Susanoo/barriers use the caster's team, as the barrier already does.
 - Outlines are set per viewer: teammates get the friendly stencil, opponents the enemy stencil. The static `Team == Enemies` checks in `ShinobiCharacterBase.cpp` and `ShinobiPlayerCharacter.cpp` become "hostile to the local pawn".
