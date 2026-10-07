@@ -82,13 +82,18 @@ public:
 	UPROPERTY(Replicated)
 	int32 PvpRound = 0;
 
-	UPROPERTY(Replicated)
+	UPROPERTY(ReplicatedUsing = OnRep_PvpWins)
 	int32 PvpWinsA = 0;
 
-	UPROPERTY(Replicated)
+	UPROPERTY(ReplicatedUsing = OnRep_PvpWins)
 	int32 PvpWinsB = 0;
 
 	/** PvP: the round's result for the RoundEnd banner; at MatchEnd, the match's. Ongoing otherwise. */
 	UPROPERTY(Replicated)
 	EShinobiRoundResult PvpRoundResult = EShinobiRoundResult::Ongoing;
+
+private:
+	/** Clients only: logs the score, which Scripts/smoke_pvp.ps1 reads to prove the state reached the client. */
+	UFUNCTION()
+	void OnRep_PvpWins();
 };

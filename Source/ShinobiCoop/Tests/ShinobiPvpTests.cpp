@@ -241,6 +241,27 @@ bool FShinobiPvpGatherStatusTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpKillTeamTest, "ShinobiCoop.Pvp.Mode.KillTeamDownsOnlyThatSide", ShinobiTestFlags)
+bool FShinobiPvpKillTeamTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPvpGameMode* Mode = W.Spawn<AShinobiPvpGameMode>();
+	Mode->PvpFormat = EShinobiPvpFormat::OneVsOne;
+	AShinobiPlayerCharacter* A = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiPlayerCharacter* B = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, -3000.f, 0.f));
+	A->SetTeam(EShinobiTeam::TeamA);
+	B->SetTeam(EShinobiTeam::TeamB);
+	ShinobiTest::Hover(A);
+	ShinobiTest::Hover(B);
+
+	Mode->KillTeam(EShinobiTeam::TeamB);
+	TestEqual(TEXT("Team B is out"), Mode->GatherStatus(EShinobiTeam::TeamB).Alive, 0);
+	TestEqual(TEXT("Team A is untouched"), Mode->GatherStatus(EShinobiTeam::TeamA).Alive, 1);
+	TestEqual(TEXT("The round judge sees team A the winner"),
+		FShinobiPvpMatch::Judge(Mode->GatherStatus(EShinobiTeam::TeamA), Mode->GatherStatus(EShinobiTeam::TeamB), false), EShinobiRoundResult::TeamAWins);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpResetTest, "ShinobiCoop.Pvp.Mode.ResetClearsBoostsAndShield", ShinobiTestFlags)
 bool FShinobiPvpResetTest::RunTest(const FString& Parameters)
 {

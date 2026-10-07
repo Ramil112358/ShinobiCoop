@@ -5,6 +5,9 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerStart.h"
+#include "HAL/IConsoleManager.h"
+#include "Misc/CommandLine.h"
+#include "TimerManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "ShinobiCoop.h"
 #include "Shinobi/ShinobiAttributeSet.h"
@@ -44,6 +47,18 @@ namespace
 		}();
 		return Tags;
 	}
+
+	FAutoConsoleCommandWithWorldAndArgs CmdKillTeam(
+		TEXT("Shinobi.KillTeam"),
+		TEXT("Dev aid (host only, PvP arena): Shinobi.KillTeam A|B kills every fighter, bots included, on that side."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AShinobiPvpGameMode* Pvp = World ? World->GetAuthGameMode<AShinobiPvpGameMode>() : nullptr;
+			if (Pvp && Args.Num() == 1 && (Args[0].Equals(TEXT("A"), ESearchCase::IgnoreCase) || Args[0].Equals(TEXT("B"), ESearchCase::IgnoreCase)))
+			{
+				Pvp->KillTeam(Args[0].Equals(TEXT("A"), ESearchCase::IgnoreCase) ? EShinobiTeam::TeamA : EShinobiTeam::TeamB);
+			}
+		}));
 
 	const TCHAR* ResultName(EShinobiRoundResult Result)
 	{
@@ -343,6 +358,33 @@ void AShinobiPvpGameMode::StartFight()
 	SetHold(false);
 	SetPhase(EShinobiPvpPhase::Fighting, FShinobiPvpMatch::RoundSeconds);
 	UE_LOG(LogShinobiCoop, Log, TEXT("Pvp: round %d start"), Match.Round);
+
+	// Smoke hook, inert without the switch: -ShinobiPvpSmokeKill=B@5 kills team B five seconds into each fight.
+	FString Spec;
+	if (FParse::Value(FCommandLine::Get(), TEXT("ShinobiPvpSmokeKill="), Spec))
+	{
+		FString Side, Delay;
+		if (Spec.Split(TEXT("@"), &Side, &Delay) && (Side == TEXT("A") || Side == TEXT("B")))
+		{
+			const EShinobiTeam Team = Side == TEXT("A") ? EShinobiTeam::TeamA : EShinobiTeam::TeamB;
+			FTimerHandle Handle;
+			GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, [this, Team] { KillTeam(Team); }), FMath::Max(0.1f, FCString::Atof(*Delay)), false);
+		}
+	}
+}
+
+void AShinobiPvpGameMode::KillTeam(EShinobiTeam Team)
+{
+	int32 Killed = 0;
+	for (AShinobiCharacterBase* Member : GetTeamMembers(Team))
+	{
+		if (Member->IsAlive())
+		{
+			Member->GetAbilitySystemComponent()->SetNumericAttributeBase(UShinobiAttributeSet::GetHealthAttribute(), 0.f);
+			++Killed;
+		}
+	}
+	UE_LOG(LogShinobiCoop, Log, TEXT("Pvp: KillTeam %s killed %d"), Team == EShinobiTeam::TeamA ? TEXT("A") : TEXT("B"), Killed);
 }
 
 void AShinobiPvpGameMode::EndRound(EShinobiRoundResult Result)

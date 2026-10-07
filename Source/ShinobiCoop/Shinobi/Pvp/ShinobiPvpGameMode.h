@@ -17,6 +17,7 @@ class APlayerStart;
  * revive is off) or the 120 s cap (more team health wins). A 5 s banner and a full reset between rounds, a 10 s result,
  * then the same map reloads for a rematch. The rules live in FShinobiPvpMatch; this drives them and the world.
  * PlayerStarts tagged Team:A / Team:B are the sides' spawns; TargetPoints tagged Pickup:<Type> are the power-ups' spots.
+ * Test hook for Scripts/smoke_pvp.ps1: -ShinobiPvpSmokeKill=<A|B>@<seconds> kills that team that long after each fight starts.
  */
 UCLASS()
 class SHINOBICOOP_API AShinobiPvpGameMode : public AGameModeBase
@@ -57,6 +58,10 @@ public:
 
 	/** A pickup (AShinobiPickup) at each TargetPoint tagged Pickup:<Type>. Once, at BeginPlay; the points are map data. */
 	void SpawnPickups();
+
+	/** Dev aid (Shinobi.KillTeam A|B, server only): zeroes the health of every living fighter on Team, through the normal
+	 * out-of-health path, so the round judge sees the side out. */
+	void KillTeam(EShinobiTeam Team);
 
 	/** Resets everyone (ResetCharacters, OnRoundReset), holds them and starts the round's countdown. */
 	void StartRound();

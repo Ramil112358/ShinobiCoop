@@ -1,5 +1,6 @@
 #include "Shinobi/ShinobiGameState.h"
 #include "Net/UnrealNetwork.h"
+#include "ShinobiCoop.h"
 
 void AShinobiGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
@@ -20,6 +21,11 @@ void AShinobiGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(AShinobiGameState, PvpWinsA);
 	DOREPLIFETIME(AShinobiGameState, PvpWinsB);
 	DOREPLIFETIME(AShinobiGameState, PvpRoundResult);
+}
+
+void AShinobiGameState::OnRep_PvpWins()
+{
+	UE_LOG(LogShinobiCoop, Log, TEXT("Pvp: score A %d - B %d"), PvpWinsA, PvpWinsB);
 }
 
 float AShinobiGameState::GetPhaseTimeRemaining() const
