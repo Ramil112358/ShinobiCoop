@@ -8,10 +8,12 @@
 #include "Engine/CollisionProfile.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
+#include "Materials/MaterialInterface.h"
 #include "Shinobi/ShinobiMeteor.h"
 #include "Shinobi/ShinobiWaterDragon.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/ShinobiPlayerController.h"
 #include "Shinobi/ShinobiTelegraph.h"
 #include "Shinobi/Abilities/GA_FireMeteor.h"
 #include "Shinobi/Abilities/GA_IceMeteor.h"
@@ -83,6 +85,175 @@ bool FShinobiTelegraphTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMeteorTargetingTest, "ShinobiCoop.Meteor.TargetPreviewRequiresConfirmation", ShinobiTestFlags)
+bool FShinobiMeteorTargetingTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	SpawnMeteorWall(W, FVector(1500.f, 0.f, 0.f), FVector(1.f, 10.f, 10.f));
+	SpawnMeteorWall(W, FVector(1500.f, 600.f, 0.f), FVector(1.f, 10.f, 10.f));
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(3);
+	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
+	TestTrue(TEXT("The first press enters target placement"), ShinobiTest::IsActive(P, UGA_FireMeteor::StaticClass()));
+	TestEqual(TEXT("Target placement spends no chakra"), ShinobiTest::Get(P, Chakra), 100.f);
+	TestFalse(TEXT("Target placement does not start cooldown"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_FireMeteor));
+	TestEqual(TEXT("A local ground-area preview is visible"), ShinobiTest::CountActors<AShinobiTelegraph>(W), 1);
+	AShinobiTelegraph* Preview = nullptr;
+	for (TActorIterator<AShinobiTelegraph> It(W.World); It; ++It)
+	{
+		Preview = *It;
+	}
+	if (TestNotNull(TEXT("The preview actor"), Preview))
+	{
+		TestEqual(TEXT("The preview uses the meteor's target radius"), Preview->GetRadius(), 450.f);
+		TestFalse(TEXT("The movable preview is local, not replicated"), Preview->GetIsReplicated());
+		const FVector InitialTarget = Preview->GetActorLocation();
+		P->SetActorRotation(FRotator(0.f, 20.f, 0.f));
+		W.Tick(0.11f);
+		TestTrue(TEXT("The preview follows updated camera aim"), FVector::Dist2D(Preview->GetActorLocation(), InitialTarget) > 100.f);
+	}
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
+	TestEqual(TEXT("Confirmation pays the meteor cost"), ShinobiTest::Get(P, Chakra), 50.f);
+	TestEqual(TEXT("The preview is replaced by the normal seal phase"), ShinobiTest::CountActors<AShinobiTelegraph>(W), 0);
+	W.Tick(0.9f);
+	TestEqual(TEXT("The confirmed cast starts its replicated warning"), ShinobiTest::CountActors<AShinobiTelegraph>(W), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMeteorLeftClickConfirmTest, "ShinobiCoop.Meteor.LeftClickConfirmsPlacement", ShinobiTestFlags)
+bool FShinobiMeteorLeftClickConfirmTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	SpawnMeteorWall(W, FVector(1500.f, 0.f, 0.f), FVector(1.f, 10.f, 10.f));
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(3);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
+
+	TestTrue(TEXT("The left-click press is consumed by placement"), P->RouteTargetPlacementInput(EShinobiAbilityInputID::Melee, true));
+	TestTrue(TEXT("The meteor proceeds into its cast"), ShinobiTest::IsActive(P, UGA_FireMeteor::StaticClass()));
+	TestFalse(TEXT("Placement has ended"), P->IsJutsuTargetPlacementActive());
+	TestEqual(TEXT("The click commits the jutsu cost"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 50.f);
+	TestTrue(TEXT("The corresponding release is consumed too"), P->RouteTargetPlacementInput(EShinobiAbilityInputID::Melee, false));
+	W.Tick(0.9f);
+	TestEqual(TEXT("The click-confirmed meteor is performed"), ShinobiTest::CountActors<AShinobiMeteor>(W), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiTelegraphSimplePreviewTest, "ShinobiCoop.Telegraph.PreviewIsASimpleSteadyOutline", ShinobiTestFlags)
+bool FShinobiTelegraphSimplePreviewTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiTelegraph* Preview = AShinobiTelegraph::SpawnPreview(W.World, FVector::ZeroVector, 300.f, FLinearColor(0.05f, 0.85f, 0.75f));
+	if (TestNotNull(TEXT("The placement preview exists"), Preview))
+	{
+		TArray<UStaticMeshComponent*> Meshes;
+		Preview->GetComponents(Meshes);
+		TestEqual(TEXT("The preview uses only the two outline rings"), Meshes.Num(), 2);
+		TArray<FVector> InitialScales;
+		for (UStaticMeshComponent* Mesh : Meshes)
+		{
+			TestNotNull(*FString::Printf(TEXT("%s has ring geometry"), *Mesh->GetName()), Mesh->GetStaticMesh().Get());
+			TestNotNull(*FString::Printf(TEXT("%s has a visible ring material"), *Mesh->GetName()), Mesh->GetMaterial(0));
+			InitialScales.Add(Mesh->GetRelativeScale3D());
+		}
+		W.Tick(0.2f);
+		for (int32 Index = 0; Index < Meshes.Num(); ++Index)
+		{
+			TestTrue(TEXT("The outline remains steady during placement"), Meshes[Index]->GetRelativeScale3D().Equals(InitialScales[Index]));
+		}
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMeteorPlacementRangeTest, "ShinobiCoop.Meteor.PlacementRangeIsReducedWithoutChangingArea", ShinobiTestFlags)
+bool FShinobiMeteorPlacementRangeTest::RunTest(const FString& Parameters)
+{
+	const UGA_FireMeteor* Fire = GetDefault<UGA_FireMeteor>();
+	const UGA_IceMeteor* Ice = GetDefault<UGA_IceMeteor>();
+	TestEqual(TEXT("Fire Meteor placement reaches 2000 units"), Fire->Range, 2000.f);
+	TestEqual(TEXT("Ice Meteors placement reaches 2000 units"), Ice->Range, 2000.f);
+	TestEqual(TEXT("Fire Meteor area radius is unchanged"), Fire->Radius, 450.f);
+	TestEqual(TEXT("Ice Meteors area radius is unchanged"), Ice->AreaRadius, 500.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMeteorTargetCancelTest, "ShinobiCoop.Meteor.EscapeCancelsTargetPreviewForFree", ShinobiTestFlags)
+bool FShinobiMeteorTargetCancelTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	SpawnMeteorWall(W, FVector(1500.f, 0.f, 0.f), FVector(1.f, 10.f, 10.f));
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(3);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
+
+	AShinobiPlayerController* PC = W.Spawn<AShinobiPlayerController>();
+	PC->Possess(P);
+	PC->TogglePauseMenu();
+	TestFalse(TEXT("Escape cancels target placement"), ShinobiTest::IsActive(P, UGA_FireMeteor::StaticClass()));
+	TestEqual(TEXT("Cancelling does not spend chakra"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 100.f);
+	TestEqual(TEXT("Cancelling removes the preview"), ShinobiTest::CountActors<AShinobiTelegraph>(W), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMeteorTargetsGroundAlongAim, "ShinobiCoop.Meteor.TargetsGroundAlongDownwardAim", ShinobiTestFlags)
+bool FShinobiMeteorTargetsGroundAlongAim::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	SpawnMeteorWall(W, FVector(0.f, 0.f, -150.f), FVector(100.f, 100.f, 1.f));
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	P->SetActorRotation(FRotator(-30.f, 0.f, 0.f));
+	P->ApplyJutsuPage(3);
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
+	TestTrue(TEXT("Ground within the downward aim is a valid placement"), ShinobiTest::IsActive(P, UGA_FireMeteor::StaticClass()));
+	TestEqual(TEXT("Placement remains free until confirmed"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 100.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMeteorLookMovesTargetNotCamera, "ShinobiCoop.Meteor.LookInputMovesTargetNotCamera", ShinobiTestFlags)
+bool FShinobiMeteorLookMovesTargetNotCamera::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	SpawnMeteorWall(W, FVector(1500.f, 0.f, 0.f), FVector(1.f, 10.f, 10.f));
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	P->ApplyJutsuPage(3);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
+	TestTrue(TEXT("Meteor is waiting for target placement"), P->IsJutsuTargetPlacementActive());
+
+	AShinobiPlayerController* PC = W.Spawn<AShinobiPlayerController>();
+	PC->Possess(P);
+	PC->SetControlRotation(FRotator::ZeroRotator);
+	const FRotator CameraBefore = PC->GetControlRotation();
+	const FVector AimBefore = P->GetJutsuTargetAimDirection();
+	AShinobiTelegraph* Preview = nullptr;
+	for (TActorIterator<AShinobiTelegraph> It(W.World); It; ++It)
+	{
+		Preview = *It;
+	}
+	const FVector TargetBefore = Preview ? Preview->GetActorLocation() : FVector::ZeroVector;
+	P->ApplyLookInput(FVector2D(1.f, 0.f));
+	const FVector AimAfter = P->GetJutsuTargetAimDirection();
+	TestTrue(TEXT("Look input leaves the camera rotation fixed"), PC->GetControlRotation().Equals(CameraBefore));
+	TestTrue(TEXT("Horizontal mouse movement shifts the target ray"), FVector::Dist(AimBefore, AimAfter) > 0.001f);
+	W.Tick(0.11f);
+	TestTrue(TEXT("The world preview follows the shifted target ray"),
+		Preview && FVector::Dist2D(Preview->GetActorLocation(), TargetBefore) > 1.f);
+
+	TestTrue(TEXT("Escape cancels placement"), P->CancelJutsuTargetPlacement());
+	TestFalse(TEXT("Target placement is no longer active"), P->IsJutsuTargetPlacementActive());
+	const FVector2D CursorAfterCancel = P->GetJutsuTargetScreenPosition();
+	P->ApplyLookInput(FVector2D(1.f, 0.f));
+	TestEqual(TEXT("Look input no longer moves the virtual cursor"), P->GetJutsuTargetScreenPosition(), CursorAfterCancel);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiFireMeteorTest, "ShinobiCoop.Meteor.FireMeteorWarnsFallsAndBurns", ShinobiTestFlags)
 bool FShinobiFireMeteorTest::RunTest(const FString& Parameters)
 {
@@ -98,6 +269,8 @@ bool FShinobiFireMeteorTest::RunTest(const FString& Parameters)
 	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
 
 	P->ApplyJutsuPage(3);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
+	TestEqual(TEXT("First press only opens target placement"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 100.f);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	TestEqual(TEXT("Cost 50 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 50.f);
 	W.Tick(0.9f);
@@ -171,6 +344,7 @@ bool FShinobiIceShowerTest::RunTest(const FString& Parameters)
 	}
 
 	P->ApplyJutsuPage(3);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
 	TestEqual(TEXT("Cost 45 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 55.f);
 	W.Tick(0.9f);
@@ -276,6 +450,7 @@ bool FShinobiMeteorFloorTest::RunTest(const FString& Parameters)
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
 	P->ApplyJutsuPage(3);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	W.Tick(0.9f);
 	const AShinobiTelegraph* Ring = nullptr;

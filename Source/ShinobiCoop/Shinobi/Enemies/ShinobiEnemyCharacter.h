@@ -83,6 +83,9 @@ public:
 	/** Whether the AI may pick Candidate as a target (it is already hostile and targetable). Summons stay near their caster. */
 	virtual bool CanTarget(const AShinobiCharacterBase& Candidate) const { return true; }
 
+	/** Where the AI waits while it has nothing to fight (a summon's place beside its caster). False: it stays where it is. */
+	virtual bool GetIdlePost(FVector& OutPost) const { return false; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

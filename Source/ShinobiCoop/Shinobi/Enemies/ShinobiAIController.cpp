@@ -32,12 +32,18 @@ void AShinobiAIController::Tick(float DeltaSeconds)
 	}
 
 	RetargetClock -= DeltaSeconds;
-	if (RetargetClock <= 0.f || !Target.IsValid() || !Target->IsTargetable())
+	// (With nothing to fight the clock still gates the search: a search every tick would StopMovement every tick, and a summon
+	// walking to its post beside the caster would never get up speed.)
+	if (RetargetClock <= 0.f || (Target.IsValid() && !Target->IsTargetable()))
 	{
 		RetargetClock = RetargetInterval;
+		const bool bHadTarget = Target.IsValid();
 		Target = FindNearestPlayer(*Self);
-		bSteerDirectly = false;
-		StopMovement(); // re-path toward the (possibly new) target below
+		if (bHadTarget || Target.IsValid()) // still nobody to fight: leave a walk to the idle post alone
+		{
+			bSteerDirectly = false;
+			StopMovement(); // re-path toward the (possibly new) target below
+		}
 		if (Target.IsValid())
 		{
 			SetFocus(Target.Get());
@@ -48,7 +54,14 @@ void AShinobiAIController::Tick(float DeltaSeconds)
 		}
 	}
 	const AShinobiCharacterBase* Victim = Target.Get();
-	if (!Victim || Self->IsBusy() || ASC->HasMatchingGameplayTag(ShinobiTags::State_Shocked) || ASC->HasMatchingGameplayTag(ShinobiTags::State_Staggered))
+	const bool bHeld = Self->IsBusy() || ASC->HasMatchingGameplayTag(ShinobiTags::State_Shocked) || ASC->HasMatchingGameplayTag(ShinobiTags::State_Staggered);
+	FVector Post;
+	if (!Victim && !bHeld && Self->GetIdlePost(Post))
+	{
+		GoToPost(*Self, Post);
+		return;
+	}
+	if (!Victim || bHeld)
 	{
 		StopMovement();
 		return;
@@ -94,6 +107,28 @@ void AShinobiAIController::Tick(float DeltaSeconds)
 	else
 	{
 		StopMovement();
+	}
+}
+
+void AShinobiAIController::GoToPost(AShinobiEnemyCharacter& Self, const FVector& Post)
+{
+	constexpr float ArriveWithin = 120.f;
+	const FVector ToPost = (Post - Self.GetActorLocation()) * FVector(1.f, 1.f, 0.f);
+	if (ToPost.Size() <= ArriveWithin)
+	{
+		StopMovement();
+		bSteerDirectly = false;
+		return;
+	}
+	if (!bSteerDirectly && (GetMoveStatus() == EPathFollowingStatus::Idle || FVector::Dist2D(PostGoal, Post) > 200.f))
+	{
+		PostGoal = Post;
+		bSteerDirectly = MoveToLocation(Post, ArriveWithin * 0.5f, true, true, false, false) == EPathFollowingRequestResult::Failed;
+	}
+	if (bSteerDirectly)
+	{
+		SetFocalPoint(Post, EAIFocusPriority::Move);
+		Self.AddMovementInput(ToPost.GetSafeNormal());
 	}
 }
 

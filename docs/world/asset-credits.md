@@ -94,9 +94,9 @@ remaining trademarks: the TX4 taxi and double-decker bus shapes, London Eye and 
 - **Animal Variety Pack** (Epic Games, free on Fab, Fab Standard License; in `Content/AnimalVarietyPack`): the wolf mesh, material and
   animations worn by the summoned dogs.
 - **Mesh2Motion** (https://github.com/scottpetrovic/mesh2motion-app, art assets CC0): the snake model, rig and animations
-  (`SourceArt/Mesh2Motion/snake-animations.glb`, exported by `Scripts/character/export_creature.py`). The dragon (the rideable summon) is also from there; the fox and kaiju rigs
-  and animations were downloaded too but are unused.
-- **Hyper3D Rodin** (generated for this project): the toad (`SourceArt/Creatures/Toad/rodin_toad.glb`), rigged and animated in
-  Blender by `Scripts/character/build_toad.py`.
-- **SpriteCook** (generated for this project): the four summon jutsu icons (toad, snake, dogs, dragon).
+  (`SourceArt/Mesh2Motion/snake-animations.glb`, exported by `Scripts/character/export_creature.py`). The fox, dragon and kaiju rigs and animations were downloaded there too
+  and are unused (the rideable dragon is the Rodin Tairn below).
+- **Hyper3D Rodin** (generated for this project): the toad (`SourceArt/Creatures/Toad/rodin_toad.glb`, rigged and animated in
+  Blender by `Scripts/character/build_toad.py`) and the crimson dragon (`SourceArt/Creatures/DragonRodin/rodin_dragon.glb`, `build_dragon_crimson.py`) and Tairn, the second rideable dragon (`SourceArt/Creatures/Tairn/rodin_tairn.glb`, with a tail club from `rodin_tail_club2.glb`, `build_dragon.py`; Tairn is a character from Rebecca Yarros's *Fourth Wing*, so he is a fan tribute: check before any public release).
+- **SpriteCook** (generated for this project): the summon jutsu icons (toad, snake, dogs, Tairn, the crimson dragon) and the two dragon-fire sprite sheets.
 

@@ -9,6 +9,7 @@ class UAbilityTask;
 class UAbilityTask_WaitGameplayEvent;
 class UAnimMontage;
 class UTexture2D;
+class AShinobiTelegraph;
 
 /** What the HUD shows for one jutsu slot. */
 struct FShinobiJutsuSlotState
@@ -93,9 +94,20 @@ public:
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
 	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled) override;
 
+	/** Cancels the free target-placement phase, if this ability is currently waiting for confirmation. */
+	bool CancelTargetPlacement();
+
 protected:
 	/** Runs before any cost is paid. Return false to fail the activation for free (the HUD flashes the slot). */
 	virtual bool PrepareJutsu() { return true; }
+
+	/** A positive radius opts this jutsu into the target-placement phase before its normal cast. */
+	virtual float GetTargetPreviewRadius() const { return 0.f; }
+
+	virtual FLinearColor GetTargetPreviewTint() const { return FLinearColor::White; }
+
+	/** Recomputes the target point for a placed jutsu. Called during preview and again on confirmation. */
+	virtual bool UpdateJutsuTarget(FVector& OutTarget) { return PrepareJutsu(); }
 
 	/** Runs after the wind-up, once the cooldown has started. Must end the ability (EndJutsu), directly or from a task. */
 	virtual void ExecuteJutsu() PURE_VIRTUAL(UShinobiJutsuAbility::ExecuteJutsu, );
@@ -126,7 +138,13 @@ private:
 	void OnInputReleased(float TimeHeld);
 
 	UFUNCTION()
+	void OnTargetConfirmed(float TimeWaited);
+
+	UFUNCTION()
 	void OnChargeTick(int32 ActionNumber);
+
+	UFUNCTION()
+	void OnTargetingTick(int32 ActionNumber);
 
 	UFUNCTION()
 	void OnInterruptedByHit(FGameplayEventData Payload);
@@ -135,6 +153,10 @@ private:
 	void OnReleaseDelayFinished();
 
 	void Release();
+
+	void StartJutsuCast();
+	bool UpdateTargetPreview();
+	void ClearTargetPreview();
 
 	/** Server: drains chakra for the charge time since the last drain. Returns false once chakra has run out. */
 	bool DrainCharge();
@@ -149,9 +171,21 @@ private:
 	UPROPERTY()
 	TObjectPtr<UAbilityTask> ChargeTicker;
 
+	UPROPERTY()
+	TObjectPtr<UAbilityTask> TargetPressTask;
+
+	UPROPERTY()
+	TObjectPtr<UAbilityTask> TargetingTicker;
+
+	UPROPERTY()
+	TObjectPtr<AShinobiTelegraph> TargetPreview;
+
 	/** Remote owner only: the server's "chakra ran out, release" signal. */
 	FDelegateHandle ServerReleaseHandle;
 
+	FVector TargetLocation = FVector::ZeroVector;
+	bool bTargetPlacementActive = false;
+	bool bCostPaid = false;
 	EPhase Phase = EPhase::Seal;
 	bool bReleaseRequested = false;
 	bool bChargingTagAdded = false;

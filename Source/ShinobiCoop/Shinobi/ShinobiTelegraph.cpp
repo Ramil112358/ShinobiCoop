@@ -1,7 +1,6 @@
 #include "Shinobi/ShinobiTelegraph.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
-#include "Materials/MaterialInstanceDynamic.h"
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Shinobi/VFX/ShinobiVfx.h"
@@ -54,6 +53,35 @@ AShinobiTelegraph* AShinobiTelegraph::Spawn(UWorld* World, const FVector& Where,
 	return Ring;
 }
 
+AShinobiTelegraph* AShinobiTelegraph::SpawnPreview(UWorld* World, const FVector& Where, float Radius, const FLinearColor& Tint)
+{
+	if (!World || World->GetNetMode() == NM_DedicatedServer)
+	{
+		return nullptr;
+	}
+	const FTransform At(FRotator::ZeroRotator, Where);
+	AShinobiTelegraph* Ring = World->SpawnActorDeferred<AShinobiTelegraph>(StaticClass(), At, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (Ring)
+	{
+		Ring->SetReplicates(false);
+		Ring->bPreview = true;
+		Ring->Radius = Radius;
+		Ring->Tint = Tint;
+		Ring->FinishSpawning(At);
+	}
+	return Ring;
+}
+
+void AShinobiTelegraph::SetPreviewTarget(const FVector& Where, bool bValid)
+{
+	if (!bPreview)
+	{
+		return;
+	}
+	SetActorLocation(Where);
+	SetActorHiddenInGame(!bValid);
+}
+
 void AShinobiTelegraph::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -71,15 +99,20 @@ void AShinobiTelegraph::BeginPlay()
 		return;
 	}
 	using ShinobiVfx::ESprite;
-	Outer->SetMaterial(0, ShinobiVfx::MakeSprite(this, ESprite::Ring, 0, Tint, 1.2f));
-	Inner->SetMaterial(0, ShinobiVfx::MakeSprite(this, ESprite::Ring, 0, Tint, 2.f));
-	Outer->SetRelativeScale3D(FVector(Radius * 2.f * TelegraphRingScale / TelegraphPlaneSize));
-	Inner->SetRelativeScale3D(FVector(Radius * 2.f * TelegraphRingScale / TelegraphPlaneSize));
+	Outer->SetMaterial(0, ShinobiVfx::MakeSprite(this, ESprite::Ring, 0, Tint, bPreview ? 2.5f : 1.2f));
+	Inner->SetMaterial(0, ShinobiVfx::MakeSprite(this, ESprite::Ring, 0, Tint, bPreview ? 1.5f : 2.f));
+	const float Scale = Radius * 2.f * TelegraphRingScale / TelegraphPlaneSize;
+	Outer->SetRelativeScale3D(FVector(Scale));
+	Inner->SetRelativeScale3D(FVector(Scale * (bPreview ? 0.9f : 1.f)));
 }
 
 void AShinobiTelegraph::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (bPreview)
+	{
+		return;
+	}
 	Age += DeltaSeconds;
 	// The inner ring closes on the centre exactly when the jutsu lands.
 	const float Left = FMath::Clamp(1.f - Age / FMath::Max(Seconds, 0.01f), 0.f, 1.f);

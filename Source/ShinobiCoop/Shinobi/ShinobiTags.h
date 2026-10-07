@@ -39,6 +39,7 @@ namespace ShinobiTags
 	// Kamui: untouchable and unseen by the AI; the Teleport window: kunai thrown, a re-press jumps to one.
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Phased);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_SummonAttacking); // a summon is mid-attack (its attack animation plays on every machine)
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_DragonBreathing); // the dragon is breathing fire (its head clip plays on every machine)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Mounted); // riding a summoned dragon: flying, a farther camera, breath instead of melee
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Susanoo); // the armour is up: damage taken halved, dealt x1.3, chakra comes back faster
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Chilled); // Ice Meteor Shower: moves slower
@@ -83,6 +84,7 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_WaterDragon);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_Susanoo);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_SummonDragon);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_SummonCrimsonDragon);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_SummonToad);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_SummonSnake);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_SummonDogs);

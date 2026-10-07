@@ -4,7 +4,6 @@
 #include "GameFramework/Actor.h"
 #include "ShinobiTelegraph.generated.h"
 
-class UMaterialInstanceDynamic;
 class UStaticMeshComponent;
 
 /**
@@ -23,7 +22,12 @@ public:
 	/** Server only (does nothing on a client); returns the spawned ring, or null. Where is a point on the ground. */
 	static AShinobiTelegraph* Spawn(UWorld* World, const FVector& Where, float Radius, float Seconds, const FLinearColor& Tint);
 
+	/** Local-only placement marker. It stays open and can be moved until the cast is confirmed or cancelled. */
+	static AShinobiTelegraph* SpawnPreview(UWorld* World, const FVector& Where, float Radius, const FLinearColor& Tint);
+
 	float GetRadius() const { return Radius; }
+
+	void SetPreviewTarget(const FVector& Where, bool bValid);
 
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -40,6 +44,8 @@ private:
 
 	UPROPERTY(Replicated)
 	FLinearColor Tint = FLinearColor::White;
+
+	bool bPreview = false;
 
 	UPROPERTY()
 	TObjectPtr<UStaticMeshComponent> Outer;

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Shinobi/VFX/ShinobiVfx.h"
 #include "ShinobiFirePatch.generated.h"
 
 class AShinobiCharacterBase;
@@ -14,6 +15,8 @@ enum class EShinobiFirePatch : uint8
 {
 	Fire,       // where a Fireball lands: 3 s, catches enemies with Burn
 	BlackFlame, // Amaterasu cast at a spot with no enemy: 5 s, catches enemies with the black flame
+	TairnFire,  // where Tairn's breath falls: 4 s of blue-white fire, dark smoke and blue embers; catches enemies with Burn
+	CrimsonFire, // where the crimson dragon's breath falls: 4 s of orange dragonfire, smoke and embers; catches enemies with Burn
 };
 
 /**
@@ -34,6 +37,9 @@ public:
 
 	static constexpr float BaseRadius = 150.f;
 	static constexpr float TickInterval = 0.5f;
+
+	/** How long the dragons' ground fire burns. */
+	static constexpr float DragonDuration = 4.f;
 
 	EShinobiFirePatch GetKind() const { return Kind; }
 	float GetRadius() const { return BaseRadius * Scale; }
@@ -63,6 +69,9 @@ private:
 		float NextSwap = 0.f; // Age at which a flame or ember card switches to another variant
 		int32 Variant = 0;
 	};
+
+	/** The sprite sheet the flames are cut from: the stock flames, Amaterasu's black ones, or the dragon's own. */
+	ShinobiVfx::ESprite FlameSprite() const;
 
 	FCard MakeCard(UStaticMesh* Plane, UMaterialInstanceDynamic* Material, const FVector& Where, float Phase, int32 Variant);
 

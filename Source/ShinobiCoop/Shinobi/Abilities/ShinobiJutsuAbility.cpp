@@ -4,6 +4,7 @@
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "Abilities/Tasks/AbilityTask_Repeat.h"
 #include "Abilities/Tasks/AbilityTask_WaitDelay.h"
+#include "Abilities/Tasks/AbilityTask_WaitInputPress.h"
 #include "Abilities/Tasks/AbilityTask_WaitInputRelease.h"
 #include "Animation/AnimMontage.h"
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
@@ -14,6 +15,8 @@
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
+#include "Shinobi/ShinobiTelegraph.h"
+#include "Shinobi/ShinobiPlayerCharacter.h"
 
 UShinobiJutsuAbility::UShinobiJutsuAbility()
 {
@@ -43,7 +46,14 @@ bool UShinobiJutsuAbility::CanActivateAbility(const FGameplayAbilitySpecHandle H
 
 void UShinobiJutsuAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
-	if (!PrepareJutsu())
+	bTargetPlacementActive = false;
+	bCostPaid = false;
+	TargetPreview = nullptr;
+	TargetingTicker = nullptr;
+	TargetPressTask = nullptr;
+	const bool bTargetedJutsu = GetTargetPreviewRadius() > 0.f;
+	const bool bHasTarget = bTargetedJutsu ? UpdateJutsuTarget(TargetLocation) : PrepareJutsu();
+	if (!bHasTarget)
 	{
 		if (UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get())
 		{
@@ -52,12 +62,48 @@ void UShinobiJutsuAbility::ActivateAbility(const FGameplayAbilitySpecHandle Hand
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
-	// Cost now, cooldown only when the wind-up completes: an interrupted jutsu refunds half and can be recast at once.
-	if (!CommitAbilityCost(Handle, ActorInfo, ActivationInfo))
+
+	InterruptTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, ShinobiTags::Event_Hit_Stagger, nullptr, true);
+	InterruptTask->EventReceived.AddDynamic(this, &UShinobiJutsuAbility::OnInterruptedByHit);
+	InterruptTask->ReadyForActivation();
+
+	if (bTargetedJutsu)
 	{
-		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		bTargetPlacementActive = true;
+		if (AShinobiPlayerCharacter* Player = Cast<AShinobiPlayerCharacter>(GetShinobiCharacter()))
+		{
+			Player->BeginJutsuTargetPlacement();
+		}
+		if (const AShinobiCharacterBase* Self = GetShinobiCharacter(); Self
+			&& (Self->IsLocallyControlled() || (!Self->GetController() && Self->GetNetMode() == NM_Standalone)))
+		{
+			TargetPreview = AShinobiTelegraph::SpawnPreview(Self->GetWorld(), TargetLocation, GetTargetPreviewRadius(), GetTargetPreviewTint());
+		}
+
+		UAbilityTask_Repeat* Ticker = UAbilityTask_Repeat::RepeatAction(this, 0.05f, MAX_int32);
+		Ticker->OnPerformAction.AddDynamic(this, &UShinobiJutsuAbility::OnTargetingTick);
+		TargetingTicker = Ticker;
+		Ticker->ReadyForActivation();
+
+		UAbilityTask_WaitInputPress* WaitPress = UAbilityTask_WaitInputPress::WaitInputPress(this, false);
+		WaitPress->OnPress.AddDynamic(this, &UShinobiJutsuAbility::OnTargetConfirmed);
+		TargetPressTask = WaitPress;
+		WaitPress->ReadyForActivation();
 		return;
 	}
+
+	StartJutsuCast();
+}
+
+void UShinobiJutsuAbility::StartJutsuCast()
+{
+	// Cost now, cooldown only when the wind-up completes: an interrupted jutsu refunds half and can be recast at once.
+	if (!CommitAbilityCost(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo))
+	{
+		EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
+		return;
+	}
+	bCostPaid = true;
 	FaceAim(nullptr);
 
 	// The ability object is instanced per actor and reused: reset the previous cast's state.
@@ -82,15 +128,71 @@ void UShinobiJutsuAbility::ActivateAbility(const FGameplayAbilitySpecHandle Hand
 		WaitRelease->ReadyForActivation();
 	}
 
-	// Event.Hit.Stagger is only sent on the server, so only the server's copy gets interrupted; its cancel
-	// replicates to the owning client.
-	InterruptTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, ShinobiTags::Event_Hit_Stagger, nullptr, true);
-	InterruptTask->EventReceived.AddDynamic(this, &UShinobiJutsuAbility::OnInterruptedByHit);
-	InterruptTask->ReadyForActivation();
-
 	UAbilityTask_WaitDelay* Seals = UAbilityTask_WaitDelay::WaitDelay(this, WindUp);
 	Seals->OnFinish.AddDynamic(this, &UShinobiJutsuAbility::OnSealsFinished);
 	Seals->ReadyForActivation();
+}
+
+void UShinobiJutsuAbility::OnTargetConfirmed(float TimeWaited)
+{
+	if (!bTargetPlacementActive)
+	{
+		return;
+	}
+	if (!UpdateTargetPreview())
+	{
+		CancelTargetPlacement();
+		return;
+	}
+	ClearTargetPreview();
+	StartJutsuCast();
+}
+
+void UShinobiJutsuAbility::OnTargetingTick(int32 ActionNumber)
+{
+	if (bTargetPlacementActive)
+	{
+		UpdateTargetPreview();
+	}
+}
+
+bool UShinobiJutsuAbility::UpdateTargetPreview()
+{
+	const bool bHasTarget = UpdateJutsuTarget(TargetLocation);
+	if (TargetPreview)
+	{
+		TargetPreview->SetPreviewTarget(TargetLocation, bHasTarget);
+	}
+	return bHasTarget;
+}
+
+void UShinobiJutsuAbility::ClearTargetPreview()
+{
+	bTargetPlacementActive = false;
+	if (AShinobiPlayerCharacter* Player = Cast<AShinobiPlayerCharacter>(GetShinobiCharacter()))
+	{
+		Player->EndJutsuTargetPlacement();
+	}
+	if (TargetingTicker)
+	{
+		TargetingTicker->EndTask();
+		TargetingTicker = nullptr;
+	}
+	if (TargetPreview)
+	{
+		TargetPreview->Destroy();
+		TargetPreview = nullptr;
+	}
+}
+
+bool UShinobiJutsuAbility::CancelTargetPlacement()
+{
+	if (!bTargetPlacementActive)
+	{
+		return false;
+	}
+	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
+	return true;
 }
 
 void UShinobiJutsuAbility::OnSealsFinished()
@@ -251,6 +353,7 @@ void UShinobiJutsuAbility::SetChargingTag(bool bOn)
 
 void UShinobiJutsuAbility::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
 {
+	ClearTargetPreview();
 	if (IsActive())
 	{
 		SetChargingTag(false); // cancelled mid-charge (interrupt, dodge)
@@ -266,9 +369,12 @@ void UShinobiJutsuAbility::EndAbility(const FGameplayAbilitySpecHandle Handle, c
 
 void UShinobiJutsuAbility::OnInterruptedByHit(FGameplayEventData Payload)
 {
-	FGameplayEffectSpecHandle Refund = MakeOutgoingGameplayEffectSpec(UGE_ChakraGain::StaticClass(), GetAbilityLevel());
-	Refund.Data->SetSetByCallerMagnitude(ShinobiTags::Data_ChakraGain, ChakraCost * InterruptRefundFraction);
-	ApplyGameplayEffectSpecToOwner(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, Refund);
+	if (bCostPaid)
+	{
+		FGameplayEffectSpecHandle Refund = MakeOutgoingGameplayEffectSpec(UGE_ChakraGain::StaticClass(), GetAbilityLevel());
+		Refund.Data->SetSetByCallerMagnitude(ShinobiTags::Data_ChakraGain, ChakraCost * InterruptRefundFraction);
+		ApplyGameplayEffectSpecToOwner(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, Refund);
+	}
 	MontageStop(0.2f); // the cast was broken: don't finish the throw
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, true);
 }
@@ -337,7 +443,10 @@ bool UShinobiJutsuAbility::TraceAim(float Range, float Radius, FHitResult& OutHi
 	FVector Start;
 	FRotator Rotation;
 	GetAimViewPoint(Start, Rotation);
-	const FVector Direction = Rotation.Vector();
+	const AShinobiPlayerCharacter* Player = Cast<AShinobiPlayerCharacter>(Self);
+	const FVector Direction = Player && Player->IsJutsuTargetPlacementActive()
+		? Player->GetJutsuTargetAimDirection()
+		: Rotation.Vector();
 	// Start level with the caster, not at the camera 450 units behind: anyone standing between them (a partner, or an
 	// enemy behind you) would otherwise become the aim point or target.
 	Start += Direction * FMath::Max(0.f, FVector::DotProduct(Self->GetActorLocation() - Start, Direction));
@@ -387,7 +496,11 @@ bool UShinobiJutsuAbility::FindAimGround(float Range, float AimRadius, FVector& 
 	FVector ViewLocation;
 	FRotator ViewRotation;
 	GetAimViewPoint(ViewLocation, ViewRotation);
-	const FVector End = Self->GetActorLocation() + ViewRotation.Vector() * Range;
+	const AShinobiPlayerCharacter* Player = Cast<AShinobiPlayerCharacter>(Self);
+	const FVector AimDirection = Player && Player->IsJutsuTargetPlacementActive()
+		? Player->GetJutsuTargetAimDirection()
+		: ViewRotation.Vector();
+	const FVector End = Self->GetActorLocation() + AimDirection * Range;
 	if (Self->GetWorld()->LineTraceSingleByChannel(Hit, End, End - FVector(0.f, 0.f, Range), ECC_WorldStatic, Params))
 	{
 		OutPoint = Hit.ImpactPoint;

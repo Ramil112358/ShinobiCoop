@@ -33,6 +33,7 @@ TEXTURES = {
     "jutsu_summonsnake.png": ("T_Jutsu_SummonSnake", 128),
     "jutsu_summondogs.png": ("T_Jutsu_SummonDogs", 128),
     "jutsu_summondragon.png": ("T_Jutsu_SummonDragon", 128),
+    "jutsu_summoncrimson.png": ("T_Jutsu_SummonCrimson", 128),
 }
 
 

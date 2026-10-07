@@ -4,6 +4,7 @@
 #include "Animation/AnimMontage.h"
 #include "AnimationRuntime.h"
 #include "Camera/CameraComponent.h"
+#include "Camera/PlayerCameraManager.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
@@ -69,7 +70,7 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 		UGA_Teleport::StaticClass(), UGA_TeleportJump::StaticClass(),
 		UGA_EarthWall::StaticClass(), UGA_WaterWall::StaticClass(), UGA_FireMeteor::StaticClass(), UGA_IceMeteor::StaticClass(), UGA_WaterDragon::StaticClass(), UGA_Susanoo::StaticClass(),
 		UGA_SummonToad::StaticClass(), UGA_SummonSnake::StaticClass(), UGA_SummonDogs::StaticClass(),
-		UGA_SummonDragon::StaticClass(), UGA_DragonDismount::StaticClass(), UGA_DragonDismountKey::StaticClass(), UGA_DragonBreath::StaticClass(),
+		UGA_SummonDragon::StaticClass(), UGA_SummonCrimsonDragon::StaticClass(), UGA_DragonDismount::StaticClass(), UGA_DragonDismountKey::StaticClass(), UGA_DragonBreath::StaticClass(),
 	};
 	StartupEffects.Add(UGE_SubstitutionRegen::StaticClass());
 
@@ -331,6 +332,22 @@ bool AShinobiPlayerCharacter::IsCastingJutsu() const
 	return false;
 }
 
+bool AShinobiPlayerCharacter::CancelJutsuTargetPlacement()
+{
+	for (FGameplayAbilitySpec& Spec : AbilitySystem->GetActivatableAbilities())
+	{
+		if (!Spec.IsActive())
+		{
+			continue;
+		}
+		if (UShinobiJutsuAbility* Jutsu = Cast<UShinobiJutsuAbility>(Spec.GetPrimaryInstance()); Jutsu && Jutsu->CancelTargetPlacement())
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 bool AShinobiPlayerCharacter::PageHasJutsu(int32 Page) const
 {
 	for (const TSubclassOf<UShinobiGameplayAbility>& AbilityClass : StartupAbilities)
@@ -488,8 +505,18 @@ void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
 	if (bMounted || bBoomPulledBack)
 	{
 		// Only driven around a ride, so anything else that sets the boom (the world tour's close-ups) is left alone.
-		CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, bMounted ? MountedArmLength : FootArmLength, DeltaSeconds, 2.f);
-		bBoomPulledBack = bMounted || !FMath::IsNearlyEqual(CameraBoom->TargetArmLength, FootArmLength, 1.f);
+		const float TargetArmLength = CameraZoomDistance + (bMounted ? MountedArmLength - FootArmLength : 0.f);
+		CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, TargetArmLength, DeltaSeconds, 2.f);
+		bBoomPulledBack = bMounted || !FMath::IsNearlyEqual(CameraBoom->TargetArmLength, CameraZoomDistance, 1.f);
+	}
+	if (bMounted != bSteeringByCamera)
+	{
+		// Riding, the character (and so the dragon) faces where the camera looks, so the fire is aimed by turning; on foot it turns with its movement.
+		bSteeringByCamera = bMounted;
+		UCharacterMovementComponent* Movement = GetCharacterMovement();
+		Movement->bOrientRotationToMovement = !bMounted;
+		Movement->bUseControllerDesiredRotation = bMounted;
+		Movement->RotationRate = FRotator(0.f, bMounted ? 360.f : 720.f, 0.f);
 	}
 	if (!bMounted)
 	{
@@ -514,6 +541,10 @@ void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
 	if (!Controller || !Target->IsAlive() || FVector::Dist(Target->GetActorLocation(), GetActorLocation()) > LockOnRange)
 	{
 		LockTarget = nullptr;
+		return;
+	}
+	if (bJutsuTargetPlacementActive)
+	{
 		return;
 	}
 	// Aim the camera (so every aimed jutsu) at the target's chest; the server aims from the replicated camera.
@@ -591,6 +622,7 @@ void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 	UEnhancedInputComponent* Input = CastChecked<UEnhancedInputComponent>(PlayerInputComponent);
 	Input->BindAction(InputConfig.Move, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Move);
 	Input->BindAction(InputConfig.Look, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Look);
+	Input->BindAction(InputConfig.CameraZoom, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::ZoomCamera);
 	Input->BindAction(InputConfig.Jump, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::JumpPressed);
 	Input->BindAction(InputConfig.Jump, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::JumpReleased);
 	for (const TPair<EShinobiAbilityInputID, TObjectPtr<UInputAction>>& Pair : InputConfig.AbilityActions)
@@ -619,13 +651,104 @@ void AShinobiPlayerCharacter::Move(const FInputActionValue& Value)
 
 void AShinobiPlayerCharacter::Look(const FInputActionValue& Value)
 {
+	ApplyLookInput(Value.Get<FVector2D>());
+}
+
+void AShinobiPlayerCharacter::ApplyLookInput(const FVector2D& Axis)
+{
+	if (bJutsuTargetPlacementActive)
+	{
+		MoveJutsuTargetCursor(Axis);
+		return;
+	}
 	if (LockTarget.IsValid())
 	{
 		return; // the lock steers the camera
 	}
-	const FVector2D Axis = Value.Get<FVector2D>();
 	AddControllerYawInput(Axis.X);
 	AddControllerPitchInput(Axis.Y);
+}
+
+void AShinobiPlayerCharacter::MoveJutsuTargetCursor(const FVector2D& Axis)
+{
+	JutsuTargetScreenPosition += Axis * 0.006f;
+	JutsuTargetScreenPosition.X = FMath::Clamp(JutsuTargetScreenPosition.X, 0.f, 1.f);
+	JutsuTargetScreenPosition.Y = FMath::Clamp(JutsuTargetScreenPosition.Y, 0.f, 1.f);
+}
+
+void AShinobiPlayerCharacter::BeginJutsuTargetPlacement()
+{
+	bJutsuTargetPlacementActive = true;
+	bHasServerJutsuAimDirection = false;
+	JutsuTargetScreenPosition = FVector2D(0.5f, 0.5f);
+}
+
+void AShinobiPlayerCharacter::EndJutsuTargetPlacement()
+{
+	bJutsuTargetPlacementActive = false;
+	bHasServerJutsuAimDirection = false;
+	JutsuTargetScreenPosition = FVector2D(0.5f, 0.5f);
+}
+
+FVector AShinobiPlayerCharacter::GetJutsuTargetAimDirection() const
+{
+	if (HasAuthority() && bHasServerJutsuAimDirection)
+	{
+		return ServerJutsuAimDirection;
+	}
+
+	const APlayerController* PC = Cast<APlayerController>(GetController());
+	const FRotator ViewRotation = PC ? PC->GetControlRotation() : GetActorRotation();
+	float AspectRatio = 16.f / 9.f;
+	if (PC)
+	{
+		int32 ViewportWidth = 0;
+		int32 ViewportHeight = 0;
+		PC->GetViewportSize(ViewportWidth, ViewportHeight);
+		if (ViewportWidth > 0 && ViewportHeight > 0)
+		{
+			AspectRatio = static_cast<float>(ViewportWidth) / ViewportHeight;
+		}
+	}
+	const float FieldOfView = PC && PC->PlayerCameraManager
+		? PC->PlayerCameraManager->GetFOVAngle()
+		: FollowCamera->FieldOfView;
+	const float HalfFovTangent = FMath::Tan(FMath::DegreesToRadians(FieldOfView * 0.5f));
+	const float HorizontalOffset = (JutsuTargetScreenPosition.X * 2.f - 1.f) * HalfFovTangent;
+	const float VerticalOffset = (1.f - JutsuTargetScreenPosition.Y * 2.f) * HalfFovTangent / AspectRatio;
+	const FRotationMatrix ViewBasis(ViewRotation);
+	return (ViewBasis.GetUnitAxis(EAxis::X)
+		+ ViewBasis.GetUnitAxis(EAxis::Y) * HorizontalOffset
+		+ ViewBasis.GetUnitAxis(EAxis::Z) * VerticalOffset).GetSafeNormal();
+}
+
+void AShinobiPlayerCharacter::ServerSetJutsuTargetAimDirection_Implementation(FVector Direction)
+{
+	if (!bJutsuTargetPlacementActive || Direction.IsNearlyZero())
+	{
+		return;
+	}
+	ServerJutsuAimDirection = Direction.GetSafeNormal();
+	bHasServerJutsuAimDirection = true;
+}
+
+void AShinobiPlayerCharacter::ZoomCamera(const FInputActionValue& Value)
+{
+	const float ZoomAxis = Value.Get<float>();
+	if (FMath::IsNearlyZero(ZoomAxis))
+	{
+		return;
+	}
+
+	CameraZoomDistance = FMath::Clamp(
+		CameraZoomDistance - ZoomAxis * CameraZoomStep,
+		MinCameraArmLength,
+		MaxCameraArmLength);
+
+	if (!AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Mounted))
+	{
+		CameraBoom->TargetArmLength = CameraZoomDistance;
+	}
 }
 
 void AShinobiPlayerCharacter::JumpPressed()
@@ -650,17 +773,78 @@ void AShinobiPlayerCharacter::JumpReleased()
 
 void AShinobiPlayerCharacter::AbilityInputPressed(EShinobiAbilityInputID InputID)
 {
+	if (RouteTargetPlacementInput(InputID, true))
+	{
+		return;
+	}
 	bFlightDive |= InputID == EShinobiAbilityInputID::Dodge && AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Mounted); // Control dives
+	if (bJutsuTargetPlacementActive && InputID >= EShinobiAbilityInputID::Jutsu1 && InputID <= EShinobiAbilityInputID::Jutsu4 && !HasAuthority())
+	{
+		ServerSetJutsuTargetAimDirection(GetJutsuTargetAimDirection());
+	}
 	AbilitySystem->AbilityLocalInputPressed(static_cast<int32>(InputID));
 }
 
 void AShinobiPlayerCharacter::AbilityInputReleased(EShinobiAbilityInputID InputID)
 {
+	if (RouteTargetPlacementInput(InputID, false))
+	{
+		return;
+	}
 	if (InputID == EShinobiAbilityInputID::Dodge)
 	{
 		bFlightDive = false;
 	}
 	AbilitySystem->AbilityLocalInputReleased(static_cast<int32>(InputID));
+}
+
+bool AShinobiPlayerCharacter::RouteTargetPlacementInput(EShinobiAbilityInputID InputID, bool bPressed)
+{
+	if (InputID != EShinobiAbilityInputID::Melee)
+	{
+		return false;
+	}
+	if (!bPressed)
+	{
+		if (TargetPlacementInputID == INDEX_NONE)
+		{
+			return false;
+		}
+		AbilitySystem->AbilityLocalInputReleased(TargetPlacementInputID);
+		TargetPlacementInputID = INDEX_NONE;
+		return true;
+	}
+	if (!bJutsuTargetPlacementActive || TargetPlacementInputID != INDEX_NONE)
+	{
+		return false;
+	}
+
+	int32 PlacementInputID = INDEX_NONE;
+	{
+		FScopedAbilityListLock AbilityListLock(*AbilitySystem);
+		for (const FGameplayAbilitySpec& Spec : AbilitySystem->GetActivatableAbilities())
+		{
+			if (Spec.IsActive()
+				&& Spec.InputID >= static_cast<int32>(EShinobiAbilityInputID::Jutsu1)
+				&& Spec.InputID <= static_cast<int32>(EShinobiAbilityInputID::Jutsu4))
+			{
+				PlacementInputID = Spec.InputID;
+				break;
+			}
+		}
+	}
+	if (PlacementInputID == INDEX_NONE)
+	{
+		return false;
+	}
+
+	TargetPlacementInputID = PlacementInputID;
+	if (!HasAuthority())
+	{
+		ServerSetJutsuTargetAimDirection(GetJutsuTargetAimDirection());
+	}
+	AbilitySystem->AbilityLocalInputPressed(PlacementInputID);
+	return true;
 }
 
 void AShinobiPlayerCharacter::SetJutsuModifier(bool bHeld)

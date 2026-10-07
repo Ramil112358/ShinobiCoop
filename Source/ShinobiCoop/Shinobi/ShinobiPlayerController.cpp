@@ -58,6 +58,10 @@ void AShinobiPlayerController::BeginPlay()
 	{
 		RunSmokeTest();
 	}
+	if (FParse::Param(FCommandLine::Get(), TEXT("ShinobiFollowTest")))
+	{
+		RunFollowTest();
+	}
 	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiShot")))
 	{
 		RunShotTest();
@@ -91,6 +95,10 @@ void AShinobiPlayerController::SetupInputComponent()
 
 void AShinobiPlayerController::TogglePauseMenu()
 {
+	if (AShinobiPlayerCharacter* ControlledPawn = GetPawn<AShinobiPlayerCharacter>(); ControlledPawn && ControlledPawn->CancelJutsuTargetPlacement())
+	{
+		return;
+	}
 	if (PauseMenu)
 	{
 		PauseMenu->RemoveFromParent();
@@ -322,6 +330,66 @@ void AShinobiPlayerController::RunSmokeTest()
 	At(14.2f, [this]() { ShinobiDrainChakra(-100.f); ShinobiPage(5); });
 	At(14.4f, [this]() { ShinobiCast(1); });
 	At(15.8f, [this]() { ShinobiDumpStats(); ConsoleCommand(TEXT("quit")); });
+}
+
+void AShinobiPlayerController::RunFollowTest()
+{
+	auto At = [this](float Seconds, TFunction<void()> Fn)
+	{
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
+	};
+	auto Log = [this](const TCHAR* When)
+	{
+		const APawn* Me = GetPawn();
+		FString Line;
+		for (TActorIterator<AShinobiSummon> It(GetWorld()); It; ++It)
+		{
+			Line += FString::Printf(TEXT(" [%d gap=%.0f speed=%.0f]"), static_cast<int32>(It->GetKind()), Me ? FVector::Dist2D(It->GetActorLocation(), Me->GetActorLocation()) : -1.f, It->GetVelocity().Size2D());
+		}
+		UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiFollow %s player=(%.0f,%.0f)%s"), When, Me ? Me->GetActorLocation().X : 0.f, Me ? Me->GetActorLocation().Y : 0.f, *Line);
+	};
+	At(4.f, [this]() { ShinobiPage(4); });
+	At(4.3f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(4); }); // Dogs
+	At(5.5f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(2); }); // Toad
+	At(6.7f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(3); }); // Snake
+	At(9.f, [Log]() { Log(TEXT("settled")); });
+	// Walk four seconds along the freest direction (the London start is hemmed in by buildings).
+	TSharedRef<FTimerHandle> Walk = MakeShared<FTimerHandle>();
+	TSharedRef<FVector> WalkDirection = MakeShared<FVector>(FVector::ForwardVector);
+	At(10.f, [this, Walk, WalkDirection]()
+	{
+		if (const APawn* Me = GetPawn())
+		{
+			float Best = -1.f;
+			for (int32 Step = 0; Step < 16; ++Step)
+			{
+				const FVector Direction = FVector(1.f, 0.f, 0.f).RotateAngleAxis(Step * 22.5f, FVector::UpVector);
+				FHitResult Hit;
+				FCollisionQueryParams Params(SCENE_QUERY_STAT(FollowTest), false, Me);
+				const FVector From = Me->GetActorLocation();
+				const float Free = GetWorld()->LineTraceSingleByChannel(Hit, From, From + Direction * 4000.f, ECC_WorldStatic, Params) ? Hit.Distance : 4000.f;
+				if (Free > Best)
+				{
+					Best = Free;
+					*WalkDirection = Direction;
+				}
+			}
+			UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiFollow walking %s for %.0f free"), *WalkDirection->ToString(), Best);
+		}
+		GetWorldTimerManager().SetTimer(*Walk, FTimerDelegate::CreateWeakLambda(this, [this, WalkDirection]()
+		{
+			if (APawn* Me = GetPawn())
+			{
+				Me->SetActorLocation(Me->GetActorLocation() + *WalkDirection * 12.f, false, nullptr, ETeleportType::None); // 600 u/s; input is not honoured on this map's start
+			}
+		}), 0.02f, true, 0.f);
+	});
+	At(12.f, [Log]() { Log(TEXT("walking 2s")); });
+	At(14.f, [Log]() { Log(TEXT("walking 4s")); });
+	At(14.2f, [this, Walk]() { GetWorldTimerManager().ClearTimer(*Walk); });
+	At(17.f, [Log]() { Log(TEXT("stopped 3s")); });
+	At(19.f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
 
 void AShinobiPlayerController::RunShotTest()
@@ -739,22 +807,47 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(58.2f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_30_HudPage4Full")); });
 	// The dragon (page 5): mount, ride in the default (pulled-back) view, breathe fire at the dummies, climb, dismount.
 	auto Rider = [this]() { return GetPawn<AShinobiPlayerCharacter>(); };
+	At(58.4f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_Susanoo)); } }); // the armour hides the rider
 	At(58.6f, [this, RestoreAim]() { ShinobiPage(5); RestoreAim(); });
 	At(58.8f, [CastJutsu]() { CastJutsu(1, 0.9f); }); // Summon Dragon: 0.8 s seals, mounted from about 59.6
 	At(61.6f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_31_DragonRide")); });
-	At(61.8f, [FaceCamera]() { FaceCamera(75.f, 60.f, 0.f, 1400.f); });
+	At(61.8f, [FaceCamera]() { FaceCamera(75.f, 60.f, 0.f, 2300.f); });
 	At(61.95f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_31b_DragonSide")); });
-	At(62.1f, BackToPlayer);
+	At(62.0f, [FaceCamera]() { FaceCamera(45.f, 70.f, 0.f, 800.f); }); // the rider close up
+	At(62.05f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_31c_DragonRider")); });
+	At(62.2f, BackToPlayer);
 	At(62.4f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->AbilityLocalInputPressed(static_cast<int32>(EShinobiAbilityInputID::Melee)); } }); // breath
 	At(62.8f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_32_DragonBreath")); });
-	At(63.1f, [FaceCamera]() { FaceCamera(75.f, 60.f, 400.f, 1400.f); });
+	At(62.85f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_32c_DragonCrosshair")); }); // with the HUD: the crosshair where the fire goes
+	At(63.1f, [FaceCamera]() { FaceCamera(75.f, 60.f, 500.f, 2300.f); });
 	At(63.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_32b_DragonBreath")); });
 	At(63.4f, BackToPlayer);
+	At(63.9f, [FaceCamera]() { FaceCamera(75.f, 80.f, 900.f, 2400.f); }); // the ground where the fire fell
+	At(64.0f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_32d_DragonGroundFire")); });
+	At(64.1f, BackToPlayer);
 	At(63.6f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->AbilityLocalInputReleased(static_cast<int32>(EShinobiAbilityInputID::Melee)); P->SetFlightClimb(true); } });
 	At(65.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_33_DragonClimb")); });
 	At(65.3f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->SetFlightClimb(false); P->SetFlightDive(true); } });
+	At(65.5f, [this]() { SetControlRotation(GetControlRotation() + FRotator(0.f, 120.f, 0.f)); }); // a sharp turn to the right: the dragon banks into it
+	At(65.62f, [FaceCamera]() { FaceCamera(70.f, 0.f, 0.f, 2200.f); }); // from the front
+	At(65.7f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_33b_DragonBank")); });
+	At(65.85f, BackToPlayer);
 	At(66.6f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->SetFlightDive(false); } });
 	At(67.0f, [this]() { ShinobiCast(1); }); // the same key: dismount
-	At(68.0f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_34_HudPage5")); });
-	At(68.6f, [this]() { ConsoleCommand(TEXT("quit")); });
+	// The other dragon (page 5, slot 2): the crimson one, with ordinary orange fire.
+	At(67.6f, [CastJutsu]() { CastJutsu(2, 0.9f); }); // mounted from about 68.4
+	At(70.0f, [FaceCamera]() { FaceCamera(75.f, 60.f, 0.f, 2300.f); });
+	At(70.1f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_35_CrimsonDragon")); });
+	At(70.2f, [FaceCamera]() { FaceCamera(45.f, 70.f, 0.f, 800.f); }); // the rider close up
+	At(70.25f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_35c_CrimsonRider")); });
+	At(70.3f, BackToPlayer);
+	At(70.5f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->AbilityLocalInputPressed(static_cast<int32>(EShinobiAbilityInputID::Melee)); } });
+	At(71.2f, [FaceCamera]() { FaceCamera(75.f, 60.f, 500.f, 2300.f); });
+	At(71.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_35b_CrimsonBreath")); });
+	At(71.6f, [FaceCamera]() { FaceCamera(75.f, 80.f, 900.f, 2400.f); });
+	At(71.7f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_35d_CrimsonGroundFire")); });
+	At(71.9f, BackToPlayer);
+	At(72.2f, [this]() { ShinobiCast(1); }); // the same key: dismount
+	At(73.0f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_34_HudPage5")); });
+	At(73.6f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
