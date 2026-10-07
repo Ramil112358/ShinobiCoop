@@ -4,9 +4,9 @@
 #include "Shinobi/Abilities/ShinobiJutsuAbility.h"
 #include "GA_FireMeteor.generated.h"
 
-/** Page 3, slot 3: a ring marks the spot under the crosshair (within 3000), and 1.4 s later a flaming meteor lands on it:
- * damage and a burn for every enemy in the radius, and a big patch of ground fire. Charging widens it and hits harder.
- * With nothing to aim at (open sky) the cast fails before any cost is paid. */
+/** Page 3, slot 3: the first press previews a ground ring under the crosshair (within 2000); the second confirms and starts
+ * the cast. A flaming meteor then damages and burns every enemy in the radius and leaves a patch of ground fire. Charging
+ * widens it and hits harder. With nothing to aim at (open sky) placement fails before any cost is paid. */
 UCLASS()
 class SHINOBICOOP_API UGA_FireMeteor : public UShinobiJutsuAbility
 {
@@ -16,7 +16,7 @@ public:
 	UGA_FireMeteor();
 
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
-	float Range = 3000.f;
+	float Range = 2000.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
 	float Radius = 450.f;
@@ -30,6 +30,9 @@ public:
 
 protected:
 	virtual bool PrepareJutsu() override;
+	virtual float GetTargetPreviewRadius() const override { return Radius; }
+	virtual FLinearColor GetTargetPreviewTint() const override;
+	virtual bool UpdateJutsuTarget(FVector& OutTarget) override;
 	virtual void ExecuteJutsu() override;
 
 private:

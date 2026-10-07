@@ -118,6 +118,7 @@ TSharedRef<SWidget> UShinobiHUDWidget::RebuildWidget()
 		BuildUnitFrame(Root);
 		BuildJutsuSlots(Root);
 		BuildPagePips(Root);
+		BuildAimCrosshair(Root);
 		BuildDragonCrosshair(Root);
 
 		WaveText = AddCanvasText(Root, TEXT("WaveText"), FAnchors(0.5f, 0.f), FVector2D(0.5f, 0.f), FVector2D(0.f, 24.f), 22, ETextJustify::Center);
@@ -463,6 +464,53 @@ void UShinobiHUDWidget::UpdateDragonCrosshair(const AShinobiPlayerCharacter* Pla
 	}
 }
 
+void UShinobiHUDWidget::BuildAimCrosshair(UCanvasPanel* Root)
+{
+	AimCrosshair = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("AimCrosshair"));
+	AimCrosshair->SetWidthOverride(22.f);
+	AimCrosshair->SetHeightOverride(22.f);
+	AimCrosshair->SetVisibility(ESlateVisibility::Collapsed);
+	UOverlay* Layers = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass());
+	AimCrosshair->AddChild(Layers);
+	UBorder* Ring = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+	Ring->SetBrush(RoundedBrush(FLinearColor(0.f, 0.f, 0.f, 0.08f), 11.f, FLinearColor(1.f, 1.f, 1.f, 0.9f), 1.5f));
+	UOverlaySlot* RingSlot = Layers->AddChildToOverlay(Ring);
+	RingSlot->SetHorizontalAlignment(HAlign_Fill);
+	RingSlot->SetVerticalAlignment(VAlign_Fill);
+	UBorder* Dot = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+	Dot->SetBrush(RoundedBrush(FLinearColor::White, 2.f));
+	USizeBox* DotBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+	DotBox->SetWidthOverride(4.f);
+	DotBox->SetHeightOverride(4.f);
+	DotBox->AddChild(Dot);
+	UOverlaySlot* DotSlot = Layers->AddChildToOverlay(DotBox);
+	DotSlot->SetHorizontalAlignment(HAlign_Center);
+	DotSlot->SetVerticalAlignment(VAlign_Center);
+	UCanvasPanelSlot* CanvasSlot = Root->AddChildToCanvas(AimCrosshair);
+	CanvasSlot->SetAnchors(FAnchors(0.5f, 0.5f));
+	CanvasSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+	CanvasSlot->SetAutoSize(true);
+}
+
+void UShinobiHUDWidget::UpdateAimCrosshair(const AShinobiPlayerCharacter* Player, const FVector2D& ViewSize)
+{
+	if (!AimCrosshair)
+	{
+		return;
+	}
+	const bool bShow = Player && Player->IsLocallyControlled()
+		&& !Player->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Mounted);
+	AimCrosshair->SetVisibility(bShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	if (bShow)
+	{
+		const FVector2D AimPosition = Player->GetJutsuTargetScreenPosition();
+		if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(AimCrosshair->Slot))
+		{
+			CanvasSlot->SetPosition(FVector2D((AimPosition.X - 0.5f) * ViewSize.X, (AimPosition.Y - 0.5f) * ViewSize.Y));
+		}
+	}
+}
+
 void UShinobiHUDWidget::BuildPagePips(UCanvasPanel* Root)
 {
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("PagePips"));
@@ -530,6 +578,8 @@ void UShinobiHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
 	const AShinobiCharacterBase* Pawn = Cast<AShinobiCharacterBase>(GetOwningPlayerPawn());
+	const AShinobiPlayerCharacter* Player = Cast<AShinobiPlayerCharacter>(Pawn);
+	UpdateAimCrosshair(Player, MyGeometry.GetLocalSize());
 	const UShinobiAttributeSet* Stats = Pawn ? Pawn->GetAttributes() : nullptr;
 	UAbilitySystemComponent* ASC = Pawn ? Pawn->GetAbilitySystemComponent() : nullptr;
 	BindFailureFlash(ASC);
@@ -583,7 +633,6 @@ void UShinobiHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 		const bool bOn = ASC->HasMatchingGameplayTag(StatusTags[Index]);
 		StatusIcons[Index]->SetVisibility(bOn && StatusIcons[Index]->GetBrush().GetResourceObject() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
-	const AShinobiPlayerCharacter* Player = Cast<AShinobiPlayerCharacter>(Pawn);
 	UpdateJutsuSlots(*ASC, Player ? Player->GetJutsuPage() : 1, Player);
 	UpdateArena(Player);
 	UpdateCompass();

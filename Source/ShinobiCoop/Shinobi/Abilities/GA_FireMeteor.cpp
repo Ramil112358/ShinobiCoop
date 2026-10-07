@@ -22,7 +22,22 @@ UGA_FireMeteor::UGA_FireMeteor()
 
 bool UGA_FireMeteor::PrepareJutsu()
 {
-	return FindAimGround(Range, 30.f, Target);
+	return UpdateJutsuTarget(Target);
+}
+
+FLinearColor UGA_FireMeteor::GetTargetPreviewTint() const
+{
+	return FLinearColor(0.02f, 0.85f, 0.75f);
+}
+
+bool UGA_FireMeteor::UpdateJutsuTarget(FVector& OutTarget)
+{
+	if (!FindAimGround(Range, 30.f, OutTarget))
+	{
+		return false;
+	}
+	Target = OutTarget;
+	return true;
 }
 
 void UGA_FireMeteor::ExecuteJutsu()

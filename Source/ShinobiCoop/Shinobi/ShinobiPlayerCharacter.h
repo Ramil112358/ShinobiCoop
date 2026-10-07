@@ -120,6 +120,19 @@ public:
 
 	bool IsCastingJutsu() const;
 	bool PageHasJutsu(int32 Page) const;
+	/** Cancels a local jutsu ground-target preview; false when no target placement is active. */
+	bool CancelJutsuTargetPlacement();
+	bool IsJutsuTargetPlacementActive() const { return bJutsuTargetPlacementActive; }
+	FVector2D GetJutsuTargetScreenPosition() const { return JutsuTargetScreenPosition; }
+	FVector GetJutsuTargetAimDirection() const;
+	/** Routes the primary attack press/release to the active ground-targeted jutsu while placement is open. */
+	bool RouteTargetPlacementInput(EShinobiAbilityInputID InputID, bool bPressed);
+	void ApplyLookInput(const FVector2D& Axis);
+	void BeginJutsuTargetPlacement();
+	void EndJutsuTargetPlacement();
+
+	UFUNCTION(Server, Reliable)
+	void ServerSetJutsuTargetAimDirection(FVector Direction);
 
 	/** Server: a client's page switch. Out-of-range values are ignored; during a cast the client is sent back the real page. */
 	UFUNCTION(Server, Reliable)
@@ -150,6 +163,11 @@ private:
 	bool bSeatedLoadTried = false;
 	bool bFlightClimb = false;
 	bool bFlightDive = false;
+	bool bJutsuTargetPlacementActive = false;
+	bool bHasServerJutsuAimDirection = false;
+	int32 TargetPlacementInputID = INDEX_NONE;
+	FVector2D JutsuTargetScreenPosition = FVector2D(0.5f, 0.5f);
+	FVector ServerJutsuAimDirection = FVector::ForwardVector;
 
 	static constexpr float FootArmLength = 450.f;
 	static constexpr float MountedArmLength = 900.f;
@@ -160,6 +178,7 @@ private:
 
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
+	void MoveJutsuTargetCursor(const FVector2D& Axis);
 	void ZoomCamera(const FInputActionValue& Value);
 	/** Ignores the jump input while CanMove() is false. */
 	void JumpPressed();

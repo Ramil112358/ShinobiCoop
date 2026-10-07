@@ -95,6 +95,10 @@ void AShinobiPlayerController::SetupInputComponent()
 
 void AShinobiPlayerController::TogglePauseMenu()
 {
+	if (AShinobiPlayerCharacter* ControlledPawn = GetPawn<AShinobiPlayerCharacter>(); ControlledPawn && ControlledPawn->CancelJutsuTargetPlacement())
+	{
+		return;
+	}
 	if (PauseMenu)
 	{
 		PauseMenu->RemoveFromParent();

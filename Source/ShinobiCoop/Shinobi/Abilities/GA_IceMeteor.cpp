@@ -22,7 +22,22 @@ UGA_IceMeteor::UGA_IceMeteor()
 
 bool UGA_IceMeteor::PrepareJutsu()
 {
-	return FindAimGround(Range, 30.f, Target);
+	return UpdateJutsuTarget(Target);
+}
+
+FLinearColor UGA_IceMeteor::GetTargetPreviewTint() const
+{
+	return FLinearColor(0.02f, 0.85f, 0.75f);
+}
+
+bool UGA_IceMeteor::UpdateJutsuTarget(FVector& OutTarget)
+{
+	if (!FindAimGround(Range, 30.f, OutTarget))
+	{
+		return false;
+	}
+	Target = OutTarget;
+	return true;
 }
 
 void UGA_IceMeteor::ExecuteJutsu()

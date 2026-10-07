@@ -59,6 +59,8 @@ private:
 	/** While riding a dragon: a ring at the point where its fire will end (straight ahead of the dragon, or the first thing in the way). */
 	void BuildDragonCrosshair(UCanvasPanel* Root);
 	void UpdateDragonCrosshair(const class AShinobiPlayerCharacter* Player);
+	void BuildAimCrosshair(UCanvasPanel* Root);
+	void UpdateAimCrosshair(const class AShinobiPlayerCharacter* Player, const FVector2D& ViewSize);
 	UTextBlock* AddCanvasText(UCanvasPanel* Root, FName Name, const FAnchors& Anchors, const FVector2D& Alignment, const FVector2D& Position, int32 FontSize, ETextJustify::Type Justify);
 	void UpdateArena(const class AShinobiPlayerCharacter* Player);
 	/** Open world: the compass strip (cardinal points, village, camps, boss) around the camera's yaw. */
@@ -156,6 +158,9 @@ private:
 	TObjectPtr<class USizeBox> DragonCrosshair;
 	UPROPERTY()
 	TArray<TObjectPtr<class UBorder>> DragonCrosshairParts;
+
+	UPROPERTY()
+	TObjectPtr<class USizeBox> AimCrosshair;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UBorder>> PagePips;
