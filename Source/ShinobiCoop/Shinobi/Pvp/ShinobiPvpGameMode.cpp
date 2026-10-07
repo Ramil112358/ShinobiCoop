@@ -129,6 +129,7 @@ void AShinobiPvpGameMode::HandleStartingNewPlayer_Implementation(APlayerControll
 {
 	Super::HandleStartingNewPlayer_Implementation(NewPlayer);
 	AssignTeam(NewPlayer); // the pawn exists now
+	RestartRoundForLateJoiner();
 }
 
 void AShinobiPvpGameMode::Logout(AController* Exiting)
@@ -283,8 +284,7 @@ void AShinobiPvpGameMode::Tick(float DeltaSeconds)
 	case EShinobiPvpPhase::Warmup:
 		if (bTimeUp || CountHumans(EShinobiTeam::TeamA) + CountHumans(EShinobiTeam::TeamB) >= 2 * FShinobiPvpMatch::SlotsPerTeam(PvpFormat))
 		{
-			FillBots();
-			StartRound();
+			StartRound(); // its reset fills the empty slots with bots
 		}
 		break;
 	case EShinobiPvpPhase::Countdown:
@@ -353,12 +353,29 @@ void AShinobiPvpGameMode::StartRound()
 	UE_LOG(LogShinobiCoop, Log, TEXT("Pvp: round %d countdown"), Match.Round);
 }
 
+bool AShinobiPvpGameMode::ShouldRestartForLateJoiner() const
+{
+	const AShinobiGameState* State = GetPvpState();
+	const bool bRoundOn = State && (State->PvpPhase == EShinobiPvpPhase::Countdown || State->PvpPhase == EShinobiPvpPhase::Fighting);
+	return bRoundOn && Match.WinsA + Match.WinsB == 0 && Match.ConsecutiveTies == 0;
+}
+
+void AShinobiPvpGameMode::RestartRoundForLateJoiner()
+{
+	if (ShouldRestartForLateJoiner())
+	{
+		UE_LOG(LogShinobiCoop, Log, TEXT("Pvp: round restarted for late joiner"));
+		StartRound();
+	}
+}
+
 void AShinobiPvpGameMode::StartFight()
 {
 	SetHold(false);
 	SetPhase(EShinobiPvpPhase::Fighting, FShinobiPvpMatch::RoundSeconds);
 	UE_LOG(LogShinobiCoop, Log, TEXT("Pvp: round %d start"), Match.Round);
 
+#if !UE_BUILD_SHIPPING
 	// Smoke hook, inert without the switch: -ShinobiPvpSmokeKill=B@5 kills team B five seconds into each fight.
 	FString Spec;
 	if (FParse::Value(FCommandLine::Get(), TEXT("ShinobiPvpSmokeKill="), Spec))
@@ -371,6 +388,7 @@ void AShinobiPvpGameMode::StartFight()
 			GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, [this, Team] { KillTeam(Team); }), FMath::Max(0.1f, FCString::Atof(*Delay)), false);
 		}
 	}
+#endif
 }
 
 void AShinobiPvpGameMode::KillTeam(EShinobiTeam Team)

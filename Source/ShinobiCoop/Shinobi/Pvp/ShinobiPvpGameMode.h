@@ -17,7 +17,7 @@ class APlayerStart;
  * revive is off) or the 120 s cap (more team health wins). A 5 s banner and a full reset between rounds, a 10 s result,
  * then the same map reloads for a rematch. The rules live in FShinobiPvpMatch; this drives them and the world.
  * PlayerStarts tagged Team:A / Team:B are the sides' spawns; TargetPoints tagged Pickup:<Type> are the power-ups' spots.
- * Test hook for Scripts/smoke_pvp.ps1: -ShinobiPvpSmokeKill=<A|B>@<seconds> kills that team that long after each fight starts.
+ * Test hook for Scripts/smoke_pvp.ps1 (not in Shipping): -ShinobiPvpSmokeKill=<A|B>@<seconds> kills that team that long after each fight starts.
  */
 UCLASS()
 class SHINOBICOOP_API AShinobiPvpGameMode : public AGameModeBase
@@ -66,12 +66,22 @@ public:
 	/** Resets everyone (ResetCharacters, OnRoundReset), holds them and starts the round's countdown. */
 	void StartRound();
 
+	/** Ends the round with Result (scores it and starts the banner). Public for the tests; the tick calls it. */
+	void EndRound(EShinobiRoundResult Result);
+
+	/** True while a human who just joined should get the round restarted: in the countdown or the fight, with nothing scored
+	 * or tied yet. Then a bot that took the empty slot at the end of warmup is replaced by the human and the round still counts. */
+	bool ShouldRestartForLateJoiner() const;
+
+	/** StartRound for a late joiner, if ShouldRestartForLateJoiner. */
+	void RestartRoundForLateJoiner();
+
 	/** Respawns dead or missing player pawns; revives, refills and moves every fighter to its team's starts, and clears the
 	 * round's leftovers (mount, summons, boosts, shields, the hold, statuses, running abilities). */
 	void ResetCharacters();
 
 	/** A bot (AShinobiBotFighter) for each empty slot: per side, SlotsPerTeam minus the side's humans, less the bots it already
-	 * has, each at a free start of its side. End of warmup, and each round's reset (OnRoundReset). */
+	 * has, each at a free start of its side. Each round's reset (OnRoundReset) calls it, the first round's included. */
 	virtual void FillBots();
 
 protected:
@@ -97,7 +107,6 @@ private:
 	void SetPhase(EShinobiPvpPhase NewPhase, float Seconds);
 	void StartWarmup();
 	void StartFight();
-	void EndRound(EShinobiRoundResult Result);
 	void EndMatch();
 	void Rematch();
 	void SetHold(bool bHold);

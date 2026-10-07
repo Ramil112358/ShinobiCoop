@@ -654,7 +654,8 @@ void UShinobiHUDWidget::UpdateArena(const AShinobiPlayerCharacter* Player)
 		}
 		else if (Banner.IsEmpty() && ASC->HasMatchingGameplayTag(ShinobiTags::State_Downed))
 		{
-			Banner = FString::Printf(TEXT("DOWNED\nBleeding out in %d - a teammate can revive you"), FMath::CeilToInt(Player->GetBleedOutRemaining()));
+			Banner = State && State->IsPvp() ? FString(TEXT("DOWNED")) // revive is off in PvP
+				: FString::Printf(TEXT("DOWNED\nBleeding out in %d - a teammate can revive you"), FMath::CeilToInt(Player->GetBleedOutRemaining()));
 		}
 		if (const FGameplayAbilitySpec* Revive = ASC->FindAbilitySpecFromClass(UGA_Revive::StaticClass()))
 		{

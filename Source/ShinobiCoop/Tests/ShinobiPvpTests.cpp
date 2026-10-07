@@ -927,6 +927,85 @@ bool FShinobiPvpFillBotsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpLateJoinerTest, "ShinobiCoop.Pvp.Mode.LateJoinerReplacesBotBeforeFirstScore", ShinobiTestFlags)
+bool FShinobiPvpLateJoinerTest::RunTest(const FString& Parameters)
+{
+	// The host first; warmup ran out and a bot took the friend's slot; now the friend arrives.
+	FShinobiTestWorld W;
+	AShinobiPvpGameMode* Mode = W.Spawn<AShinobiPvpGameMode>();
+	Mode->PvpFormat = EShinobiPvpFormat::OneVsOne;
+	AShinobiGameState* State = Mode->GetGameState<AShinobiGameState>();
+	if (!TestNotNull(TEXT("The mode brought its game state"), State))
+	{
+		return false;
+	}
+	SpawnStart(W, FVector(0.f, 5000.f, 0.f), AShinobiPvpGameMode::TeamStartTagA);
+	SpawnStart(W, FVector(0.f, -5000.f, 0.f), AShinobiPvpGameMode::TeamStartTagB);
+	Mode->AssignTeam(W.Spawn<AAIController>()); // the host, on A
+	Mode->StartRound();
+	TestEqual(TEXT("A bot holds B's slot"), BotsOn(W, EShinobiTeam::TeamB).Num(), 1);
+
+	State->PvpPhase = EShinobiPvpPhase::Fighting;
+	Mode->AssignTeam(W.Spawn<AAIController>()); // the friend, on B
+	TestTrue(TEXT("A late human before any score restarts the round"), Mode->ShouldRestartForLateJoiner());
+	Mode->RestartRoundForLateJoiner();
+	TestEqual(TEXT("The bot made way for the friend"), BotsOn(W, EShinobiTeam::TeamB).Num(), 0);
+	TestEqual(TEXT("The restart is a fresh countdown"), State->PvpPhase, EShinobiPvpPhase::Countdown);
+	TestTrue(TEXT("Still before any score, in the countdown"), Mode->ShouldRestartForLateJoiner());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpLateJoinerScoredTest, "ShinobiCoop.Pvp.Mode.LateJoinerAfterAScoreKeepsTheRound", ShinobiTestFlags)
+bool FShinobiPvpLateJoinerScoredTest::RunTest(const FString& Parameters)
+{
+	for (const EShinobiRoundResult Result : { EShinobiRoundResult::TeamAWins, EShinobiRoundResult::Tie })
+	{
+		FShinobiTestWorld W;
+		AShinobiPvpGameMode* Mode = W.Spawn<AShinobiPvpGameMode>();
+		Mode->PvpFormat = EShinobiPvpFormat::OneVsOne;
+		AShinobiGameState* State = Mode->GetGameState<AShinobiGameState>();
+		if (!TestNotNull(TEXT("The mode brought its game state"), State))
+		{
+			return false;
+		}
+		SpawnStart(W, FVector(0.f, 5000.f, 0.f), AShinobiPvpGameMode::TeamStartTagA);
+		SpawnStart(W, FVector(0.f, -5000.f, 0.f), AShinobiPvpGameMode::TeamStartTagB);
+		Mode->AssignTeam(W.Spawn<AAIController>());
+		Mode->StartRound();
+		Mode->EndRound(Result); // a round scored (a win) or tied
+		State->PvpPhase = EShinobiPvpPhase::Fighting; // as the next round's phase
+		Mode->AssignTeam(W.Spawn<AAIController>());
+
+		TestFalse(TEXT("A scored or tied round: no restart for a joiner"), Mode->ShouldRestartForLateJoiner());
+		Mode->RestartRoundForLateJoiner();
+		TestEqual(TEXT("The bot stays until the next normal reset"), BotsOn(W, EShinobiTeam::TeamB).Num(), 1);
+		TestEqual(TEXT("The phase is untouched"), State->PvpPhase, EShinobiPvpPhase::Fighting);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpLateJoinerPhaseTest, "ShinobiCoop.Pvp.Mode.LateJoinerOnlyRestartsCountdownOrFighting", ShinobiTestFlags)
+bool FShinobiPvpLateJoinerPhaseTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPvpGameMode* Mode = W.Spawn<AShinobiPvpGameMode>();
+	Mode->PvpFormat = EShinobiPvpFormat::OneVsOne;
+	AShinobiGameState* State = Mode->GetGameState<AShinobiGameState>();
+	if (!TestNotNull(TEXT("The mode brought its game state"), State))
+	{
+		return false;
+	}
+	const TArray<TPair<EShinobiPvpPhase, bool>> Expected = {
+		{ EShinobiPvpPhase::None, false }, { EShinobiPvpPhase::Warmup, false }, { EShinobiPvpPhase::Countdown, true },
+		{ EShinobiPvpPhase::Fighting, true }, { EShinobiPvpPhase::RoundEnd, false }, { EShinobiPvpPhase::MatchEnd, false } };
+	for (const TPair<EShinobiPvpPhase, bool>& Case : Expected)
+	{
+		State->PvpPhase = Case.Key;
+		TestEqual(FString::Printf(TEXT("Phase %d"), static_cast<int32>(Case.Key)), Mode->ShouldRestartForLateJoiner(), Case.Value);
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpTravelOptionsTest, "ShinobiCoop.Pvp.Session.TravelOptions", ShinobiTestFlags)
 bool FShinobiPvpTravelOptionsTest::RunTest(const FString& Parameters)
 {
