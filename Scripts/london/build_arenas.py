@@ -202,7 +202,8 @@ def check_cells(rect):
 
 
 def walls(rect, tag):
-    """Four InvisibleWall boxes centred on the rect edge, overlapping at the corners."""
+    """Four InvisibleWall boxes centred on the rect edge, overlapping at the corners, and a lid over the rect with its
+    underside at WALL_TOP_M: the dragon mount flies (MOVE_Flying, no altitude cap) and kill_z does not catch flight."""
     material =unreal.load_asset(f"{bl.bw.WORLD_DIR}/MI_LondonEdgeWall")  # London's grey; reused, never rebuilt here
     x0, y0, x1, y1 = rect
     height, zc = WALL_TOP_M - WALL_BOTTOM_M, (WALL_TOP_M + WALL_BOTTOM_M) / 2
@@ -216,13 +217,20 @@ def walls(rect, tag):
         wall.static_mesh_component.set_collision_profile_name("InvisibleWall")
         wall.static_mesh_component.set_cast_shadow(False)
         out.append(bl.tagged(wall, tag, always_loaded=True))
+    lid = bl.bw.spawn_mesh("/Engine/BasicShapes/Cube.Cube", material, (uu((x0 + x1) / 2), uu((y0 + y1) / 2), uu(WALL_TOP_M + WALL_THICK_M / 2)),
+                           (x1 - x0 + WALL_THICK_M, y1 - y0 + WALL_THICK_M, WALL_THICK_M), label="ArenaWall_Lid")
+    lid.set_actor_hidden_in_game(True)
+    lid.static_mesh_component.set_collision_profile_name("InvisibleWall")
+    lid.static_mesh_component.set_cast_shadow(False)
+    out.append(bl.tagged(lid, tag, always_loaded=True))
     return out
 
 
 def check_walls(rect):
     """A pawn capsule (the player's and the dragon's collision: Pawn) swept from 10 m inside each wall to 10 m outside,
-    at five spots per side, on the street and at 55 m: none may get outside; each side and height must have a probe
-    stopped by the wall itself (others may stop on a building first)."""
+    at five spots per side, on the street and at 55 m, and from 55 m up to 75 m at nine spots under the lid: none may get
+    outside; each side and height, and the lid, must have a probe stopped by the wall itself (others may stop on a
+    building first)."""
     x0, y0, x1, y1 = rect
     passed, by_wall, other = [], {}, 0
     for z_m in (1.5, 55.0):
@@ -243,8 +251,24 @@ def check_walls(rect):
                     by_wall[(side, z_m)] = by_wall.get((side, z_m), 0) + 1
                 else:
                     other += 1
+    # Up: from 55 m (just under the lid) to 75 m at nine spots; none may end above the lid.
+    for fx in (0.2, 0.5, 0.8):
+        for fy in (0.2, 0.5, 0.8):
+            x, y = x0 + fx * (x1 - x0), y0 + fy * (y1 - y0)
+            body = bl.EAS.spawn_actor_from_class(unreal.Character, unreal.Vector(uu(x), uu(y), uu(55)), unreal.Rotator(0, 0, 0))
+            result = body.set_actor_location(unreal.Vector(uu(x), uu(y), uu(75)), True, False)
+            end = body.get_actor_location()
+            bl.EAS.destroy_actor(body)
+            if end.z / 100 > WALL_TOP_M:
+                passed.append(f"Lid f{fx},{fy} up to {end.z / 100:.1f} m")
+                continue
+            hits = [r for r in (result if isinstance(result, tuple) else (result,)) if isinstance(r, unreal.HitResult)]
+            if hits and hit_info(hits[0])[1] == "ArenaWall_Lid":
+                by_wall[("Lid", 55.0)] = by_wall.get(("Lid", 55.0), 0) + 1
+            else:
+                other += 1
     log(f"wall check: {len(passed)} probes got outside {passed}; stopped by the wall {sorted(by_wall.items())}; {other} stopped by something else first")
-    missing = [(s, z) for s in "NSWE" for z in (1.5, 55.0) if (s, z) not in by_wall]
+    missing = [(s, z) for s in "NSWE" for z in (1.5, 55.0) if (s, z) not in by_wall] + ([("Lid", 55.0)] if ("Lid", 55.0) not in by_wall else [])
     if missing:
         unreal.log_warning(f"[build_arenas] wall check: no probe stopped by the wall itself for {missing}")
     if passed:
@@ -318,9 +342,20 @@ def clean_old(map_path):
         if os.path.isdir(path):
             # ponytail: plain file removal plus a rescan; EditorAssetLibrary.delete_directory loads every actor first
             # and fails (an Error, so a non-zero commandlet exit) once their map is gone.
-            shutil.rmtree(path, ignore_errors=True)
+            shutil.rmtree(path)
             registry.scan_paths_synchronous([f"/Game/{folder}/{rel}"], True)
             log(f"removed old {folder}/{rel}")
+
+
+def run_crop(aid):
+    """The arena's landscape crop (crop_terrain in the system Python, which has PIL) into Saved/ArenaTerrain/<Id>."""
+    terrain_dir = os.path.join(bl.PROJECT, "Saved", "ArenaTerrain", aid)
+    try:
+        done = subprocess.run(["python", os.path.join(HERE, "build_arenas.py"), "crop", aid, terrain_dir],
+                              check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"landscape crop for {aid} failed (exit {e.returncode}): {e.stderr}") from e
+    return terrain_dir, json.loads(done.stdout)
 
 
 def build_arena(arena, offset):
@@ -333,18 +368,20 @@ def build_arena(arena, offset):
     clean_old(map_path)
     # The landscape: London's heightmap and weightmaps cropped to the rect + CROP_MARGIN_M (system Python has PIL),
     # into Saved/ (gitignored).
-    terrain_dir = os.path.join(bl.PROJECT, "Saved", "ArenaTerrain", aid)
-    crop = json.loads(subprocess.run(["python", os.path.join(HERE, "build_arenas.py"), "crop", aid, terrain_dir],
-                                     check=True, capture_output=True, text=True).stdout)
+    terrain_dir, crop = run_crop(aid)
     # Own layer infos next to the map: re-creating London's would rewrite /Game/Shinobi/London/LayerInfo.
     world = bl.make_world(map_path, GAME_MODE, fresh_material=False, layer_info=f"{map_path}_LayerInfo", terrain_dir=terrain_dir)
     place_landscape(world, crop)
     check_cells(backdrop)
     chunk_actors = bl.place_city(keep, tag)
+    if chunk_actors == 0:
+        raise RuntimeError(f"{aid}: no chunk meshes for cells {cells(backdrop)} (is the London content there?)")
     mesh = bl.mesh_loader()
     placements = bl.load_json("placements.json")
     instances, streets = bl.place_streets(world, keep, tag, placements, mesh)
     landmarks = bl.place_landmarks(world, keep, tag, placements["markers"], mesh)
+    if mesh.failed:
+        raise RuntimeError(f"{aid}: catalog meshes that do not load: {sorted(mesh.failed)}")
     walls(rect, tag)
 
     ox, oy = offset
@@ -385,9 +422,7 @@ def verify_arena(arena, offset):
     the landscape and ground checks; nothing is saved."""
     rect = map_rect(arena["rect"], offset)
     world = bl.load_map(arena["map"])
-    crop = json.loads(subprocess.run(["python", os.path.join(HERE, "build_arenas.py"), "crop", arena["id"],
-                                      os.path.join(bl.PROJECT, "Saved", "ArenaTerrain", arena["id"])],
-                                     check=True, capture_output=True, text=True).stdout)
+    crop = run_crop(arena["id"])[1]
     check_landscape(world, crop)
     check_ground(world, rect)
     # ponytail: no check_walls here; static mesh collision of a reloaded map is absent in the commandlet (probe_arena.py

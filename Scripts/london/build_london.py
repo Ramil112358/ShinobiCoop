@@ -140,7 +140,10 @@ def make_world(map_path, game_mode, fresh_material=True, layer_info=f"{ROOT}/Lay
     post = bw.spawn_class(unreal.PostProcessVolume, (0, 0, 0), label=look.VOLUME_LABEL)
     look.apply_post(post)
     settings = world.get_world_settings()
-    settings.set_editor_property("default_game_mode", unreal.load_class(None, game_mode))
+    mode = unreal.load_class(None, game_mode)
+    if mode is None:
+        raise RuntimeError(f"no game mode class {game_mode}")
+    settings.set_editor_property("default_game_mode", mode)
     settings.set_editor_property("kill_z", -3000.0)
     return world
 
@@ -220,10 +223,11 @@ def check_axes():
 # -------------------------------------------------------------------------------------------------------------- dress
 def mesh_loader():
     """mesh(key, variant=0) -> the london_catalog.json StaticMesh for a furniture or landmark key, loaded once, or None
-    (the key is added to mesh.missing). mesh.catalog is the catalog."""
+    (the key is added to mesh.missing; a catalog path that does not load also goes to mesh.failed). mesh.catalog is the
+    catalog."""
     with open(os.path.join(HERE, "london_catalog.json"), encoding="utf-8") as f:
         catalog = json.load(f)
-    meshes, missing = {}, set()
+    meshes, missing, failed = {}, set(), set()
 
     def mesh(key, variant=0):
         if key == "tree_plane" and catalog.get("_tree_variants"):
@@ -236,9 +240,12 @@ def mesh_loader():
             return None
         if path not in meshes:
             meshes[path] = unreal.load_asset(path.split(".")[0])
+        if meshes[path] is None:
+            missing.add(key)
+            failed.add(path)
         return meshes[path]
 
-    mesh.catalog, mesh.missing = catalog, missing
+    mesh.catalog, mesh.missing, mesh.failed = catalog, missing, failed
     return mesh
 
 
