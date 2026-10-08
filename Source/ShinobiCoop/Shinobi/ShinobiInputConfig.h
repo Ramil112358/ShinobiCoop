@@ -39,6 +39,10 @@ public:
 	UPROPERTY()
 	TObjectPtr<UInputAction> Look;
 
+	/** Right mouse: temporarily look around without changing gameplay aim. */
+	UPROPERTY()
+	TObjectPtr<UInputAction> CameraFreeLook;
+
 	UPROPERTY()
 	TObjectPtr<UInputAction> Jump;
 

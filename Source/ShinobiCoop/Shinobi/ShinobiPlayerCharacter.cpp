@@ -567,6 +567,7 @@ void AShinobiPlayerCharacter::UnPossessed()
 	// ends on its own, so end the hold-to-use abilities here. Must run before Super: APawn::UnPossessed clears
 	// the Owner, after which the ClientCancelAbility RPC can't reach the owning client. Mostly server-side; on a
 	// client it can also run while the pawn is being destroyed (harmless).
+	SetCameraFreeLook(false);
 	FGameplayTagContainer HeldAbilities;
 	HeldAbilities.AddTag(ShinobiTags::Ability_Sprint);
 	HeldAbilities.AddTag(ShinobiTags::Ability_ChakraCharge);
@@ -593,6 +594,9 @@ void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 	UEnhancedInputComponent* Input = CastChecked<UEnhancedInputComponent>(PlayerInputComponent);
 	Input->BindAction(InputConfig.Move, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Move);
 	Input->BindAction(InputConfig.Look, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::Look);
+	Input->BindAction(InputConfig.CameraFreeLook, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::SetCameraFreeLook, true);
+	Input->BindAction(InputConfig.CameraFreeLook, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::SetCameraFreeLook, false);
+	Input->BindAction(InputConfig.CameraFreeLook, ETriggerEvent::Canceled, this, &AShinobiPlayerCharacter::SetCameraFreeLook, false);
 	Input->BindAction(InputConfig.CameraZoom, ETriggerEvent::Triggered, this, &AShinobiPlayerCharacter::ZoomCamera);
 	Input->BindAction(InputConfig.Jump, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::JumpPressed);
 	Input->BindAction(InputConfig.Jump, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::JumpReleased);
@@ -627,6 +631,11 @@ void AShinobiPlayerCharacter::Look(const FInputActionValue& Value)
 
 void AShinobiPlayerCharacter::ApplyLookInput(const FVector2D& Axis)
 {
+	if (bCameraFreeLookActive)
+	{
+		ApplyCameraFreeLookInput(Axis);
+		return;
+	}
 	if (bJutsuTargetPlacementActive)
 	{
 		MoveJutsuTargetCursor(Axis);
@@ -638,6 +647,50 @@ void AShinobiPlayerCharacter::ApplyLookInput(const FVector2D& Axis)
 	}
 	AddControllerYawInput(Axis.X);
 	AddControllerPitchInput(Axis.Y);
+}
+
+void AShinobiPlayerCharacter::SetCameraFreeLook(bool bHeld)
+{
+	if (bHeld == bCameraFreeLookActive)
+	{
+		return;
+	}
+
+	if (bHeld)
+	{
+		APlayerController* PC = Cast<APlayerController>(GetController());
+		if (!PC || !IsLocallyControlled())
+		{
+			return;
+		}
+
+		CameraFreeLookRotation = (PC->GetControlRotation() - GetActorRotation()).GetNormalized();
+		CameraBoom->bUsePawnControlRotation = false;
+		CameraBoom->SetRelativeRotation(CameraFreeLookRotation);
+		bCameraFreeLookActive = true;
+		return;
+	}
+
+	CameraBoom->SetRelativeRotation(FRotator::ZeroRotator);
+	CameraBoom->bUsePawnControlRotation = true;
+	bCameraFreeLookActive = false;
+}
+
+void AShinobiPlayerCharacter::ApplyCameraFreeLookInput(const FVector2D& Axis)
+{
+	const APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC)
+	{
+		return;
+	}
+
+	CameraFreeLookRotation.Yaw += Axis.X * PC->InputYawScale_DEPRECATED;
+	CameraFreeLookRotation.Pitch = FMath::Clamp(
+		CameraFreeLookRotation.Pitch + Axis.Y * PC->InputPitchScale_DEPRECATED,
+		CameraFreeLookMinPitch,
+		CameraFreeLookMaxPitch);
+	CameraFreeLookRotation.Normalize();
+	CameraBoom->SetRelativeRotation(CameraFreeLookRotation);
 }
 
 void AShinobiPlayerCharacter::MoveJutsuTargetCursor(const FVector2D& Axis)

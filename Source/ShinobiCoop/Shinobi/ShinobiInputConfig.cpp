@@ -66,6 +66,9 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 		AddModifier<UInputModifierScaleByDeltaTime>(Stick, Ctx);
 	}
 
+	Config->CameraFreeLook = MakeAction(Config, TEXT("IA_CameraFreeLook"), EInputActionValueType::Boolean);
+	Ctx->MapKey(Config->CameraFreeLook, EKeys::RightMouseButton);
+
 	Config->Jump = MakeAction(Config, TEXT("IA_Jump"), EInputActionValueType::Boolean);
 	Ctx->MapKey(Config->Jump, EKeys::SpaceBar);
 	Ctx->MapKey(Config->Jump, EKeys::Gamepad_FaceButton_Bottom);

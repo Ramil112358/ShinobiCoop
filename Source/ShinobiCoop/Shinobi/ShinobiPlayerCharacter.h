@@ -164,20 +164,26 @@ private:
 	bool bFlightClimb = false;
 	bool bFlightDive = false;
 	bool bJutsuTargetPlacementActive = false;
+	bool bCameraFreeLookActive = false;
 	bool bHasServerJutsuAimDirection = false;
 	int32 TargetPlacementInputID = INDEX_NONE;
 	FVector2D JutsuTargetScreenPosition = FVector2D(0.5f, 0.5f);
 	FVector ServerJutsuAimDirection = FVector::ForwardVector;
+	FRotator CameraFreeLookRotation = FRotator::ZeroRotator;
 
 	static constexpr float FootArmLength = 450.f;
 	static constexpr float MountedArmLength = 900.f;
 	static constexpr float MinCameraArmLength = 200.f;
 	static constexpr float MaxCameraArmLength = 1200.f;
 	static constexpr float CameraZoomStep = 100.f;
+	static constexpr float CameraFreeLookMinPitch = -70.f;
+	static constexpr float CameraFreeLookMaxPitch = 80.f;
 	float CameraZoomDistance = FootArmLength;
 
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
+	void SetCameraFreeLook(bool bHeld);
+	void ApplyCameraFreeLookInput(const FVector2D& Axis);
 	void MoveJutsuTargetCursor(const FVector2D& Axis);
 	void ZoomCamera(const FInputActionValue& Value);
 	/** Ignores the jump input while CanMove() is false. */
