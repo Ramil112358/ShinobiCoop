@@ -7,7 +7,7 @@
 
 DECLARE_MULTICAST_DELEGATE(FShinobiOutOfHealthDelegate);
 
-/** Health, chakra, stamina and substitution charges shared by players and enemies. */
+/** Health, chakra, stamina, substitution charges (and the PvP shield) shared by players and enemies. */
 UCLASS()
 class SHINOBICOOP_API UShinobiAttributeSet : public UAttributeSet
 {
@@ -61,6 +61,11 @@ public:
 	FGameplayAttributeData MaxSubstitutionCharges;
 	ATTRIBUTE_ACCESSORS_BASIC(UShinobiAttributeSet, MaxSubstitutionCharges)
 
+	/** Damage still to soak while State.Shield is on (the PvP shield pickup): UShinobiDamageExec spends it before Health. */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Shield, Category = "Shinobi")
+	FGameplayAttributeData Shield;
+	ATTRIBUTE_ACCESSORS_BASIC(UShinobiAttributeSet, Shield)
+
 	/** Meta attribute: damage waiting to be applied to Health. Server only, never replicated. */
 	UPROPERTY(BlueprintReadOnly, Category = "Shinobi")
 	FGameplayAttributeData IncomingDamage;
@@ -75,6 +80,7 @@ protected:
 	UFUNCTION() void OnRep_MaxStamina(const FGameplayAttributeData& OldValue);
 	UFUNCTION() void OnRep_SubstitutionCharges(const FGameplayAttributeData& OldValue);
 	UFUNCTION() void OnRep_MaxSubstitutionCharges(const FGameplayAttributeData& OldValue);
+	UFUNCTION() void OnRep_Shield(const FGameplayAttributeData& OldValue);
 
 private:
 	void ClampToMax(const FGameplayAttribute& Attribute, float& NewValue) const;

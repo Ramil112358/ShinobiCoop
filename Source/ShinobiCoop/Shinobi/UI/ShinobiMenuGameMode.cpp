@@ -2,6 +2,7 @@
 #include "Engine/GameInstance.h"
 #include "Misc/CommandLine.h"
 #include "TimerManager.h"
+#include "ShinobiCoop.h"
 #include "Shinobi/Online/ShinobiSessionSubsystem.h"
 #include "Shinobi/UI/ShinobiMenuWidgets.h"
 
@@ -26,7 +27,27 @@ void AShinobiMenuPlayerController::BeginPlay()
 	UShinobiSessionSubsystem* Sessions = GetGameInstance()->GetSubsystem<UShinobiSessionSubsystem>();
 	if (FParse::Param(FCommandLine::Get(), TEXT("ShinobiAutoHost")))
 	{
-		Sessions->HostGame();
+		// -ShinobiAutoHostArena=<WestEnd|Camden|Westminster|Tower> hosts that PvP arena, in -ShinobiAutoHostFormat=1v1|2v2 (1v1 if absent).
+		FString ArenaId, FormatId;
+		int32 MapIndex = 0;
+		if (FParse::Value(FCommandLine::Get(), TEXT("ShinobiAutoHostArena="), ArenaId))
+		{
+			const TArray<FShinobiMap>& Maps = UShinobiSessionSubsystem::GetMaps();
+			const int32 Found = Maps.IndexOfByPredicate([&ArenaId](const FShinobiMap& Map)
+			{
+				return Map.bArena && FString(Map.Path).EndsWith(TEXT("Lvl_Arena_") + ArenaId, ESearchCase::IgnoreCase);
+			});
+			if (Found == INDEX_NONE)
+			{
+				UE_LOG(LogShinobiCoop, Warning, TEXT("-ShinobiAutoHostArena=%s matches no arena, hosting the default map"), *ArenaId);
+			}
+			else
+			{
+				MapIndex = Found;
+			}
+		}
+		FParse::Value(FCommandLine::Get(), TEXT("ShinobiAutoHostFormat="), FormatId);
+		Sessions->HostGame(MapIndex, FormatId == TEXT("2v2") ? EShinobiPvpFormat::TwoVsTwo : EShinobiPvpFormat::OneVsOne);
 	}
 	else if (FParse::Param(FCommandLine::Get(), TEXT("ShinobiAutoJoin")))
 	{

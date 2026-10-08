@@ -14,6 +14,8 @@
  *   chakra charge).
  * Periodic damage (Burn, Black Flame) skips all of that: it ticks through i-frames, never staggers and never
  * uses up the bonus.
+ * For any damage: Susanoo and State.AttackBoost scale it first; a target with State.Shield spends its Shield attribute
+ * on it before Health (the shield ends when spent), and only what gets through can stagger.
  */
 UCLASS()
 class SHINOBICOOP_API UShinobiDamageExec : public UGameplayEffectExecutionCalculation

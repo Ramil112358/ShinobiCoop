@@ -4,6 +4,7 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Interfaces/OnlineSessionInterface.h"
 #include "OnlineSessionSettings.h"
+#include "Shinobi/Pvp/ShinobiPvpMatch.h"
 #include "ShinobiSessionSubsystem.generated.h"
 
 /** A map Host Game can open. */
@@ -11,6 +12,8 @@ struct FShinobiMap
 {
 	const TCHAR* DisplayName;
 	const TCHAR* Path;
+	/** A PvP arena: hosted on the PvP game mode in a chosen format instead of the co-op one. */
+	bool bArena = false;
 };
 
 /** One joinable game from Find Games. */
@@ -21,6 +24,8 @@ struct FShinobiFoundGame
 	int32 Players = 0;
 	int32 MaxPlayers = 0;
 	int32 PingMs = 0;
+	/** "1v1" or "2v2" for an arena, empty for co-op. */
+	FString Format;
 };
 
 /**
@@ -40,9 +45,14 @@ public:
 	static const TCHAR* MenuMap;
 	/** Session setting carrying the map's display name, for Find Games. */
 	static const FName MapKey;
+	/** Session setting carrying the arena format ("1v1" / "2v2"); empty for co-op. */
+	static const FName FormatKey;
 
 	/** The maps Host Game offers; the first is the default. */
 	static const TArray<FShinobiMap>& GetMaps();
+
+	/** The OpenLevel options for hosting Map: "listen", plus the PvP game mode and Format for an arena. */
+	static FString MakeTravelOptions(const FShinobiMap& Map, EShinobiPvpFormat Format);
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
@@ -53,8 +63,8 @@ public:
 	/** A session operation is in flight (the menu disables its buttons). */
 	bool IsBusy() const { return bBusy; }
 
-	/** Hosts on GetMaps()[MapIndex]. */
-	void HostGame(int32 MapIndex = 0);
+	/** Hosts on GetMaps()[MapIndex]; Format only matters on an arena (None there means 1v1). */
+	void HostGame(int32 MapIndex = 0, EShinobiPvpFormat Format = EShinobiPvpFormat::None);
 	void FindGames();
 	/** Index into GetFoundGames(). */
 	void JoinGame(int32 Index);
@@ -93,6 +103,7 @@ private:
 	TArray<FShinobiFoundGame> FoundGames;
 	TFunction<void()> AfterDestroy;
 	int32 HostMapIndex = 0;
+	EShinobiPvpFormat HostFormat = EShinobiPvpFormat::None;
 	FString Message;
 	bool bBusy = false;
 	/** Set on a disconnect: the engine loads GameDefaultMap, and the next map load goes on to the menu. */

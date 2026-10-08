@@ -3,8 +3,13 @@
 #include "Animation/AnimInstance.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/GameInstance.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/World.h"
+#include "EngineUtils.h"
+#include "GameFramework/PlayerController.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
 #include "ShinobiCoop.h"
 #include "Shinobi/ShinobiAttributeSet.h"
@@ -53,7 +58,7 @@ void AShinobiCharacterBase::BeginPlay()
 {
 	Super::BeginPlay();
 	// Outline the visible body (the hero, when a hidden Manny drives it); the driver itself stays out of custom depth.
-	ShinobiLook::EnableOutline(GetBodyMesh(), Team == EShinobiTeam::Enemies ? ShinobiLook::StencilEnemy : ShinobiLook::StencilFriendly);
+	RefreshOutline();
 	if (GetBodyMesh() != GetMesh())
 	{
 		GetMesh()->SetRenderCustomDepth(false);
@@ -76,6 +81,78 @@ void AShinobiCharacterBase::BeginPlay()
 	{
 		Attributes->OnOutOfHealth.AddUObject(this, &AShinobiCharacterBase::HandleOutOfHealth);
 		GrantStartupAbilitiesAndEffects();
+	}
+}
+
+void AShinobiCharacterBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	// Not initial-only: the PvP mode picks a joining player's side after the pawn has already replicated.
+	DOREPLIFETIME(AShinobiCharacterBase, Team);
+}
+
+void AShinobiCharacterBase::SetTeam(EShinobiTeam NewTeam)
+{
+	if (!HasAuthority() || Team == NewTeam)
+	{
+		return;
+	}
+	Team = NewTeam;
+	OnTeamChanged();
+}
+
+void AShinobiCharacterBase::OnRep_Team()
+{
+	OnTeamChanged();
+}
+
+void AShinobiCharacterBase::OnTeamChanged()
+{
+	const AShinobiCharacterBase* Viewer = GetLocalViewer(GetWorld());
+	if (Viewer == this)
+	{
+		RefreshAllOutlines(GetWorld()); // everyone's colour is relative to this body's side
+		return;
+	}
+	ApplyOutlineFor(Viewer);
+}
+
+const AShinobiCharacterBase* AShinobiCharacterBase::GetLocalViewer(const UWorld* World)
+{
+	const UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
+	const APlayerController* PC = GI ? GI->GetFirstLocalPlayerController(World) : nullptr;
+	return PC ? Cast<AShinobiCharacterBase>(PC->GetPawn()) : nullptr;
+}
+
+void AShinobiCharacterBase::RefreshOutline()
+{
+	ApplyOutlineFor(GetLocalViewer(GetWorld()));
+}
+
+void AShinobiCharacterBase::ApplyOutlineFor(const AShinobiCharacterBase* Viewer)
+{
+	// A viewer's own body counts as friendly (IsHostileTo is false for itself).
+	// ponytail: without a viewer (dedicated server, nobody possessed yet) the stencil is the old static rule, since only Enemies
+	// were ever red; PvP characters are first drawn with it and corrected by RefreshAllOutlines when the local pawn arrives.
+	ShinobiLook::EnableOutline(GetBodyMesh(), OutlineStencilFor(Viewer));
+}
+
+uint8 AShinobiCharacterBase::OutlineStencilFor(const AShinobiCharacterBase* Viewer) const
+{
+	const bool bEnemy = Viewer ? IsHostileTo(Viewer) : Team == EShinobiTeam::Enemies;
+	return bEnemy ? ShinobiLook::StencilEnemy : ShinobiLook::StencilFriendly;
+}
+
+void AShinobiCharacterBase::RefreshAllOutlines(UWorld* World)
+{
+	if (!World)
+	{
+		return;
+	}
+	const AShinobiCharacterBase* Viewer = GetLocalViewer(World);
+	for (TActorIterator<AShinobiCharacterBase> It(World); It; ++It)
+	{
+		It->ApplyOutlineFor(Viewer);
 	}
 }
 

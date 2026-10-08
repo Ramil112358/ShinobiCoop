@@ -22,10 +22,14 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/GA_Revive.h"
+#include "Shinobi/Enemies/ShinobiSummon.h"
+#include "Shinobi/Pvp/ShinobiPvpText.h"
 #include "Shinobi/VFX/ShinobiSfx.h"
 #include "Shinobi/World/ShinobiCamp.h"
 #include "Camera/PlayerCameraManager.h"
 #include "EngineUtils.h"
+#include "GameplayEffectTypes.h"
+#include "GameplayTagContainer.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiDragonMount.h"
@@ -141,6 +145,8 @@ TSharedRef<SWidget> UShinobiHUDWidget::RebuildWidget()
 		TeamText = AddCanvasText(Root, TEXT("TeamText"), FAnchors(0.f, 0.f), FVector2D(0.f, 0.f), FVector2D(40.f, 24.f), 14, ETextJustify::Left);
 		BannerText = AddCanvasText(Root, TEXT("BannerText"), FAnchors(0.5f, 0.35f), FVector2D(0.5f, 0.5f), FVector2D::ZeroVector, 40, ETextJustify::Center);
 		HintText = AddCanvasText(Root, TEXT("HintText"), FAnchors(0.5f, 0.6f), FVector2D(0.5f, 0.5f), FVector2D::ZeroVector, 18, ETextJustify::Center);
+		OpponentText = AddCanvasText(Root, TEXT("OpponentText"), FAnchors(1.f, 0.f), FVector2D(1.f, 0.f), FVector2D(-40.f, 24.f), 14, ETextJustify::Right);
+		BoostText = AddCanvasText(Root, TEXT("BoostText"), FAnchors(0.5f, 0.68f), FVector2D(0.5f, 0.5f), FVector2D::ZeroVector, 16, ETextJustify::Center);
 	}
 	return Super::RebuildWidget();
 }
@@ -717,7 +723,13 @@ void UShinobiHUDWidget::UpdateArena(const AShinobiPlayerCharacter* Player)
 			ShinobiSfx::Play2D(this, EShinobiSfx::Victory);
 		}
 	}
-	if (State)
+	if (State && State->IsPvp())
+	{
+		// The arena match: score strip on top, the round's words in the centre. The wave banners below are PvE's.
+		Wave = ShinobiPvp::ScoreText(*State, State->GetPhaseTimeRemaining());
+		Banner = ShinobiPvp::BannerText(*State, Player ? Player->GetTeam() : EShinobiTeam::TeamA, State->GetPhaseTimeRemaining());
+	}
+	else if (State)
 	{
 		switch (State->Phase)
 		{
@@ -743,14 +755,14 @@ void UShinobiHUDWidget::UpdateArena(const AShinobiPlayerCharacter* Player)
 		}
 	}
 
-	// Teammates: every other player in the session.
+	// Teammates: every other player on our side (in a PvP arena the opposing side is not listed).
 	FString Team;
 	if (State)
 	{
 		for (const APlayerState* Mate : State->PlayerArray)
 		{
 			const AShinobiCharacterBase* Body = Mate ? Cast<AShinobiCharacterBase>(Mate->GetPawn()) : nullptr;
-			if (!Body || Body == Player)
+			if (!Body || Body == Player || (Player && Player->IsHostileTo(Body)))
 			{
 				continue;
 			}
@@ -768,11 +780,12 @@ void UShinobiHUDWidget::UpdateArena(const AShinobiPlayerCharacter* Player)
 		const UAbilitySystemComponent* ASC = Player->GetAbilitySystemComponent();
 		if (Banner.IsEmpty() && ASC->HasMatchingGameplayTag(ShinobiTags::State_Dead))
 		{
-			Banner = TEXT("DEAD\nBack at the next wave");
+			Banner = State && State->IsPvp() ? TEXT("DEAD\nBack next round") : TEXT("DEAD\nBack at the next wave");
 		}
 		else if (Banner.IsEmpty() && ASC->HasMatchingGameplayTag(ShinobiTags::State_Downed))
 		{
-			Banner = FString::Printf(TEXT("DOWNED\nBleeding out in %d - a teammate can revive you"), FMath::CeilToInt(Player->GetBleedOutRemaining()));
+			Banner = State && State->IsPvp() ? FString(TEXT("DOWNED")) // revive is off in PvP
+				: FString::Printf(TEXT("DOWNED\nBleeding out in %d - a teammate can revive you"), FMath::CeilToInt(Player->GetBleedOutRemaining()));
 		}
 		if (const FGameplayAbilitySpec* Revive = ASC->FindAbilitySpecFromClass(UGA_Revive::StaticClass()))
 		{
@@ -786,10 +799,73 @@ void UShinobiHUDWidget::UpdateArena(const AShinobiPlayerCharacter* Player)
 			Hint = TEXT("[ LOCKED ]");
 		}
 	}
+	const bool bPvp = State && State->IsPvp();
 	WaveText->SetText(FText::FromString(Wave));
 	TeamText->SetText(FText::FromString(Team));
+	OpponentText->SetText(FText::FromString(bPvp ? OpponentList(Player) : FString()));
+	BoostText->SetText(FText::FromString(bPvp ? BoostList(Player) : FString()));
 	BannerText->SetText(FText::FromString(Banner));
 	HintText->SetText(FText::FromString(Hint));
+}
+
+FString UShinobiHUDWidget::OpponentList(const AShinobiPlayerCharacter* Player) const
+{
+	FString Opponents;
+	if (!Player || !GetWorld())
+	{
+		return Opponents;
+	}
+	int32 BotNumber = 0;
+	for (TActorIterator<AShinobiCharacterBase> It(GetWorld()); It; ++It)
+	{
+		const AShinobiCharacterBase* Body = *It;
+		if (!IsPvpTeam(Body->GetTeam()) || !Player->IsHostileTo(Body) || Body->IsA<AShinobiSummon>())
+		{
+			continue;
+		}
+		// ponytail: a body with no player state is a bot; numbered in world order, no names yet
+		const APlayerState* Owner = Body->GetPlayerState();
+		const FString Name = Owner ? Owner->GetPlayerName() : FString::Printf(TEXT("Bot %d"), ++BotNumber);
+		const UAbilitySystemComponent* ASC = Body->GetAbilitySystemComponent();
+		const TCHAR* Status = ASC->HasMatchingGameplayTag(ShinobiTags::State_Dead) ? TEXT("  DEAD") : TEXT("");
+		Opponents += FString::Printf(TEXT("%s  %d / %d%s\n"), *Name, FMath::RoundToInt(Body->GetAttributes()->GetHealth()),
+			FMath::RoundToInt(Body->GetAttributes()->GetMaxHealth()), Status);
+	}
+	return Opponents;
+}
+
+FString UShinobiHUDWidget::BoostList(const AShinobiPlayerCharacter* Player) const
+{
+	FString Boosts;
+	if (!Player)
+	{
+		return Boosts;
+	}
+	// The pickups (Task 5) own these tags; looked up by name so the HUD works before they exist.
+	static const TPair<const TCHAR*, const TCHAR*> BoostTags[] = {
+		{ TEXT("State.AttackBoost"), TEXT("Attack boost") },
+		{ TEXT("State.SpeedBoost"), TEXT("Speed boost") },
+		{ TEXT("State.Shield"), TEXT("Shield") },
+	};
+	const UAbilitySystemComponent* ASC = Player->GetAbilitySystemComponent();
+	for (const TPair<const TCHAR*, const TCHAR*>& Boost : BoostTags)
+	{
+		const FGameplayTag Tag = FGameplayTag::RequestGameplayTag(FName(Boost.Key), false);
+		if (!Tag.IsValid())
+		{
+			continue;
+		}
+		float Remaining = 0.f;
+		for (const float Left : ASC->GetActiveEffectsTimeRemaining(FGameplayEffectQuery::MakeQuery_MatchAnyOwningTags(FGameplayTagContainer(Tag))))
+		{
+			Remaining = FMath::Max(Remaining, Left);
+		}
+		if (Remaining > 0.f)
+		{
+			Boosts += FString::Printf(TEXT("%s %ds\n"), Boost.Value, FMath::CeilToInt(Remaining));
+		}
+	}
+	return Boosts;
 }
 
 void UShinobiHUDWidget::UpdateJutsuSlots(const UAbilitySystemComponent& ASC, int32 Page, const AShinobiPlayerCharacter* Player)

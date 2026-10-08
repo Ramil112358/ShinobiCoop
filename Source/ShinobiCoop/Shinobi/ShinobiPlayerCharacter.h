@@ -101,6 +101,9 @@ public:
 	/** The hero mesh when the hero is in use (Shinobi.Hero 1 and its assets exist), else GetMesh(). */
 	virtual USkeletalMeshComponent* GetBodyMesh() const override { return HeroMesh ? HeroMesh.Get() : GetMesh(); }
 
+	/** Outlines the hero and its outfit. */
+	virtual void ApplyOutlineFor(const AShinobiCharacterBase* Viewer) override;
+
 	/** Null when the player is the plain visible Manny (the fallback). */
 	USkeletalMeshComponent* GetHeroMesh() const { return HeroMesh; }
 	UShinobiOverheadTextComponent* GetNameTag() const { return NameTag; }

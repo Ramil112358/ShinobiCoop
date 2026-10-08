@@ -21,8 +21,16 @@ UENUM(BlueprintType)
 enum class EShinobiTeam : uint8
 {
 	Players,
-	Enemies
+	Enemies,
+	/** PvP arena sides (AShinobiPvpGameMode): hostile to each other and to Enemies, never to their own side. */
+	TeamA,
+	TeamB
 };
+
+inline bool IsPvpTeam(EShinobiTeam Team)
+{
+	return Team == EShinobiTeam::TeamA || Team == EShinobiTeam::TeamB;
+}
 
 /** Character with an ability system, shared by players, enemies and dummies. */
 UCLASS()
@@ -47,6 +55,9 @@ public:
 	UShinobiSusanooComponent* GetSusanoo() const { return Susanoo; }
 
 	EShinobiTeam GetTeam() const { return Team; }
+	/** Server: changes sides, at any time (replicated to every client, also after the pawn first replicated), and re-outlines
+	 * for every viewer. */
+	void SetTeam(EShinobiTeam NewTeam);
 	bool IsHostileTo(const AShinobiCharacterBase* Other) const { return Other && Other != this && Other->Team != Team; }
 
 	/** The mesh you see: the hero for players (AShinobiPlayerCharacter), else GetMesh(). Never null. Auras, the cast
@@ -66,6 +77,17 @@ public:
 	/** What the AI may aim at: alive and not phased. */
 	bool IsTargetable() const { return IsAlive() && !IsPhased(); }
 
+	/** The character the local player controls (the first local player controller's pawn), or null: a dedicated server, or
+	 * nobody possessed yet. Outlines and damage-number colours are relative to it. */
+	static const AShinobiCharacterBase* GetLocalViewer(const UWorld* World);
+
+	/** Outlines the body red when hostile to the local viewer, else dark. No viewer: the old static rule (Enemies are red). */
+	void RefreshOutline();
+	/** RefreshOutline against a given viewer. */
+	virtual void ApplyOutlineFor(const AShinobiCharacterBase* Viewer);
+	/** Re-outlines every character in World; call when the local pawn changes. */
+	static void RefreshAllOutlines(UWorld* World);
+
 	/** Stuns (Shock) last this many times their normal duration (the boss shrugs them off faster). */
 	float GetStunMultiplier() const { return StunMultiplier; }
 
@@ -73,6 +95,9 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void PossessedBy(AController* NewController) override;
 	virtual void OnRep_Controller() override;
+	/** The outline stencil for a viewer (see RefreshOutline). */
+	uint8 OutlineStencilFor(const AShinobiCharacterBase* Viewer) const;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	/** Server only. Called each time Health reaches 0. */
 	virtual void HandleOutOfHealth();
@@ -110,7 +135,7 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UShinobiSusanooComponent> Susanoo;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
+	UPROPERTY(EditDefaultsOnly, ReplicatedUsing = OnRep_Team, Category = "Shinobi")
 	EShinobiTeam Team = EShinobiTeam::Enemies;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
@@ -120,6 +145,12 @@ protected:
 	TArray<TSubclassOf<UGameplayEffect>> StartupEffects;
 
 private:
+	UFUNCTION()
+	void OnRep_Team();
+
+	/** The sides changed: this body is outlined afresh, and so is everyone else when this is the viewer's own body. */
+	void OnTeamChanged();
+
 	void GrantStartupAbilitiesAndEffects();
 
 	/** Every machine: State.Dead turns the body into a ragdoll with no capsule collision or movement. */

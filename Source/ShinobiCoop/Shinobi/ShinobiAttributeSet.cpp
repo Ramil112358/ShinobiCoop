@@ -12,6 +12,7 @@ UShinobiAttributeSet::UShinobiAttributeSet()
 	InitMaxStamina(100.f);
 	InitSubstitutionCharges(3.f);
 	InitMaxSubstitutionCharges(3.f);
+	InitShield(0.f);
 	InitIncomingDamage(0.f);
 }
 
@@ -26,6 +27,7 @@ void UShinobiAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 	DOREPLIFETIME_CONDITION_NOTIFY(UShinobiAttributeSet, MaxStamina, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UShinobiAttributeSet, SubstitutionCharges, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UShinobiAttributeSet, MaxSubstitutionCharges, COND_None, REPNOTIFY_Always);
+	DOREPLIFETIME_CONDITION_NOTIFY(UShinobiAttributeSet, Shield, COND_None, REPNOTIFY_Always);
 }
 
 void UShinobiAttributeSet::ClampToMax(const FGameplayAttribute& Attribute, float& NewValue) const
@@ -117,3 +119,4 @@ void UShinobiAttributeSet::OnRep_Stamina(const FGameplayAttributeData& OldValue)
 void UShinobiAttributeSet::OnRep_MaxStamina(const FGameplayAttributeData& OldValue) { GAMEPLAYATTRIBUTE_REPNOTIFY(UShinobiAttributeSet, MaxStamina, OldValue); }
 void UShinobiAttributeSet::OnRep_SubstitutionCharges(const FGameplayAttributeData& OldValue) { GAMEPLAYATTRIBUTE_REPNOTIFY(UShinobiAttributeSet, SubstitutionCharges, OldValue); }
 void UShinobiAttributeSet::OnRep_MaxSubstitutionCharges(const FGameplayAttributeData& OldValue) { GAMEPLAYATTRIBUTE_REPNOTIFY(UShinobiAttributeSet, MaxSubstitutionCharges, OldValue); }
+void UShinobiAttributeSet::OnRep_Shield(const FGameplayAttributeData& OldValue) { GAMEPLAYATTRIBUTE_REPNOTIFY(UShinobiAttributeSet, Shield, OldValue); }

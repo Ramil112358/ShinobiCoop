@@ -84,7 +84,7 @@ namespace
 AShinobiSummon::AShinobiSummon(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	Team = EShinobiTeam::Players;
+	Team = EShinobiTeam::Players; // until Summon() gives it its caster's
 	UseMannequinMesh();
 	NavInvoker->SetGenerationRadii(1500.f, 2500.f); // fast and plentiful: the inherited 5 km would keep rebuilding navmesh tiles
 }
@@ -315,6 +315,7 @@ TArray<AShinobiSummon*> AShinobiSummon::Summon(AShinobiCharacterBase* Caster, ES
 		Summon->FollowAngle = Kind == EShinobiSummonKind::Toad ? PI * 1.25f : Kind == EShinobiSummonKind::Snake ? PI * 0.75f : Angle;
 		Summon->FollowRadius = Kind == EShinobiSummonKind::Dog ? 330.f : FollowDistance * 0.85f;
 		Summon->Summoner = Caster;
+		Summon->Team = Caster->GetTeam(); // a caster on a PvP side brings the summon along
 		Summon->FinishSpawning(Where);
 		Pack.Add(Summon);
 		AShinobiBurst::Spawn(World, EShinobiBurst::SummonPoof, Spot, Stats.Scale);

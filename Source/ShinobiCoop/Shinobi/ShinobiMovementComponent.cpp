@@ -125,6 +125,10 @@ float UShinobiMovementComponent::GetMaxSpeed() const
 	{
 		Speed *= UGE_Chill::SpeedScale;
 	}
+	if (Character && Character->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_SpeedBoost))
+	{
+		Speed *= UGE_SpeedBoost::SpeedScale;
+	}
 	return Speed;
 }
 

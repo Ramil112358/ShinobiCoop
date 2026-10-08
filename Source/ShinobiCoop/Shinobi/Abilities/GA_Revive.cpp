@@ -4,6 +4,7 @@
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
 #include "Abilities/Tasks/AbilityTask_WaitInputRelease.h"
 #include "EngineUtils.h"
+#include "Shinobi/ShinobiGameState.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/World/ShinobiVillager.h"
@@ -74,14 +75,21 @@ AShinobiVillager* UGA_Revive::FindVillagerNear(const AActor& Talker)
 AShinobiPlayerCharacter* UGA_Revive::FindDownedAlly() const
 {
 	const AShinobiCharacterBase* Self = GetShinobiCharacter();
-	if (!Self)
+	return Self ? FindDownedAllyFor(*Self) : nullptr;
+}
+
+AShinobiPlayerCharacter* UGA_Revive::FindDownedAllyFor(const AShinobiCharacterBase& Self)
+{
+	UWorld* World = Self.GetWorld();
+	const AShinobiGameState* State = World ? World->GetGameState<AShinobiGameState>() : nullptr;
+	if (!World || (State && State->IsPvp()))
 	{
 		return nullptr;
 	}
-	for (TActorIterator<AShinobiPlayerCharacter> It(Self->GetWorld()); It; ++It)
+	for (TActorIterator<AShinobiPlayerCharacter> It(World); It; ++It)
 	{
-		if (*It != Self && !Self->IsHostileTo(*It) && It->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Downed)
-			&& FVector::Dist(It->GetActorLocation(), Self->GetActorLocation()) <= Reach)
+		if (*It != &Self && !Self.IsHostileTo(*It) && It->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Downed)
+			&& FVector::Dist(It->GetActorLocation(), Self.GetActorLocation()) <= Reach)
 		{
 			return *It;
 		}

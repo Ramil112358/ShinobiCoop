@@ -151,3 +151,24 @@ AShinobiRogueJonin::AShinobiRogueJonin(const FObjectInitializer& ObjectInitializ
 	UseMannequinMesh();
 	GetCapsuleComponent()->SetRelativeScale3D(FVector(1.3f)); // the boss stands a head taller than the grunts
 }
+
+AShinobiBotFighter::AShinobiBotFighter(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	BaseHealth = GetDefault<UShinobiAttributeSet>()->GetMaxHealth(); // a player's (the attribute's default), so HealthScale stays 1
+	// The Rogue Ninja's combo and look, and the Kunai Thrower's throw for whoever keeps away.
+	AttackDamage = 25.f;
+	AttackAbility = UGA_EnemyMelee::StaticClass();
+	SpecialAbility = UGA_EnemyKunai::StaticClass();
+	SpecialRange = 1500.f;
+	SpecialInterval = 3.f;
+	StartupAbilities = { AttackAbility, SpecialAbility };
+	BodyPool = { TEXT("Haru"), TEXT("Kuro") };
+	UseMannequinMesh();
+}
+
+void AShinobiBotFighter::BeginPlay()
+{
+	Super::BeginPlay();
+	HealthText->SetNameMode(TEXT("Bot"));
+}

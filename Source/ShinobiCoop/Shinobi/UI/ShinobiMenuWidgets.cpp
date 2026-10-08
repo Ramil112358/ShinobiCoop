@@ -196,10 +196,30 @@ void UShinobiMainMenuWidget::Refresh()
 	}
 	if (bPickingMap)
 	{
+		// Co-op maps keep their rows; each arena gets one row per format (ponytail: a format toggle when more modes exist).
+		HostRows.Reset();
 		const TArray<FShinobiMap>& Maps = UShinobiSessionSubsystem::GetMaps();
 		for (int32 Index = 0; Index < Maps.Num(); ++Index)
 		{
-			AddButton(GameList, FString::Printf(TEXT("Host on %s"), Maps[Index].DisplayName), Index,
+			if (!Maps[Index].bArena)
+			{
+				HostRows.Add({ Index, EShinobiPvpFormat::None });
+			}
+		}
+		for (int32 Index = 0; Index < Maps.Num(); ++Index)
+		{
+			if (Maps[Index].bArena)
+			{
+				HostRows.Add({ Index, EShinobiPvpFormat::OneVsOne });
+				HostRows.Add({ Index, EShinobiPvpFormat::TwoVsTwo });
+			}
+		}
+		for (int32 Row = 0; Row < HostRows.Num(); ++Row)
+		{
+			const FShinobiMap& Map = Maps[HostRows[Row].MapIndex];
+			const FString Label = !Map.bArena ? FString::Printf(TEXT("Host on %s"), Map.DisplayName)
+				: FString::Printf(TEXT("Host %s %s"), Map.DisplayName, HostRows[Row].Format == EShinobiPvpFormat::TwoVsTwo ? TEXT("2v2") : TEXT("1v1"));
+			AddButton(GameList, Label, Row,
 				FShinobiIndexClicked::CreateUObject(this, &UShinobiMainMenuWidget::OnMapRow))->SetIsEnabled(!Sessions->IsBusy());
 		}
 		return;
@@ -208,17 +228,18 @@ void UShinobiMainMenuWidget::Refresh()
 	for (int32 Index = 0; Index < Games.Num(); ++Index)
 	{
 		const FShinobiFoundGame& Game = Games[Index];
-		const FString Label = FString::Printf(TEXT("Join %s - %s  (%d/%d, %d ms)"), *Game.HostName,
-			Game.MapName.IsEmpty() ? TEXT("?") : *Game.MapName, Game.Players, Game.MaxPlayers, Game.PingMs);
+		const FString Label = FString::Printf(TEXT("Join %s - %s%s  (%d/%d, %d ms)"), *Game.HostName,
+			Game.MapName.IsEmpty() ? TEXT("?") : *Game.MapName, Game.Format.IsEmpty() ? TEXT("") : *(TEXT(" ") + Game.Format),
+			Game.Players, Game.MaxPlayers, Game.PingMs);
 		AddButton(GameList, Label, Index, FShinobiIndexClicked::CreateUObject(this, &UShinobiMainMenuWidget::OnJoinRow))->SetIsEnabled(!Sessions->IsBusy());
 	}
 }
 
 void UShinobiMainMenuWidget::OnMapRow(int32 Index)
 {
-	if (UShinobiSessionSubsystem* Sessions = GetSessions())
+	if (UShinobiSessionSubsystem* Sessions = GetSessions(); Sessions && HostRows.IsValidIndex(Index))
 	{
-		Sessions->HostGame(Index);
+		Sessions->HostGame(HostRows[Index].MapIndex, HostRows[Index].Format);
 	}
 }
 

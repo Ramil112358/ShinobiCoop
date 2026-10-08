@@ -59,6 +59,11 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Enemy")
 	float SpecialRange = 1500.f;
 
+	/** Seconds between SpecialAbility starts, on top of its own cooldown (an uncooled one, like a bot's kunai, would otherwise
+	 * repeat back to back and the enemy never close in); 0 = whenever the ability allows. */
+	UPROPERTY(EditDefaultsOnly, Category = "Enemy")
+	float SpecialInterval = 0.f;
+
 	/** The characters this type wears (built by Scripts/setup_hero.py at /Game/Shinobi/Characters/<Name>); the server
 	 * picks one per spawn. Never shared with AShinobiVillager::Bodies. */
 	TArray<FString> BodyPool;
@@ -132,4 +137,19 @@ class SHINOBICOOP_API AShinobiRogueJonin : public AShinobiEnemyCharacter
 
 public:
 	AShinobiRogueJonin(const FObjectInitializer& ObjectInitializer);
+};
+
+/** PvP arena bot, filling an empty slot (AShinobiPvpGameMode::FillBots): a player's health, the Rogue Ninja's 2-hit combo of
+ * 25, a kunai for 25 from up to 1500 at most every 3 s; no jutsu, no dragon. Labelled "Bot" overhead. Fights for the side
+ * it is put on (SetTeam), like any enemy picking the nearest hostile. */
+UCLASS()
+class SHINOBICOOP_API AShinobiBotFighter : public AShinobiEnemyCharacter
+{
+	GENERATED_BODY()
+
+public:
+	AShinobiBotFighter(const FObjectInitializer& ObjectInitializer);
+
+protected:
+	virtual void BeginPlay() override;
 };

@@ -17,7 +17,9 @@
 #include "Shinobi/ShinobiInputConfig.h"
 #include "Shinobi/ShinobiLook.h"
 #include "Engine/SkeletalMesh.h"
+#include "Shinobi/ShinobiGameState.h"
 #include "Shinobi/ShinobiTags.h"
+#include "Shinobi/Pvp/ShinobiPvpGameMode.h"
 #include "Shinobi/Abilities/GA_AlmightyPush.h"
 #include "Shinobi/Abilities/GA_Amaterasu.h"
 #include "Shinobi/Abilities/GA_ChakraCharge.h"
@@ -187,7 +189,7 @@ void AShinobiPlayerCharacter::ApplyOutfit()
 	// outfit's would carry the outfit off by the difference: shift it back by the two hips' reference-pose offset.
 	OutfitMesh->SetRelativeLocation(RefHipsLocation(Cloth) - RefHipsLocation(Body));
 	OutfitMesh->SetLeaderPoseComponent(HeroMesh);
-	ShinobiLook::EnableOutline(OutfitMesh, Team == EShinobiTeam::Enemies ? ShinobiLook::StencilEnemy : ShinobiLook::StencilFriendly);
+	RefreshOutline();
 	// Scripts/smoke_m4.ps1 style check: both machines log what they see.
 	UE_LOG(LogShinobiCoop, Log, TEXT("%s wears %s"), *GetName(), Outfits[OutfitIndex].Name);
 }
@@ -211,6 +213,12 @@ bool AShinobiPlayerCharacter::ApplyCharacter()
 		}
 	}
 	return false;
+}
+
+void AShinobiPlayerCharacter::ApplyOutlineFor(const AShinobiCharacterBase* Viewer)
+{
+	Super::ApplyOutlineFor(Viewer);
+	ShinobiLook::EnableOutline(OutfitMesh, OutlineStencilFor(Viewer)); // the cloak is its own mesh
 }
 
 void AShinobiPlayerCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -245,6 +253,7 @@ bool AShinobiPlayerCharacter::CanMove() const
 		Tags.AddTag(ShinobiTags::State_Reviving);
 		Tags.AddTag(ShinobiTags::State_Downed);
 		Tags.AddTag(ShinobiTags::State_Dead);
+		Tags.AddTag(ShinobiTags::State_PvpHold);
 		return Tags;
 	}();
 	return !AbilitySystem->HasAnyMatchingGameplayTags(Blockers);
@@ -385,10 +394,30 @@ void AShinobiPlayerCharacter::FellOutOfWorld(const UDamageType& DamageType)
 	{
 		return;
 	}
+	const AShinobiGameState* State = GetWorld()->GetGameState<AShinobiGameState>();
+	const bool bPvp = State && State->IsPvp();
+	if (bPvp && State->PvpPhase != EShinobiPvpPhase::Warmup)
+	{
+		Super::FellOutOfWorld(DamageType); // gone: out for the round (dead to GatherStatus); the next reset respawns the player
+		return;
+	}
+	// Back to a start: the first one, or in a PvP warmup one of this side's (any start when the map has none tagged).
+	const FName OwnTag = bPvp && IsPvpTeam(GetTeam())
+		? (GetTeam() == EShinobiTeam::TeamA ? AShinobiPvpGameMode::TeamStartTagA : AShinobiPvpGameMode::TeamStartTagB) : NAME_None;
+	APlayerStart* Spot = nullptr;
 	for (TActorIterator<APlayerStart> It(GetWorld()); It; ++It)
 	{
+		Spot = Spot ? Spot : *It;
+		if (OwnTag.IsNone() || It->ActorHasTag(OwnTag))
+		{
+			Spot = *It;
+			break;
+		}
+	}
+	if (Spot)
+	{
 		GetCharacterMovement()->StopMovementImmediately();
-		TeleportTo(It->GetActorLocation(), It->GetActorRotation());
+		TeleportTo(Spot->GetActorLocation(), Spot->GetActorRotation());
 		return;
 	}
 	Super::FellOutOfWorld(DamageType);

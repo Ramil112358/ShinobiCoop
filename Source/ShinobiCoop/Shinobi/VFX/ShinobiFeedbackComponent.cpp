@@ -110,7 +110,9 @@ void UShinobiFeedbackComponent::OnDamaged(float Amount)
 	{
 		return;
 	}
-	const bool bOnPlayer = Owner->GetTeam() == EShinobiTeam::Players;
+	// Red numbers on the viewer's own side, white/gold on the opposing one; no pawn yet: the old rule (the players' side is ours).
+	const AShinobiCharacterBase* Viewer = AShinobiCharacterBase::GetLocalViewer(GetWorld());
+	const bool bOnPlayer = Viewer ? !Owner->IsHostileTo(Viewer) : Owner->GetTeam() == EShinobiTeam::Players;
 	const FVector Head = Owner->GetActorLocation() + FVector(FMath::FRandRange(-30.f, 30.f), FMath::FRandRange(-30.f, 30.f), 100.f);
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;

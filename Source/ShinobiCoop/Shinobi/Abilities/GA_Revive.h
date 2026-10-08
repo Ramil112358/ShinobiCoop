@@ -31,6 +31,9 @@ public:
 	/** 0-1 while reviving, for the HUD; 0 otherwise. */
 	float GetProgress() const;
 
+	/** A downed ally of Self within Reach, or null. Always null in a PvP match (downed is out for the round). */
+	static AShinobiPlayerCharacter* FindDownedAllyFor(const AShinobiCharacterBase& Self);
+
 private:
 	AShinobiPlayerCharacter* FindDownedAlly() const;
 
