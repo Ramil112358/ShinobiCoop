@@ -8,6 +8,7 @@
 
 class UCameraComponent;
 class UShinobiOverheadTextComponent;
+class UShinobiSurfaceFxComponent;
 class USpringArmComponent;
 struct FInputActionValue;
 
@@ -241,6 +242,9 @@ private:
 	/** Teammates' names above their heads; hidden on your own character. */
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UShinobiOverheadTextComponent> NameTag;
+
+	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
+	TObjectPtr<UShinobiSurfaceFxComponent> SurfaceFx;
 
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	TObjectPtr<USpringArmComponent> CameraBoom;

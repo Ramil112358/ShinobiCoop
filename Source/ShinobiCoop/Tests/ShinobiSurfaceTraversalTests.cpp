@@ -7,6 +7,7 @@
 #include "Engine/StaticMeshActor.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/VFX/ShinobiSurfaceFxComponent.h"
 
 namespace
 {
@@ -288,6 +289,33 @@ bool FShinobiWaterTest::RunTest(const FString& Parameters)
 
 	AShinobiPlayerCharacter* Q = PlayerAt(W, FVector(5000.f, 0.f, 100.f));
 	TestFalse(TEXT("ordinary ground is not water"), Moves(Q)->IsWaterTraversing());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSurfaceFxTest, "ShinobiCoop.Movement.SurfaceTraversal.FeetGlowOnlyWhileTraversing", ShinobiTestFlags)
+bool FShinobiSurfaceFxTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	Arena(W);
+	AShinobiPlayerCharacter* P = PlayerAt(W, FVector(WallX - 300.f, 0.f, 100.f));
+	const UShinobiSurfaceFxComponent* Fx = P->FindComponentByClass<UShinobiSurfaceFxComponent>();
+	if (!TestNotNull(TEXT("players have the foot glow"), Fx))
+	{
+		return false;
+	}
+	W.Tick(0.3f);
+	TestEqual(TEXT("hidden on ordinary ground"), Fx->GetFade(), 0.f);
+	if (!RunOntoWall(*this, W, P))
+	{
+		return false;
+	}
+	W.Tick(0.3f);
+	TestTrue(FString::Printf(TEXT("shown on the wall (%.2f)"), Fx->GetFade()), Fx->GetFade() > 0.99f);
+	P->Jump();
+	W.Tick(0.05f);
+	P->StopJumping();
+	W.Tick(0.3f);
+	TestEqual(TEXT("fades out after kicking off"), Fx->GetFade(), 0.f);
 	return true;
 }
 

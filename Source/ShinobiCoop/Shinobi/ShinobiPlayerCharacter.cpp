@@ -49,6 +49,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Net/UnrealNetwork.h"
 #include "Shinobi/ShinobiMovementComponent.h"
+#include "Shinobi/VFX/ShinobiSurfaceFxComponent.h"
 
 namespace
 {
@@ -111,6 +112,9 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 
 	NameTag = CreateDefaultSubobject<UShinobiOverheadTextComponent>(TEXT("NameTag"));
 	NameTag->SetupAttachment(RootComponent);
+
+	SurfaceFx = CreateDefaultSubobject<UShinobiSurfaceFxComponent>(TEXT("SurfaceFx"));
+	SurfaceFx->SetupAttachment(RootComponent); // turns with the capsule onto walls
 }
 
 int32 AShinobiPlayerCharacter::FindRosterIndex(const FString& Name)
