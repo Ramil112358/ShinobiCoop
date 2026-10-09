@@ -38,6 +38,11 @@ public:
 	void ForceRotationCorrectionFor(float Seconds);
 	virtual bool ShouldCorrectRotation() const override;
 
+	/** Corrections carry the server's gravity, but the engine never applies it on the owning client (UE 5.8): take it here,
+	 * so a wall detach the server made (a hit, a teleport) also takes this client off the wall before its moves replay. */
+	virtual void ClientHandleMoveResponse(const FCharacterMoveResponseDataContainer& MoveResponse) override;
+	virtual void SetGravityDirection(const FVector& GravityDir) override;
+
 	// ---- Wall and water traversal (players only; docs/superpowers/specs/2026-10-05-surface-traversal-design.md) ----
 
 	/** On a wall: gravity points into it and the character walks on it. The engine replicates gravity to every machine. */
@@ -91,5 +96,10 @@ private:
 	bool TryWrapCorner(const FVector& Move);
 
 	double ForceRotationCorrectionUntil = 0.0;
+	/** When gravity last changed (world seconds): corrections carry rotation for a while after, so the owning client turns
+	 * with a server-side attach or detach. */
+	double GravityChangedAt = -1.0;
+	/** Other machines' copies of a character follow the replicated gravity only; they never decide wall state. */
+	bool IsSimulatedProxy() const;
 	bool bWasMounted = false;
 };

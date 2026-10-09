@@ -4,6 +4,7 @@
 #include "Animation/AnimMontage.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Shinobi/ShinobiCharacterBase.h"
+#include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
 
@@ -43,11 +44,16 @@ void UGA_Dodge::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const F
 		ApplyEffectToSelf(UGE_StaminaRegenDelay::StaticClass());
 	}
 
-	FVector Direction = Character->GetCharacterMovement()->GetCurrentAcceleration().GetSafeNormal2D();
+	// Along the surface the character stands on: the ground, or the wall it runs on.
+	const FVector Up = Character->GetActorUpVector();
+	FVector Direction = FVector::VectorPlaneProject(Character->GetCharacterMovement()->GetCurrentAcceleration(), Up).GetSafeNormal();
 	if (Direction.IsNearlyZero())
 	{
-		Direction = -Character->GetActorForwardVector().GetSafeNormal2D(); // backstep
+		Direction = -FVector::VectorPlaneProject(Character->GetActorForwardVector(), Up).GetSafeNormal(); // backstep
 	}
+	// "Gravity" on a root motion force keeps world Z, which would cancel a dodge up or down a wall.
+	const UShinobiMovementComponent* Movement = Cast<UShinobiMovementComponent>(Character->GetCharacterMovement());
+	const bool bKeepWorldZ = !(Movement && Movement->IsWallTraversing());
 
 	if (UAnimMontage* Anim = Montage.LoadSynchronous())
 	{
@@ -60,7 +66,7 @@ void UGA_Dodge::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const F
 
 	UAbilityTask_ApplyRootMotionConstantForce* Push = UAbilityTask_ApplyRootMotionConstantForce::ApplyRootMotionConstantForce(
 		this, TEXT("Dodge"), Direction, Distance / Duration, Duration, false, nullptr,
-		ERootMotionFinishVelocityMode::ClampVelocity, FVector::ZeroVector, 200.f, true);
+		ERootMotionFinishVelocityMode::ClampVelocity, FVector::ZeroVector, 200.f, bKeepWorldZ);
 	Push->OnFinish.AddDynamic(this, &UGA_Dodge::OnDodgeFinished);
 	Push->ReadyForActivation();
 }

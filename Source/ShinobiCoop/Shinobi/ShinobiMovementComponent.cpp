@@ -16,11 +16,15 @@ namespace
 		typedef FSavedMove_Character Super;
 
 		uint8 bSavedWantsToSprint : 1;
+		/** Gravity when the move started: moves across a wall attach or detach must not be combined, or the replay would run
+		 * the combined move entirely under one gravity. */
+		FVector SavedGravityDirection = UCharacterMovementComponent::DefaultGravityDirection;
 
 		virtual void Clear() override
 		{
 			Super::Clear();
 			bSavedWantsToSprint = false;
+			SavedGravityDirection = UCharacterMovementComponent::DefaultGravityDirection;
 		}
 
 		virtual uint8 GetCompressedFlags() const override
@@ -35,7 +39,8 @@ namespace
 
 		virtual bool CanCombineWith(const FSavedMovePtr& NewMove, ACharacter* InCharacter, float MaxDelta) const override
 		{
-			if (bSavedWantsToSprint != static_cast<FShinobiSavedMove*>(NewMove.Get())->bSavedWantsToSprint)
+			const FShinobiSavedMove* Other = static_cast<FShinobiSavedMove*>(NewMove.Get());
+			if (bSavedWantsToSprint != Other->bSavedWantsToSprint || !SavedGravityDirection.Equals(Other->SavedGravityDirection))
 			{
 				return false;
 			}
@@ -48,6 +53,7 @@ namespace
 			if (const UShinobiMovementComponent* Movement = Cast<UShinobiMovementComponent>(C->GetCharacterMovement()))
 			{
 				bSavedWantsToSprint = Movement->bWantsToSprint;
+				SavedGravityDirection = Movement->GetGravityDirection();
 			}
 		}
 
@@ -87,7 +93,11 @@ UShinobiMovementComponent::UShinobiMovementComponent()
 
 void UShinobiMovementComponent::UpdateCharacterStateBeforeMovement(float DeltaSeconds)
 {
-	if (!CanSurfaceTraverse())
+	if (IsSimulatedProxy())
+	{
+		// Another machine's copy: it follows the replicated gravity (and its extrapolation can briefly lose the floor).
+	}
+	else if (!CanSurfaceTraverse())
 	{
 		DetachFromWall(); // mounted, downed, dead, phased, or not a player: never on a wall
 	}
@@ -183,13 +193,38 @@ void UShinobiMovementComponent::ForceRotationCorrectionFor(float Seconds)
 
 bool UShinobiMovementComponent::ShouldCorrectRotation() const
 {
-	return GetWorld() && GetWorld()->GetTimeSeconds() < ForceRotationCorrectionUntil;
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	// On a wall, and just after leaving one, the facing is part of the wall state: corrections carry it too.
+	return Now < ForceRotationCorrectionUntil || HasCustomGravity() || (GravityChangedAt >= 0.0 && Now < GravityChangedAt + 0.5);
+}
+
+void UShinobiMovementComponent::ClientHandleMoveResponse(const FCharacterMoveResponseDataContainer& MoveResponse)
+{
+	if (!MoveResponse.IsGoodMove())
+	{
+		SetGravityDirection(MoveResponse.ClientAdjustment.GravityDirection);
+	}
+	Super::ClientHandleMoveResponse(MoveResponse);
+}
+
+void UShinobiMovementComponent::SetGravityDirection(const FVector& GravityDir)
+{
+	if (!GravityDir.GetSafeNormal().Equals(GetGravityDirection()) && GetWorld())
+	{
+		GravityChangedAt = GetWorld()->GetTimeSeconds();
+	}
+	Super::SetGravityDirection(GravityDir);
 }
 
 // ---- Wall and water traversal ----
 
 const FName UShinobiMovementComponent::WaterSurfaceTag(TEXT("ShinobiWaterSurface"));
 const FName UShinobiMovementComponent::NoTraversalTag(TEXT("ShinobiNoSurfaceTraversal"));
+
+bool UShinobiMovementComponent::IsSimulatedProxy() const
+{
+	return CharacterOwner && CharacterOwner->GetLocalRole() == ROLE_SimulatedProxy;
+}
 
 bool UShinobiMovementComponent::CanSurfaceTraverse() const
 {
@@ -228,6 +263,7 @@ bool UShinobiMovementComponent::SweepCapsule(const FVector& From, const FVector&
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(ShinobiTraversalSweep), false, CharacterOwner);
 	FCollisionResponseParams Response;
 	InitCollisionParams(Params, Response);
+	Response.CollisionResponse.SetResponse(ECC_Pawn, ECR_Ignore); // other characters are where each machine last saw them
 	return GetWorld()->SweepSingleByChannel(OutHit, From, To, Rotation, UpdatedComponent->GetCollisionObjectType(), GetPawnCapsuleCollisionShape(SHRINK_None), Params, Response);
 }
 
@@ -236,6 +272,7 @@ bool UShinobiMovementComponent::Fits(const FVector& Location, const FQuat& Rotat
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(ShinobiTraversalFit), false, CharacterOwner);
 	FCollisionResponseParams Response;
 	InitCollisionParams(Params, Response);
+	Response.CollisionResponse.SetResponse(ECC_Pawn, ECR_Ignore); // other characters move out of the way
 	return !GetWorld()->OverlapBlockingTestByChannel(Location, Rotation, UpdatedComponent->GetCollisionObjectType(), GetPawnCapsuleCollisionShape(SHRINK_None), Params, Response);
 }
 
@@ -277,7 +314,9 @@ bool UShinobiMovementComponent::AttachToWall(const FHitResult& Hit, const FVecto
 	const FVector Normal = Hit.ImpactNormal;
 	const float HalfHeight = CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 	const FVector Center = FVector::PointPlaneProject(Anchor, Hit.ImpactPoint, Normal) + Normal * (HalfHeight + MIN_FLOOR_DIST);
-	FVector Facing = FVector::VectorPlaneProject(Velocity, Normal);
+	// Turn the run with the surface (ground to wall, or round a corner) so it carries on along the new face.
+	const FVector Turned = FVector::VectorPlaneProject(FQuat::FindBetweenNormals(-GetGravityDirection(), Normal).RotateVector(Velocity), Normal);
+	FVector Facing = Turned;
 	if (Facing.SizeSquared() < 1.f)
 	{
 		Facing = FVector::VectorPlaneProject(FVector::UpVector, Normal); // face up the wall
@@ -289,7 +328,7 @@ bool UShinobiMovementComponent::AttachToWall(const FHitResult& Hit, const FVecto
 	}
 	SetGravityDirection(-Normal);
 	UpdatedComponent->SetWorldLocationAndRotation(Center, Rotation, false, nullptr, ETeleportType::TeleportPhysics);
-	Velocity = FVector::VectorPlaneProject(Velocity, Normal);
+	Velocity = Turned;
 	if (MovementMode == MOVE_Walking)
 	{
 		FindFloor(Center, CurrentFloor, false); // already walking (a corner): SetMovementMode would not look for the new floor
@@ -331,7 +370,7 @@ void UShinobiMovementComponent::UpdateWallTraversal()
 
 void UShinobiMovementComponent::DetachFromWall(const FVector& Facing)
 {
-	if (!IsWallTraversing())
+	if (!IsWallTraversing() || IsSimulatedProxy())
 	{
 		return;
 	}
@@ -386,6 +425,10 @@ bool UShinobiMovementComponent::CheckFall(const FFindFloorResult& OldFloor, cons
 	{
 		return Super::CheckFall(OldFloor, Hit, Delta, OldLocation, remainingTime, timeTick, Iterations, bMustJump);
 	}
+	if (IsSimulatedProxy())
+	{
+		return true; // the owner's machine decides; the replicated state follows
+	}
 	const FVector Move = Delta.GetSafeNormal();
 	if (!((Move | FVector::UpVector) > 0.5f && TryVault()) && !TryWrapCorner(Move))
 	{
@@ -428,8 +471,20 @@ bool UShinobiMovementComponent::TryWrapCorner(const FVector& Move)
 	// little way in from the corner so the whole capsule is over the new face.
 	const FVector From = UpdatedComponent->GetComponentLocation() - Normal * (Capsule->GetScaledCapsuleHalfHeight() - Radius) + Along * (Radius + WallReach);
 	FHitResult Hit;
-	return SweepCapsule(From, From - Along * (Radius + 2.f * WallReach), UpdatedComponent->GetComponentQuat(), Hit)
-		&& IsClimbable(Hit) && AttachToWall(Hit, Hit.ImpactPoint - Normal * (Radius + 5.f));
+	if (!SweepCapsule(From, From - Along * (Radius + 2.f * WallReach), UpdatedComponent->GetComponentQuat(), Hit)
+		|| !IsClimbable(Hit) || !AttachToWall(Hit, Hit.ImpactPoint - Normal * (Radius + 5.f)))
+	{
+		return false;
+	}
+	// The camera turns with the wall, so the held key keeps running round the building instead of meaning "down" on the
+	// new face. Only where the input comes from (the owning machine), and not again while replaying moves.
+	AController* Controller = CharacterOwner->GetController();
+	if (Controller && CharacterOwner->IsLocallyControlled() && !CharacterOwner->bClientUpdating)
+	{
+		const float Turn = FRotator::NormalizeAxis(Hit.ImpactNormal.Rotation().Yaw - Normal.Rotation().Yaw);
+		Controller->SetControlRotation(Controller->GetControlRotation() + FRotator(0.f, Turn, 0.f));
+	}
+	return true;
 }
 
 void UShinobiMovementComponent::FaceDirection(AActor* Actor, const FVector& WorldDir)

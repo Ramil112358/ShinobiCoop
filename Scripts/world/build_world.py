@@ -61,9 +61,11 @@ NO_TRAVERSAL_TAG = "ShinobiNoSurfaceTraversal"  # never wall-run, e.g. map bound
 
 
 
-def walkable_water(actor):
-    """Characters stand on the water; shots, the camera and every other trace pass through it."""
+def walkable_water(actor, navigation=True):
+    """Characters stand on the water; shots, the camera and every other trace pass through it. navigation=False keeps it
+    out of the navmesh (the valley's map-wide plane lies under the terrain: AI would find paths beneath the ground)."""
     smc = actor.static_mesh_component
+    smc.set_editor_property("can_ever_affect_navigation", navigation)
     smc.set_collision_enabled(unreal.CollisionEnabled.QUERY_ONLY)
     smc.set_collision_response_to_all_channels(unreal.CollisionResponseType.ECR_IGNORE)
     smc.set_collision_response_to_channel(unreal.CollisionChannel.ECC_PAWN, unreal.CollisionResponseType.ECR_BLOCK)
@@ -314,7 +316,7 @@ def stage_terrain(lay):
     # River: one flat plane at the water level; the terrain hides it everywhere but the river bed.
     water = solid_material("MI_Water", (0.05, 0.22, 0.35), 0.1)
     plane = spawn_mesh("/Engine/BasicShapes/Plane.Plane", water, (0, 0, uu(meta["water_level_m"])), (lay.size_m + 100, lay.size_m + 100, 1), label="RiverWater")
-    walkable_water(plane)  # shinobi walk on the river
+    walkable_water(plane, navigation=False)  # shinobi walk on the river
     plane.set_editor_property("tags", [unreal.Name(WATER_TAG), unreal.Name(WATER_SURFACE_TAG)])
     plane.static_mesh_component.set_cast_shadow(False)
 
@@ -591,7 +593,7 @@ def stage_water(lay):
             EAS.destroy_actor(actor)
     plane = spawn_mesh("/Engine/BasicShapes/Plane.Plane", material, (0, 0, uu(meta["water_level_m"])),
                        (lay.size_m + 100, lay.size_m + 100, 1), label="RiverWater")
-    walkable_water(plane)
+    walkable_water(plane, navigation=False)
     plane.static_mesh_component.set_cast_shadow(False)
     plane.set_editor_property("tags", [unreal.Name(WATER_TAG), unreal.Name(WATER_SURFACE_TAG)])
     plane.set_editor_property("is_spatially_loaded", False)
@@ -608,7 +610,7 @@ def stage_traversal(lay):
     for actor in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.StaticMeshActor):
         label = actor.get_actor_label()
         if actor.actor_has_tag(WATER_TAG) or label == "RiverWater":
-            walkable_water(actor)
+            walkable_water(actor, navigation=False)
             actor.set_editor_property("tags", [unreal.Name(WATER_TAG), unreal.Name(WATER_SURFACE_TAG)])
         elif label.startswith("EdgeWall"):
             actor.set_editor_property("tags", [unreal.Name(NO_TRAVERSAL_TAG)])

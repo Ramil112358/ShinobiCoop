@@ -2,7 +2,9 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "AIController.h"
 #include "Components/StaticMeshComponent.h"
+#include "GameFramework/CharacterMovementReplication.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Shinobi/ShinobiMovementComponent.h"
@@ -231,6 +233,10 @@ bool FShinobiWallCornerTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	Arena(W, 2000.f, 1000.f); // the wall ends at Y = 500; its side face looks along +Y
 	AShinobiPlayerCharacter* P = PlayerAt(W, FVector(WallX - 300.f, 300.f, 100.f));
+	AAIController* C = W.World->SpawnActor<AAIController>(); // stands in for the player's controller: its control rotation is the camera
+	C->bSetControlRotationFromPawnOrientation = false;
+	C->Possess(P);
+	C->SetControlRotation(FRotator::ZeroRotator);
 	if (!RunOntoWall(*this, W, P))
 	{
 		return false;
@@ -243,6 +249,10 @@ bool FShinobiWallCornerTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("still on a wall"), Moves(P)->IsWallTraversing());
 	TestTrue(TEXT("now on the side face"), Moves(P)->GetGravityDirection().Equals(FVector(0.f, -1.f, 0.f), 0.05f));
 	TestTrue(TEXT("beside it, not inside"), P->GetActorLocation().Y > 500.f);
+	// Round the corner the run carries on along the new face, and the camera turns with the wall, so the held key keeps
+	// running sideways instead of turning into "down".
+	TestTrue(FString::Printf(TEXT("keeps its speed round the corner (%.0f)"), Moves(P)->Velocity.X), Moves(P)->Velocity.X > 200.f);
+	TestTrue(FString::Printf(TEXT("the camera turned with the wall (%.0f)"), C->GetControlRotation().Yaw), FMath::IsNearlyEqual(FRotator::NormalizeAxis(C->GetControlRotation().Yaw), -90.f, 1.f));
 	return true;
 }
 
@@ -316,6 +326,134 @@ bool FShinobiSurfaceFxTest::RunTest(const FString& Parameters)
 	P->StopJumping();
 	W.Tick(0.3f);
 	TestEqual(TEXT("fades out after kicking off"), Fx->GetFade(), 0.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiWallCorrectionTest, "ShinobiCoop.Movement.SurfaceTraversal.ServerCorrectionsCarryGravityAndRotation", ShinobiTestFlags)
+bool FShinobiWallCorrectionTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	Arena(W);
+	AShinobiPlayerCharacter* P = PlayerAt(W, FVector(WallX - 300.f, 0.f, 100.f));
+	if (!RunOntoWall(*this, W, P))
+	{
+		return false;
+	}
+	UShinobiMovementComponent* M = Moves(P);
+	TestTrue(TEXT("the server sends rotation in corrections while on a wall"), M->ShouldCorrectRotation());
+
+	// The server knocked this client off the wall (a hit, a teleport): its correction says "world gravity".
+	FCharacterMoveResponseDataContainer Response;
+	Response.ClientAdjustment.bAckGoodMove = false;
+	Response.ClientAdjustment.TimeStamp = 1.f;
+	Response.ClientAdjustment.NewLoc = P->GetActorLocation();
+	Response.ClientAdjustment.GravityDirection = FVector(0.f, 0.f, -1.f);
+	M->ClientHandleMoveResponse(Response);
+	TestFalse(TEXT("the client takes the server's gravity"), M->IsWallTraversing());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiWallProxyTest, "ShinobiCoop.Movement.SurfaceTraversal.OtherPlayersCopiesFollowOnlyReplicatedGravity", ShinobiTestFlags)
+bool FShinobiWallProxyTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	Arena(W);
+	AShinobiPlayerCharacter* P = PlayerAt(W, FVector(WallX - 300.f, 0.f, 100.f));
+	if (!RunOntoWall(*this, W, P))
+	{
+		return false;
+	}
+	// Another machine's copy: its extrapolation can briefly lose the floor. It must not decide wall state itself.
+	P->SetRole(ROLE_SimulatedProxy);
+	UShinobiMovementComponent* M = Moves(P);
+	M->SetMovementMode(MOVE_Falling);
+	M->UpdateCharacterStateBeforeMovement(0.05f);
+	TestTrue(TEXT("still on the wall until the server says otherwise"), M->IsWallTraversing());
+	P->SetRole(ROLE_Authority);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiWallPawnTest, "ShinobiCoop.Movement.SurfaceTraversal.ACharacterBesideTheWallDoesNotBlockAttaching", ShinobiTestFlags)
+bool FShinobiWallPawnTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	Arena(W);
+	// Where the wall-turned capsule will lie. Other characters move out of the way, and their positions differ between
+	// machines, so they must not decide whether a player attaches.
+	W.Spawn<AShinobiCharacterBase>(FVector(WallX - 150.f, 0.f, 100.f));
+	AShinobiPlayerCharacter* P = PlayerAt(W, FVector(WallX - 60.f, 0.f, 100.f));
+	Drive(W, P, FVector::ForwardVector, 1.f);
+	TestTrue(TEXT("attaches"), Moves(P)->IsWallTraversing());
+	return true;
+}
+
+namespace
+{
+	/** On the wall a little above the ground, standing still and facing down it. */
+	bool HangFacingDown(FAutomationTestBase& Test, FShinobiTestWorld& W, AShinobiPlayerCharacter* P)
+	{
+		if (!RunOntoWall(Test, W, P))
+		{
+			return false;
+		}
+		Drive(W, P, FVector::ForwardVector, 0.25f);
+		W.Tick(0.3f);
+		UShinobiMovementComponent::FaceDirection(P, FVector::DownVector);
+		return Test.TestTrue(TEXT("still on the wall"), Moves(P)->IsWallTraversing());
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiWallMeleeTest, "ShinobiCoop.Movement.SurfaceTraversal.MeleeOnAWallHitsAnEnemyBelow", ShinobiTestFlags)
+bool FShinobiWallMeleeTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	Arena(W);
+	AShinobiPlayerCharacter* P = PlayerAt(W, FVector(WallX - 300.f, 0.f, 100.f));
+	if (!HangFacingDown(*this, W, P))
+	{
+		return false;
+	}
+	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(WallX - 60.f, 0.f, P->GetActorLocation().Z - 150.f));
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Melee);
+	W.Tick(0.6f);
+	const float Health = ShinobiTest::Get(E, UShinobiAttributeSet::GetHealthAttribute());
+	TestTrue(FString::Printf(TEXT("the enemy below is hit (%.0f)"), Health), Health < 500.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiWallDodgeTest, "ShinobiCoop.Movement.SurfaceTraversal.DodgeOnAWallMovesAlongIt", ShinobiTestFlags)
+bool FShinobiWallDodgeTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	Arena(W);
+	AShinobiPlayerCharacter* P = PlayerAt(W, FVector(WallX - 300.f, 0.f, 100.f));
+	if (!RunOntoWall(*this, W, P))
+	{
+		return false;
+	}
+	Drive(W, P, FVector::ForwardVector, 0.3f); // climbing: the dodge goes the way the input points, up the wall
+	const float StartZ = P->GetActorLocation().Z;
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Dodge);
+	W.Tick(0.3f);
+	TestTrue(FString::Printf(TEXT("dodged up the wall (%.0f)"), P->GetActorLocation().Z - StartZ), P->GetActorLocation().Z - StartZ > 250.f);
+	TestTrue(TEXT("and stayed on it"), Moves(P)->IsWallTraversing());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiWallDashVaultTest, "ShinobiCoop.Movement.SurfaceTraversal.ADashThatVaultsOntoTheRoofEndsUpright", ShinobiTestFlags)
+bool FShinobiWallDashVaultTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	Arena(W, 600.f);
+	AShinobiPlayerCharacter* P = PlayerAt(W, FVector(WallX - 300.f, 0.f, 100.f));
+	if (!RunOntoWall(*this, W, P))
+	{
+		return false;
+	}
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2); // Chidori: seals on the wall, then a dash up it and over the top
+	W.Tick(1.5f);
+	TestFalse(TEXT("on the roof, off the wall"), Moves(P)->IsWallTraversing());
+	TestTrue(FString::Printf(TEXT("upright after the dash (%.2f)"), P->GetActorUpVector().Z), P->GetActorUpVector().Z > 0.99f);
 	return true;
 }
 

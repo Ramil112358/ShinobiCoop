@@ -79,7 +79,10 @@ TArray<AShinobiCharacterBase*> UShinobiGameplayAbility::FindHostilesInCone(float
 		return Result;
 	}
 	const FVector Origin = Self->GetActorLocation();
-	const FVector Forward = Self->GetActorForwardVector().GetSafeNormal2D();
+	// Measured in the plane the caster stands on: the ground, or the wall it runs on.
+	const FVector Up = Self->GetActorUpVector();
+	const bool bOnWall = Up.Z < 0.99f;
+	const FVector Forward = FVector::VectorPlaneProject(Self->GetActorForwardVector(), Up).GetSafeNormal();
 	const float MinDot = FMath::Cos(FMath::DegreesToRadians(HalfAngleDegrees));
 
 	// ponytail: linear scan over all characters; fine for dozens, switch to an overlap query if counts grow
@@ -90,9 +93,10 @@ TArray<AShinobiCharacterBase*> UShinobiGameplayAbility::FindHostilesInCone(float
 		{
 			continue;
 		}
-		const FVector ToOther = (Other->GetActorLocation() - Origin) * FVector(1.f, 1.f, 0.f);
+		const FVector Offset = Other->GetActorLocation() - Origin;
+		const FVector ToOther = FVector::VectorPlaneProject(Offset, Up);
 		const float Distance = ToOther.Size();
-		if (Distance > Range)
+		if (Distance > Range || (bOnWall && FMath::Abs(Offset | Up) > Range)) // on a wall, not someone far out from it
 		{
 			continue;
 		}
@@ -118,7 +122,7 @@ AShinobiCharacterBase* UShinobiGameplayAbility::FindNearestHostileInCone(float R
 	float NearestDistance = TNumericLimits<float>::Max();
 	for (AShinobiCharacterBase* Candidate : Candidates)
 	{
-		const float Distance = FVector::Dist2D(Origin, Candidate->GetActorLocation());
+		const float Distance = FVector::VectorPlaneProject(Candidate->GetActorLocation() - Origin, GetShinobiCharacter()->GetActorUpVector()).Size();
 		if (Distance < NearestDistance)
 		{
 			NearestDistance = Distance;
