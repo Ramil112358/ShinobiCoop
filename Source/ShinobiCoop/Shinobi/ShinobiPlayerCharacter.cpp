@@ -48,6 +48,7 @@
 #include "GameFramework/PlayerState.h"
 #include "HAL/IConsoleManager.h"
 #include "Net/UnrealNetwork.h"
+#include "Shinobi/ShinobiMovementComponent.h"
 
 namespace
 {
@@ -648,9 +649,22 @@ void AShinobiPlayerCharacter::Move(const FInputActionValue& Value)
 		return;
 	}
 	const FVector2D Axis = Value.Get<FVector2D>();
-	const FRotator Yaw(0.f, Controller->GetControlRotation().Yaw, 0.f);
-	AddMovementInput(FRotationMatrix(Yaw).GetUnitAxis(EAxis::X), Axis.Y);
-	AddMovementInput(FRotationMatrix(Yaw).GetUnitAxis(EAxis::Y), Axis.X);
+	const FRotationMatrix Yaw(FRotator(0.f, Controller->GetControlRotation().Yaw, 0.f));
+	FVector Intent = Yaw.GetUnitAxis(EAxis::X) * Axis.Y + Yaw.GetUnitAxis(EAxis::Y) * Axis.X;
+	if (const UShinobiMovementComponent* Movement = Cast<UShinobiMovementComponent>(GetCharacterMovement()); Movement && Movement->IsWallTraversing())
+	{
+		Intent = Movement->WallInputDirection(Intent); // the camera stays upright; the wall turns it into up/down/sideways
+	}
+	AddMovementInput(Intent);
+}
+
+void AShinobiPlayerCharacter::LaunchCharacter(FVector LaunchVelocity, bool bXYOverride, bool bZOverride)
+{
+	if (UShinobiMovementComponent* Movement = Cast<UShinobiMovementComponent>(GetCharacterMovement()))
+	{
+		Movement->DetachFromWall();
+	}
+	Super::LaunchCharacter(LaunchVelocity, bXYOverride, bZOverride);
 }
 
 void AShinobiPlayerCharacter::Look(const FInputActionValue& Value)

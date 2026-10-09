@@ -62,6 +62,9 @@ public:
 
 	virtual void Tick(float DeltaSeconds) override;
 
+	/** Knockback off a wall: detach first, so the launch happens with world gravity. */
+	virtual void LaunchCharacter(FVector LaunchVelocity, bool bXYOverride, bool bZOverride) override;
+
 	/** Every character a player can pick (Scripts/setup_hero.py builds them; heroes from photos or VRoid get added here,
 	 * the generated NPC cast lives on the enemy types and AShinobiVillager instead). Entry 0 is the default hero and the
 	 * fallback for a pick whose assets aren't imported. */

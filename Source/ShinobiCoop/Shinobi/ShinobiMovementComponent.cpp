@@ -5,6 +5,7 @@
 #include "GameFramework/Character.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiEffects.h"
+#include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiTags.h"
 
 namespace
@@ -86,6 +87,18 @@ UShinobiMovementComponent::UShinobiMovementComponent()
 
 void UShinobiMovementComponent::UpdateCharacterStateBeforeMovement(float DeltaSeconds)
 {
+	if (!CanSurfaceTraverse())
+	{
+		DetachFromWall(); // mounted, downed, dead, phased, or not a player: never on a wall
+	}
+	else if (IsWallTraversing())
+	{
+		UpdateWallTraversal();
+	}
+	else
+	{
+		TryEnterWall();
+	}
 	const AShinobiCharacterBase* Character = Cast<AShinobiCharacterBase>(GetOwner());
 	const bool bMounted = Character && Character->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Mounted);
 	if (bMounted && MovementMode != MOVE_Flying)
@@ -171,4 +184,166 @@ void UShinobiMovementComponent::ForceRotationCorrectionFor(float Seconds)
 bool UShinobiMovementComponent::ShouldCorrectRotation() const
 {
 	return GetWorld() && GetWorld()->GetTimeSeconds() < ForceRotationCorrectionUntil;
+}
+
+// ---- Wall and water traversal ----
+
+const FName UShinobiMovementComponent::WaterSurfaceTag(TEXT("ShinobiWaterSurface"));
+const FName UShinobiMovementComponent::NoTraversalTag(TEXT("ShinobiNoSurfaceTraversal"));
+
+bool UShinobiMovementComponent::CanSurfaceTraverse() const
+{
+	const AShinobiPlayerCharacter* Player = Cast<AShinobiPlayerCharacter>(GetOwner());
+	if (!Player || !Player->GetAbilitySystemComponent())
+	{
+		return false;
+	}
+	static const FGameplayTagContainer Blockers = []
+	{
+		FGameplayTagContainer Tags;
+		Tags.AddTag(ShinobiTags::State_Mounted);
+		Tags.AddTag(ShinobiTags::State_Downed);
+		Tags.AddTag(ShinobiTags::State_Dead);
+		Tags.AddTag(ShinobiTags::State_Phased);
+		return Tags;
+	}();
+	return !Player->GetAbilitySystemComponent()->HasAnyMatchingGameplayTags(Blockers);
+}
+
+bool UShinobiMovementComponent::SweepCapsule(const FVector& From, const FVector& To, const FQuat& Rotation, FHitResult& OutHit) const
+{
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(ShinobiTraversalSweep), false, CharacterOwner);
+	FCollisionResponseParams Response;
+	InitCollisionParams(Params, Response);
+	return GetWorld()->SweepSingleByChannel(OutHit, From, To, Rotation, UpdatedComponent->GetCollisionObjectType(), GetPawnCapsuleCollisionShape(SHRINK_None), Params, Response);
+}
+
+bool UShinobiMovementComponent::Fits(const FVector& Location, const FQuat& Rotation) const
+{
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(ShinobiTraversalFit), false, CharacterOwner);
+	FCollisionResponseParams Response;
+	InitCollisionParams(Params, Response);
+	return !GetWorld()->OverlapBlockingTestByChannel(Location, Rotation, UpdatedComponent->GetCollisionObjectType(), GetPawnCapsuleCollisionShape(SHRINK_None), Params, Response);
+}
+
+bool UShinobiMovementComponent::IsClimbable(const FHitResult& Hit) const
+{
+	const UPrimitiveComponent* Component = Hit.GetComponent();
+	return Hit.IsValidBlockingHit() && Component && Component->GetCollisionObjectType() == ECC_WorldStatic
+		&& FMath::Abs(Hit.ImpactNormal.Z) <= WallMaxNormalZ
+		&& !(Hit.GetActor() && Hit.GetActor()->ActorHasTag(NoTraversalTag));
+}
+
+void UShinobiMovementComponent::TryEnterWall()
+{
+	const FVector Push = Acceleration.GetSafeNormal2D();
+	if (Push.IsZero() || !(IsMovingOnGround() || IsFalling()))
+	{
+		return; // standing still beside a wall never attaches
+	}
+	const FVector Location = UpdatedComponent->GetComponentLocation();
+	FHitResult Hit;
+	if (!SweepCapsule(Location, Location + Push * WallReach, UpdatedComponent->GetComponentQuat(), Hit) || !IsClimbable(Hit) || (Push | -Hit.ImpactNormal) < 0.5f)
+	{
+		return;
+	}
+	// Kerbs, benches and car sides have vertical faces too: the face must also reach head height.
+	const UCapsuleComponent* Capsule = CharacterOwner->GetCapsuleComponent();
+	const FVector Head = Location + FVector::UpVector * (Capsule->GetScaledCapsuleHalfHeight() - 10.f);
+	FHitResult HeadHit;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(ShinobiWallHead), false, CharacterOwner);
+	if (GetWorld()->LineTraceSingleByChannel(HeadHit, Head, Head - Hit.ImpactNormal * (Capsule->GetScaledCapsuleRadius() + WallReach + 10.f), UpdatedComponent->GetCollisionObjectType(), Params)
+		&& IsClimbable(HeadHit))
+	{
+		AttachToWall(Hit, Location);
+	}
+}
+
+bool UShinobiMovementComponent::AttachToWall(const FHitResult& Hit, const FVector& Anchor)
+{
+	const FVector Normal = Hit.ImpactNormal;
+	const float HalfHeight = CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	const FVector Center = FVector::PointPlaneProject(Anchor, Hit.ImpactPoint, Normal) + Normal * (HalfHeight + MIN_FLOOR_DIST);
+	FVector Facing = FVector::VectorPlaneProject(Velocity, Normal);
+	if (Facing.SizeSquared() < 1.f)
+	{
+		Facing = FVector::VectorPlaneProject(FVector::UpVector, Normal); // face up the wall
+	}
+	const FQuat Rotation = FRotationMatrix::MakeFromZX(Normal, Facing).ToQuat();
+	if (!Fits(Center, Rotation))
+	{
+		return false; // no room to turn onto the wall: never rotate the capsule into geometry
+	}
+	SetGravityDirection(-Normal);
+	UpdatedComponent->SetWorldLocationAndRotation(Center, Rotation, false, nullptr, ETeleportType::TeleportPhysics);
+	Velocity = FVector::VectorPlaneProject(Velocity, Normal);
+	if (MovementMode == MOVE_Walking)
+	{
+		FindFloor(Center, CurrentFloor, false); // already walking (a corner): SetMovementMode would not look for the new floor
+	}
+	else
+	{
+		SetMovementMode(MOVE_Walking);
+	}
+	return true;
+}
+
+void UShinobiMovementComponent::UpdateWallTraversal()
+{
+	if (!IsMovingOnGround())
+	{
+		DetachFromWall(); // left the wall some other way: fall the normal way
+	}
+	// Task 2 adds the inner-corner and walk-down-to-the-ground checks here.
+}
+
+void UShinobiMovementComponent::DetachFromWall(const FVector& Facing)
+{
+	if (!IsWallTraversing())
+	{
+		return;
+	}
+	const FVector Normal = -GetGravityDirection();
+	SetGravityDirection(DefaultGravityDirection);
+	const UCapsuleComponent* Capsule = CharacterOwner->GetCapsuleComponent();
+	const float Lift = Capsule->GetScaledCapsuleHalfHeight() - Capsule->GetScaledCapsuleRadius();
+	const FVector Look = FVector::VectorPlaneProject(Facing.IsNearlyZero() ? -Normal : Facing, FVector::UpVector);
+	const FQuat Upright = FRotationMatrix::MakeFromXZ(Look.IsNearlyZero() ? UpdatedComponent->GetForwardVector() : Look, FVector::UpVector).ToQuat();
+	// Standing up swings the capsule's long axis from the wall's normal to vertical: take the first nearby spot it fits,
+	// closest to the wall first. With none free, stay put and let the movement component push out of the overlap.
+	const FVector Location = UpdatedComponent->GetComponentLocation();
+	const FVector Near = Location - Normal * (Lift - MIN_FLOOR_DIST);
+	const FVector Candidates[] = { Near, Near + FVector::UpVector * Lift, Location, Location + FVector::UpVector * Lift };
+	FVector Spot = Location;
+	for (const FVector& Candidate : Candidates)
+	{
+		if (Fits(Candidate, Upright))
+		{
+			Spot = Candidate;
+			break;
+		}
+	}
+	UpdatedComponent->SetWorldLocationAndRotation(Spot, Upright, false, nullptr, ETeleportType::TeleportPhysics);
+	SetMovementMode(MOVE_Falling);
+}
+
+FVector UShinobiMovementComponent::WallInputDirection(const FVector& Intent) const
+{
+	const FVector Normal = -GetGravityDirection();
+	const FVector Into = -Normal.GetSafeNormal2D();
+	const FVector Side = FVector::CrossProduct(FVector::UpVector, Into).GetSafeNormal();
+	const FVector Up = FVector::VectorPlaneProject(FVector::UpVector, Normal).GetSafeNormal();
+	return Up * (Intent | Into) + Side * (Intent | Side);
+}
+
+bool UShinobiMovementComponent::DoJump(bool bReplayingMoves, float DeltaTime)
+{
+	if (!IsWallTraversing())
+	{
+		return Super::DoJump(bReplayingMoves, DeltaTime);
+	}
+	const FVector Normal = -GetGravityDirection();
+	DetachFromWall(Normal); // facing away from the wall
+	Velocity = Normal * KickOffSpeed + FVector::UpVector * KickOffUp;
+	return true; // counts as the first jump, so the double jump still works in the air
 }

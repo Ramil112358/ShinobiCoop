@@ -4,7 +4,8 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "ShinobiMovementComponent.generated.h"
 
-/** Adds a sprint flag that travels in saved moves, so the server agrees with the client (no rubber-banding). */
+/** Adds a sprint flag that travels in saved moves, so the server agrees with the client (no rubber-banding), and wall/water
+ * traversal for players: custom gravity into a wall while running on it, decided inside each move on both machines. */
 UCLASS()
 class SHINOBICOOP_API UShinobiMovementComponent : public UCharacterMovementComponent
 {
@@ -37,12 +38,45 @@ public:
 	void ForceRotationCorrectionFor(float Seconds);
 	virtual bool ShouldCorrectRotation() const override;
 
+	// ---- Wall and water traversal (players only; docs/superpowers/specs/2026-10-05-surface-traversal-design.md) ----
+
+	/** On a wall: gravity points into it and the character walks on it. The engine replicates gravity to every machine. */
+	bool IsWallTraversing() const { return HasCustomGravity(); }
+
+	/** A player shinobi that is not mounted, downed, dead or phased. */
+	bool CanSurfaceTraverse() const;
+
+	/** Leaves the wall: world gravity, upright yaw-only rotation facing Facing (default: the wall) at the nearest spot the
+	 * capsule fits, falling. No-op when not on a wall. */
+	void DetachFromWall(const FVector& Facing = FVector::ZeroVector);
+
+	/** Maps a horizontal camera-relative world intent onto the wall: into the wall = up, out of it = down, along it = sideways. */
+	FVector WallInputDirection(const FVector& Intent) const;
+
+	/** On a wall, Jump kicks off it instead of jumping along its normal. */
+	virtual bool DoJump(bool bReplayingMoves, float DeltaTime) override;
+
+	static const FName WaterSurfaceTag;  // walkable water actors (map builders: WATER_SURFACE_TAG)
+	static const FName NoTraversalTag;   // never climbed, e.g. map-boundary walls (map builders: NO_TRAVERSAL_TAG)
+	static constexpr float WallMaxNormalZ = 0.4226f; // sin 25 deg: steeper faces are walls
+	static constexpr float WallReach = 30.f;         // how far ahead of the capsule a face is noticed
+	static constexpr float KickOffSpeed = 700.f;
+	static constexpr float KickOffUp = 450.f;
+
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	float SprintSpeed = 900.f;
 
 	uint8 bWantsToSprint : 1;
 
 private:
+	void TryEnterWall();
+	void UpdateWallTraversal();
+	bool SweepCapsule(const FVector& From, const FVector& To, const FQuat& Rotation, FHitResult& OutHit) const;
+	bool Fits(const FVector& Location, const FQuat& Rotation) const;
+	bool IsClimbable(const FHitResult& Hit) const;
+	/** Turns onto the wall Hit found, at Anchor projected onto it. False (and nothing changes) when the turned capsule would not fit. */
+	bool AttachToWall(const FHitResult& Hit, const FVector& Anchor);
+
 	double ForceRotationCorrectionUntil = 0.0;
 	bool bWasMounted = false;
 };
