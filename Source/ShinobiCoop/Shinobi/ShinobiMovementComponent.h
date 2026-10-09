@@ -43,6 +43,10 @@ public:
 	/** On a wall: gravity points into it and the character walks on it. The engine replicates gravity to every machine. */
 	bool IsWallTraversing() const { return HasCustomGravity(); }
 
+	/** Walking on an actor tagged WaterSurfaceTag. Traces under the feet, so it also works for other players' characters. */
+	bool IsWaterTraversing() const;
+	bool IsSurfaceTraversing() const { return IsWallTraversing() || IsWaterTraversing(); }
+
 	/** A player shinobi that is not mounted, downed, dead or phased. */
 	bool CanSurfaceTraverse() const;
 

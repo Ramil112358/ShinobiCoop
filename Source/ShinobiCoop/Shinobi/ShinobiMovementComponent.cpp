@@ -210,6 +210,19 @@ bool UShinobiMovementComponent::CanSurfaceTraverse() const
 	return !Player->GetAbilitySystemComponent()->HasAnyMatchingGameplayTags(Blockers);
 }
 
+bool UShinobiMovementComponent::IsWaterTraversing() const
+{
+	if (!CharacterOwner || IsWallTraversing() || !IsMovingOnGround())
+	{
+		return false;
+	}
+	const FVector Feet = GetActorFeetLocation();
+	FHitResult Hit;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(ShinobiWaterCheck), false, CharacterOwner);
+	return GetWorld()->LineTraceSingleByChannel(Hit, Feet + FVector(0.f, 0.f, 5.f), Feet - FVector(0.f, 0.f, 20.f), ECC_Pawn, Params)
+		&& Hit.GetActor() && Hit.GetActor()->ActorHasTag(WaterSurfaceTag);
+}
+
 bool UShinobiMovementComponent::SweepCapsule(const FVector& From, const FVector& To, const FQuat& Rotation, FHitResult& OutHit) const
 {
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(ShinobiTraversalSweep), false, CharacterOwner);

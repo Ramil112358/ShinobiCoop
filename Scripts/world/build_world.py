@@ -56,7 +56,17 @@ EAS = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
 TOON_VOLUME_LABEL = "ShinobiToonPost"
 MOOD_TAG = "ShinobiMood"
 WATER_TAG = "ShinobiWater"
+WATER_SURFACE_TAG = "ShinobiWaterSurface"  # walkable water (UShinobiMovementComponent::WaterSurfaceTag)
+NO_TRAVERSAL_TAG = "ShinobiNoSurfaceTraversal"  # never wall-run, e.g. map boundaries (UShinobiMovementComponent::NoTraversalTag)
 
+
+
+def walkable_water(actor):
+    """Characters stand on the water; shots, the camera and every other trace pass through it."""
+    smc = actor.static_mesh_component
+    smc.set_collision_enabled(unreal.CollisionEnabled.QUERY_ONLY)
+    smc.set_collision_response_to_all_channels(unreal.CollisionResponseType.ECR_IGNORE)
+    smc.set_collision_response_to_channel(unreal.CollisionChannel.ECC_PAWN, unreal.CollisionResponseType.ECR_BLOCK)
 
 def log(message):
     unreal.log(f"[build_world] {message}")
@@ -304,7 +314,8 @@ def stage_terrain(lay):
     # River: one flat plane at the water level; the terrain hides it everywhere but the river bed.
     water = solid_material("MI_Water", (0.05, 0.22, 0.35), 0.1)
     plane = spawn_mesh("/Engine/BasicShapes/Plane.Plane", water, (0, 0, uu(meta["water_level_m"])), (lay.size_m + 100, lay.size_m + 100, 1), label="RiverWater")
-    plane.static_mesh_component.set_collision_profile_name("NoCollision")  # wade through: the river bed is the floor
+    walkable_water(plane)  # shinobi walk on the river
+    plane.set_editor_property("tags", [unreal.Name(WATER_TAG), unreal.Name(WATER_SURFACE_TAG)])
     plane.static_mesh_component.set_cast_shadow(False)
 
     # Invisible walls just inside the mountains; the kill-Z is handled by the world game mode (W4).
@@ -314,6 +325,7 @@ def stage_terrain(lay):
         wall = spawn_mesh("/Engine/BasicShapes/Cube.Cube", wall_material, (uu(x), uu(y), uu(100)), (sx, sy, 400), label=f"EdgeWall{i}")
         wall.set_actor_hidden_in_game(True)
         wall.static_mesh_component.set_collision_profile_name("InvisibleWall")
+        wall.set_editor_property("tags", [unreal.Name(NO_TRAVERSAL_TAG)])
 
     world_settings = world.get_world_settings()
     world_settings.set_editor_property("default_game_mode", unreal.load_class(None, "/Script/ShinobiCoop.ShinobiWorldGameMode"))
@@ -569,7 +581,7 @@ def water_material():
 
 def stage_water(lay):
     """The river surface: one plane at the constant water level with M_WaterReal (replacing the terrain stage's flat
-    RiverWater plane); the terrain hides it everywhere but the river bed. No collision: players wade on the bed.
+    RiverWater plane); the terrain hides it everywhere but the river bed. Blocks only Pawn: shinobi walk on the surface.
     (Spec fallback: UE's Water plugin river spawned but rendered no surface in UE 5.8.) Re-running replaces it."""
     meta = terrain_maps()
     material = water_material()
@@ -579,9 +591,9 @@ def stage_water(lay):
             EAS.destroy_actor(actor)
     plane = spawn_mesh("/Engine/BasicShapes/Plane.Plane", material, (0, 0, uu(meta["water_level_m"])),
                        (lay.size_m + 100, lay.size_m + 100, 1), label="RiverWater")
-    plane.static_mesh_component.set_collision_profile_name("NoCollision")
+    walkable_water(plane)
     plane.static_mesh_component.set_cast_shadow(False)
-    plane.set_editor_property("tags", [unreal.Name(WATER_TAG)])
+    plane.set_editor_property("tags", [unreal.Name(WATER_TAG), unreal.Name(WATER_SURFACE_TAG)])
     plane.set_editor_property("is_spatially_loaded", False)
     if not unreal.EditorLoadingAndSavingUtils.save_map(world, MAP):
         raise RuntimeError(f"failed to save {MAP}")
@@ -589,7 +601,24 @@ def stage_water(lay):
     log("water: river surface (M_WaterReal) placed")
 
 
-STAGES = {"terrain": stage_terrain, "dress": stage_dress, "mood": stage_mood, "water": stage_water}
+def stage_traversal(lay):
+    """Walls and water (docs/superpowers/specs/2026-10-05-surface-traversal-design.md) on the existing map, without
+    rebuilding any other stage: the river becomes walkable and the edge walls unclimbable. Re-running is harmless."""
+    world = load_map_fully()
+    for actor in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.StaticMeshActor):
+        label = actor.get_actor_label()
+        if actor.actor_has_tag(WATER_TAG) or label == "RiverWater":
+            walkable_water(actor)
+            actor.set_editor_property("tags", [unreal.Name(WATER_TAG), unreal.Name(WATER_SURFACE_TAG)])
+        elif label.startswith("EdgeWall"):
+            actor.set_editor_property("tags", [unreal.Name(NO_TRAVERSAL_TAG)])
+    if not unreal.EditorLoadingAndSavingUtils.save_map(world, MAP):
+        raise RuntimeError(f"failed to save {MAP}")
+    unreal.EditorLoadingAndSavingUtils.save_dirty_packages(True, True)
+    log("traversal: river walkable, edge walls unclimbable")
+
+
+STAGES = {"terrain": stage_terrain, "dress": stage_dress, "mood": stage_mood, "water": stage_water, "traversal": stage_traversal}
 if __name__ == "__main__":  # Scripts/london/build_london.py imports the helpers
     stage = os.environ.get("SHINOBI_WORLD_STAGE", "terrain")
     STAGES[stage](layout_mod.load())

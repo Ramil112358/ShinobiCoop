@@ -22,6 +22,7 @@ import unreal
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "world"))
 import build_world as bw  # noqa: E402
+import import_library as lib  # noqa: E402
 import look  # noqa: E402
 
 PROJECT = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
@@ -173,7 +174,7 @@ def place_city(keep=None, tag="LondonCity"):
     """One StaticMeshActor per imported chunk mesh City/<Kind>/<Kind>_<cx>_<cy> whose 128 m cell passes keep(cx, cy)
     (every chunk when keep is None). Returns the actor count."""
     count = 0
-    for kind in ("G", "B", "K", "W", "X"):
+    for kind in ("G", "B", "K", "W"):  # X (hidden river-edge walls) is not placed: shinobi walk onto the water
         folder = f"{ROOT}/City/{kind}"
         for path in sorted(unreal.EditorAssetLibrary.list_assets(folder, recursive=True)):
             data = unreal.EditorAssetLibrary.find_asset_data(path)
@@ -188,16 +189,15 @@ def place_city(keep=None, tag="LondonCity"):
             actor.static_mesh_component.set_static_mesh(mesh)
             actor.static_mesh_component.set_mobility(unreal.ComponentMobility.STATIC)
             actor.set_actor_label(mesh.get_name())
-            if kind in ("K", "W"):
+            if kind == "K":
                 actor.static_mesh_component.set_collision_profile_name("NoCollision")
-            if kind in ("W", "X"):
+            if kind == "W":
                 actor.static_mesh_component.set_cast_shadow(False)
-            if kind == "X":
-                actor.set_actor_hidden_in_game(True)
-                actor.static_mesh_component.set_collision_profile_name("InvisibleWall")
+                bw.walkable_water(actor)
             # Always loaded: London is seen across kilometres (skyline, river, bridges), and Nanite streams the
             # detail anyway; streamed cells left the distant city empty with landmarks floating over the void.
-            tagged(actor, tag, f"City:{kind}", always_loaded=True)
+            extra = [bw.WATER_SURFACE_TAG] if kind == "W" else []
+            tagged(actor, tag, f"City:{kind}", *extra, always_loaded=True)
             count += 1
     return count
 
@@ -334,7 +334,7 @@ def stage_dress():
                              (length, 0.5, 40), yaw=math.degrees(math.atan2(dy, dx)), label=f"EdgeWall_{i}")
         wall.set_actor_hidden_in_game(True)
         wall.static_mesh_component.set_collision_profile_name("InvisibleWall")
-        tagged(wall, "LondonDress", always_loaded=True)
+        tagged(wall, "LondonDress", bw.NO_TRAVERSAL_TAG, always_loaded=True)
     save(world)
     log(f"dress: {instances} instances in {chunk_count} chunks, {landmarks} landmarks, {len(m['camps'])} camps, "
         f"{len(m['villagers'])} Londoners + {len(m.get('pedestrians', []))} crowd, {len(m['tour'])} tour points; no mesh for {sorted(mesh.missing)}")
@@ -480,7 +480,30 @@ def stage_mood():
     log(f"mood: city bed + {len(points)} river sounds")
 
 
-STAGES = {"terrain": stage_terrain, "city": stage_city, "dress": stage_dress, "mood": stage_mood}
+def stage_traversal():
+    """Walls and water on the existing map: water chunks get exact collision that only Pawn hits, the hidden river-edge
+    walls (City:X) go, and the playable-edge walls are marked unclimbable. Re-running is harmless."""
+    for path in unreal.EditorAssetLibrary.list_assets(f"{ROOT}/City/W", recursive=True):
+        mesh = unreal.EditorAssetLibrary.find_asset_data(path).get_asset()
+        if isinstance(mesh, unreal.StaticMesh):
+            lib.set_collision(mesh, "complex")
+            unreal.EditorAssetLibrary.save_loaded_asset(mesh)
+    world = load_map()
+    clear(world, "City:X")
+    for actor in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.StaticMeshActor):
+        add = None
+        if actor.actor_has_tag("City:W"):
+            bw.walkable_water(actor)
+            add = bw.WATER_SURFACE_TAG
+        elif actor.get_actor_label().startswith("EdgeWall_"):
+            add = bw.NO_TRAVERSAL_TAG
+        if add and not actor.actor_has_tag(add):
+            actor.set_editor_property("tags", list(actor.get_editor_property("tags")) + [unreal.Name(add)])
+    save(world)
+    log("traversal: water walkable, river-edge walls removed, edge walls unclimbable")
+
+
+STAGES = {"terrain": stage_terrain, "city": stage_city, "dress": stage_dress, "mood": stage_mood, "traversal": stage_traversal}
 
 if __name__ == "__main__":
     STAGES[os.environ.get("SHINOBI_LONDON_STAGE", "terrain")]()

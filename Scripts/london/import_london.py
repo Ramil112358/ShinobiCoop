@@ -5,7 +5,7 @@
              M_LondonFlat (colour x vertex colour), M_LondonSign (the signage atlas); one instance per palette name of
              Scripts/london/blender/make_city_meshes.py
   chunks     SourceArt/World/London/Chunks/{B,K,G,W}_<x>_<y>.glb -> City/<kind>/: slots remapped by palette name, Nanite
-             (not water), collision complex-as-simple on buildings (B) and ground (G), none on backdrop and water
+             (not water), collision complex-as-simple on buildings (B), ground (G) and water (W, walked on), none on the backdrop
   props      SourceArt/World/London/Props/*.glb (fetch_models.py + prep_models.py) and the Poly Haven street props
   catalog    Scripts/london/london_catalog.json: furniture/landmark key -> mesh, from those and the Fab packs in Content
 Resumable: meshes already imported are kept unless SHINOBI_REIMPORT=1. SHINOBI_LONDON_IMPORT=materials,chunks,props,catalog
@@ -47,7 +47,7 @@ FLAT = {"Frame_White": ((0.82, 0.82, 0.78), 0.45, 0.0), "Frame_Dark": ((0.03, 0.
         "Paint_Blue": ((0.2, 0.42, 0.68), 0.4, 0.2), "Curtain_Glass": ((0.16, 0.21, 0.27), 0.05, 0.9),
         "Capsule_Glass": ((0.22, 0.27, 0.3), 0.04, 0.8), "Lamp_Glass": ((0.95, 0.85, 0.6), 0.2, 0.0),
         "Beacon_Amber": ((1.0, 0.45, 0.03), 0.25, 0.0)}
-CHUNK_KINDS = {"B": "complex", "G": "complex", "K": "none", "W": "none", "X": "complex"}
+CHUNK_KINDS = {"B": "complex", "G": "complex", "K": "none", "W": "complex", "X": "complex"}
 
 FACADE_HLSL = r"""
 float3 c = Albedo * VC * Tint;

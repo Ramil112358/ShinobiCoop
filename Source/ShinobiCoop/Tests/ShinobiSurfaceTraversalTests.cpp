@@ -265,4 +265,30 @@ bool FShinobiFaceDirectionTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiWaterTest, "ShinobiCoop.Movement.SurfaceTraversal.WaterTaggedSurfacesAreWalkedOn", ShinobiTestFlags)
+bool FShinobiWaterTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	// Water as the map builders make it: tagged, query-only, blocking Pawn and nothing else.
+	AStaticMeshActor* Water = Block(W, FVector(0.f, 0.f, -50.f), FVector(4000.f, 4000.f, 100.f));
+	Water->Tags.Add(UShinobiMovementComponent::WaterSurfaceTag);
+	UStaticMeshComponent* Mesh = Water->GetStaticMeshComponent();
+	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	Mesh->SetCollisionResponseToAllChannels(ECR_Ignore);
+	Mesh->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+	Block(W, FVector(5000.f, 0.f, -50.f), FVector(4000.f, 4000.f, 100.f)); // ordinary ground beside it
+
+	AShinobiPlayerCharacter* P = PlayerAt(W, FVector(0.f, 0.f, 100.f));
+	W.Tick(0.5f);
+	TestEqual(TEXT("walking"), Moves(P)->MovementMode.GetValue(), MOVE_Walking);
+	TestTrue(FString::Printf(TEXT("on the surface (%.0f)"), P->GetActorLocation().Z), P->GetActorLocation().Z > 80.f);
+	TestTrue(TEXT("on water"), Moves(P)->IsWaterTraversing());
+	Drive(W, P, FVector::ForwardVector, 0.5f);
+	TestTrue(TEXT("still on water while moving"), Moves(P)->IsWaterTraversing());
+
+	AShinobiPlayerCharacter* Q = PlayerAt(W, FVector(5000.f, 0.f, 100.f));
+	TestFalse(TEXT("ordinary ground is not water"), Moves(Q)->IsWaterTraversing());
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
