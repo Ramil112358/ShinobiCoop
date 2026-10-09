@@ -65,9 +65,17 @@ public:
 	UPROPERTY()
 	TObjectPtr<UInputAction> JutsuPagePrev;
 
-	/** Mouse wheel: adjust the player's camera distance. */
+	/** Mouse wheel: adjust the player's camera distance (zooms the big map instead while it is open). */
 	UPROPERTY()
 	TObjectPtr<UInputAction> CameraZoom;
+
+	/** M (View button): open or close the big map. */
+	UPROPERTY()
+	TObjectPtr<UInputAction> MapToggle;
+
+	/** = / - (numpad + / -, D-pad up): zoom the open map, +1 in, -1 out. */
+	UPROPERTY()
+	TObjectPtr<UInputAction> MapZoom;
 
 	/** Gamepad A/B/X/Y -> Jutsu 1-4. Only active while RB is held. */
 	UPROPERTY()
