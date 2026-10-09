@@ -170,4 +170,79 @@ bool FShinobiWallForcedDetachTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+namespace
+{
+	/** Drives Intent until the player leaves the wall (or MaxSeconds pass). */
+	void DriveUntilOff(FShinobiTestWorld& W, AShinobiPlayerCharacter* P, const FVector& Intent, float MaxSeconds)
+	{
+		for (float T = 0.f; T < MaxSeconds && Moves(P)->IsWallTraversing(); T += 0.05f)
+		{
+			Drive(W, P, Intent, 0.05f);
+		}
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiWallVaultTest, "ShinobiCoop.Movement.SurfaceTraversal.ClimbingPastTheTopVaultsOntoTheRoof", ShinobiTestFlags)
+bool FShinobiWallVaultTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	Arena(W, 600.f); // a 6 m building with a flat 2 m deep roof
+	AShinobiPlayerCharacter* P = PlayerAt(W, FVector(WallX - 300.f, 0.f, 100.f));
+	if (!RunOntoWall(*this, W, P))
+	{
+		return false;
+	}
+	DriveUntilOff(W, P, FVector::ForwardVector, 3.f);
+	W.Tick(0.3f);
+	const FVector Location = P->GetActorLocation();
+	TestFalse(TEXT("off the wall"), Moves(P)->IsWallTraversing());
+	TestEqual(TEXT("walking"), Moves(P)->MovementMode.GetValue(), MOVE_Walking);
+	TestTrue(TEXT("upright"), P->GetActorUpVector().Z > 0.99f);
+	TestTrue(FString::Printf(TEXT("on the roof (%.0f, %.0f)"), Location.X, Location.Z), Location.X > WallX && Location.Z > 600.f + 80.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiWallWalkDownTest, "ShinobiCoop.Movement.SurfaceTraversal.WalkingDownStandsUpOnTheGround", ShinobiTestFlags)
+bool FShinobiWallWalkDownTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	Arena(W);
+	AShinobiPlayerCharacter* P = PlayerAt(W, FVector(WallX - 300.f, 0.f, 100.f));
+	if (!RunOntoWall(*this, W, P))
+	{
+		return false;
+	}
+	Drive(W, P, FVector::ForwardVector, 0.6f); // up a little
+	DriveUntilOff(W, P, FVector::BackwardVector, 3.f); // then back down
+	W.Tick(0.5f);
+	const FVector Location = P->GetActorLocation();
+	TestFalse(TEXT("off the wall"), Moves(P)->IsWallTraversing());
+	TestEqual(TEXT("walking"), Moves(P)->MovementMode.GetValue(), MOVE_Walking);
+	TestTrue(TEXT("upright"), P->GetActorUpVector().Z > 0.99f);
+	TestTrue(FString::Printf(TEXT("standing on the ground (%.0f)"), Location.Z), Location.Z > 80.f && Location.Z < 120.f);
+	TestTrue(TEXT("outside the wall"), Location.X < WallX);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiWallCornerTest, "ShinobiCoop.Movement.SurfaceTraversal.RunningRoundAnOuterCornerWrapsOntoTheSide", ShinobiTestFlags)
+bool FShinobiWallCornerTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	Arena(W, 2000.f, 1000.f); // the wall ends at Y = 500; its side face looks along +Y
+	AShinobiPlayerCharacter* P = PlayerAt(W, FVector(WallX - 300.f, 300.f, 100.f));
+	if (!RunOntoWall(*this, W, P))
+	{
+		return false;
+	}
+	Drive(W, P, FVector::ForwardVector, 0.5f); // off the ground
+	for (float T = 0.f; T < 3.f && !Moves(P)->GetGravityDirection().Equals(FVector(0.f, -1.f, 0.f), 0.05f); T += 0.05f)
+	{
+		Drive(W, P, FVector::RightVector, 0.05f);
+	}
+	TestTrue(TEXT("still on a wall"), Moves(P)->IsWallTraversing());
+	TestTrue(TEXT("now on the side face"), Moves(P)->GetGravityDirection().Equals(FVector(0.f, -1.f, 0.f), 0.05f));
+	TestTrue(TEXT("beside it, not inside"), P->GetActorLocation().Y > 500.f);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

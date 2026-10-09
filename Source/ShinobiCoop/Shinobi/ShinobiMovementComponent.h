@@ -56,6 +56,9 @@ public:
 	/** On a wall, Jump kicks off it instead of jumping along its normal. */
 	virtual bool DoJump(bool bReplayingMoves, float DeltaTime) override;
 
+	/** Walking off a wall's edge: onto the roof at the top, round an outer corner at the sides, otherwise fall. */
+	virtual bool CheckFall(const FFindFloorResult& OldFloor, const FHitResult& Hit, const FVector& Delta, const FVector& OldLocation, float remainingTime, float timeTick, int32 Iterations, bool bMustJump) override;
+
 	static const FName WaterSurfaceTag;  // walkable water actors (map builders: WATER_SURFACE_TAG)
 	static const FName NoTraversalTag;   // never climbed, e.g. map-boundary walls (map builders: NO_TRAVERSAL_TAG)
 	static constexpr float WallMaxNormalZ = 0.4226f; // sin 25 deg: steeper faces are walls
@@ -76,6 +79,8 @@ private:
 	bool IsClimbable(const FHitResult& Hit) const;
 	/** Turns onto the wall Hit found, at Anchor projected onto it. False (and nothing changes) when the turned capsule would not fit. */
 	bool AttachToWall(const FHitResult& Hit, const FVector& Anchor);
+	bool TryVault();
+	bool TryWrapCorner(const FVector& Move);
 
 	double ForceRotationCorrectionUntil = 0.0;
 	bool bWasMounted = false;

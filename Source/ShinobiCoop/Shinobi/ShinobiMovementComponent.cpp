@@ -293,8 +293,27 @@ void UShinobiMovementComponent::UpdateWallTraversal()
 	if (!IsMovingOnGround())
 	{
 		DetachFromWall(); // left the wall some other way: fall the normal way
+		return;
 	}
-	// Task 2 adds the inner-corner and walk-down-to-the-ground checks here.
+	const FVector Move = Acceleration.GetSafeNormal();
+	if (Move.IsZero())
+	{
+		return;
+	}
+	const FVector Location = UpdatedComponent->GetComponentLocation();
+	FHitResult Hit;
+	if (!SweepCapsule(Location, Location + Move * WallReach, UpdatedComponent->GetComponentQuat(), Hit) || !Hit.IsValidBlockingHit())
+	{
+		return;
+	}
+	if (Hit.ImpactNormal.Z >= GetWalkableFloorZ())
+	{
+		DetachFromWall(); // walked down onto the ground: stand up on it
+	}
+	else if (IsClimbable(Hit) && (Move | -Hit.ImpactNormal) >= 0.5f)
+	{
+		AttachToWall(Hit, Location); // inner corner: onto the next face
+	}
 }
 
 void UShinobiMovementComponent::DetachFromWall(const FVector& Facing)
@@ -346,4 +365,56 @@ bool UShinobiMovementComponent::DoJump(bool bReplayingMoves, float DeltaTime)
 	DetachFromWall(Normal); // facing away from the wall
 	Velocity = Normal * KickOffSpeed + FVector::UpVector * KickOffUp;
 	return true; // counts as the first jump, so the double jump still works in the air
+}
+
+bool UShinobiMovementComponent::CheckFall(const FFindFloorResult& OldFloor, const FHitResult& Hit, const FVector& Delta, const FVector& OldLocation, float remainingTime, float timeTick, int32 Iterations, bool bMustJump)
+{
+	if (!IsWallTraversing())
+	{
+		return Super::CheckFall(OldFloor, Hit, Delta, OldLocation, remainingTime, timeTick, Iterations, bMustJump);
+	}
+	const FVector Move = Delta.GetSafeNormal();
+	if (!((Move | FVector::UpVector) > 0.5f && TryVault()) && !TryWrapCorner(Move))
+	{
+		DetachFromWall();
+	}
+	return true; // handled: PhysWalking must not start a fall with the wall's gravity
+}
+
+bool UShinobiMovementComponent::TryVault()
+{
+	const FVector Inward = GetGravityDirection().GetSafeNormal2D(); // gravity points into the wall
+	const UCapsuleComponent* Capsule = CharacterOwner->GetCapsuleComponent();
+	const float HalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+	const FVector Location = UpdatedComponent->GetComponentLocation();
+	const FVector Over = Location + Inward * (HalfHeight + Capsule->GetScaledCapsuleRadius() + 20.f);
+	FHitResult Roof;
+	if (!SweepCapsule(Over + FVector::UpVector * HalfHeight * 2.f, Over - FVector::UpVector * HalfHeight * 2.f, FQuat::Identity, Roof)
+		|| !Roof.IsValidBlockingHit() || Roof.ImpactNormal.Z < GetWalkableFloorZ() || Roof.ImpactPoint.Z < Location.Z - HalfHeight)
+	{
+		return false; // no roof within reach: a parapet in the way, or only the ground far below
+	}
+	SetGravityDirection(DefaultGravityDirection);
+	UpdatedComponent->SetWorldLocationAndRotation(Roof.Location, FRotationMatrix::MakeFromX(Inward).ToQuat(), false, nullptr, ETeleportType::TeleportPhysics);
+	Velocity = Inward * Velocity.Size(); // keep running, now across the roof
+	FindFloor(Roof.Location, CurrentFloor, false);
+	return true;
+}
+
+bool UShinobiMovementComponent::TryWrapCorner(const FVector& Move)
+{
+	const FVector Normal = -GetGravityDirection();
+	const FVector Along = FVector::VectorPlaneProject(Move, Normal).GetSafeNormal();
+	if (Along.IsZero())
+	{
+		return false;
+	}
+	const UCapsuleComponent* Capsule = CharacterOwner->GetCapsuleComponent();
+	const float Radius = Capsule->GetScaledCapsuleRadius();
+	// Past an outer corner the next face looks along the move: sweep back onto it from beyond the corner, then stand a
+	// little way in from the corner so the whole capsule is over the new face.
+	const FVector From = UpdatedComponent->GetComponentLocation() - Normal * (Capsule->GetScaledCapsuleHalfHeight() - Radius) + Along * (Radius + WallReach);
+	FHitResult Hit;
+	return SweepCapsule(From, From - Along * (Radius + 2.f * WallReach), UpdatedComponent->GetComponentQuat(), Hit)
+		&& IsClimbable(Hit) && AttachToWall(Hit, Hit.ImpactPoint - Normal * (Radius + 5.f));
 }
