@@ -90,6 +90,38 @@ void AShinobiPlayerController::SetupInputComponent()
 	if (UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(InputComponent))
 	{
 		Input->BindAction(UShinobiInputConfig::Get().Pause, ETriggerEvent::Started, this, &AShinobiPlayerController::TogglePauseMenu);
+		Input->BindAction(UShinobiInputConfig::Get().MapToggle, ETriggerEvent::Started, this, &AShinobiPlayerController::ToggleMap);
+		Input->BindAction(UShinobiInputConfig::Get().MapZoom, ETriggerEvent::Started, this, &AShinobiPlayerController::OnMapZoom);
+	}
+}
+
+void AShinobiPlayerController::ToggleMap()
+{
+	if (Hud)
+	{
+		Hud->ToggleBigMap();
+	}
+}
+
+bool AShinobiPlayerController::IsBigMapOpen() const
+{
+	return Hud && Hud->IsBigMapOpen();
+}
+
+void AShinobiPlayerController::ZoomMap(int32 Steps, bool bWrap)
+{
+	if (Hud)
+	{
+		Hud->ZoomMap(Steps, bWrap);
+	}
+}
+
+void AShinobiPlayerController::OnMapZoom(const FInputActionValue& Value)
+{
+	const float Axis = Value.Get<float>();
+	if (!FMath::IsNearlyZero(Axis))
+	{
+		ZoomMap(Axis > 0.f ? 1 : -1, true);
 	}
 }
 

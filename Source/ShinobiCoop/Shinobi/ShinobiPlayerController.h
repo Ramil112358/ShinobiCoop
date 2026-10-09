@@ -8,6 +8,7 @@ class UGameplayEffect;
 class UShinobiHUDWidget;
 class UShinobiPauseMenuWidget;
 struct FGameplayTag;
+struct FInputActionValue;
 
 /** Creates the HUD for local players; hosts developer console commands and the smoke-test hook. */
 UCLASS()
@@ -53,9 +54,19 @@ public:
 	/** Local: open or close the pause menu (Esc / Start). */
 	void TogglePauseMenu();
 
+	/** Local: open or close the big map (M / View). */
+	void ToggleMap();
+
+	bool IsBigMapOpen() const;
+
+	/** Local: zoom the big map while it is open, else the minimap. Steps > 0 zooms in; with bWrap, past the closest
+	 * level it goes back to the whole map. */
+	void ZoomMap(int32 Steps, bool bWrap);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
+	void OnMapZoom(const FInputActionValue& Value);
 	/** Server: the new pawn plays the character this player picked (so the pick survives respawns). */
 	virtual void OnPossess(APawn* InPawn) override;
 	/** Local: the pawn we control changed, so every character's outline (hostile = red) is redrawn. */

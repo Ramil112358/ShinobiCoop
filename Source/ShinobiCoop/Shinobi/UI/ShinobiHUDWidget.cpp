@@ -35,6 +35,9 @@
 #include "Shinobi/ShinobiDragonMount.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/Abilities/ShinobiJutsuAbility.h"
+#include "Shinobi/UI/ShinobiMiniMapData.h"
+#include "ShinobiCoop.h"
+#include "Kismet/GameplayStatics.h"
 
 namespace
 {
@@ -69,6 +72,24 @@ namespace
 	constexpr float TrailDrainPerSecond = 0.6f;
 	constexpr int32 NumPips = 3; // MaxSubstitutionCharges
 	constexpr float CompassHalfWidth = 220.f;
+	// Compass and minimap markers.
+	const FLinearColor VillageMarkColor(0.95f, 0.9f, 0.7f);
+	const FLinearColor CampMarkColor(1.f, 0.3f, 0.2f);
+	const FLinearColor BossMarkColor(0.75f, 0.3f, 1.f);
+	const FLinearColor ClearedMarkColor(0.5f, 0.5f, 0.5f);
+	const FLinearColor MateMarkColor(0.3f, 0.75f, 1.f);
+	constexpr float MiniMapEdge = 250.f; // the map's long edge on screen
+	constexpr float MiniMapMargin = 24.f;
+	constexpr float MiniMapArrowSize = 18.f;
+	constexpr float BigMapShare = 0.86f; // of the screen, on the side the map fills
+	constexpr float BigMapMarkScale = 1.4f;
+	// Map zoom steps (1 = the whole map in view). A step is offered only while the view still spans MinMapViewSpan cm
+	// and a texel of the art covers at most MaxMapArtStretch screen units.
+	constexpr float MapZoomLevels[] = { 1.f, 2.f, 4.f, 8.f };
+	constexpr float MinMapViewSpan = 6000.f;
+	constexpr float MaxMapArtStretch = 2.5f;
+	// Scripts/minimap/bake_minimaps.py imports SourceArt/UI/minimap_arrow.png here.
+	const TCHAR* MiniMapArrowPath = TEXT("/Game/Shinobi/UI/Minimaps/T_MiniMap_Arrow.T_MiniMap_Arrow");
 	// Scripts/setup_hud.py imports SourceArt/UI/portrait.png here.
 	const TCHAR* PortraitPath = TEXT("/Game/Shinobi/UI/T_Portrait.T_Portrait");
 
@@ -124,6 +145,7 @@ TSharedRef<SWidget> UShinobiHUDWidget::RebuildWidget()
 		BuildPagePips(Root);
 		BuildAimCrosshair(Root);
 		BuildDragonCrosshair(Root);
+		BuildMiniMap(Root);
 
 		WaveText = AddCanvasText(Root, TEXT("WaveText"), FAnchors(0.5f, 0.f), FVector2D(0.5f, 0.f), FVector2D(0.f, 24.f), 22, ETextJustify::Center);
 		RootCanvas = Root;
@@ -642,7 +664,207 @@ void UShinobiHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	UpdateJutsuSlots(*ASC, Player ? Player->GetJutsuPage() : 1, Player);
 	UpdateArena(Player);
 	UpdateCompass();
+	UpdateMiniMap(Pawn, MyGeometry.GetLocalSize());
 	UpdateDragonCrosshair(Player);
+}
+
+void UShinobiHUDWidget::BuildMiniMap(UCanvasPanel* Root)
+{
+	const FString Level = UGameplayStatics::GetCurrentLevelName(this, true);
+	MiniMapData = UShinobiMiniMapData::ForLevel(Level);
+	if (!MiniMapData || !MiniMapData->HasValidBounds() || !MiniMapData->HasValidTileGrid())
+	{
+		UE_CLOG(Level.StartsWith(TEXT("Lvl_")), LogShinobiCoop, Warning, TEXT("%s has no valid minimap: add it to Scripts/minimap/minimap_maps.json and bake"), *Level);
+		MiniMapData = nullptr;
+		return;
+	}
+	const FVector2D Extent = MiniMapData->WorldMax - MiniMapData->WorldMin;
+	MiniMapSize = Extent / Extent.GetMax() * MiniMapEdge;
+
+	BigMapShade = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("BigMapShade"));
+	BigMapShade->SetBrushColor(FLinearColor(0.f, 0.f, 0.f, 0.45f));
+	BigMapShade->SetVisibility(ESlateVisibility::Collapsed);
+	UCanvasPanelSlot* ShadeSlot = Root->AddChildToCanvas(BigMapShade);
+	ShadeSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+	ShadeSlot->SetOffsets(FMargin(0.f));
+
+	MiniMapFrame = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("MiniMapFrame"));
+	MiniMapFrame->SetBrush(RoundedBrush(InkColor, 6.f, TrimColor, 1.5f));
+	MiniMapFrame->SetPadding(FMargin(4.f));
+	Root->AddChildToCanvas(MiniMapFrame); // laid out by UpdateMiniMap
+
+	MiniMapCanvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("MiniMapCanvas"));
+	MiniMapCanvas->SetClipping(EWidgetClipping::ClipToBounds);
+	MiniMapFrame->SetContent(MiniMapCanvas);
+	for (const FShinobiMiniMapTile& Tile : MiniMapData->Tiles)
+	{
+		UImage* Image = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
+		Image->SetBrushFromTexture(Tile.Base);
+		MiniMapCanvas->AddChildToCanvas(Image);
+		MiniMapTiles.Add(Image);
+	}
+
+	MiniMapArrow = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("MiniMapArrow"));
+	if (UTexture2D* Arrow = LoadObject<UTexture2D>(nullptr, MiniMapArrowPath, nullptr, LOAD_NoWarn))
+	{
+		MiniMapArrow->SetBrush(ArtBrush(Arrow, FVector2D(MiniMapArrowSize)));
+	}
+	else
+	{
+		MiniMapArrow->SetBrush(RoundedBrush(FLinearColor::White, -1.f, InkColor, 2.f));
+	}
+	MiniMapArrow->SetRenderTransformPivot(FVector2D(0.5f));
+	UCanvasPanelSlot* ArrowSlot = MiniMapCanvas->AddChildToCanvas(MiniMapArrow);
+	ArrowSlot->SetAlignment(FVector2D(0.5f));
+	ArrowSlot->SetZOrder(1); // above the dots
+
+	BigMapHint = MakeText(13, NameColor);
+	BigMapHint->SetText(FText::FromString(TEXT("[M] Close     [Wheel] [+] [-] Zoom")));
+	BigMapHint->SetShadowOffset(FVector2D(1.f));
+	BigMapHint->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.8f));
+	UCanvasPanelSlot* HintSlot = MiniMapCanvas->AddChildToCanvas(BigMapHint);
+	HintSlot->SetAnchors(FAnchors(0.f, 1.f));
+	HintSlot->SetAlignment(FVector2D(0.f, 1.f));
+	HintSlot->SetPosition(FVector2D(10.f, -8.f));
+	HintSlot->SetAutoSize(true);
+	HintSlot->SetZOrder(2);
+	BigMapHint->SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UShinobiHUDWidget::ToggleBigMap()
+{
+	bBigMap = MiniMapData && !bBigMap;
+}
+
+int32 UShinobiHUDWidget::MaxMapZoom(float ViewLong) const
+{
+	const float WorldLong = (MiniMapData->WorldMax - MiniMapData->WorldMin).GetMax();
+	// Asked each time: in the editor the tile textures report 0 x 0 until they finish compiling.
+	FVector2D ArtSize = FVector2D::ZeroVector;
+	for (const FShinobiMiniMapTile& Tile : MiniMapData->Tiles)
+	{
+		ArtSize.X += Tile.Y == 0 ? Tile.Base->GetSizeX() : 0;
+		ArtSize.Y += Tile.X == 0 ? Tile.Base->GetSizeY() : 0;
+	}
+	const float MapArtLong = ArtSize.GetMax();
+	int32 Index = 0;
+	while (Index + 1 < UE_ARRAY_COUNT(MapZoomLevels)
+		&& WorldLong / MapZoomLevels[Index + 1] >= MinMapViewSpan
+		&& ViewLong * MapZoomLevels[Index + 1] <= MapArtLong * MaxMapArtStretch)
+	{
+		++Index;
+	}
+	return Index;
+}
+
+void UShinobiHUDWidget::ZoomMap(int32 Steps, bool bWrap)
+{
+	if (!MiniMapData)
+	{
+		return;
+	}
+	int32& Zoom = bBigMap ? BigZoom : MiniZoom;
+	const int32 Max = MaxMapZoom(MapViewSize.GetMax());
+	Zoom = bWrap && Zoom + Steps > Max ? 0 : FMath::Clamp(Zoom + Steps, 0, Max);
+}
+
+void UShinobiHUDWidget::UpdateMiniMap(const AShinobiCharacterBase* Pawn, const FVector2D& ScreenSize)
+{
+	if (!MiniMapData || !Pawn)
+	{
+		return;
+	}
+	// The corner map, or the whole map fitted into most of the screen.
+	const FVector2D Extent = MiniMapData->WorldMax - MiniMapData->WorldMin;
+	const float BigScale = FMath::Min(ScreenSize.X / Extent.X, ScreenSize.Y / Extent.Y) * BigMapShare;
+	const FVector2D View = bBigMap ? FVector2D(FMath::RoundToFloat(Extent.X * BigScale), FMath::RoundToFloat(Extent.Y * BigScale)) : MiniMapSize;
+	if (!View.Equals(MapViewSize) || bBigMap != bMapLaidOutBig)
+	{
+		MapViewSize = View;
+		bMapLaidOutBig = bBigMap;
+		UCanvasPanelSlot* FrameSlot = Cast<UCanvasPanelSlot>(MiniMapFrame->Slot);
+		FrameSlot->SetAnchors(bBigMap ? FAnchors(0.5f, 0.5f) : FAnchors(1.f, 1.f));
+		FrameSlot->SetAlignment(bBigMap ? FVector2D(0.5f) : FVector2D(1.f));
+		FrameSlot->SetPosition(bBigMap ? FVector2D::ZeroVector : FVector2D(-MiniMapMargin));
+		FrameSlot->SetSize(View + FVector2D(8.f));
+		Cast<UCanvasPanelSlot>(MiniMapArrow->Slot)->SetSize(FVector2D(MiniMapArrowSize * (bBigMap ? BigMapMarkScale : 1.f)));
+		BigMapShade->SetVisibility(bBigMap ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		BigMapHint->SetVisibility(bBigMap ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	}
+
+	// Zoomed in, the map is centred on the player but never pans past its own edge.
+	int32& Zoom = bBigMap ? BigZoom : MiniZoom;
+	Zoom = FMath::Min(Zoom, MaxMapZoom(View.GetMax()));
+	const FVector2D Full = View * MapZoomLevels[Zoom];
+	const FVector2D PlayerAt = MiniMapData->WorldToUV(Pawn->GetActorLocation()) * Full;
+	const FVector2D Offset(FMath::RoundToFloat(FMath::Clamp(View.X / 2.f - PlayerAt.X, View.X - Full.X, 0.f)),
+		FMath::RoundToFloat(FMath::Clamp(View.Y / 2.f - PlayerAt.Y, View.Y - Full.Y, 0.f)));
+	if (!Offset.Equals(TileOffset) || !Full.Equals(TileFull))
+	{
+		TileOffset = Offset;
+		TileFull = Full;
+		for (int32 Index = 0; Index < MiniMapTiles.Num(); ++Index)
+		{
+			const FShinobiMiniMapTile& Tile = MiniMapData->Tiles[Index];
+			// Whole pixels on both edges, so neighbouring tiles meet without a seam.
+			const FVector2D Min(FMath::RoundToFloat(Offset.X + Tile.UVMin.X * Full.X), FMath::RoundToFloat(Offset.Y + Tile.UVMin.Y * Full.Y));
+			const FVector2D Max(FMath::RoundToFloat(Offset.X + Tile.UVMax.X * Full.X), FMath::RoundToFloat(Offset.Y + Tile.UVMax.Y * Full.Y));
+			UCanvasPanelSlot* TileSlot = Cast<UCanvasPanelSlot>(MiniMapTiles[Index]->Slot);
+			TileSlot->SetPosition(Min);
+			TileSlot->SetSize(Max - Min);
+		}
+	}
+
+	auto ToMap = [this, &Offset, &Full](const FVector& Where) { return Offset + MiniMapData->WorldToUV(Where) * Full; };
+	Cast<UCanvasPanelSlot>(MiniMapArrow->Slot)->SetPosition(ToMap(Pawn->GetActorLocation()));
+	// The arrow art points up (north, -Y); yaw 0 faces +X (east, right) and grows clockwise on the map.
+	MiniMapArrow->SetRenderTransformAngle(Pawn->GetActorRotation().Yaw + 90.f);
+
+	const float Mark = bBigMap ? BigMapMarkScale : 1.f;
+	int32 Used = 0;
+	const AShinobiGameState* State = GetWorld()->GetGameState<AShinobiGameState>();
+	if (State && State->NumCamps > 0)
+	{
+		MiniMapDot(Used++, ToMap(State->VillageLocation), 12.f * Mark, VillageMarkColor);
+		for (TActorIterator<AShinobiCamp> It(GetWorld()); It; ++It)
+		{
+			const bool bCleared = It->GetState() == EShinobiCampState::Cleared;
+			MiniMapDot(Used++, ToMap(It->GetActorLocation()), (It->bBoss ? 14.f : 10.f) * Mark,
+				bCleared ? ClearedMarkColor : (It->bBoss ? BossMarkColor : CampMarkColor));
+		}
+	}
+	// Teammates: every other player on our side (never the opposing side in a PvP arena).
+	if (State)
+	{
+		for (const APlayerState* Mate : State->PlayerArray)
+		{
+			const AShinobiCharacterBase* Body = Mate ? Cast<AShinobiCharacterBase>(Mate->GetPawn()) : nullptr;
+			if (Body && Body != Pawn && !Pawn->IsHostileTo(Body))
+			{
+				MiniMapDot(Used++, ToMap(Body->GetActorLocation()), 10.f * Mark, MateMarkColor);
+			}
+		}
+	}
+	for (int32 Index = Used; Index < MiniMapDots.Num(); ++Index)
+	{
+		MiniMapDots[Index]->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+void UShinobiHUDWidget::MiniMapDot(int32 Index, const FVector2D& Position, float Size, const FLinearColor& Colour)
+{
+	while (MiniMapDots.Num() <= Index)
+	{
+		UBorder* Dot = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+		MiniMapCanvas->AddChildToCanvas(Dot)->SetAlignment(FVector2D(0.5f));
+		MiniMapDots.Add(Dot);
+	}
+	UBorder* Dot = MiniMapDots[Index];
+	Dot->SetBrush(RoundedBrush(Colour, -1.f, InkColor, 1.5f));
+	Dot->SetVisibility(ESlateVisibility::HitTestInvisible);
+	UCanvasPanelSlot* DotSlot = Cast<UCanvasPanelSlot>(Dot->Slot);
+	DotSlot->SetPosition(Position);
+	DotSlot->SetSize(FVector2D(Size));
 }
 
 UTextBlock* UShinobiHUDWidget::CompassLabel(int32 Index)
@@ -659,7 +881,7 @@ void UShinobiHUDWidget::UpdateCompass()
 {
 	const AShinobiGameState* State = GetWorld() ? GetWorld()->GetGameState<AShinobiGameState>() : nullptr;
 	const APlayerController* PC = GetOwningPlayer();
-	const bool bShow = State && State->NumCamps > 0 && PC && PC->PlayerCameraManager && RootCanvas;
+	const bool bShow = State && State->NumCamps > 0 && PC && PC->PlayerCameraManager && RootCanvas && !bBigMap;
 	if (CompassBar)
 	{
 		CompassBar->SetVisibility(bShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
@@ -686,16 +908,16 @@ void UShinobiHUDWidget::UpdateCompass()
 		{
 			Mark((Where - Eye).Rotation().Yaw, FString::Printf(TEXT("%s %dm"), *Name, FMath::RoundToInt(FVector::Dist2D(Where, Eye) / 100.f)), Colour);
 		};
-		// The layout's +Y is north.
-		Mark(90.f, TEXT("N"), FLinearColor::White);
+		// As on the minimap: +X is east, so north is -Y, and yaw grows clockwise (N, E, S, W).
+		Mark(-90.f, TEXT("N"), FLinearColor::White);
 		Mark(0.f, TEXT("E"), FLinearColor(0.8f, 0.8f, 0.8f));
-		Mark(-90.f, TEXT("S"), FLinearColor(0.8f, 0.8f, 0.8f));
+		Mark(90.f, TEXT("S"), FLinearColor(0.8f, 0.8f, 0.8f));
 		Mark(180.f, TEXT("W"), FLinearColor(0.8f, 0.8f, 0.8f));
-		MarkAt(State->VillageLocation, State->HubName, FLinearColor(0.95f, 0.9f, 0.7f));
+		MarkAt(State->VillageLocation, State->HubName, VillageMarkColor);
 		for (TActorIterator<AShinobiCamp> It(GetWorld()); It; ++It)
 		{
 			const bool bCleared = It->GetState() == EShinobiCampState::Cleared;
-			const FLinearColor Colour = bCleared ? FLinearColor(0.5f, 0.5f, 0.5f) : (It->bBoss ? FLinearColor(0.75f, 0.3f, 1.f) : FLinearColor(1.f, 0.3f, 0.2f));
+			const FLinearColor Colour = bCleared ? ClearedMarkColor : (It->bBoss ? BossMarkColor : CampMarkColor);
 			MarkAt(It->GetActorLocation(), It->bBoss ? TEXT("Boss") : TEXT("Camp"), Colour);
 		}
 	}

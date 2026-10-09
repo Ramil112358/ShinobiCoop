@@ -123,6 +123,17 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 	Config->CameraZoom = MakeAction(Config, TEXT("IA_CameraZoom"), EInputActionValueType::Axis1D);
 	Ctx->MapKey(Config->CameraZoom, EKeys::MouseWheelAxis);
 
+	Config->MapToggle = MakeAction(Config, TEXT("IA_MapToggle"), EInputActionValueType::Boolean);
+	Ctx->MapKey(Config->MapToggle, EKeys::M);
+	Ctx->MapKey(Config->MapToggle, EKeys::Gamepad_Special_Left);
+	// D-pad down is Dismount, so the pad only zooms in: past the closest level it wraps back to the whole map.
+	Config->MapZoom = MakeAction(Config, TEXT("IA_MapZoom"), EInputActionValueType::Axis1D);
+	Ctx->MapKey(Config->MapZoom, EKeys::Equals);
+	Ctx->MapKey(Config->MapZoom, EKeys::Add);
+	Ctx->MapKey(Config->MapZoom, EKeys::Gamepad_DPad_Up);
+	AddModifier<UInputModifierNegate>(Ctx->MapKey(Config->MapZoom, EKeys::Hyphen), Ctx);
+	AddModifier<UInputModifierNegate>(Ctx->MapKey(Config->MapZoom, EKeys::Subtract), Ctx);
+
 	return Config;
 }
 

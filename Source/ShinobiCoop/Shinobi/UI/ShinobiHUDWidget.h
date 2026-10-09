@@ -12,6 +12,7 @@ class UImage;
 class UOverlay;
 class UProgressBar;
 class UShinobiJutsuAbility;
+class UShinobiMiniMapData;
 class USizeBox;
 class UTextBlock;
 class UVerticalBox;
@@ -36,6 +37,14 @@ public:
 
 	/** Whether the dragon crosshair is showing, and where (viewport pixels). For tests. */
 	bool IsDragonCrosshairShown() const;
+
+	/** M: the level's map large in the middle of the screen, in place of the minimap. Stays shut on a level without a map. */
+	void ToggleBigMap();
+	bool IsBigMapOpen() const { return bBigMap; }
+
+	/** Zooms the open map (big or mini) one level: Steps > 0 in. With bWrap, zooming in past the closest level goes back
+	 * to the whole map. Zoomed views follow the player. */
+	void ZoomMap(int32 Steps, bool bWrap);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -72,6 +81,17 @@ private:
 	void UpdateCompass();
 	UTextBlock* CompassLabel(int32 Index);
 
+	/** Bottom-right: the level's baked map (UShinobiMiniMapData::ForLevel), north-up; hidden when none is baked. */
+	void BuildMiniMap(UCanvasPanel* Root);
+	/** Lays the map out (corner or big), pans it to the player at the current zoom and moves the arrow, teammates,
+	 * village and camps onto it. ScreenSize: the HUD's size, for the big map. */
+	void UpdateMiniMap(const class AShinobiCharacterBase* Pawn, const FVector2D& ScreenSize);
+	/** The closest zoom level (index into the zoom steps) for a view ViewLong across: the view still spans a useful
+	 * stretch of world and the art is not blown up too far. */
+	int32 MaxMapZoom(float ViewLong) const;
+	/** Pooled map dot Index, shown at Position (map pixels) with this size and colour. */
+	void MiniMapDot(int32 Index, const FVector2D& Position, float Size, const FLinearColor& Colour);
+
 	/** Binds the red "can't cast" flash to the current pawn's ability system; rebinds when the pawn changes. */
 	void BindFailureFlash(UAbilitySystemComponent* ASC);
 	void OnAbilityFailed(const UGameplayAbility* Ability, const FGameplayTagContainer& Reasons);
@@ -85,6 +105,46 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UBorder> CompassBar;
+
+	UPROPERTY()
+	TObjectPtr<const UShinobiMiniMapData> MiniMapData;
+
+	/** The corner map's size on screen: the long edge is fixed, the short one follows the map's aspect. */
+	FVector2D MiniMapSize = FVector2D::ZeroVector;
+
+	/** The size the map is laid out at now (corner or big), and whether that is the big layout. */
+	FVector2D MapViewSize = FVector2D::ZeroVector;
+	bool bMapLaidOutBig = false;
+
+	/** The tile layout last applied (offset and whole-map size, in view units); tiles move only when it changes. */
+	FVector2D TileOffset = FVector2D(-1.f);
+	FVector2D TileFull = FVector2D::ZeroVector;
+
+	bool bBigMap = false;
+	int32 MiniZoom = 1;
+	int32 BigZoom = 0;
+
+	UPROPERTY()
+	TObjectPtr<UBorder> MiniMapFrame;
+
+	/** Behind the big map: dims the game. */
+	UPROPERTY()
+	TObjectPtr<UBorder> BigMapShade;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> BigMapHint;
+
+	UPROPERTY()
+	TObjectPtr<UCanvasPanel> MiniMapCanvas;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UImage>> MiniMapTiles;
+
+	UPROPERTY()
+	TObjectPtr<UImage> MiniMapArrow;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UBorder>> MiniMapDots;
 
 	/** Pooled compass labels, positioned every tick; unused ones are hidden. */
 	UPROPERTY()

@@ -1,5 +1,6 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "ShinobiCoop.h"
+#include "Shinobi/ShinobiPlayerController.h"
 #include "AbilitySystemComponent.h"
 #include "Animation/AnimMontage.h"
 #include "AnimationRuntime.h"
@@ -808,6 +809,12 @@ void AShinobiPlayerCharacter::ZoomCamera(const FInputActionValue& Value)
 	const float ZoomAxis = Value.Get<float>();
 	if (FMath::IsNearlyZero(ZoomAxis))
 	{
+		return;
+	}
+	// While the big map is open the wheel zooms the map, not the camera.
+	if (AShinobiPlayerController* PC = Cast<AShinobiPlayerController>(Controller); PC && PC->IsBigMapOpen())
+	{
+		PC->ZoomMap(ZoomAxis > 0.f ? 1 : -1, false);
 		return;
 	}
 
