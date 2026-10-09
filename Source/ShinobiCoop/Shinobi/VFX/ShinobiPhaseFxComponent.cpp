@@ -2,6 +2,8 @@
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemInterface.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/World.h"
+#include "TimerManager.h"
 #include "Materials/MaterialInterface.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/VFX/ShinobiVfx.h"
@@ -36,10 +38,11 @@ void UShinobiPhaseFxComponent::OnPhasedChanged(const FGameplayTag Tag, int32 Cou
 {
 	if (Count > 0)
 	{
-		ApplyGhost();
+		GetWorld()->GetTimerManager().SetTimer(GhostTimer, this, &UShinobiPhaseFxComponent::ApplyGhost, GhostDelay);
 	}
 	else
 	{
+		GetWorld()->GetTimerManager().ClearTimer(GhostTimer); // stepped out before the spiral finished
 		RestoreBody();
 	}
 }

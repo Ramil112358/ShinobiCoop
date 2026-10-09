@@ -26,6 +26,7 @@
 #include "Shinobi/ShinobiBarrier.h"
 #include "Shinobi/ShinobiProjectile.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
+#include "Shinobi/VFX/ShinobiPhaseFxComponent.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOffPageJutsuTest, "ShinobiCoop.JutsuPages.OffPageJutsuDoesNotFire", ShinobiTestFlags)
 bool FShinobiOffPageJutsuTest::RunTest(const FString& Parameters)
@@ -651,7 +652,8 @@ bool FShinobiKamuiGhostTest::RunTest(const FString& Parameters)
 	UMaterialInterface* Original = Body->GetMaterial(0);
 
 	ShinobiTest::ApplyEffect(P, UGE_Kamui::StaticClass());
-	W.Tick(0.1f);
+	TestTrue(TEXT("Solid while the eye's spiral turns"), Body->GetMaterial(0) == Original);
+	W.Tick(0.1f + UShinobiPhaseFxComponent::GhostDelay);
 	const UMaterialInstanceDynamic* Ghost = Cast<UMaterialInstanceDynamic>(Body->GetMaterial(0));
 	if (TestNotNull(TEXT("A ghost material while phased (run Scripts/setup_vfx.py if M_Phased is missing)"), Ghost))
 	{

@@ -322,11 +322,13 @@ bool AShinobiBurst::BuildCards()
 		AddCard(Plane, ESprite::Ember, FLinearColor(0.55f, 0.8f, 1.f), 1.5f, FVector::ZeroVector, FVector2D(300.f, 520.f) * S, 120.f * S, false, true);
 		break;
 	case EShinobiBurst::Swirl:
-		// Kamui: a spiral turning on the ground and a soft flash, in chakra blue.
-		Duration = 0.7f;
-		AddCard(Plane, ESprite::Vortex, FLinearColor(0.4f, 0.7f, 1.f), 2.f, FVector::ZeroVector, FVector2D(520.f, 520.f) * S, 0.f, true, false, 0.f);
-		Cards.Last().Spin = 360.f;
-		AddCard(Plane, ESprite::Burst, FLinearColor(0.5f, 0.8f, 1.f), 1.2f, FVector(0.f, 0.f, 90.f), FVector2D(380.f, 380.f) * S);
+		// Kamui: space twisting into a spiral out of the caster's eye (spawned at the eye), facing the camera. Two layers
+		// turning against each other read as a warp rather than a flat decal.
+		Duration = 0.45f;
+		AddCard(Plane, ESprite::Vortex, FLinearColor(0.55f, 0.6f, 0.75f), 1.6f, FVector::ZeroVector, FVector2D(520.f, 520.f) * S);
+		Cards.Last().Spin = -540.f;
+		AddCard(Plane, ESprite::Vortex, FLinearColor(0.45f, 0.7f, 1.f), 2.2f, FVector::ZeroVector, FVector2D(300.f, 300.f) * S);
+		Cards.Last().Spin = 900.f;
 		break;
 	default:
 		return false;
@@ -404,6 +406,14 @@ void AShinobiBurst::Tick(float DeltaSeconds)
 			{
 				Card.Mesh->SetWorldLocation(Origin + FVector(0.f, 0.f, 8.f));
 				Card.Mesh->SetWorldRotation(FRotator(0.f, Card.Spin * Age, 0.f));
+				Card.Mesh->SetWorldScale3D(FVector(Size.X / 100.f, Size.Y / 100.f, 1.f));
+			}
+			else if (Card.Spin != 0.f)
+			{
+				// Fully facing the camera, centred on the origin and turning in the view plane (Kamui's spiral).
+				const FVector ToCamera = (CameraAt - Origin).GetSafeNormal();
+				Card.Mesh->SetWorldLocation(Origin);
+				Card.Mesh->SetWorldRotation(FQuat(ToCamera, FMath::DegreesToRadians(Card.Spin * Age)) * FRotationMatrix::MakeFromZ(ToCamera).ToQuat());
 				Card.Mesh->SetWorldScale3D(FVector(Size.X / 100.f, Size.Y / 100.f, 1.f));
 			}
 			else
