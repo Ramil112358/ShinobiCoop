@@ -503,6 +503,32 @@ def usage():
                 changed = changed or bool(needed)
             EAL.save_loaded_asset(base)
     log(f"usage: {len(done)} base materials flagged")
+    gltf_parent()
+
+
+GLTF_ENGINE = "/InterchangeAssets/gltf/Substrate/M_GLTF"
+
+
+def gltf_parent():
+    """glTF-imported props (cars, bus, phone box...) are instances of the engine's read-only M_GLTF, which can't take the
+    instanced-static-mesh flag, so in game they render as the grey default checker. Reparent them to a project copy."""
+    copy = f"{MATS}/M_GLTF"
+    if not EAL.does_asset_exist(copy):
+        EAL.duplicate_asset(GLTF_ENGINE, copy)
+    parent = unreal.load_asset(copy)
+    for flag in (unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES, unreal.MaterialUsage.MATUSAGE_NANITE):
+        MEL.set_base_material_usage(parent, flag, True)
+    MEL.recompile_material(parent)
+    EAL.save_loaded_asset(parent)
+    engine = unreal.load_asset(GLTF_ENGINE)
+    moved = 0
+    for path in EAL.list_assets("/Game", recursive=True):
+        mi = unreal.load_asset(path.split(".")[0]) if "/Materials/" in path or "/Props/" in path else None
+        if isinstance(mi, unreal.MaterialInstanceConstant) and mi.get_editor_property("parent") == engine:
+            MEL.set_material_instance_parent(mi, parent)
+            EAL.save_loaded_asset(mi, False)  # reparenting doesn't dirty the package
+            moved += 1
+    log(f"gltf: {moved} instances moved to {copy}")
 
 
 def painted_copy(source, name, colour, roughness=0.35, metallic=0.3, only_slots=None):
