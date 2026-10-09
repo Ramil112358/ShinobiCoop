@@ -27,7 +27,8 @@ Let player-controlled shinobi run up and along building walls and walk on water,
 
 ### On the wall
 - Gravity direction is `-WallNormal`. The capsule up axis is `WallNormal`.
-- The camera stays world-upright and never rolls. Movement input maps from camera space onto the wall plane: W is up the wall, S is down, and A/D are sideways along the wall. Sprint and chill speed rules apply unchanged.
+- The camera stays world-upright and never rolls. Movement input maps from camera space onto the wall plane. The part of the input pointing into the wall moves the character up, and the part pointing out of it moves the character down. The part along the wall moves the character sideways. With the camera facing the wall, W is up, S is down and A/D are sideways. There is no away-from-wall input exit, because S already means "down". Sprint and chill speed rules apply unchanged.
+- Faces less than about 1.8 m tall never attach. A head-height trace must also reach the face, so kerbs, benches and car sides are excluded.
 - At a corner, when the character reaches an adjacent face that also passes the entry test, gravity re-targets to the new face. It changes only after a sweep confirms the move.
 
 ### Exit
@@ -36,13 +37,15 @@ Every exit restores gravity to `(0, 0, -1)` and an upright yaw-only rotation.
 | Trigger | Result |
 | --- | --- |
 | Jump | Launch along `WallNormal * KickOffSpeed + Up * KickOffUp`; the character enters falling |
-| Input points away from the wall, or the floor is lost below the feet | Falling |
+| Moving down the wall onto walkable ground | Stands up on the ground |
+| Floor is lost at a side edge (outer corner) with no adjacent face to wrap onto | Falling |
 | Floor is lost at the top edge while moving up | Trace down onto the roof from above the edge; if the trace finds a walkable spot, place the character there standing. Otherwise, falling |
 | Mount, downed, dead, knockback launch, Teleport, Substitution | Immediate detach |
 
 ### Water
 - Water surfaces get the `ShinobiWaterSurface` tag. Their mesh collision is query-only, blocks `Pawn` and ignores every other channel. Characters walk on them as ordinary floor, with no special movement code. Materials, transforms and shadows stay unchanged.
-- London's hidden river-edge barriers (`City:X`) stop blocking `Pawn`, so players can step onto the water. The valley has no river-edge barriers. Its map-wide `RiverWater` plane lies under the terrain everywhere except the river bed, so blocking `Pawn` on it affects only the river.
+- London's hidden river-edge barriers (`City:X`) are removed, so players can step onto the water. The valley has no river-edge barriers. Its map-wide `RiverWater` plane lies under the terrain everywhere except the river bed, so blocking `Pawn` on it affects only the river.
+- Water blocks every `Pawn`, so enemies and summons also walk on the surface instead of wading on the river bed. Navmesh then covers the river.
 - Outer map-boundary walls (valley `EdgeWall*`, London `EdgeWall`) keep blocking and are tagged `ShinobiNoSurfaceTraversal`.
 
 ### Building collision
@@ -50,7 +53,7 @@ Every exit restores gravity to `(0, 0, -1)` and an upright yaw-only rotation.
 
 ## Combat on walls
 
-- Five call sites force upright yaw-only rotation: `GA_Melee`, `ShinobiDashJutsu`, `ShinobiJutsuAbility` (cast facing), `GA_Substitution`, `GA_Teleport`. One helper, `ShinobiTraversal::FaceDirection(ACharacter*, FVector WorldDir)`, replaces them. It builds a rotation whose up axis is `-GravityDirection` and whose forward axis is `WorldDir` projected onto the gravity floor plane. For an upright character it gives exactly the old yaw-only result.
+- Five call sites force upright yaw-only rotation: `GA_Melee`, `ShinobiDashJutsu`, `ShinobiJutsuAbility` (cast facing), `GA_Substitution`, `GA_Teleport`. One helper, the static `UShinobiMovementComponent::FaceDirection(AActor*, const FVector& WorldDir)`, replaces the facing in `GA_Melee`, `ShinobiDashJutsu` and `ShinobiJutsuAbility`. Substitution and Teleport detach the character before relocating it, so their upright rotation stays correct. It builds a rotation whose up axis is `-GravityDirection` and whose forward axis is `WorldDir` projected onto the gravity floor plane. For an upright character it gives exactly the old yaw-only result.
 - Projectiles and beams keep using the camera aim and need no change.
 - Teleport and Substitution relocate the character, so they detach it first.
 - When a character on a wall receives `LaunchCharacter` knockback (melee push, Rasengan, Almighty Push), it detaches before the launch is applied.
@@ -76,7 +79,7 @@ AI wall traversal, ceilings, swimming, water ripples or splashes, traversal stam
 
 - `ShinobiMovementComponent.h/.cpp`: entry detection, gravity switching, the wall input frame, exits, top-edge vault, corner re-target, and the queries `IsWallTraversing()` / `IsWaterTraversing()`.
 - `ShinobiPlayerCharacter.cpp`: map `Move` input to the wall plane, kick off on Jump, detach on mount, death and knockback.
-- New `Shinobi/ShinobiTraversal.h/.cpp` (`FaceDirection`). Five ability call sites use it.
+- `UShinobiMovementComponent::FaceDirection` replaces the upright-only facing in four ability call sites. Teleport and Substitution detach first.
 - New `Shinobi/VFX/ShinobiSurfaceFxComponent.h/.cpp`.
 - `ABP_Manny_Combat`: gravity-relative ground speed, if needed.
 - `Scripts/world/build_world.py` and `Scripts/london/build_london.py`: water tag and collision, edge-barrier response, boundary tag, building collision check.
