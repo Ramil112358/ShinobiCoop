@@ -13,6 +13,7 @@
 #include "GameFramework/Pawn.h"
 #include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiCharacterBase.h"
+#include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/ShinobiTelegraph.h"
@@ -516,17 +517,13 @@ void UShinobiJutsuAbility::FaceAim(const AActor* Target) const
 	{
 		return;
 	}
-	float Yaw = 0.f;
 	if (Target)
 	{
-		Yaw = (Target->GetActorLocation() - Self->GetActorLocation()).Rotation().Yaw;
+		UShinobiMovementComponent::FaceDirection(Self, Target->GetActorLocation() - Self->GetActorLocation());
+		return;
 	}
-	else
-	{
-		FVector ViewLocation;
-		FRotator ViewRotation;
-		GetAimViewPoint(ViewLocation, ViewRotation);
-		Yaw = ViewRotation.Yaw;
-	}
-	Self->SetActorRotation(FRotator(0.f, Yaw, 0.f));
+	FVector ViewLocation;
+	FRotator ViewRotation;
+	GetAimViewPoint(ViewLocation, ViewRotation);
+	UShinobiMovementComponent::FaceDirection(Self, ViewRotation.Vector());
 }

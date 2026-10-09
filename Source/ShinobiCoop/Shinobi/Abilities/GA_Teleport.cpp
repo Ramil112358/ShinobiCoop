@@ -111,6 +111,10 @@ void UGA_TeleportJump::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 	const UCapsuleComponent* Capsule = Self->GetCapsuleComponent();
 	const FVector Arrival = Chosen->GetArrivalPoint(Capsule->GetScaledCapsuleRadius(), Capsule->GetScaledCapsuleHalfHeight());
 	// TeleportTo stays put if something blocks the spot; the kunai is then kept for another try.
+	if (UShinobiMovementComponent* Movement = GetShinobiMovement())
+	{
+		Movement->DetachFromWall(); // arrives upright at the kunai
+	}
 	if (Self->TeleportTo(Arrival, FRotator(0.f, ViewRotation.Yaw, 0.f)))
 	{
 		if (UShinobiMovementComponent* Movement = GetShinobiMovement())

@@ -418,3 +418,14 @@ bool UShinobiMovementComponent::TryWrapCorner(const FVector& Move)
 	return SweepCapsule(From, From - Along * (Radius + 2.f * WallReach), UpdatedComponent->GetComponentQuat(), Hit)
 		&& IsClimbable(Hit) && AttachToWall(Hit, Hit.ImpactPoint - Normal * (Radius + 5.f));
 }
+
+void UShinobiMovementComponent::FaceDirection(AActor* Actor, const FVector& WorldDir)
+{
+	const ACharacter* Character = Cast<ACharacter>(Actor);
+	const FVector Up = Character && Character->GetCharacterMovement() ? -Character->GetCharacterMovement()->GetGravityDirection() : FVector::UpVector;
+	const FVector Forward = FVector::VectorPlaneProject(WorldDir, Up);
+	if (Actor && !Forward.IsNearlyZero())
+	{
+		Actor->SetActorRotation(FRotationMatrix::MakeFromXZ(Forward, Up).Rotator());
+	}
+}

@@ -46,5 +46,5 @@ private:
 	void OnDashFinished();
 
 	/** Facing when the dash started; the strike uses it, since held move input turns the character mid-dash. */
-	float DashYaw = 0.f;
+	FQuat DashRotation = FQuat::Identity; // facing when the dash started (on a wall too)
 };

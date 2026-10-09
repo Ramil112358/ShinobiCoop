@@ -245,4 +245,24 @@ bool FShinobiWallCornerTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiFaceDirectionTest, "ShinobiCoop.Movement.SurfaceTraversal.FacingKeepsTheFeetOnTheWall", ShinobiTestFlags)
+bool FShinobiFaceDirectionTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	Arena(W);
+	AShinobiPlayerCharacter* P = PlayerAt(W, FVector(WallX - 300.f, 0.f, 100.f));
+
+	UShinobiMovementComponent::FaceDirection(P, FVector(1.f, 1.f, -5.f));
+	TestTrue(TEXT("upright: yaw only"), P->GetActorRotation().Equals(FRotator(0.f, 45.f, 0.f), 0.5f));
+
+	if (!RunOntoWall(*this, W, P))
+	{
+		return false;
+	}
+	UShinobiMovementComponent::FaceDirection(P, FVector(0.f, 1.f, 0.f));
+	TestTrue(TEXT("on the wall the feet stay on it"), P->GetActorUpVector().Equals(FVector(-1.f, 0.f, 0.f), 0.01f));
+	TestTrue(TEXT("and it faces the asked way along it"), P->GetActorForwardVector().Equals(FVector(0.f, 1.f, 0.f), 0.01f));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

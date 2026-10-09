@@ -53,6 +53,10 @@ public:
 	/** Maps a horizontal camera-relative world intent onto the wall: into the wall = up, out of it = down, along it = sideways. */
 	FVector WallInputDirection(const FVector& Intent) const;
 
+	/** Turns Actor toward WorldDir about its gravity up axis: yaw only when upright, along the wall when on one. A WorldDir
+	 * along the up axis leaves the facing as it is. */
+	static void FaceDirection(AActor* Actor, const FVector& WorldDir);
+
 	/** On a wall, Jump kicks off it instead of jumping along its normal. */
 	virtual bool DoJump(bool bReplayingMoves, float DeltaTime) override;
 

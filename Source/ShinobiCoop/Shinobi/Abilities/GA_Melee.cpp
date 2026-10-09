@@ -5,6 +5,7 @@
 #include "Abilities/Tasks/AbilityTask_WaitInputPress.h"
 #include "Animation/AnimMontage.h"
 #include "Shinobi/ShinobiCharacterBase.h"
+#include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
 
@@ -39,7 +40,7 @@ void UGA_Melee::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const F
 	// Players attack where the camera looks. AI turns itself.
 	if (const APawn* Pawn = Cast<APawn>(GetAvatarActorFromActorInfo()); Pawn && Pawn->IsPlayerControlled())
 	{
-		GetAvatarActorFromActorInfo()->SetActorRotation(FRotator(0.f, Pawn->GetControlRotation().Yaw, 0.f));
+		UShinobiMovementComponent::FaceDirection(GetAvatarActorFromActorInfo(), Pawn->GetControlRotation().Vector());
 	}
 
 	ComboIndex = 0;
