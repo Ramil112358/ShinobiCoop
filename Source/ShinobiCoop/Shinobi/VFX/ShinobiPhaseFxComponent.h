@@ -21,6 +21,8 @@ class SHINOBICOOP_API UShinobiPhaseFxComponent : public UActorComponent
 
 public:
 	static constexpr float GhostOpacity = 0.3f;
+	/** Seconds after the tag lands before the body turns ghost: Kamui's eye spiral plays first. Purely cosmetic. */
+	static constexpr float GhostDelay = 0.2f;
 
 protected:
 	virtual void BeginPlay() override;
@@ -41,4 +43,5 @@ private:
 	TArray<FSaved> Saved;
 	TWeakObjectPtr<UAbilitySystemComponent> AbilitySystem;
 	FDelegateHandle PhasedHandle;
+	FTimerHandle GhostTimer;
 };

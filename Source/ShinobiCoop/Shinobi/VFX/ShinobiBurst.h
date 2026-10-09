@@ -22,7 +22,7 @@ enum class EShinobiBurst : uint8
 	FireBreath,       // Fireball: a flame cone from the caster's mouth along the burst's rotation
 	BlackFlameIgnite, // Amaterasu: the black flames catching on the target
 	Shockwave,        // Almighty Push: a ring of force and dust on the ground
-	Swirl,            // Kamui: the spiral the caster slips into or out of
+	Swirl,            // Kamui: a camera-facing spiral out of the caster's eye as they slip in or out
 	TeleportFlash,    // Teleport: the flash where the caster arrives
 	Crumble,          // Earth Wall breaking
 	Splash,           // Water Wall breaking
@@ -95,7 +95,7 @@ private:
 		float Delay = 0.f;       // seconds before it appears (a stream of flame reaches its far cards later)
 		bool bFlat = false;      // lies on the ground (rings, vortexes) instead of facing the camera
 		bool bFlicker = false;   // switches variant every few frames (lightning, flame)
-		float Spin = 0.f;        // degrees per second, flat cards only
+		float Spin = 0.f;        // degrees per second; on a standing card it also turns the card to face the camera fully
 		float NextSwap = 0.f;
 		int32 Variant = 0;
 	};

@@ -1,9 +1,24 @@
 #include "Shinobi/Abilities/GA_Kamui.h"
 #include "AbilitySystemComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
+
+namespace
+{
+	/** Kamui's spiral starts at the eye: just in front of and above the head bone (head height off the capsule if there is none). */
+	void SpawnEyeSpiral(const AShinobiCharacterBase& Self)
+	{
+		const USkeletalMeshComponent* Body = Self.GetBodyMesh();
+		const FName Head = Self.GetHeadBone();
+		const FVector Eye = Body && Body->GetBoneIndex(Head) != INDEX_NONE
+			? Body->GetSocketLocation(Head) + Self.GetActorForwardVector() * 15.f + FVector(0.f, 0.f, 8.f)
+			: Self.GetActorLocation() + Self.GetActorForwardVector() * 15.f + FVector(0.f, 0.f, 70.f);
+		AShinobiBurst::Spawn(Self.GetWorld(), EShinobiBurst::Swirl, Eye);
+	}
+}
 
 UGA_Kamui::UGA_Kamui()
 {
@@ -23,10 +38,11 @@ void UGA_Kamui::ExecuteJutsu()
 {
 	if (HasAuthority(&CurrentActivationInfo))
 	{
+		// Phased (and untouchable) at once; the ghost look waits for the spiral (UShinobiPhaseFxComponent::GhostDelay).
 		ApplyEffectToSelf(UGE_Kamui::StaticClass());
 		if (const AShinobiCharacterBase* Self = GetShinobiCharacter())
 		{
-			AShinobiBurst::Spawn(Self->GetWorld(), EShinobiBurst::Swirl, Self->GetActorLocation());
+			SpawnEyeSpiral(*Self);
 		}
 	}
 	EndJutsu();
@@ -47,7 +63,7 @@ void UGA_KamuiExit::ActivateAbility(const FGameplayAbilitySpecHandle Handle, con
 		GetAbilitySystemComponentFromActorInfo()->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_Phased));
 		if (const AShinobiCharacterBase* Self = GetShinobiCharacter())
 		{
-			AShinobiBurst::Spawn(Self->GetWorld(), EShinobiBurst::Swirl, Self->GetActorLocation());
+			SpawnEyeSpiral(*Self);
 		}
 	}
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
