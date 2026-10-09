@@ -1,53 +1,114 @@
 # Surface Traversal: Walls and Water
 
+Revised 2026-10-09. Replaces the 2026-10-05 version; the custom movement mode it described is dropped.
+
 ## Goal
 
-Let player-controlled shinobi automatically climb solid vertical walls and walk across marked water surfaces by moving into them. Show blue chakra around the character's feet only while this traversal is active. Keep the feature compatible with co-op movement prediction and the existing world maps.
+Let player-controlled shinobi run up and along building walls and walk on water, in the style of *Naruto to Boruto: Shinobi Striker*. While they traverse a wall or water, a thin blue chakra glow wraps each foot, in the same look as the chakra-charge aura (hold C). Players can fight while on a wall. Collision is never bypassed, so no character can enter a building through its walls. The feature must work in co-op with client prediction.
 
-## Agreed design
+## Agreed decisions
 
-- Traversal engages automatically from movement input; it does not require a new button.
-- Use a dedicated surface-traversal movement mode in `UShinobiMovementComponent`. Do not reuse flying mode, which is also used by dragon mounts and could bypass normal collision behavior.
-- Limit automatic traversal to player characters. Enemies and other AI keep their existing movement.
-- Detect climbable surfaces from solid world collision and near-vertical hit normals. Project movement along the contacted face, keep the character attached while input continues, and detach when the surface ends or the player moves away.
-- Mark water surface actors explicitly with `ShinobiWaterSurface`. Water surfaces must block the character capsule for traversal while retaining their existing visual material and map layout.
-- Drive the foot chakra effect from the active traversal state on each machine; keep it cosmetic and use the existing chakra-blue VFX look.
-- Preserve sprint, mounted flight, jutsu movement effects, and ordinary walking/falling behavior when traversal is inactive.
+- **Engine custom gravity.** On a wall, the character's gravity direction is set to point into the wall (`UCharacterMovementComponent::SetGravityDirection`), and the character uses ordinary `MOVE_Walking` on it. The engine already handles capsule rotation, floor finding, prediction, client corrections and replication to simulated proxies (`ACharacter::ReplicatedGravityDirection`). There is no custom movement mode.
+- **Automatic entry.** No new button. Walking, sprinting or falling into a climbable face while movement input pushes into it attaches the character.
+- **Jump kicks off.** Jump on a wall resets gravity and launches the character away from the wall and slightly up.
+- **Top edge vaults.** Climbing past the top of a wall puts the character upright on the roof.
+- **Full wall combat.** Melee, jutsu, dash and dodge can all be used on a wall.
+- **Players only.** Enemies, summons and other AI keep their existing movement.
 
-## Surface authoring and maps
+## Movement rules
 
-The Hidden Leaf Valley map creates a river plane tagged `ShinobiWater` with `NoCollision`; London imports water mesh chunks as `City:W`, also with `NoCollision`. Both currently let players fall to or walk on the river bed. The implementation will add the `ShinobiWaterSurface` marker and query collision to these surfaces so the movement component can identify and stand on them. The water meshes remain visually unchanged. Existing invisible water-edge walls remain collision barriers; they are not water surfaces.
+### Entry
+- The owner must be an `AShinobiPlayerCharacter`. It must not be mounted, downed, dead or phased.
+- The character is in `MOVE_Walking` or `MOVE_Falling`.
+- The movement input points into a blocking `WorldStatic` hit whose normal is within 25° of horizontal (`|Normal.Z| <= sin 25°`).
+- The hit actor is not tagged `ShinobiNoSurfaceTraversal`.
+- An overlap test of the capsule, rotated to the wall frame and placed at feet-contact distance, finds no blocking geometry. If it does, the character does not attach. This is what stops the capsule rotating into a building.
+- Standing beside a wall with no input into it never attaches.
 
-Climb detection uses blocking world geometry with an approximately vertical face, rather than requiring content authors to retag every building mesh. It is restricted to player-controlled characters and movement-directed contact, so merely standing beside a wall does not pull a character onto it. Surface changes at corners and edges must be swept and validated before the character follows them.
+### On the wall
+- Gravity direction is `-WallNormal`. The capsule up axis is `WallNormal`.
+- The camera stays world-upright and never rolls. Movement input maps from camera space onto the wall plane: W is up the wall, S is down, and A/D are sideways along the wall. Sprint and chill speed rules apply unchanged.
+- At a corner, when the character reaches an adjacent face that also passes the entry test, gravity re-targets to the new face. It changes only after a sweep confirms the move.
 
-## Movement and networking
+### Exit
+Every exit restores gravity to `(0, 0, -1)` and an upright yaw-only rotation.
 
-`UShinobiMovementComponent` owns detection, entry/exit, surface-relative input, adhesion, and movement-mode transitions. The regular character movement collision sweep remains authoritative. Client prediction and saved moves must preserve traversal intent/state sufficiently for the server and owning client to agree without persistent correction. Replicated movement state lets remote players see the correct pose and foot effect.
+| Trigger | Result |
+| --- | --- |
+| Jump | Launch along `WallNormal * KickOffSpeed + Up * KickOffUp`; the character enters falling |
+| Input points away from the wall, or the floor is lost below the feet | Falling |
+| Floor is lost at the top edge while moving up | Trace down onto the roof from above the edge; if the trace finds a walkable spot, place the character there standing. Otherwise, falling |
+| Mount, downed, dead, knockback launch, Teleport, Substitution | Immediate detach |
 
-On a wall, movement is constrained to the contacted plane; input toward the wall maintains adhesion, while input away from it releases the character to falling. On water, the character remains supported at the marked water plane and moves horizontally. Leaving the marked plane returns to ordinary falling or walking according to the next valid floor hit. Mounted flight takes precedence and never enters surface traversal.
+### Water
+- Water surfaces get the `ShinobiWaterSurface` tag. Their mesh collision is query-only, blocks `Pawn` and ignores every other channel. Characters walk on them as ordinary floor, with no special movement code. Materials, transforms and shadows stay unchanged.
+- London's hidden river-edge barriers (`City:X`) stop blocking `Pawn`, so players can step onto the water. The valley has no river-edge barriers. Its map-wide `RiverWater` plane lies under the terrain everywhere except the river bed, so blocking `Pawn` on it affects only the river.
+- Outer map-boundary walls (valley `EdgeWall*`, London `EdgeWall`) keep blocking and are tagged `ShinobiNoSurfaceTraversal`.
 
-## Chakra effect
+### Building collision
+- Climbable building geometry must block `Pawn`. Imported London building chunks (`City:B`) are checked. If they lack collision, the build script gives them collision so players cannot walk into buildings.
 
-Add a small cosmetic component or equivalent effect owned by the player character. It follows the feet and turns on while the movement component reports wall or water traversal. It uses the project's existing chakra-blue glow style, is visible to nearby co-op players, and has no gameplay or chakra-cost effect. It turns off promptly on detach, death, or mount entry.
+## Combat on walls
 
-## Scope and exclusions
+- Five call sites force upright yaw-only rotation: `GA_Melee`, `ShinobiDashJutsu`, `ShinobiJutsuAbility` (cast facing), `GA_Substitution`, `GA_Teleport`. One helper, `ShinobiTraversal::FaceDirection(ACharacter*, FVector WorldDir)`, replaces them. It builds a rotation whose up axis is `-GravityDirection` and whose forward axis is `WorldDir` projected onto the gravity floor plane. For an upright character it gives exactly the old yaw-only result.
+- Projectiles and beams keep using the camera aim and need no change.
+- Teleport and Substitution relocate the character, so they detach it first.
+- When a character on a wall receives `LaunchCharacter` knockback (melee push, Rasengan, Almighty Push), it detaches before the launch is applied.
+- Dragon fire patches already require an upward floor normal and spawn nothing on a wall. Mounting detaches.
 
-- Player-controlled shinobi only; AI traversal, ceilings, swimming, underwater movement, traversal stamina/cost, and a dedicated traversal input are out of scope.
-- Water detection is explicit through the `ShinobiWaterSurface` marker, not inferred from material names.
-- Building geometry does not need per-mesh authoring tags; any solid near-vertical world face may be climbed by a player.
-- No changes to water appearance, map dimensions, or existing river-edge barriers.
+## Animation
+
+`ABP_Manny_Combat` is checked first. If its ground speed comes from world-XY velocity, it is changed to gravity-relative velocity (velocity projected onto the plane perpendicular to gravity). Wall running then plays the normal locomotion cycle in the rotated frame.
+
+## Foot chakra VFX
+
+- `UShinobiSurfaceFxComponent` is a new player-only scene component.
+- It attaches one thin, flattened glow shell to the `foot_l` and `foot_r` bones of the body mesh. The material comes from `ShinobiVfx::MakeGlow` with `ShinobiVfx::Colors::Chakra`, the same look as the charge aura. A subtle pulse and a faint light sit at the feet.
+- The glow shows while the character is on a wall, or on a floor whose actor is tagged `ShinobiWaterSurface`.
+- It fades in and out over about 0.15 s. Death, downed and mount hide it at once.
+- It is purely cosmetic and not replicated. Each machine derives the state from replicated gravity direction and movement base. Nothing is created on a dedicated server, and it has no chakra cost.
+
+## Out of scope
+
+AI wall traversal, ceilings, swimming, water ripples or splashes, traversal stamina or cost, and a dedicated traversal button.
 
 ## Implementation areas
 
-- `ShinobiMovementComponent.h/.cpp`: surface-traversal state, prediction, collision queries, and custom movement handling.
-- `ShinobiPlayerCharacter.h/.cpp` or a focused traversal VFX component: expose player eligibility and show the foot chakra effect.
-- `Scripts/world/build_world.py` and `Scripts/london/build_london.py`: mark the generated water surfaces and enable the collision response needed for character support.
-- In-editor checks for wall entry, water support, edge detach, and mounted flight will validate the result, including a co-op session.
+- `ShinobiMovementComponent.h/.cpp`: entry detection, gravity switching, the wall input frame, exits, top-edge vault, corner re-target, and the queries `IsWallTraversing()` / `IsWaterTraversing()`.
+- `ShinobiPlayerCharacter.cpp`: map `Move` input to the wall plane, kick off on Jump, detach on mount, death and knockback.
+- New `Shinobi/ShinobiTraversal.h/.cpp` (`FaceDirection`). Five ability call sites use it.
+- New `Shinobi/VFX/ShinobiSurfaceFxComponent.h/.cpp`.
+- `ABP_Manny_Combat`: gravity-relative ground speed, if needed.
+- `Scripts/world/build_world.py` and `Scripts/london/build_london.py`: water tag and collision, edge-barrier response, boundary tag, building collision check.
+- New `Tests/ShinobiSurfaceTraversalTests.cpp`.
+
+## Testing
+
+- **Focused automation tests** `ShinobiCoop.Movement.SurfaceTraversal.*`:
+  - run-in entry
+  - no entry while only standing beside a wall
+  - entry blocked when the rotated capsule does not fit
+  - tangent climbing
+  - Jump kick-off
+  - top-edge vault
+  - standing on a water-tagged surface
+  - `FaceDirection` keeps the up axis on a wall and gives yaw-only rotation when upright
+
+  Only these tests run. The full suite is not run.
+- **In-editor co-op check** at the end, with two players on both maps:
+  - wall entry and exits
+  - combat on a wall
+  - walking on water and reaching it from the bank
+  - no clipping into buildings
+  - the foot VFX visible to the other player
+  - mount precedence
+  - no persistent client correction
 
 ## Acceptance criteria
 
-1. A player can move onto a vertical building face, climb up and sideways, and detach by moving away or reaching an unsupported edge.
-2. A player can move from a bank onto marked water and walk over the water surface without falling to the river bed.
-3. Blue chakra appears around the feet during both traversal types, is visible to the other co-op player, and disappears after detaching.
-4. Ordinary ground movement, sprint, jutsu movement, and mounted flight continue to behave as before.
-5. Generated Hidden Leaf Valley and London maps mark water surfaces for traversal while their water-edge barriers continue to block movement.
+1. A player runs into a building wall and runs up and sideways on it. Jump kicks them off, and climbing past the top lands them on the roof.
+2. No player can enter a building through its walls, whether by entry, climbing, corners or kick-off.
+3. A player walks from the bank onto the river and across it on both maps without falling to the river bed.
+4. Melee, jutsu, dash and dodge work on a wall without snapping the character upright.
+5. Blue chakra wraps both feet during wall and water traversal. The other co-op player sees it, and it disappears after detaching.
+6. Ground movement, sprint, mounted flight and AI movement are unchanged.
