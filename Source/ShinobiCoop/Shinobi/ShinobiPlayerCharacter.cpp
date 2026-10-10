@@ -533,6 +533,10 @@ void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
 		AddMovementInput(FVector::UpVector, (bFlightClimb ? 1.f : 0.f) - (bFlightDive ? 1.f : 0.f));
 	}
 	UpdateSeatedPose();
+	if (GetCharacterMovement()->IsFalling())
+	{
+		FallApexZ = FMath::Max(FallApexZ, GetActorLocation().Z);
+	}
 	// Possession and the player state can arrive after BeginPlay, so keep the tag current here.
 	NameTag->SetVisibility(!IsLocallyControlled());
 	if (const APlayerState* State = GetPlayerState())
@@ -670,6 +674,37 @@ void AShinobiPlayerCharacter::LaunchCharacter(FVector LaunchVelocity, bool bXYOv
 		Movement->DetachFromWall();
 	}
 	Super::LaunchCharacter(LaunchVelocity, bXYOverride, bZOverride);
+}
+
+void AShinobiPlayerCharacter::OnMovementModeChanged(EMovementMode PrevMovementMode, uint8 PreviousCustomMode)
+{
+	Super::OnMovementModeChanged(PrevMovementMode, PreviousCustomMode);
+	static const TSoftObjectPtr<UAnimMontage> RollMontage(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Land_Roll.AM_Land_Roll")));
+	UAnimInstance* Anim = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!Anim || IsNetMode(NM_DedicatedServer))
+	{
+		return;
+	}
+	const UShinobiMovementComponent* Movement = Cast<UShinobiMovementComponent>(GetCharacterMovement());
+	if (Movement->IsFalling())
+	{
+		FallApexZ = GetActorLocation().Z;
+		if (UAnimMontage* Roll = RollMontage.Get())
+		{
+			Anim->Montage_Stop(0.1f, Roll); // jumped out of the roll
+		}
+		return;
+	}
+	// ponytail: the roll is in place (build_land_roll.py strips its travel); the landing momentum carries it. A forward
+	// push (root motion force, as GA_Dodge) if standing-still rolls look wrong.
+	if (PrevMovementMode == MOVE_Falling && Movement->IsMovingOnGround() && !Movement->IsWallTraversing() && CanMove()
+		&& FallApexZ - GetActorLocation().Z >= RollFallHeight && !Anim->IsAnyMontagePlaying())
+	{
+		if (UAnimMontage* Roll = RollMontage.LoadSynchronous())
+		{
+			Anim->Montage_Play(Roll);
+		}
+	}
 }
 
 void AShinobiPlayerCharacter::Look(const FInputActionValue& Value)

@@ -3,6 +3,8 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "AIController.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/CharacterMovementReplication.h"
 #include "Engine/StaticMesh.h"
@@ -454,6 +456,56 @@ bool FShinobiWallDashVaultTest::RunTest(const FString& Parameters)
 	W.Tick(1.5f);
 	TestFalse(TEXT("on the roof, off the wall"), Moves(P)->IsWallTraversing());
 	TestTrue(FString::Printf(TEXT("upright after the dash (%.2f)"), P->GetActorUpVector().Z), P->GetActorUpVector().Z > 0.99f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiLandRollTest, "ShinobiCoop.Movement.LandingRollsAfterALongFallOrDoubleJumpOnly", ShinobiTestFlags)
+bool FShinobiLandRollTest::RunTest(const FString& Parameters)
+{
+	// (run Scripts/character/build_land_roll.py, then Scripts/setup_jutsu_anims.py with JUTSU_ONLY=Land, if missing)
+	const UAnimMontage* Roll = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Shinobi/Anims/AM_Land_Roll.AM_Land_Roll"));
+	if (!TestNotNull(TEXT("roll montage"), Roll))
+	{
+		return false;
+	}
+	FShinobiTestWorld W;
+	Arena(W);
+	AShinobiPlayerCharacter* P = PlayerAt(W, FVector(0.f, 0.f, 100.f));
+	UAnimInstance* Anim = P->GetMesh()->GetAnimInstance();
+	if (!TestNotNull(TEXT("the character's animation instance"), Anim))
+	{
+		return false;
+	}
+	P->Jump();
+	W.Tick(1.5f);
+	P->StopJumping();
+	TestTrue(TEXT("A single jump lands"), Moves(P)->IsMovingOnGround());
+	TestFalse(TEXT("without a roll"), Anim->Montage_IsPlaying(Roll));
+
+	P->Jump();
+	W.Tick(0.5f);
+	P->StopJumping();
+	P->Jump(); // the double jump, near the first one's top
+	W.Tick(0.1f);
+	P->StopJumping();
+	for (int32 Step = 0; Step < 60 && !Moves(P)->IsMovingOnGround(); ++Step)
+	{
+		W.Tick(0.05f);
+	}
+	TestTrue(TEXT("A double jump lands with a roll"), Anim->Montage_IsPlaying(Roll));
+	W.Tick(Roll->GetPlayLength() + 0.5f);
+	TestFalse(TEXT("which ends"), Anim->Montage_IsPlaying(Roll));
+
+	P->SetActorLocation(FVector(-2000.f, 0.f, 600.f)); // off a roof
+	W.Tick(0.1f);
+	for (int32 Step = 0; Step < 60 && !Moves(P)->IsMovingOnGround(); ++Step)
+	{
+		W.Tick(0.05f);
+	}
+	TestTrue(TEXT("A long drop lands with a roll"), Anim->Montage_IsPlaying(Roll));
+	P->Jump();
+	W.Tick(0.2f);
+	TestFalse(TEXT("and jumping ends it"), Anim->Montage_IsPlaying(Roll));
 	return true;
 }
 
