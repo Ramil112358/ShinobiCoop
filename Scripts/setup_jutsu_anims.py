@@ -28,10 +28,11 @@ JUTSU = {
     "FireMeteor": ("Seal", "Release"), "IceMeteor": ("Seal", "Release"), "WaterDragon": ("Seal", "Release"), "Susanoo": ("Seal", "Release"),
     "Summon": ("Seal", "Release"),  # shared by the toad, snake, dogs and dragon
     "Mount": ("Sit",),  # the rider's seated loop (AShinobiPlayerCharacter)
+    "Land": ("Roll",),  # the roll after a long fall (AShinobiPlayerCharacter; Scripts/character/build_land_roll.py)
 }
 # Phase -> (blend in, blend out) seconds. The seals and the charge hand over to the next phase quickly; the release
 # blends back out to locomotion more slowly.
-PHASES = {"Seal": (0.1, 0.1), "Charge": (0.1, 0.1), "Release": (0.05, 0.25), "Sit": (0.3, 0.3)}
+PHASES = {"Seal": (0.1, 0.1), "Charge": (0.1, 0.1), "Release": (0.05, 0.25), "Sit": (0.3, 0.3), "Roll": (0.1, 0.3)}
 
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 

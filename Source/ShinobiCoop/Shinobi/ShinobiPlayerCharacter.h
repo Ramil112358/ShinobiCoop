@@ -66,6 +66,13 @@ public:
 	/** Knockback off a wall: detach first, so the launch happens with world gravity. */
 	virtual void LaunchCharacter(FVector LaunchVelocity, bool bXYOverride, bool bZOverride) override;
 
+	/** A single jump peaks at ~184 cm (JumpZVelocity 600), so only a double jump or a drop off a wall or roof rolls. */
+	static constexpr float RollFallHeight = 230.f;
+
+	/** Every machine (proxies get the replicated mode): landing from RollFallHeight or more below the fall's highest
+	 * point plays the roll (AM_Land_Roll); taking off again ends it. */
+	virtual void OnMovementModeChanged(EMovementMode PrevMovementMode, uint8 PreviousCustomMode = 0) override;
+
 	/** Every character a player can pick (Scripts/setup_hero.py builds them; heroes from photos or VRoid get added here,
 	 * the generated NPC cast lives on the enemy types and AShinobiVillager instead). Entry 0 is the default hero and the
 	 * fallback for a pick whose assets aren't imported. */
@@ -164,6 +171,9 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UAnimMontage> SeatedMontage;
+
+	/** The current fall's highest point (world Z); Tick raises it while falling. */
+	float FallApexZ = 0.f;
 
 	bool bBoomPulledBack = false;
 	bool bSteeringByCamera = false;
