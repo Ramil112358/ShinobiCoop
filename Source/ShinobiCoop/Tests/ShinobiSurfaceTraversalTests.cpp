@@ -493,7 +493,28 @@ bool FShinobiLandRollTest::RunTest(const FString& Parameters)
 		W.Tick(0.05f);
 	}
 	TestTrue(TEXT("A double jump lands with a roll"), Anim->Montage_IsPlaying(Roll));
-	W.Tick(Roll->GetPlayLength() + 0.5f);
+	// A real roll turns the body over: at some point the head is below the hips (a locked root would keep it upright).
+	// Checked on the animated Manny and on the body players see, which copies its pose (Manny's pelvis/head, the
+	// roster bodies' Hips/Head).
+	const auto Bone = [](const USkeletalMeshComponent* Mesh, const TCHAR* Manny, const TCHAR* Mixamo)
+	{
+		return Mesh->GetBoneIndex(Manny) != INDEX_NONE ? FName(Manny) : FName(Mixamo);
+	};
+	const USkeletalMeshComponent* Meshes[] = {P->GetMesh(), P->GetBodyMesh()};
+	float LowestHeadOverHips[] = {TNumericLimits<float>::Max(), TNumericLimits<float>::Max()};
+	for (float T = 0.f; T < Roll->GetPlayLength(); T += 0.05f)
+	{
+		W.Tick(0.05f);
+		for (int32 I = 0; I < 2; ++I)
+		{
+			const USkeletalMeshComponent* Mesh = Meshes[I];
+			LowestHeadOverHips[I] = FMath::Min(LowestHeadOverHips[I],
+				Mesh->GetSocketLocation(Bone(Mesh, TEXT("head"), TEXT("Head"))).Z - Mesh->GetSocketLocation(Bone(Mesh, TEXT("pelvis"), TEXT("Hips"))).Z);
+		}
+	}
+	TestTrue(FString::Printf(TEXT("and turns over (head %.0f cm over the pelvis at the lowest)"), LowestHeadOverHips[0]), LowestHeadOverHips[0] < 0.f);
+	TestTrue(FString::Printf(TEXT("and so does the body players see, %s (%.0f cm)"), *Meshes[1]->GetName(), LowestHeadOverHips[1]), LowestHeadOverHips[1] < 0.f);
+	W.Tick(0.5f);
 	TestFalse(TEXT("which ends"), Anim->Montage_IsPlaying(Roll));
 
 	P->SetActorLocation(FVector(-2000.f, 0.f, 600.f)); // off a roof
