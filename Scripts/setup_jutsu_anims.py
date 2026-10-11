@@ -34,6 +34,9 @@ JUTSU = {
 # blends back out to locomotion more slowly.
 PHASES = {"Seal": (0.1, 0.1), "Charge": (0.1, 0.1), "Release": (0.05, 0.25), "Sit": (0.3, 0.3), "Roll": (0.1, 0.3)}
 
+# Clips whose body turns over (see retarget()): the root track carries the turn, so it is not locked.
+ROOT_TURNS = {"Land_Roll"}
+
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 
 # A Mixamo "Sitting Idle" (FBX, without skin, on the Power Up character) saved as SourceArt/Mixamo/Sitting Idle.fbx replaces the
@@ -97,9 +100,10 @@ def retarget(source_anim, jutsu, mixamo_mesh, manny_mesh, retargeter):
     path = f"{ANIM_DIR}/AS_{jutsu}"
     anim = load(path)
     # Played as a stationary cast: no root motion, and the root is pinned so a clip that steps doesn't drag
-    # the mesh away from the capsule.
+    # the mesh away from the capsule. Except the landing roll: the retargeter's Root Motion op (rotate_with_pelvis)
+    # moves the pelvis rotation onto Manny's root, so pinning the root would keep the body upright through the roll.
     anim.set_editor_property("enable_root_motion", False)
-    anim.set_editor_property("force_root_lock", True)
+    anim.set_editor_property("force_root_lock", jutsu not in ROOT_TURNS)
     if not unreal.EditorAssetLibrary.save_loaded_asset(anim):
         raise RuntimeError(f"failed to save {path}")
     return anim
