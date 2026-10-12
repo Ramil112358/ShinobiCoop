@@ -65,15 +65,15 @@ UGA_SummonSnake::UGA_SummonSnake()
 	Clearance = 350.f;
 }
 
-UGA_SummonDogs::UGA_SummonDogs()
+UGA_SummonPabu::UGA_SummonPabu()
 {
 	InputID = EShinobiAbilityInputID::Jutsu4;
-	DisplayName = INVTEXT("Summon Dogs");
-	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonDogs.T_Jutsu_SummonDogs")));
+	DisplayName = INVTEXT("Summon Pabu");
+	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonPabu.T_Jutsu_SummonPabu")));
 	ChakraCost = 45.f;
 	Cooldown = 30.f;
-	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_SummonDogs);
-	SummonKind = EShinobiSummonKind::Dog;
+	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_SummonPabu);
+	SummonKind = EShinobiSummonKind::Pabu;
 	Distance = 350.f;
 	Clearance = 250.f;
 }

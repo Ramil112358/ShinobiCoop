@@ -96,8 +96,9 @@ void AShinobiAIController::Tick(float DeltaSeconds)
 	{
 		if (!bSteerDirectly && GetMoveStatus() == EPathFollowingStatus::Idle)
 		{
-			// bCanStrafe: keep the focus on the target instead of turning to face the path.
-			bSteerDirectly = MoveToActor(Target.Get(), StopDistance * 0.9f, true, true, true) == EPathFollowingRequestResult::Failed;
+			// bCanStrafe: keep the focus on the target instead of turning to face the path. "Already there" counts both capsules' radii,
+			// which can leave a short-reach biter (Pabu) parked just outside AttackRange: steer the last bit straight in.
+			bSteerDirectly = MoveToActor(Target.Get(), StopDistance * 0.9f, true, true, true) != EPathFollowingRequestResult::RequestSuccessful;
 		}
 		if (bSteerDirectly)
 		{

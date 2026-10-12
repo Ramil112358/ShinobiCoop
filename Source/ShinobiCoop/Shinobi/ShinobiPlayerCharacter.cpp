@@ -72,7 +72,7 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 		UGA_AlmightyPush::StaticClass(), UGA_Kamui::StaticClass(), UGA_KamuiExit::StaticClass(),
 		UGA_Teleport::StaticClass(), UGA_TeleportJump::StaticClass(),
 		UGA_EarthWall::StaticClass(), UGA_WaterWall::StaticClass(), UGA_FireMeteor::StaticClass(), UGA_IceMeteor::StaticClass(), UGA_WaterDragon::StaticClass(), UGA_Susanoo::StaticClass(),
-		UGA_SummonToad::StaticClass(), UGA_SummonSnake::StaticClass(), UGA_SummonDogs::StaticClass(),
+		UGA_SummonToad::StaticClass(), UGA_SummonSnake::StaticClass(), UGA_SummonPabu::StaticClass(),
 		UGA_SummonDragon::StaticClass(), UGA_SummonCrimsonDragon::StaticClass(), UGA_DragonDismount::StaticClass(), UGA_DragonDismountKey::StaticClass(), UGA_DragonBreath::StaticClass(),
 	};
 	StartupEffects.Add(UGE_SubstitutionRegen::StaticClass());

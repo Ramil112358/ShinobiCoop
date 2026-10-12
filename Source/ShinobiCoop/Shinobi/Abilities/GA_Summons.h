@@ -47,12 +47,12 @@ public:
 	UGA_SummonSnake();
 };
 
-/** Page 4, slot 4: a pack of four ninken. */
+/** Page 4, slot 4: Pabu, a corgi ninken. */
 UCLASS()
-class SHINOBICOOP_API UGA_SummonDogs : public UGA_SummonBase
+class SHINOBICOOP_API UGA_SummonPabu : public UGA_SummonBase
 {
 	GENERATED_BODY()
 
 public:
-	UGA_SummonDogs();
+	UGA_SummonPabu();
 };

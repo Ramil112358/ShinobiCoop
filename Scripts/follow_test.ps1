@@ -1,4 +1,4 @@
-# Summons the dogs, toad and snake on a map, walks away from them for four seconds and prints how far each is from the player
+# Summons Pabu, the toad and the snake on a map, walks away from them for four seconds and prints how far each is from the player
 # (-ShinobiFollowTest). They should close up to ~4-8 m while the player walks and settle there once it stops.
 #   .\Scripts\follow_test.ps1 -Map /Game/Shinobi/Maps/Lvl_London
 # Opens a visible window for about 30 s; close the GUI editor first only if you rebuilt.

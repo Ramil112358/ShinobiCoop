@@ -345,7 +345,7 @@ void AShinobiPlayerController::RunSmokeTest()
 		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
 	};
 	At(6.3f, [this]() { ShinobiPage(4); });
-	At(6.5f, [this]() { ShinobiCast(4); }); // Dogs: the pack of four appears from about 7.2 s
+	At(6.5f, [this]() { ShinobiCast(4); }); // Pabu: appears from about 7.2 s
 	At(7.4f, [this]() { ShinobiDrainChakra(-100.f); });
 	At(7.6f, [this]() { ShinobiCast(1); }); // Susanoo: the armour is up from about 8.3 s for 20 s
 	At(8.4f, [this]() { ShinobiDrainChakra(-100.f); ShinobiPage(3); });
@@ -382,7 +382,7 @@ void AShinobiPlayerController::RunFollowTest()
 		UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiFollow %s player=(%.0f,%.0f)%s"), When, Me ? Me->GetActorLocation().X : 0.f, Me ? Me->GetActorLocation().Y : 0.f, *Line);
 	};
 	At(4.f, [this]() { ShinobiPage(4); });
-	At(4.3f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(4); }); // Dogs
+	At(4.3f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(4); }); // Pabu
 	At(5.5f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(2); }); // Toad
 	At(6.7f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(3); }); // Snake
 	At(9.f, [Log]() { Log(TEXT("settled")); });
@@ -820,10 +820,10 @@ void AShinobiPlayerController::RunJutsuShotTest()
 			RestoreAim();
 		}
 	});
-	At(49.3f, [CastJutsu]() { CastJutsu(4, 0.8f); }); // Dogs: 0.7 s seals, the pack appears at 50.0
+	At(49.3f, [CastJutsu]() { CastJutsu(4, 0.8f); }); // Pabu: 0.7 s seals, Pabu appears at 50.0
 	At(50.5f, [FaceCamera]() { FaceCamera(70.f, 70.f, 400.f, 900.f); });
-	At(50.6f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_27_Dogs")); });
-	At(51.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_27b_Dogs")); });
+	At(50.6f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_27_Pabu")); });
+	At(51.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_27b_Pabu")); });
 	auto ClearSummons = [this]() { for (TActorIterator<AShinobiSummon> It(GetWorld()); It; ++It) { It->Dismiss(); } };
 	At(51.5f, [BackToPlayer, ClearSummons]() { BackToPlayer(); ClearSummons(); });
 	At(52.0f, [CastJutsu]() { CastJutsu(2, 0.8f); }); // Toad: appears at 52.7

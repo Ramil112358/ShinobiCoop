@@ -4,14 +4,14 @@
 #include "Shinobi/Enemies/GA_EnemyAttacks.h"
 #include "GA_SummonAttacks.generated.h"
 
-/** A ninken's bite: one swing of AttackDamage in front. */
+/** Pabu's bite: one swing of AttackDamage in front. */
 UCLASS()
-class SHINOBICOOP_API UGA_DogBite : public UGA_EnemyMelee
+class SHINOBICOOP_API UGA_PabuBite : public UGA_EnemyMelee
 {
 	GENERATED_BODY()
 
 public:
-	UGA_DogBite();
+	UGA_PabuBite();
 };
 
 /** The toad rears up and slams the ground: AttackDamage to everything hostile within Radius (scaled by its size) of its feet.
