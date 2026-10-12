@@ -251,10 +251,10 @@ shows the figure). `Scripts/smoke_m1.ps1` checks that the client sees its own ar
 
 ## 10. Summons (2026-10-03)
 
-Page 4, slots 2-4: Summon Toad (60 chakra, 45 s cooldown), Summon Snake (50, 40 s) and Summon Dogs (45, 30 s). After the Kuchiyose seals
+Page 4, slots 2-4: Summon Toad (60 chakra, 45 s cooldown), Summon Snake (50, 40 s) and Summon Pabu (45, 30 s; it replaced the pack of four dogs on 2026-10-12). After the Kuchiyose seals
 (`AM_Summon_Seal`, a crouch with the right fist drawn up) and a palm slam (`AM_Summon_Release`, both built by
 `Scripts/character/build_jutsu_anims.py`, timeline `Summon`) the creature appears 4-5 m in front of the caster in a puff of smoke
-(`EShinobiBurst::SummonPoof`). A caster has one of each kind out at a time: calling it again replaces it (a dog pack of four counts as one).
+(`EShinobiBurst::SummonPoof`). A caster has one of each kind out at a time: calling it again replaces it.
 
 A summon is `AShinobiSummon`, an `AShinobiEnemyCharacter` on the **players'** team, so the existing enemy AI, health, attack abilities and
 death do the work: it chases the nearest hostile, enemies pick it as a target like a player, and the caster's area jutsu skip it. It is
@@ -265,21 +265,32 @@ not counted by waves or camps (only `FShinobiEncounter::Spawn` registers kills).
 |---|---|---|---|
 | Toad (x1) | 600 | `UGA_ToadSlam`: 60 to everything within 4.5 m of its feet, every 2.5 s | 12 s |
 | Snake (x1) | 350 | `UGA_SnakeStrike`: 70 from up to 8 m, every 2 s | 10 s |
-| Dog (x4) | 120 each | `UGA_DogBite`: 18 in front, every 0.8 s, run speed 800 | 15 s |
+| Pabu (x1) | 450 | `UGA_PabuBite`: 45 in front, every 0.8 s, run speed 650 | 15 s |
 
 Animation is `UShinobiCreatureAnimInstance` (no animation blueprint): it picks the clip from replicated state (velocity, health, the tag
 `State.SummonAttacking` that the three attack abilities grant) and cross-fades between idle, walk, run, attack, flinch (when hurt) and
-death over 0.2 s instead of cutting. Walk and run play at the speed the creature actually moves (the wolf's clip speeds are read off its
-root-motion variants; the toad and snake play their one move clip at 1x at top speed), and the attack clip is stretched over
-the attack ability's wind-up plus recovery so the blow lands with the damage. The wolf has no death clip and ragdolls.
+death over 0.2 s instead of cutting. Walk and run play at the speed the creature actually moves (Pabu's trot covers 144 cm/s and his gallop 480,
+as `build_pabu.py` prints them; the toad and snake play their one move clip at 1x at top speed), and the attack clip is stretched over
+the attack ability's wind-up plus recovery so the blow lands with the damage.
 
 Following: with nothing to fight a summon walks to a post beside its caster (`GetIdlePost`; the toad behind on one side, the snake on
-the other, the dogs fanned out round them), and if it is left more than 40 m behind (a teleport, a dragon ride) it reappears there in a
+the other, Pabu ahead of them), and if it is left more than 40 m behind (a teleport, a dragon ride) it reappears there in a
 puff of smoke. It only picks fights with enemies within 30 m of the caster.
 
 Where the creatures come from (all in `docs/world/asset-credits.md`):
 
-- **Dogs**: the Animal Variety Pack wolf (Epic, Fab), dark coat, scaled 1.1. It faces +Y in the pack and is turned in code.
+- **Pabu**: the user's own Pembroke corgi, a Tripo Studio model (H3.1 from `SourceArt/Character/Photos/Pabu/side.png`, retopologised to
+  20k triangles, auto-rigged as "Other"; the export is `SourceArt/Tripo/Pabu`). Tripo's joints are good but its skin weights are not (two
+  thirds of the vertices unweighted) and its one four-legged preset (walk) fails on that rig, so `Scripts/character/build_pabu.py` keeps
+  the joints, renames them (pelvis, spine, chest, neck1-2, head, two bones an ear, four a leg, six in the tail), levels the model (Tripo's
+  stands mid-step, turned 20 and tipped 10 degrees, and looks 41 degrees over his right shoulder: the head is turned to the front in the
+  mesh itself, fading out down the neck, before rigging), poses it square and makes that the rest pose, weights it by bone heat and keys Idle
+  (looks left and right, the corgi head tilt, ear swivels and flicks, a steady tail wag),
+  Walk (a trot), Run (a gallop), Bite (the jaws close 0.4 s in, `UGA_PabuBite::WindUp`), Hit and Death with IK-driven paws. True corgi
+  size (0.33 m at the withers), scaled 1.6 in code. He wears `M_Creature` (base colour, Tripo's normal map and its roughness, floored at
+  0.55 so the fur is not glossy; `setup_creatures.py` uses it for any creature with `<png>_Normal.png` and `<png>_Roughness.png`) and waits
+  2.2 m from his caster, closer than the toad and snake. To rerun: `blender -b -P Scripts/character/build_pabu.py` (add `-- preview [Clip...]`
+  for renders in `Saved/`), then `Scripts/setup_creatures.py`.
 - **Snake**: the Mesh2Motion snake (CC0) with its own idle, side-winding, bite, hit and death clips, five times as thick and two and a
   half times as long as the original. `Scripts/character/export_creature.py` turns a Mesh2Motion GLB to face +X, stands it on the
   ground and writes one FBX per clip; `Scripts/setup_creatures.py` imports them under `/Game/Shinobi/Creatures/<Name>`.
@@ -291,7 +302,7 @@ Where the creatures come from (all in `docs/world/asset-credits.md`):
 - To add a creature: put it in `CREATURES` in `setup_creatures.py`, a look in `CreatureLookFor` and a row in `SummonStatsFor`.
 
 Shots 27-30 of `Scripts/shot_chakra.ps1 -Jutsu` show the three arrivals and the full page-4 HUD; `Scripts/smoke_m1.ps1` checks the client
-sees the four dogs. Not done: turn clips for the wolf (`RunTurnL/R` are in the pack). A summon leaves the moment its caster is downed,
+sees Pabu. Not done: turn clips, a jaw (Pabu bites with a lunge and a head shake; his mouth stays shut). A summon leaves the moment its caster is downed,
 dies or leaves the game, and one cast next to a wall is pulled back in front of it and put on the floor.
 
 ## 11. Dragons: Tairn and the crimson dragon (2026-10-03)

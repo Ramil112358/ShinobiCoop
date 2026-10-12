@@ -10,7 +10,6 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
-#include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Enemies/GA_EnemyAttacks.h"
@@ -39,7 +38,7 @@ namespace
 		static const FSummonStats Table[] = {
 			{ 600.f, 60.f, 350.f, 2.5f, 350.f, 12.f, 1.0f, FLinearColor(0.1f, 0.4f, 0.1f), 1 },
 			{ 350.f, 70.f, 800.f, 2.0f, 500.f, 10.f, 1.0f, FLinearColor(0.35f, 0.1f, 0.5f), 1 },
-			{ 120.f, 18.f, 170.f, 0.8f, 650.f, 15.f, 1.0f, FLinearColor(0.15f, 0.15f, 0.17f), AShinobiSummon::DogPackSize },
+			{ 450.f, 45.f, 190.f, 0.8f, 650.f, 15.f, 1.0f, FLinearColor(0.75f, 0.5f, 0.3f), 1 }, // one Pabu worth about the old pack of four
 		};
 		return Table[static_cast<int32>(Kind)];
 	}
@@ -60,24 +59,23 @@ namespace
 		FVector Scale;
 		float CapsuleRadius;
 		float CapsuleHalfHeight;
-		bool bDarkCoat;       // swap in the "...Dark" twin of each material
 	};
 
 	const FCreatureLook& CreatureLookFor(EShinobiSummonKind Kind)
 	{
-		// The Animal Variety Pack wolf faces +Y and is a 2 m wolf; a ninken is a little bigger. Its Walk covers 93 cm/s and its Run 444
-		// (read off the root-motion variants of the clips), times the 1.1 scale.
-		static const FCreatureLook Dog = { TEXT("/Game/AnimalVarietyPack/Wolf/Meshes/SK_Wolf"), TEXT("/Game/AnimalVarietyPack/Wolf/Animations/ANIM_Wolf_"),
-			TEXT("IdleAggressive"), TEXT("Walk"), TEXT("Run"), TEXT("Bite"), TEXT("GetHitFront"), nullptr, 102.f, 488.f, -90.f, FVector(1.1f), 45.f, 55.f, true };
+		// Pabu (Tripo model, rigged and keyed by Scripts/character/build_pabu.py) faces +X at true corgi size, 0.66 m long and 0.45 m to the
+		// ear tips; a summoned one is 1.6 times that. His trot covers 144 cm/s and his gallop 480 at play rate 1 (printed by the build script).
+		static const FCreatureLook Pabu = { TEXT("/Game/Shinobi/Creatures/Pabu/SK_Pabu"), TEXT("/Game/Shinobi/Creatures/Pabu/ANIM_Pabu_"),
+			TEXT("Idle"), TEXT("Walk"), TEXT("Run"), TEXT("Bite"), TEXT("Hit"), TEXT("Death"), 144.f, 480.f, 0.f, FVector(1.6f), 35.f, 38.f };
 		// The Mesh2Motion snake (Scripts/character/export_creature.py) faces +X, 4 m long; a summoned one is two and a half times as long and
 		// five times as thick. One winding clip, played at 1 when it moves at its top speed.
 		static const FCreatureLook Snake = { TEXT("/Game/Shinobi/Creatures/Snake/SK_Snake"), TEXT("/Game/Shinobi/Creatures/Snake/ANIM_Snake_"),
-			TEXT("Idle"), TEXT("Move"), nullptr, TEXT("Bite"), TEXT("Hit"), TEXT("Death"), 500.f, 500.f, 0.f, FVector(2.5f, 5.f, 5.f), 60.f, 40.f, false };
+			TEXT("Idle"), TEXT("Move"), nullptr, TEXT("Bite"), TEXT("Hit"), TEXT("Death"), 500.f, 500.f, 0.f, FVector(2.5f, 5.f, 5.f), 60.f, 40.f };
 		// The Rodin toad (Scripts/character/build_toad.py) faces +X, 1.9 m long and 1.5 m tall; a summoned one is two and a half times that.
 		// One hop clip, played at 1 when it moves at its top speed.
 		static const FCreatureLook Toad = { TEXT("/Game/Shinobi/Creatures/Toad/SK_Toad"), TEXT("/Game/Shinobi/Creatures/Toad/ANIM_Toad_"),
-			TEXT("Idle"), TEXT("Move"), nullptr, TEXT("Slam"), TEXT("Hit"), TEXT("Death"), 350.f, 350.f, 0.f, FVector(2.5f), 170.f, 190.f, false };
-		return Kind == EShinobiSummonKind::Dog ? Dog : Kind == EShinobiSummonKind::Snake ? Snake : Toad;
+			TEXT("Idle"), TEXT("Move"), nullptr, TEXT("Slam"), TEXT("Hit"), TEXT("Death"), 350.f, 350.f, 0.f, FVector(2.5f), 170.f, 190.f };
+		return Kind == EShinobiSummonKind::Pabu ? Pabu : Kind == EShinobiSummonKind::Snake ? Snake : Toad;
 	}
 }
 
@@ -110,7 +108,7 @@ void AShinobiSummon::Configure()
 	BodyTint = Stats.Tint;
 	AttackAbility = Kind == EShinobiSummonKind::Toad ? TSubclassOf<UShinobiGameplayAbility>(UGA_ToadSlam::StaticClass())
 		: Kind == EShinobiSummonKind::Snake ? TSubclassOf<UShinobiGameplayAbility>(UGA_SnakeStrike::StaticClass())
-		: TSubclassOf<UShinobiGameplayAbility>(UGA_DogBite::StaticClass());
+		: TSubclassOf<UShinobiGameplayAbility>(UGA_PabuBite::StaticClass());
 	StartupAbilities = { AttackAbility }; // granted by the character base's BeginPlay, after this
 	GetCharacterMovement()->MaxWalkSpeed = Stats.Speed;
 	SetActorScale3D(FVector(Stats.Scale));
@@ -161,20 +159,6 @@ void AShinobiSummon::WearCreature()
 	Creature->SetupAttachment(GetMesh());
 	Creature->SetRelativeTransform(Wanted * FTransform(GetBaseRotationOffset(), GetBaseTranslationOffset()).Inverse()); // the default offset: the mesh's current one includes network smoothing
 	Creature->SetRelativeScale3D(Look->Scale);
-	if (Look->bDarkCoat) // every material has a "...Dark" twin beside it
-	{
-		for (int32 Slot = 0; Slot < Creature->GetNumMaterials(); ++Slot)
-		{
-			if (const UMaterialInterface* Coat = Creature->GetMaterial(Slot))
-			{
-				const FString Dark = FString::Printf(TEXT("%s/%sDark.%sDark"), *FPackageName::GetLongPackagePath(Coat->GetPackage()->GetName()), *Coat->GetName(), *Coat->GetName());
-				if (UMaterialInterface* Twin = LoadObject<UMaterialInterface>(nullptr, *Dark, nullptr, LOAD_NoWarn | LOAD_Quiet))
-				{
-					Creature->SetMaterial(Slot, Twin);
-				}
-			}
-		}
-	}
 	Creature->RegisterComponent();
 	if (UShinobiCreatureAnimInstance* Anim = Cast<UShinobiCreatureAnimInstance>(Creature->GetAnimInstance()))
 	{
@@ -311,9 +295,9 @@ TArray<AShinobiSummon*> AShinobiSummon::Summon(AShinobiCharacterBase* Caster, ES
 			continue;
 		}
 		Summon->Kind = Kind;
-		// Where it waits beside the caster: the toad behind on one side, the snake on the other, the dogs fanned out all round.
-		Summon->FollowAngle = Kind == EShinobiSummonKind::Toad ? PI * 1.25f : Kind == EShinobiSummonKind::Snake ? PI * 0.75f : Angle;
-		Summon->FollowRadius = Kind == EShinobiSummonKind::Dog ? 330.f : FollowDistance * 0.85f;
+		// Where it waits beside the caster: the toad behind on one side, the snake on the other, Pabu in front; a pack (Count > 1) fans out all round.
+		Summon->FollowAngle = Kind == EShinobiSummonKind::Toad ? PI * 1.25f : Kind == EShinobiSummonKind::Snake ? PI * 0.75f : Stats.Count > 1 ? Angle : PI * 0.25f;
+		Summon->FollowRadius = Kind == EShinobiSummonKind::Pabu ? 220.f : FollowDistance * 0.85f; // Pabu keeps close to his caster
 		Summon->Summoner = Caster;
 		Summon->Team = Caster->GetTeam(); // a caster on a PvP side brings the summon along
 		Summon->FinishSpawning(Where);

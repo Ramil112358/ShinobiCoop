@@ -11,12 +11,13 @@ import unreal
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CREATURES = {
     # name: (colour or None, clips, base-colour PNG, or None, or a list with one entry per material slot: a PNG, or a flat colour).
-    # With a PNG the creature wears M_Character (the heroes' lit material).
+    # With a PNG the creature wears M_Character (the heroes' lit material), or M_Creature when <png>_Normal.png and <png>_Roughness.png are beside it.
     # The files are SourceArt/Creatures/<SOURCE.get(name, name)>/<name>*.fbx.
     "Snake": ((0.20, 0.08, 0.30), ["Idle", "Move", "Bite", "Hit", "Death"], None),
     "Tairn": (None, ["Idle", "Flap", "Glide", "Breath"], ["Tairn.png", "TairnClub.png", (0.02, 0.02, 0.025)]),  # body, club ball, club spikes
     "CrimsonDragon": (None, ["Idle", "Flap", "Glide", "Breath"], "CrimsonDragon.png"),
     "Toad": (None, ["Idle", "Move", "Slam", "Hit", "Death"], "Toad.png"),
+    "Pabu": (None, ["Idle", "Walk", "Run", "Bite", "Hit", "Death"], "Pabu.png"),  # Scripts/character/build_pabu.py
 }
 SOURCE = {"CrimsonDragon": "DragonRodin"}  # the first Rodin dragon (Scripts/character/build_dragon_crimson.py); Tairn is in SourceArt/Creatures/Tairn
 LEGACY = ["/Game/Shinobi/Creatures/Dragon"]  # the one dragon before there were two: now Tairn and CrimsonDragon
@@ -50,10 +51,8 @@ def skeletal_options(mesh):
     return options
 
 
-def textured_material(name, png, dest):
-    parent = unreal.load_asset("/Game/Shinobi/Characters/M_Character")
-    if parent is None:
-        raise RuntimeError("M_Character is missing (Scripts/setup_hero.py)")
+def import_texture(png, dest, name, kind="color"):
+    """Imports a PNG as T_<name>. kind: "color", "normal" (a green-up map from Blender, flipped for Unreal) or "mask" (linear grey)."""
     task = unreal.AssetImportTask()
     task.filename = png
     task.destination_path = dest
@@ -65,10 +64,62 @@ def textured_material(name, png, dest):
     texture = unreal.load_asset(f"{dest}/T_{name}")
     if not isinstance(texture, unreal.Texture2D):
         raise RuntimeError(f"could not import {png}")
+    if kind != "color":
+        texture.set_editor_property("srgb", False)
+        texture.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_NORMALMAP if kind == "normal" else unreal.TextureCompressionSettings.TC_GRAYSCALE)
+        texture.set_editor_property("flip_green_channel", kind == "normal")
+        unreal.EditorAssetLibrary.save_loaded_asset(texture)
+    return texture
+
+
+def creature_material(maps):
+    """M_Creature: lit Substrate with base colour, normal and roughness maps (fur that has depth and is not glossy). Built if missing,
+    with `maps` (param -> texture, the first creature's) as its defaults: each sampler needs a texture of its own kind."""
+    path = "/Game/Shinobi/Creatures/M_Creature"
+    material = unreal.load_asset(path)
+    if material:
+        return material
+    material = TOOLS.create_asset("M_Creature", "/Game/Shinobi/Creatures", unreal.Material, unreal.MaterialFactoryNew())
+    samples = {}
+    for row, (param, sampler) in enumerate((("BaseColor", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR),
+                                            ("Normal", unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL),
+                                            ("Roughness", unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_GRAYSCALE))):
+        sample = MEL.create_material_expression(material, unreal.MaterialExpressionTextureSampleParameter2D, -600, row * 260)
+        sample.set_editor_property("parameter_name", param)
+        sample.set_editor_property("sampler_type", sampler)
+        sample.set_editor_property("texture", maps[param])
+        samples[param] = sample
+    spec = MEL.create_material_expression(material, unreal.MaterialExpressionConstant, -600, 800)
+    spec.set_editor_property("r", 0.3)
+    shading = MEL.create_material_expression(material, unreal.MaterialExpressionSubstrateShadingModels, -200, 0)
+    for src, out, pin in ((samples["BaseColor"], "RGB", "BaseColor"), (samples["Normal"], "RGB", "Normal"), (samples["Roughness"], "R", "Roughness"), (spec, "", "Specular")):
+        if not MEL.connect_material_expressions(src, out, shading, pin):
+            raise RuntimeError(f"M_Creature: could not connect {pin}")
+    MEL.connect_material_property(shading, "", unreal.MaterialProperty.MP_FRONT_MATERIAL)
+    MEL.set_base_material_usage(material, unreal.MaterialUsage.MATUSAGE_SKELETAL_MESH, True)
+    errors = MEL.recompile_material(material)
+    if errors:
+        raise RuntimeError(f"M_Creature failed to compile: {errors}")
+    unreal.EditorAssetLibrary.save_loaded_asset(material)
+    return material
+
+
+def textured_material(name, png, dest):
+    """MI_<name> on the base colour PNG. With <png>_Normal.png and <png>_Roughness.png beside it, on M_Creature with all three maps;
+    else on M_Character (the heroes' lit material)."""
+    stem = os.path.splitext(png)[0]
+    maps = {"BaseColor": import_texture(png, dest, name)}
+    if os.path.exists(f"{stem}_Normal.png") and os.path.exists(f"{stem}_Roughness.png"):
+        maps["Normal"] = import_texture(f"{stem}_Normal.png", dest, f"{name}_Normal", "normal")
+        maps["Roughness"] = import_texture(f"{stem}_Roughness.png", dest, f"{name}_Roughness", "mask")
+    parent = creature_material(maps) if len(maps) == 3 else unreal.load_asset("/Game/Shinobi/Characters/M_Character")
+    if parent is None:
+        raise RuntimeError("M_Character is missing (Scripts/setup_hero.py)")
     path = f"{dest}/MI_{name}"
     mi = unreal.load_asset(path) or TOOLS.create_asset(f"MI_{name}", dest, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
     MEL.set_material_instance_parent(mi, parent)
-    MEL.set_material_instance_texture_parameter_value(mi, "BaseColor", texture)
+    for param, texture in maps.items():
+        MEL.set_material_instance_texture_parameter_value(mi, param, texture)
     unreal.EditorAssetLibrary.save_loaded_asset(mi)
     return mi
 
@@ -91,7 +142,8 @@ def material_for(name, colour, dest):
 for legacy in LEGACY:
     if unreal.EditorAssetLibrary.does_directory_exist(legacy):
         unreal.EditorAssetLibrary.delete_directory(legacy)
-for name, (colour, clips, texture) in CREATURES.items():
+ONLY = [n for n in os.environ.get("CREATURES_ONLY", "").split(",") if n]  # e.g. CREATURES_ONLY=Pabu: import just those
+for name, (colour, clips, texture) in ((n, c) for n, c in CREATURES.items() if not ONLY or n in ONLY):
     source = os.path.join(ROOT, "SourceArt", "Creatures", SOURCE.get(name, name))
     dest = f"/Game/Shinobi/Creatures/{name}"
     unreal.EditorAssetLibrary.make_directory(dest)

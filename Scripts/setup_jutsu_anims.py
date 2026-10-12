@@ -26,7 +26,7 @@ JUTSU = {
     "AlmightyPush": ALL_PHASES,
     "Teleport": ("Seal", "Release"), "Kamui": ("Seal", "Release"), "EarthWall": ("Seal", "Release"), "WaterWall": ("Seal", "Release"),
     "FireMeteor": ("Seal", "Release"), "IceMeteor": ("Seal", "Release"), "WaterDragon": ("Seal", "Release"), "Susanoo": ("Seal", "Release"),
-    "Summon": ("Seal", "Release"),  # shared by the toad, snake, dogs and dragon
+    "Summon": ("Seal", "Release"),  # shared by the toad, snake, Pabu and dragon
     "Mount": ("Sit",),  # the rider's seated loop (AShinobiPlayerCharacter)
     "Land": ("Roll",),  # the roll after a long fall (AShinobiPlayerCharacter; Scripts/character/build_land_roll.py)
 }

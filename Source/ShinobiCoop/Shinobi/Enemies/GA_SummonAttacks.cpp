@@ -4,14 +4,14 @@
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
 
-UGA_DogBite::UGA_DogBite()
+UGA_PabuBite::UGA_PabuBite()
 {
 	Hits = 1;
 	WindUp = 0.4f;
 	Recovery = 0.35f;
 	Range = 190.f;
 	HalfAngle = 70.f;
-	WindUpMontage = nullptr; // the wolf plays its own clip, on State.SummonAttacking
+	WindUpMontage = nullptr; // Pabu plays its own clip, on State.SummonAttacking
 	FollowUpMontage = nullptr;
 	ActivationOwnedTags.AddTag(ShinobiTags::State_SummonAttacking);
 }

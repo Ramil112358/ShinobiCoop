@@ -11,13 +11,13 @@ enum class EShinobiSummonKind : uint8
 {
 	Toad,  // a giant toad: slow, tough, slams the ground
 	Snake, // a giant snake: long reach, strikes from afar
-	Dog,   // a ninken: summoned as a pack of DogPackSize, fast and fragile
+	Pabu,  // a corgi ninken: one, quick, bites
 };
 
 /**
  * A creature called by a summoning jutsu. It is an enemy-AI character on the players' team: it chases the nearest hostile
  * (AShinobiAIController), fights with the shared attack abilities, and is a target for enemies like any player. It leaves in
- * a puff of smoke when its time is up. The caster has at most one of each kind (a dog pack counts as one); calling it again
+ * a puff of smoke when its time is up. The caster has at most one of each kind; calling it again
  * replaces it. Not counted by waves or camps (only FShinobiEncounter::Spawn registers kills).
  */
 UCLASS()
@@ -27,8 +27,6 @@ class SHINOBICOOP_API AShinobiSummon : public AShinobiEnemyCharacter
 
 public:
 	AShinobiSummon(const FObjectInitializer& ObjectInitializer);
-
-	static constexpr int32 DogPackSize = 4;
 
 	/**
 	 * Server only. Calls Kind's summon(s) to the ground point Ground, facing where Caster faces, and dismisses the ones of
@@ -42,7 +40,7 @@ public:
 	EShinobiSummonKind GetKind() const { return Kind; }
 	AShinobiCharacterBase* GetSummoner() const { return Summoner.Get(); }
 
-	/** The wolf for a dog, else the placeholder mannequin. */
+	/** The creature model when it is imported, else the placeholder mannequin. */
 	virtual USkeletalMeshComponent* GetBodyMesh() const override { return Creature ? Creature.Get() : Super::GetBodyMesh(); }
 
 	virtual void Tick(float DeltaSeconds) override;
@@ -78,7 +76,7 @@ private:
 	/** Applies Kind's numbers, size and look. Runs on every machine, before the enemy base reads them. */
 	void Configure();
 
-	/** Dogs and snakes: dresses the summon in its creature (the Animal Variety Pack wolf, the Mesh2Motion snake) over the hidden
+	/** Dresses the summon in its creature (Pabu, the Mesh2Motion snake, the Rodin toad) over the hidden
 	 * mannequin. Does nothing on a dedicated server or when the creature is not imported. */
 	void WearCreature();
 
