@@ -6,6 +6,7 @@
              Scripts/london/blender/make_city_meshes.py
   chunks     SourceArt/World/London/Chunks/{B,K,G,W}_<x>_<y>.glb -> City/<kind>/: slots remapped by palette name, Nanite
              (not water), collision complex-as-simple on buildings (B), ground (G) and water (W, walked on), none on the backdrop
+  collision  each building chunk's complex collision mesh City/BCollision/<chunk>_Col (see building_collision)
   props      SourceArt/World/London/Props/*.glb (fetch_models.py + prep_models.py) and the Poly Haven street props
   catalog    Scripts/london/london_catalog.json: furniture/landmark key -> mesh, from those and the Fab packs in Content
 Resumable: meshes already imported are kept unless SHINOBI_REIMPORT=1. SHINOBI_LONDON_IMPORT=materials,chunks,props,catalog
@@ -480,6 +481,100 @@ def no_distance_fields():
     log(f"nodf: distance fields off on {off} meshes")
 
 
+TRIMS = {"Trim_Stucco", "Trim_Portland"}
+COLLISION_DROP = {"Frame_White", "Frame_Dark", "Signage", "ChimneyPot"} | TRIMS
+
+
+def building_collision():
+    """Building chunks (B) collide with a mesh of their own (City/BCollision/<chunk>_Col, the StaticMesh "Complex
+    Collision Mesh"): a Nanite mesh's complex collision is its fallback, ~2% of the triangles, and that decimation drops
+    whole wall, glass and door quads (about a quarter of facade rays passed straight through). The collision mesh is the
+    full source minus details on the wall (frames, glazing bars, sills, cornices, signs, chimney pots), welded and with
+    coplanar faces merged: ~20% of the source, flush with the visible facade. Each chunk is checked against its source:
+    horizontal rays that hit a facade must hit the collision mesh within 1.5 m (shopfront glass is recessed ~1 m); a chunk that fails keeps its trims."""
+    GS, SEL, SIM = unreal.GeometryScript_AssetUtils, unreal.GeometryScript_MeshSelection, unreal.GeometryScript_MeshSimplification
+    edit = next(getattr(unreal, n) for n in dir(unreal)
+                if n.startswith("GeometryScript_") and hasattr(getattr(unreal, n), "delete_selected_triangles_from_mesh"))
+    tiny = unreal.load_asset("/Engine/BasicShapes/Cube")
+
+    def first(result, cls):
+        return next(v for v in result if isinstance(v, cls)) if isinstance(result, tuple) else result
+
+    def source(mesh):
+        lod = unreal.GeometryScriptMeshReadLOD()
+        lod.lod_type = unreal.GeometryScriptLODType.SOURCE_MODEL
+        return first(GS.copy_mesh_from_static_mesh_v2(mesh, unreal.DynamicMesh(), unreal.GeometryScriptCopyMeshFromAssetOptions(), lod), unreal.DynamicMesh)
+
+    def holes(mesh, src, col):
+        sp = unreal.GeometryScript_MeshSpatial
+        bvh = {id(m): first(sp.build_bvh_for_mesh(m), unreal.GeometryScriptDynamicMeshBVH) for m in (src, col)}
+
+        def hit(m, o, d):
+            h = first(sp.find_nearest_ray_intersection_with_mesh(m, bvh[id(m)], o, d, unreal.GeometryScriptSpatialQueryOptions()), unreal.GeometryScriptRayHitResult)
+            return h.ray_parameter if h.hit else None
+        box = mesh.get_bounding_box()
+        lo, hi = box.min, box.max
+        bad = 0
+        # Off the 1 m grid: a ray exactly along a triangle edge can slip between the two triangles.
+        for z in (lo.z + 187.3, lo.z + 537.3, lo.z + 1037.3):
+            for sign in (1, -1):
+                for y in (v + 37.3 for v in range(int(lo.y), int(hi.y), 200)):
+                    o, d = unreal.Vector(lo.x - 100 if sign > 0 else hi.x + 100, y, z), unreal.Vector(sign, 0, 0)
+                    s = hit(src, o, d)
+                    bad += s is not None and (hit(col, o, d) or 1e9) > s + 150
+                for x in (v + 37.3 for v in range(int(lo.x), int(hi.x), 200)):
+                    o, d = unreal.Vector(x, lo.y - 100 if sign > 0 else hi.y + 100, z), unreal.Vector(0, sign, 0)
+                    s = hit(src, o, d)
+                    bad += s is not None and (hit(col, o, d) or 1e9) > s + 150
+        return bad
+
+    only = [c for c in os.environ.get("SHINOBI_LONDON_CHUNKS", "").split(",") if c]
+    done = leaky = 0
+    for path in sorted(EAL.list_assets(f"{ROOT}/City/B", recursive=True)):
+        if only and path.split(".")[-1] not in only:
+            continue
+        mesh = unreal.load_asset(path.split(".")[0])
+        if not isinstance(mesh, unreal.StaticMesh) or (mesh.get_editor_property("complex_collision_mesh") and not REIMPORT):
+            continue
+        src = source(mesh)
+        slots = [str(slot.get_editor_property("material_slot_name")) for slot in mesh.get_editor_property("static_materials")]
+
+        def simplified(drop):
+            col = source(mesh)
+            for index, slot in enumerate(slots):
+                if slot in drop:
+                    edit.delete_selected_triangles_from_mesh(col, first(SEL.select_mesh_elements_by_material_id(col, index, unreal.GeometryScriptMeshSelectionType.TRIANGLES), unreal.GeometryScriptMeshSelection))
+            weld = unreal.GeometryScriptWeldEdgesOptions()
+            weld.tolerance = 0.5
+            unreal.GeometryScript_MeshRepair.weld_mesh_edges(col, weld)
+            planar = unreal.GeometryScriptPlanarSimplifyOptions()
+            planar.angle_threshold = 0.5
+            SIM.apply_simplify_to_planar(col, planar)
+            return col, holes(mesh, src, col)
+        col, bad = simplified(COLLISION_DROP)
+        if bad:  # some trims are whole structures (parapets, porticos) with no wall behind them: keep the trims
+            col, bad = simplified(COLLISION_DROP - TRIMS)
+        if bad:
+            leaky += 1
+            unreal.log_warning(f"[import_london] {mesh.get_name()}: {bad} facade rays pass its collision mesh")
+        target = f"{ROOT}/City/BCollision/{mesh.get_name()}_Col"
+        if EAL.does_asset_exist(target):
+            asset = unreal.load_asset(target)
+            GS.copy_mesh_to_static_mesh(col, asset, unreal.GeometryScriptCopyMeshToAssetOptions(), unreal.GeometryScriptMeshWriteLOD())
+        else:
+            options = unreal.GeometryScriptCreateNewStaticMeshAssetOptions()
+            options.enable_nanite = False
+            options.enable_collision = False  # never placed: it only lends its triangles to the chunk
+            asset = first(unreal.GeometryScript_NewAssetUtils.create_new_static_mesh_asset_from_mesh(col, target, options), unreal.StaticMesh)
+        unreal.ShinobiWorldBuilderLibrary.set_distance_field_settings(asset, 0.05, tiny)  # never rendered: no distance field
+        EAL.save_loaded_asset(asset)
+        mesh.set_editor_property("complex_collision_mesh", asset)
+        EAL.save_loaded_asset(mesh)
+        done += 1
+        log(f"collision: {mesh.get_name()} {src.get_triangle_count()} -> {col.get_triangle_count()} tris, {bad} leaks")
+    log(f"collision: {done} building chunks, {leaky} with leaks")
+
+
 def usage():
     """Every catalog mesh's materials get the instanced-static-mesh and Nanite usage flags: the street furniture is
     placed as HISM instances, and a material without the flag renders as the default checker in game."""
@@ -619,8 +714,8 @@ def main():
         usage()
     if "fallback" in steps:  # existing chunks: ground lossless (kerbs), buildings AUTO, without reimporting
         # Buildings must stay AUTO: a lossless fallback (~120k tris per chunk) makes every editor session rebuild the
-        # mesh distance fields for ~6 min before Play, and the navmesh export of their collision huge. Their walls are
-        # planar, so the decimated fallback collides the same.
+        # mesh distance fields for ~6 min before Play. Their collision comes from the "collision" step instead: the
+        # ~2% fallback leaves holes in the facades.
         fixed = 0
         for kind in ("B",):
             for path in EAL.list_assets(f"{ROOT}/City/{kind}", recursive=True):
@@ -656,6 +751,8 @@ def main():
         soft_glass()
     if "nodf" in steps:
         no_distance_fields()
+    if "collision" in steps:
+        building_collision()
     if "chunks" in steps:
         chunks(palette)
     if "pieces" in steps:
