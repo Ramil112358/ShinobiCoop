@@ -21,6 +21,11 @@ class SHINOBICOOP_API UShinobiLocomotionAnimInstance : public UAnimInstance
 	GENERATED_BODY()
 
 public:
+	/** The sample's AnimBP (a subclass of this). Load it at BeginPlay or later, never from a constructor: class default
+	 * objects are built while this module loads, before plugin modules the sample's assets import (DrawDebugLibrary),
+	 * and loading the AnimBP then breaks its nodes for the whole session. Null when the sample isn't migrated. */
+	static UClass* LoadAnimBlueprintClass();
+
 	/** Game thread: called from the AnimBP's EventBlueprintUpdateAnimation, before its locomotion logic runs. */
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|Animation")
 	void UpdateCharacterProperties();

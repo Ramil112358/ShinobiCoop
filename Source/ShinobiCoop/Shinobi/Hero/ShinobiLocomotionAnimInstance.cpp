@@ -26,6 +26,12 @@ namespace
 	}
 }
 
+UClass* UShinobiLocomotionAnimInstance::LoadAnimBlueprintClass()
+{
+	static const TSoftClassPtr<UAnimInstance> AnimBlueprint(FSoftObjectPath(TEXT("/Game/Blueprints/SandboxCharacter_CMC_ABP.SandboxCharacter_CMC_ABP_C")));
+	return AnimBlueprint.LoadSynchronous();
+}
+
 void UShinobiLocomotionAnimInstance::NativeInitializeAnimation()
 {
 	Super::NativeInitializeAnimation();

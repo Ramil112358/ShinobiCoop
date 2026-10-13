@@ -17,6 +17,7 @@
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Shinobi/ShinobiLook.h"
+#include "Shinobi/Hero/ShinobiLocomotionAnimInstance.h"
 #include "Shinobi/UI/ShinobiOverheadTextComponent.h"
 
 namespace
@@ -108,6 +109,12 @@ void AShinobiVillager::BeginPlay()
 		TalkCount = Variant;
 		IdleTime = 1.f + (Variant % 4);
 		return;
+	}
+	// Motion-matched walking from the Game Animation Sample; the constructor's ABP_Unarmed until it's migrated. Not for the
+	// crowd above: City Sample characters play their own loops, and motion matching per crowd member would cost too much.
+	if (UClass* Locomotion = UShinobiLocomotionAnimInstance::LoadAnimBlueprintClass())
+	{
+		GetMesh()->SetAnimInstanceClass(Locomotion);
 	}
 	if (Body->WearCharacter(Bodies[FMath::Abs(Variant) % UE_ARRAY_COUNT(Bodies)]))
 	{

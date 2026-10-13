@@ -15,7 +15,7 @@
 namespace
 {
 	/** An engine cube (100 cm) scaled to Size cm, its base centred at Base. */
-	AStaticMeshActor* Block(FShinobiTestWorld& W, const FVector& Base, const FVector& Size)
+	AStaticMeshActor* TraversalBlock(FShinobiTestWorld& W, const FVector& Base, const FVector& Size)
 	{
 		UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
 		AStaticMeshActor* Actor = W.Spawn<AStaticMeshActor>(Base + FVector(0.f, 0.f, Size.Z * 0.5f));
@@ -26,9 +26,9 @@ namespace
 	}
 
 	/** A player standing on a floor at the origin, facing +X, possessed so its movement runs. */
-	AShinobiPlayerCharacter* StandingPlayer(FShinobiTestWorld& W)
+	AShinobiPlayerCharacter* TraversalPlayer(FShinobiTestWorld& W)
 	{
-		Block(W, FVector(0.f, 0.f, -10.f), FVector(4000.f, 4000.f, 10.f));
+		TraversalBlock(W, FVector(0.f, 0.f, -10.f), FVector(4000.f, 4000.f, 10.f));
 		AShinobiPlayerCharacter* Player = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, 0.f, 100.f));
 		W.Spawn<AAIController>()->Possess(Player); // a PlayerController without a LocalPlayer never moves here
 		W.Tick(0.5f); // lands
@@ -41,7 +41,7 @@ namespace
 		return Player;
 	}
 
-	float FeetZ(const AShinobiPlayerCharacter* Player)
+	float TraversalFeetZ(const AShinobiPlayerCharacter* Player)
 	{
 		return Player->GetActorLocation().Z - Player->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 	}
@@ -51,8 +51,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiTraversalHurdleTest, "ShinobiCoop.Trave
 bool FShinobiTraversalHurdleTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* P = StandingPlayer(W);
-	Block(W, FVector(90.f, 0.f, 0.f), FVector(30.f, 400.f, 90.f)); // 90 cm high, 30 cm deep, its face 75 cm ahead
+	AShinobiPlayerCharacter* P = TraversalPlayer(W);
+	TraversalBlock(W, FVector(90.f, 0.f, 0.f), FVector(30.f, 400.f, 90.f)); // 90 cm high, 30 cm deep, its face 75 cm ahead
 	UShinobiTraversalComponent* Traversal = P->FindComponentByClass<UShinobiTraversalComponent>();
 
 	TestTrue(TEXT("Traversal starts at a low wall"), Traversal->TryTraversal());
@@ -60,7 +60,7 @@ bool FShinobiTraversalHurdleTest::RunTest(const FString& Parameters)
 	W.Tick(3.f);
 	TestFalse(TEXT("Done"), Traversal->IsTraversing());
 	TestTrue(FString::Printf(TEXT("Ends beyond the wall (x %.0f)"), P->GetActorLocation().X), P->GetActorLocation().X > 105.f);
-	TestTrue(FString::Printf(TEXT("Ends on the floor (feet z %.0f)"), FeetZ(P)), FMath::Abs(FeetZ(P)) < 20.f);
+	TestTrue(FString::Printf(TEXT("Ends on the floor (feet z %.0f)"), TraversalFeetZ(P)), FMath::Abs(TraversalFeetZ(P)) < 20.f);
 	return true;
 }
 
@@ -68,13 +68,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiTraversalMantleTest, "ShinobiCoop.Trave
 bool FShinobiTraversalMantleTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* P = StandingPlayer(W);
-	Block(W, FVector(275.f, 0.f, 0.f), FVector(400.f, 400.f, 150.f)); // 150 cm high and deep, its face 75 cm ahead
+	AShinobiPlayerCharacter* P = TraversalPlayer(W);
+	TraversalBlock(W, FVector(275.f, 0.f, 0.f), FVector(400.f, 400.f, 150.f)); // 150 cm high and deep, its face 75 cm ahead
 	UShinobiTraversalComponent* Traversal = P->FindComponentByClass<UShinobiTraversalComponent>();
 
 	TestTrue(TEXT("Traversal starts at a high block"), Traversal->TryTraversal());
 	W.Tick(3.f);
-	TestTrue(FString::Printf(TEXT("Ends on top (feet z %.0f)"), FeetZ(P)), FMath::Abs(FeetZ(P) - 150.f) < 20.f);
+	TestTrue(FString::Printf(TEXT("Ends on top (feet z %.0f)"), TraversalFeetZ(P)), FMath::Abs(TraversalFeetZ(P) - 150.f) < 20.f);
 	return true;
 }
 
@@ -82,8 +82,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiTraversalTallWallTest, "ShinobiCoop.Tra
 bool FShinobiTraversalTallWallTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* P = StandingPlayer(W);
-	Block(W, FVector(275.f, 0.f, 0.f), FVector(400.f, 400.f, 600.f)); // too high to mantle: wall-run territory
+	AShinobiPlayerCharacter* P = TraversalPlayer(W);
+	TraversalBlock(W, FVector(275.f, 0.f, 0.f), FVector(400.f, 400.f, 600.f)); // too high to mantle: wall-run territory
 	TestFalse(TEXT("No traversal at a tall wall"), P->FindComponentByClass<UShinobiTraversalComponent>()->TryTraversal());
 	return true;
 }

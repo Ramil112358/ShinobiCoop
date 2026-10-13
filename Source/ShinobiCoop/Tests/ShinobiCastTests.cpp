@@ -7,6 +7,7 @@
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/World/ShinobiVillager.h"
+#include "Shinobi/Hero/ShinobiLocomotionAnimInstance.h"
 
 // The generated NPC cast (Scripts/setup_hero.py -> /Game/Shinobi/Characters/<Name>): enemies wear a character from
 // their type's pool, villagers one per Variant. These run against whatever has been imported: a character that isn't
@@ -67,6 +68,7 @@ bool FShinobiVillagersWearTheirCharacterTest::RunTest(const FString& Parameters)
 		Villager->Variant = Variant;
 		Villager->FinishSpawning(Where);
 		const FString Name = AShinobiVillager::Bodies[Variant];
+		TestTrue(Name + TEXT(" walks with the motion-matching AnimBP"), Cast<UShinobiLocomotionAnimInstance>(Villager->GetMesh()->GetAnimInstance()) != nullptr);
 		if (Villager->GetBodyMesh() == Villager->GetMesh())
 		{
 			TestTrue(Name + TEXT(" not imported: the tinted Quinn shows"), Villager->GetMesh()->IsVisible());

@@ -14,6 +14,7 @@
 #include "ShinobiCoop.h"
 #include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiEffects.h"
+#include "Shinobi/Hero/ShinobiLocomotionAnimInstance.h"
 #include "Shinobi/ShinobiLook.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiTags.h"
@@ -57,16 +58,9 @@ UAbilitySystemComponent* AShinobiCharacterBase::GetAbilitySystemComponent() cons
 void AShinobiCharacterBase::BeginPlay()
 {
 	Super::BeginPlay();
-	if (bUseLocomotionAnim)
+	if (UClass* Locomotion = bUseLocomotionAnim ? UShinobiLocomotionAnimInstance::LoadAnimBlueprintClass() : nullptr)
 	{
-		// Motion-matched locomotion from the Game Animation Sample (Scripts/anim/). Loaded here, not by ConstructorHelpers:
-		// class default objects are built while this module loads, before plugin modules the sample's assets import
-		// (DrawDebugLibrary), and loading the AnimBP then breaks its nodes for the whole session.
-		static const TSoftClassPtr<UAnimInstance> LocomotionAnim(FSoftObjectPath(TEXT("/Game/Blueprints/SandboxCharacter_CMC_ABP.SandboxCharacter_CMC_ABP_C")));
-		if (UClass* Locomotion = LocomotionAnim.LoadSynchronous())
-		{
-			GetMesh()->SetAnimInstanceClass(Locomotion);
-		}
+		GetMesh()->SetAnimInstanceClass(Locomotion); // motion-matched locomotion from the Game Animation Sample
 	}
 	// Outline the visible body (the hero, when a hidden Manny drives it); the driver itself stays out of custom depth.
 	RefreshOutline();
