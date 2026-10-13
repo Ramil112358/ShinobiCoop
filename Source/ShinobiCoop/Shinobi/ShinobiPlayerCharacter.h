@@ -9,6 +9,8 @@
 class UCameraComponent;
 class UShinobiOverheadTextComponent;
 class UShinobiSurfaceFxComponent;
+class UShinobiTraversalComponent;
+class UMotionWarpingComponent;
 class USpringArmComponent;
 struct FInputActionValue;
 
@@ -255,6 +257,13 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UShinobiSurfaceFxComponent> SurfaceFx;
+
+	/** Vault, hurdle and mantle on jump (the Game Animation Sample's traversal), steered onto the ledges by MotionWarping. */
+	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
+	TObjectPtr<UShinobiTraversalComponent> Traversal;
+
+	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
+	TObjectPtr<UMotionWarpingComponent> MotionWarping;
 
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	TObjectPtr<USpringArmComponent> CameraBoom;

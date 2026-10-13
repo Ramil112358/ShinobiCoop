@@ -1,5 +1,6 @@
 #include "Shinobi/Hero/ShinobiLocomotionAnimInstance.h"
 #include "GameFramework/Character.h"
+#include "Shinobi/Hero/ShinobiBlueprintStruct.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 
 namespace
@@ -13,16 +14,7 @@ namespace
 		{
 			const FName Name(*It->GetAuthoredName());
 			Fields.Add(Name, *It);
-			const UEnum* Enum = nullptr;
-			if (const FByteProperty* Byte = CastField<FByteProperty>(*It))
-			{
-				Enum = Byte->Enum;
-			}
-			else if (const FEnumProperty* EnumProperty = CastField<FEnumProperty>(*It))
-			{
-				Enum = EnumProperty->GetEnum();
-			}
-			if (Enum)
+			if (const UEnum* Enum = ShinobiBlueprintStruct::GetEnum(*It))
 			{
 				TMap<FString, int64>& Values = EnumValues.Add(Name);
 				for (int32 Index = 0; Index < Enum->NumEnums() - 1; ++Index) // last entry is the generated _MAX
@@ -30,33 +22,6 @@ namespace
 					Values.Add(Enum->GetDisplayNameTextByIndex(Index).ToString(), Enum->GetValueByIndex(Index));
 				}
 			}
-		}
-	}
-
-	template <typename T>
-	void SetStruct(const TMap<FName, const FProperty*>& Fields, void* Container, FName Field, const T& Value)
-	{
-		const FStructProperty* Property = CastField<FStructProperty>(Fields.FindRef(Field));
-		if (Property && Property->Struct == TBaseStructure<T>::Get())
-		{
-			*Property->ContainerPtrToValuePtr<T>(Container) = Value;
-		}
-	}
-
-	void SetReal(const TMap<FName, const FProperty*>& Fields, void* Container, FName Field, double Value)
-	{
-		const FNumericProperty* Property = CastField<FNumericProperty>(Fields.FindRef(Field));
-		if (Property && Property->IsFloatingPoint())
-		{
-			Property->SetFloatingPointPropertyValue(Property->ContainerPtrToValuePtr<void>(Container), Value);
-		}
-	}
-
-	void SetBool(const TMap<FName, const FProperty*>& Fields, void* Container, FName Field, bool bValue)
-	{
-		if (const FBoolProperty* Property = CastField<FBoolProperty>(Fields.FindRef(Field)))
-		{
-			Property->SetPropertyValue_InContainer(Container, bValue);
 		}
 	}
 }
@@ -83,19 +48,9 @@ void UShinobiLocomotionAnimInstance::NativeInitializeAnimation()
 void UShinobiLocomotionAnimInstance::SetEnum(void* Container, FName Field, const TCHAR* DisplayName) const
 {
 	const TMap<FString, int64>* Values = EnumValues.Find(Field);
-	const int64* Value = Values ? Values->Find(DisplayName) : nullptr;
-	if (!Value)
+	if (const int64* Value = Values ? Values->Find(DisplayName) : nullptr)
 	{
-		return;
-	}
-	const FProperty* Property = Fields.FindRef(Field);
-	if (const FByteProperty* Byte = CastField<FByteProperty>(Property))
-	{
-		Byte->SetPropertyValue_InContainer(Container, static_cast<uint8>(*Value));
-	}
-	else if (const FEnumProperty* EnumProperty = CastField<FEnumProperty>(Property))
-	{
-		EnumProperty->GetUnderlyingProperty()->SetIntPropertyValue(EnumProperty->ContainerPtrToValuePtr<void>(Container), *Value);
+		ShinobiBlueprintStruct::SetEnum(Fields.FindRef(Field), Container, *Value);
 	}
 }
 
@@ -108,6 +63,7 @@ void UShinobiLocomotionAnimInstance::UpdateCharacterProperties()
 		return;
 	}
 	void* Properties = PropertiesProperty->ContainerPtrToValuePtr<void>(this);
+	auto Field = [this](const TCHAR* Name) { return Fields.FindRef(FName(Name)); };
 
 	const bool bOnGround = Movement->IsMovingOnGround(); // also true on a wall (wall running walks on custom gravity)
 	const double Now = GetWorld()->GetTimeSeconds();
@@ -129,28 +85,29 @@ void UShinobiLocomotionAnimInstance::UpdateCharacterProperties()
 	const bool bStrafe = !Movement->bOrientRotationToMovement;
 	const FVector Acceleration = Movement->GetCurrentAcceleration();
 
+	using namespace ShinobiBlueprintStruct;
 	SetEnum(Properties, TEXT("MovementMode"), bOnGround ? TEXT("OnGround") : TEXT("InAir"));
 	SetEnum(Properties, TEXT("Gait"), bSprint ? TEXT("Sprint") : bWalk ? TEXT("Walk") : TEXT("Run"));
 	SetEnum(Properties, TEXT("Stance"), Movement->IsCrouching() ? TEXT("Crouch") : TEXT("Stand"));
 	SetEnum(Properties, TEXT("RotationMode"), bStrafe ? TEXT("Strafe") : TEXT("OrientToMovement"));
-	SetStruct(Fields, Properties, TEXT("ActorTransform"), Character->GetActorTransform());
-	SetStruct(Fields, Properties, TEXT("Velocity"), Movement->Velocity);
-	SetStruct(Fields, Properties, TEXT("InputAcceleration"), Acceleration);
-	SetReal(Fields, Properties, TEXT("CurrentMaxAcceleration"), Movement->GetMaxAcceleration());
-	SetReal(Fields, Properties, TEXT("CurrentMaxDeceleration"), Movement->GetMaxBrakingDeceleration());
-	SetStruct(Fields, Properties, TEXT("OrientationIntent"), Acceleration.IsNearlyZero() ? Character->GetActorRotation() : Acceleration.Rotation());
-	SetStruct(Fields, Properties, TEXT("AimingRotation"), Character->GetBaseAimRotation());
-	SetBool(Fields, Properties, TEXT("JustLanded"), Now - LandedTime < JustLandedSeconds);
-	SetStruct(Fields, Properties, TEXT("LandVelocity"), LandVelocity);
-	SetStruct(Fields, Properties, TEXT("GroundNormal"), FVector(Movement->CurrentFloor.HitResult.ImpactNormal));
-	SetStruct(Fields, Properties, TEXT("GroundLocation"), FVector(Movement->CurrentFloor.HitResult.ImpactPoint));
+	SetStruct(Field(TEXT("ActorTransform")), Properties, Character->GetActorTransform());
+	SetStruct(Field(TEXT("Velocity")), Properties, Movement->Velocity);
+	SetStruct(Field(TEXT("InputAcceleration")), Properties, Acceleration);
+	SetReal(Field(TEXT("CurrentMaxAcceleration")), Properties, Movement->GetMaxAcceleration());
+	SetReal(Field(TEXT("CurrentMaxDeceleration")), Properties, Movement->GetMaxBrakingDeceleration());
+	SetStruct(Field(TEXT("OrientationIntent")), Properties, Acceleration.IsNearlyZero() ? Character->GetActorRotation() : Acceleration.Rotation());
+	SetStruct(Field(TEXT("AimingRotation")), Properties, Character->GetBaseAimRotation());
+	SetBool(Field(TEXT("JustLanded")), Properties, Now - LandedTime < JustLandedSeconds);
+	SetStruct(Field(TEXT("LandVelocity")), Properties, LandVelocity);
+	SetStruct(Field(TEXT("GroundNormal")), Properties, FVector(Movement->CurrentFloor.HitResult.ImpactNormal));
+	SetStruct(Field(TEXT("GroundLocation")), Properties, FVector(Movement->CurrentFloor.HitResult.ImpactPoint));
 
 	if (InputStateProperty)
 	{
 		void* InputState = InputStateProperty->ContainerPtrToValuePtr<void>(Properties);
-		SetBool(Fields, InputState, TEXT("WantsToSprint"), bSprint);
-		SetBool(Fields, InputState, TEXT("WantsToWalk"), bWalk);
-		SetBool(Fields, InputState, TEXT("WantsToStrafe"), bStrafe);
-		SetBool(Fields, InputState, TEXT("WantsToCrouch"), Movement->bWantsToCrouch);
+		SetBool(Field(TEXT("WantsToSprint")), InputState, bSprint);
+		SetBool(Field(TEXT("WantsToWalk")), InputState, bWalk);
+		SetBool(Field(TEXT("WantsToStrafe")), InputState, bStrafe);
+		SetBool(Field(TEXT("WantsToCrouch")), InputState, Movement->bWantsToCrouch);
 	}
 }

@@ -19,6 +19,9 @@ import unreal
 DEST_CONTENT = "E:/ShinobiCoop/Content"
 ROOTS = [
     "/Game/Blueprints/SandboxCharacter_CMC_ABP",
+    # Traversal montages and their chooser (UShinobiTraversalComponent). Not AC_TraversalLogic, the sample's traversal
+    # component: it only works on the sample's level blocks and drags them in.
+    "/Game/Characters/UEFN_Mannequin/Animations/Traversal/CHT_TraversalMontages_CMC",
 ]
 
 
