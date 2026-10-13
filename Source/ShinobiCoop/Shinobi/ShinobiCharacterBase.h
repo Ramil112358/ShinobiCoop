@@ -102,8 +102,12 @@ protected:
 	/** Server only. Called each time Health reaches 0. */
 	virtual void HandleOutOfHealth();
 
-	/** Constructor-only: Manny (or Quinn) mesh + combat anim blueprint from the template content. */
+	/** Constructor-only: Manny (or Quinn) mesh + combat anim blueprint from the template content, swapped for the
+	 * motion-matching AnimBP in BeginPlay. */
 	void UseMannequinMesh(bool bQuinn = false);
+
+	/** Set by UseMannequinMesh: BeginPlay gives the mesh the sample's motion-matching AnimBP (SandboxCharacter_CMC_ABP). */
+	bool bUseLocomotionAnim = false;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi", meta = (ClampMin = "0"))
 	float StunMultiplier = 1.f;

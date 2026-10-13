@@ -57,6 +57,17 @@ UAbilitySystemComponent* AShinobiCharacterBase::GetAbilitySystemComponent() cons
 void AShinobiCharacterBase::BeginPlay()
 {
 	Super::BeginPlay();
+	if (bUseLocomotionAnim)
+	{
+		// Motion-matched locomotion from the Game Animation Sample (Scripts/anim/). Loaded here, not by ConstructorHelpers:
+		// class default objects are built while this module loads, before plugin modules the sample's assets import
+		// (DrawDebugLibrary), and loading the AnimBP then breaks its nodes for the whole session.
+		static const TSoftClassPtr<UAnimInstance> LocomotionAnim(FSoftObjectPath(TEXT("/Game/Blueprints/SandboxCharacter_CMC_ABP.SandboxCharacter_CMC_ABP_C")));
+		if (UClass* Locomotion = LocomotionAnim.LoadSynchronous())
+		{
+			GetMesh()->SetAnimInstanceClass(Locomotion);
+		}
+	}
 	// Outline the visible body (the hero, when a hidden Manny drives it); the driver itself stays out of custom depth.
 	RefreshOutline();
 	if (GetBodyMesh() != GetMesh())
@@ -240,8 +251,9 @@ void AShinobiCharacterBase::UseMannequinMesh(bool bQuinn)
 	}
 	if (MannyAnim.Succeeded())
 	{
-		GetMesh()->SetAnimInstanceClass(MannyAnim.Class);
+		GetMesh()->SetAnimInstanceClass(MannyAnim.Class); // replaced by the motion-matching AnimBP in BeginPlay
 	}
+	bUseLocomotionAnim = true;
 	GetMesh()->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -96.f), FRotator(0.f, -90.f, 0.f));
 }
 
