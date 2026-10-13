@@ -18,10 +18,17 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Shinobi/ShinobiLook.h"
 #include "Shinobi/Hero/ShinobiLocomotionAnimInstance.h"
+#include "Shinobi/Hero/ShinobiAnimGenAnimInstance.h"
+#include "HAL/IConsoleManager.h"
 #include "Shinobi/UI/ShinobiOverheadTextComponent.h"
 
 namespace
 {
+	TAutoConsoleVariable<bool> CVarAnimGenVillagers(
+		TEXT("Shinobi.AnimGenVillagers"),
+		false,
+		TEXT("TRIAL: villagers (not the crowd) walk with AnimGen's machine-learned controller in a random trained style instead of motion matching. Read when a villager spawns."));
+
 	// ponytail: a fixed bank of lines; per-villager data arrives with quests in sub-project #4
 	const TCHAR* Barks[] = {
 		TEXT("The camps in the forest have been restless lately."),
@@ -112,9 +119,15 @@ void AShinobiVillager::BeginPlay()
 	}
 	// Motion-matched walking from the Game Animation Sample; the constructor's ABP_Unarmed until it's migrated. Not for the
 	// crowd above: City Sample characters play their own loops, and motion matching per crowd member would cost too much.
-	if (UClass* Locomotion = UShinobiLocomotionAnimInstance::LoadAnimBlueprintClass())
+	UClass* AnimGen = CVarAnimGenVillagers.GetValueOnGameThread() ? UShinobiAnimGenAnimInstance::LoadAnimBlueprintClass() : nullptr;
+	if (UClass* Locomotion = AnimGen ? AnimGen : UShinobiLocomotionAnimInstance::LoadAnimBlueprintClass())
 	{
 		GetMesh()->SetAnimInstanceClass(Locomotion);
+	}
+	if (UShinobiAnimGenAnimInstance* Generated = Cast<UShinobiAnimGenAnimInstance>(GetMesh()->GetAnimInstance()))
+	{
+		const TArray<FName>& Styles = UShinobiAnimGenAnimInstance::PropFreeStyles();
+		Generated->Style = Styles[FMath::Abs(Variant) % Styles.Num()];
 	}
 	if (Body->WearCharacter(Bodies[FMath::Abs(Variant) % UE_ARRAY_COUNT(Bodies)]))
 	{
