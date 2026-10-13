@@ -4,6 +4,7 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Chooser.h"
+#include "Shinobi/Hero/ShinobiAnimSample.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/Character.h"
 #include "MotionWarpingComponent.h"
@@ -51,38 +52,6 @@ namespace
 		TArray<FMotionWarpingWindowData> Windows;
 		UMotionWarpingUtilities::GetMotionWarpingWindowsForWarpTargetFromAnimation(Montage, Target, Windows);
 		return Windows.Num() > 0;
-	}
-
-	/** Copies one Blueprint field into another of the same type (the AnimBP's gait into the chooser's input, ...). */
-	void CopyField(const FProperty* To, void* ToContainer, const FProperty* From, const void* FromContainer)
-	{
-		if (To && From && To->SameType(From))
-		{
-			To->CopyCompleteValue(To->ContainerPtrToValuePtr<void>(ToContainer), From->ContainerPtrToValuePtr<void>(FromContainer));
-		}
-	}
-
-	/** Calls the AnimBP's Get_PoseHistory and copies its result into Field (the chooser's pose-match column reads it). */
-	void CopyPoseHistory(UAnimInstance* AnimInstance, const FProperty* Field, void* Container)
-	{
-		UFunction* Function = Field ? AnimInstance->FindFunction(TEXT("Get_PoseHistory")) : nullptr;
-		if (!Function)
-		{
-			return;
-		}
-		uint8* Params = static_cast<uint8*>(FMemory_Alloca(Function->ParmsSize));
-		FMemory::Memzero(Params, Function->ParmsSize);
-		Function->InitializeStruct(Params);
-		AnimInstance->ProcessEvent(Function, Params);
-		for (TFieldIterator<FProperty> It(Function); It && It->HasAnyPropertyFlags(CPF_Parm); ++It)
-		{
-			if (It->HasAnyPropertyFlags(CPF_OutParm | CPF_ReturnParm))
-			{
-				CopyField(Field, Container, *It, Params);
-				break;
-			}
-		}
-		Function->DestroyStruct(Params);
 	}
 }
 
@@ -255,24 +224,11 @@ bool UShinobiTraversalComponent::ChooseMontage(FShinobiTraversalAction& Action, 
 	SetReal(Find(InputType, TEXT("BackLedgeHeight")), In, BackLedgeHeight);
 	SetReal(Find(InputType, TEXT("DistanceToLedge")), In, FVector::Dist(Action.FrontLedgeLocation, Character->GetMesh()->GetComponentLocation()));
 	SetReal(Find(InputType, TEXT("Speed")), In, Character->GetCharacterMovement()->Velocity.Size2D());
-	// Gait and movement mode as the AnimBP sees them (UShinobiLocomotionAnimInstance fills its CharacterProperties).
-	if (const FStructProperty* Properties = CastField<FStructProperty>(AnimInstance->GetClass()->FindPropertyByName(TEXT("CharacterProperties"))))
-	{
-		const void* From = Properties->ContainerPtrToValuePtr<void>(AnimInstance);
-		CopyField(Find(InputType, TEXT("Gait")), In, Find(Properties->Struct, TEXT("Gait")), From);
-		CopyField(Find(InputType, TEXT("MovementMode")), In, Find(Properties->Struct, TEXT("MovementMode")), From);
-	}
-	CopyPoseHistory(AnimInstance, Find(InputType, TEXT("PoseHistory")), In);
-
-	// The chooser's context, in the order its table declares: the AnimBP, the inputs, the outputs.
-	FChooserEvaluationContext Context(AnimInstance);
-	Context.AddStructViewParam(FStructView(InputType, Input.GetMutableMemory()));
-	Context.AddStructViewParam(FStructView(OutputType, Output.GetMutableMemory()));
-	UChooserTable::EvaluateChooser(Context, Chooser, FObjectChooserBase::FObjectChooserIteratorCallback::CreateLambda([&Action](UObject* Result)
-	{
-		Action.Montage = Cast<UAnimMontage>(Result);
-		return Action.Montage ? FObjectChooserBase::EIteratorStatus::Stop : FObjectChooserBase::EIteratorStatus::Failed;
-	}));
+	// Gait and movement mode as the AnimBP sees them.
+	ShinobiAnimSample::CopyCharacterProperty(AnimInstance, TEXT("Gait"), Find(InputType, TEXT("Gait")), In);
+	ShinobiAnimSample::CopyCharacterProperty(AnimInstance, TEXT("MovementMode"), Find(InputType, TEXT("MovementMode")), In);
+	ShinobiAnimSample::CopyPoseHistory(AnimInstance, Find(InputType, TEXT("PoseHistory")), In);
+	Action.Montage = ShinobiAnimSample::ChooseMontage(Chooser, AnimInstance, InputType, In, OutputType, Output.GetMutableMemory());
 
 	const FProperty* OutputAction = Find(OutputType, TEXT("ActionType"));
 	const FString ActionName = GetEnumDisplayName(OutputAction, Output.GetMemory());
@@ -283,6 +239,7 @@ bool UShinobiTraversalComponent::ChooseMontage(FShinobiTraversalAction& Action, 
 		return TRAVERSAL_REJECT("the chooser has no montage for it");
 	}
 	Action.StartTime = static_cast<float>(GetReal(Find(OutputType, TEXT("MontageStartTime")), Output.GetMemory()));
+	UE_LOG(LogShinobiCoop, Verbose, TEXT("Traversal: %s from %.2f s"), *GetNameSafe(Action.Montage), Action.StartTime);
 	Action.PlayRate = 1.f;
 	// The sample's SetWarpTargets: hurdles and vaults go over the far edge, hurdles also land on the floor beyond it.
 	Action.bWarpBackLedge = ActionName == TEXT("Hurdle") || ActionName == TEXT("Vault");

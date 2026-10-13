@@ -15,6 +15,7 @@
 #include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/Hero/ShinobiLocomotionAnimInstance.h"
+#include "Shinobi/Hero/ShinobiPhysicalReactionComponent.h"
 #include "Shinobi/ShinobiLook.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiTags.h"
@@ -216,8 +217,21 @@ void AShinobiCharacterBase::OnDeadTagChanged(const FGameplayTag Tag, int32 Count
 	}
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	GetCharacterMovement()->DisableMovement();
+	if (PhysicalReactions && PhysicalReactions->Die())
+	{
+		return; // the driver sags into a ragdoll and the visible body follows it through the retarget
+	}
 	GetBodyMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
 	GetBodyMesh()->SetSimulatePhysics(true);
+}
+
+void AShinobiCharacterBase::LaunchCharacter(FVector LaunchVelocity, bool bXYOverride, bool bZOverride)
+{
+	Super::LaunchCharacter(LaunchVelocity, bXYOverride, bZOverride);
+	if (PhysicalReactions && HasAuthority() && LaunchVelocity.Size() >= PhysicalReactions->KnockdownSpeed)
+	{
+		PhysicalReactions->Knockdown(LaunchVelocity);
+	}
 }
 
 FName AShinobiCharacterBase::GetRightHandBone() const
@@ -249,6 +263,7 @@ void AShinobiCharacterBase::UseMannequinMesh(bool bQuinn)
 	}
 	bUseLocomotionAnim = true;
 	GetMesh()->SetRelativeLocationAndRotation(FVector(0.f, 0.f, -96.f), FRotator(0.f, -90.f, 0.f));
+	PhysicalReactions = CreateDefaultSubobject<UShinobiPhysicalReactionComponent>(TEXT("PhysicalReactions"));
 }
 
 void AShinobiCharacterBase::GrantStartupAbilitiesAndEffects()

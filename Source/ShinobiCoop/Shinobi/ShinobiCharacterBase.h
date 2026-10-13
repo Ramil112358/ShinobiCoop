@@ -15,6 +15,7 @@ class UShinobiCastFxComponent;
 class UShinobiChakraAuraComponent;
 class UShinobiFeedbackComponent;
 class UShinobiPhaseFxComponent;
+class UShinobiPhysicalReactionComponent;
 class UShinobiSusanooComponent;
 
 UENUM(BlueprintType)
@@ -91,6 +92,12 @@ public:
 	/** Stuns (Shock) last this many times their normal duration (the boss shrugs them off faster). */
 	float GetStunMultiplier() const { return StunMultiplier; }
 
+	/** Physical hit reactions (humanoids, set up by UseMannequinMesh); null for other bodies. */
+	UShinobiPhysicalReactionComponent* GetPhysicalReactions() const { return PhysicalReactions; }
+
+	/** Hard launches (the server's, at least the reactions' KnockdownSpeed) also knock the character down. */
+	virtual void LaunchCharacter(FVector LaunchVelocity, bool bXYOverride, bool bZOverride) override;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void PossessedBy(AController* NewController) override;
@@ -126,6 +133,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UShinobiBodyFlameComponent> BodyFlames;
+
+	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
+	TObjectPtr<UShinobiPhysicalReactionComponent> PhysicalReactions;
 
 	/** Damage numbers, hit-stop, camera shake and sounds (cosmetic, every machine that renders). */
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")

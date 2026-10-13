@@ -36,7 +36,8 @@ public class ShinobiCoop : ModuleRules
 			"MotionWarping",
 			"Chooser",
 			"AnimationWarpingRuntime",
-			"PoseSearch"
+			"PoseSearch",
+			"PhysicsControl"
 		});
 
 		if (Target.bBuildEditor)

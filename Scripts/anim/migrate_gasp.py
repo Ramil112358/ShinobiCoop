@@ -22,6 +22,9 @@ ROOTS = [
     # Traversal montages and their chooser (UShinobiTraversalComponent). Not AC_TraversalLogic, the sample's traversal
     # component: it only works on the sample's level blocks and drags them in.
     "/Game/Characters/UEFN_Mannequin/Animations/Traversal/CHT_TraversalMontages_CMC",
+    # Hit reactions (UShinobiPhysicalReactionComponent): the physics control profiles and the getups after a knockdown.
+    "/Game/Characters/UEFN_Mannequin/Rigs/PCA_SandboxCharacter",
+    "/Game/Characters/UEFN_Mannequin/Animations/Ragdoll/CHT_GetUpMontages",
 ]
 
 
