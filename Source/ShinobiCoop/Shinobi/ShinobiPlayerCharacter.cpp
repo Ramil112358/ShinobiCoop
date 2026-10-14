@@ -879,9 +879,14 @@ void AShinobiPlayerCharacter::ZoomCamera(const FInputActionValue& Value)
 	}
 }
 
+bool AShinobiPlayerCharacter::CanJumpOrTraverse() const
+{
+	return CanMove() && !AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Blocking);
+}
+
 void AShinobiPlayerCharacter::JumpPressed()
 {
-	if (!CanMove())
+	if (!CanJumpOrTraverse())
 	{
 		return;
 	}

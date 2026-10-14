@@ -319,4 +319,37 @@ bool FShinobiBlockPoseTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlockNoJumpTest, "ShinobiCoop.Block.Ability.NoJumpingOrVaultingBehindTheGuard", ShinobiTestFlags)
+bool FShinobiBlockNoJumpTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	TestTrue(TEXT("Free to jump"), P->CanJumpOrTraverse());
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Block);
+	TestFalse(TEXT("A guard stays on the ground: no jump, vault or mantle"), P->CanJumpOrTraverse());
+	ShinobiTest::Release(P, EShinobiAbilityInputID::Block);
+	TestTrue(TEXT("Free to jump again"), P->CanJumpOrTraverse());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlockPredictedRootTest, "ShinobiCoop.Block.Ability.TheRootIsAPredictedMoveFlag", ShinobiTestFlags)
+bool FShinobiBlockPredictedRootTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	UShinobiMovementComponent* Move = CastChecked<UShinobiMovementComponent>(P->GetCharacterMovement());
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Block);
+	TestTrue(TEXT("The ability sets the move flag (on the owning client too)"), Move->IsBlocking());
+	ShinobiTest::Release(P, EShinobiAbilityInputID::Block);
+	TestFalse(TEXT("and clears it on release"), Move->IsBlocking());
+
+	// The root follows the flag, not the server's tag, so a client roots (and frees) itself without waiting a round trip.
+	Move->SetBlocking(true);
+	TestEqual(TEXT("Rooted by the flag alone"), Move->GetMaxSpeed(), 0.f);
+	Move->SetBlocking(false);
+	ShinobiTest::ApplyEffect(P, UGE_Blocking::StaticClass());
+	TestTrue(TEXT("The tag alone does not root"), Move->GetMaxSpeed() > 0.f);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

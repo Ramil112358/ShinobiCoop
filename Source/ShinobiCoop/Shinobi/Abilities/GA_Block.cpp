@@ -5,6 +5,7 @@
 #include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiEffects.h"
+#include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
 
@@ -44,6 +45,10 @@ void UGA_Block::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const F
 		return;
 	}
 	bGuardRaised = true;
+	if (UShinobiMovementComponent* Movement = GetShinobiMovement())
+	{
+		Movement->SetBlocking(true); // on the owning client too: the root is predicted, the guard itself is the server's
+	}
 
 	UAbilityTask_WaitInputRelease* Release = UAbilityTask_WaitInputRelease::WaitInputRelease(this);
 	Release->OnRelease.AddDynamic(this, &UGA_Block::OnInputReleased);
@@ -83,6 +88,10 @@ void UGA_Block::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGamep
 	if (bGuardRaised)
 	{
 		bGuardRaised = false;
+		if (UShinobiMovementComponent* Movement = GetShinobiMovement())
+		{
+			Movement->SetBlocking(false);
+		}
 		if (HasAuthority(&ActivationInfo))
 		{
 			// The regen delay first, as in UGA_Sprint::EndAbility: both grant State.StaminaRegenBlocked, so the count never hits 0.

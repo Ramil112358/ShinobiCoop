@@ -43,6 +43,9 @@ public:
 	/** False while charging chakra, shocked, staggered, reviving, downed or dead: move and jump input are ignored. */
 	bool CanMove() const;
 
+	/** Space may jump, vault or mantle: CanMove() and not guarding (a guard stays on the ground). */
+	bool CanJumpOrTraverse() const;
+
 	/** Flight while mounted: Space climbs, Control dives (both cancel). Ignored on the ground. */
 	void SetFlightClimb(bool bHeld) { bFlightClimb = bHeld; }
 	void SetFlightDive(bool bHeld) { bFlightDive = bHeld; }

@@ -17,6 +17,11 @@ public:
 	void SetSprinting(bool bNewSprinting) { bWantsToSprint = bNewSprinting; }
 	bool IsSprinting() const { return bWantsToSprint; }
 
+	/** Guarding (UGA_Block sets it on the owning client and the server): roots the player. A saved-move flag like sprint, so the
+	 * owning client roots and frees itself at once instead of a round trip later, when State.Blocking replicates. */
+	void SetBlocking(bool bNewBlocking) { bWantsToBlock = bNewBlocking; }
+	bool IsBlocking() const { return bWantsToBlock; }
+
 	virtual float GetMaxSpeed() const override;
 
 	/** Rides State.Mounted: flies while it is on and falls once it ends. Runs in every move, on the client and the server alike,
@@ -83,6 +88,7 @@ public:
 	float SprintSpeed = 900.f;
 
 	uint8 bWantsToSprint : 1;
+	uint8 bWantsToBlock : 1;
 
 private:
 	void TryEnterWall();
