@@ -13,7 +13,7 @@ CREATURES = {
     # name: (colour or None, clips, base-colour PNG, or None, or a list with one entry per material slot: a PNG, or a flat colour).
     # With a PNG the creature wears M_Character (the heroes' lit material), or M_Creature when <png>_Normal.png and <png>_Roughness.png are beside it.
     # The files are SourceArt/Creatures/<SOURCE.get(name, name)>/<name>*.fbx.
-    "Snake": ((0.20, 0.08, 0.30), ["Idle", "Move", "Bite", "Hit", "Death"], None),
+    "Misha": (None, ["Idle", "Move", "Bark", "Hit", "Death"], "Misha.png"),  # Scripts/character/build_misha.py; he replaced the snake (still in /Game/Shinobi/Creatures/Snake, unused)
     "Tairn": (None, ["Idle", "Flap", "Glide", "Breath"], ["Tairn.png", "TairnClub.png", (0.02, 0.02, 0.025)]),  # body, club ball, club spikes
     "CrimsonDragon": (None, ["Idle", "Flap", "Glide", "Breath"], "CrimsonDragon.png"),
     "Toad": (None, ["Idle", "Move", "Slam", "Hit", "Death"], "Toad.png"),

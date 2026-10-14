@@ -37,14 +37,14 @@ public:
 	UGA_SummonToad();
 };
 
-/** Page 4, slot 3: a giant snake that strikes from a distance. */
+/** Page 4, slot 3: Misha, a giant plush puppy who barks a shockwave from a distance. */
 UCLASS()
-class SHINOBICOOP_API UGA_SummonSnake : public UGA_SummonBase
+class SHINOBICOOP_API UGA_SummonMisha : public UGA_SummonBase
 {
 	GENERATED_BODY()
 
 public:
-	UGA_SummonSnake();
+	UGA_SummonMisha();
 };
 
 /** Page 4, slot 4: Pabu, a corgi ninken. */

@@ -52,16 +52,16 @@ UGA_SummonToad::UGA_SummonToad()
 	Clearance = 300.f;
 }
 
-UGA_SummonSnake::UGA_SummonSnake()
+UGA_SummonMisha::UGA_SummonMisha()
 {
 	InputID = EShinobiAbilityInputID::Jutsu3;
-	DisplayName = INVTEXT("Summon Snake");
-	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonSnake.T_Jutsu_SummonSnake")));
+	DisplayName = INVTEXT("Summon Misha");
+	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonMisha.T_Jutsu_SummonMisha")));
 	ChakraCost = 50.f;
 	Cooldown = 40.f;
-	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_SummonSnake);
-	SummonKind = EShinobiSummonKind::Snake;
-	Distance = 400.f;
+	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_SummonMisha);
+	SummonKind = EShinobiSummonKind::Misha;
+	Distance = 500.f; // he is a big plush: room for him clear of the caster
 	Clearance = 350.f;
 }
 

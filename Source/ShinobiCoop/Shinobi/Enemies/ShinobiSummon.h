@@ -10,7 +10,7 @@ UENUM()
 enum class EShinobiSummonKind : uint8
 {
 	Toad,  // a giant toad: slow, tough, slams the ground
-	Snake, // a giant snake: long reach, strikes from afar
+	Misha, // a giant plush puppy: hops, barks a shockwave from afar
 	Pabu,  // a corgi ninken: one, quick, bites
 };
 
@@ -76,7 +76,7 @@ private:
 	/** Applies Kind's numbers, size and look. Runs on every machine, before the enemy base reads them. */
 	void Configure();
 
-	/** Dresses the summon in its creature (Pabu, the Mesh2Motion snake, the Rodin toad) over the hidden
+	/** Dresses the summon in its creature (Pabu, Misha, the Rodin toad) over the hidden
 	 * mannequin. Does nothing on a dedicated server or when the creature is not imported. */
 	void WearCreature();
 
