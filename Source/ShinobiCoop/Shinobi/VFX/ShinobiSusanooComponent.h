@@ -10,9 +10,9 @@ class UMaterialInstanceDynamic;
 class UStaticMeshComponent;
 
 /**
- * Susanoo's look: while its owner carries State.Susanoo, a spectral ribcage figure (SM_Susanoo, about 6 m tall, in the glowing
- * M_Susanoo) stands around them. It fades in over a moment, pulses slowly, and fades out when the armour ends. The tag
- * replicates, so every machine shows it. Cosmetic only; the armour itself is UGE_Susanoo and the damage exec.
+ * A Susanoo figure: while its owner carries StateTag, Model (origin at the feet, in the glowing M_Susanoo) stands around them.
+ * It fades in, breathes slowly, and fades out when the tag goes. The tag replicates, so every machine shows it. Cosmetic only.
+ * Defaults: the Susanoo jutsu's 6 m ribcage (State.Susanoo, SM_Susanoo). Players have a second one for their guard (UGA_Block).
  */
 UCLASS(ClassGroup = (Shinobi))
 class SHINOBICOOP_API UShinobiSusanooComponent : public UActorComponent
@@ -28,6 +28,19 @@ public:
 	/** The figure's mesh component; null until the armour first goes up, and on a dedicated server. */
 	UStaticMeshComponent* GetFigure() const { return Figure; }
 
+	/** Set by the owner's constructor; the defaults are the Susanoo jutsu's. */
+	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
+	FGameplayTag StateTag;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
+	FSoftObjectPath Model;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
+	float FadeInSeconds = 0.8f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
+	float FadeOutSeconds = 0.5f;
+
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 protected:
@@ -35,7 +48,7 @@ protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
-	void OnSusanooChanged(const FGameplayTag Tag, int32 Count);
+	void OnStateChanged(const FGameplayTag Tag, int32 Count);
 
 	/** Builds the figure and its material the first time they are needed. Does nothing if the model is not imported. */
 	void EnsureFigure();

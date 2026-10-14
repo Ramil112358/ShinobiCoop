@@ -52,6 +52,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/VFX/ShinobiSurfaceFxComponent.h"
+#include "Shinobi/VFX/ShinobiSusanooComponent.h"
 #include "Shinobi/Traversal/ShinobiTraversalComponent.h"
 #include "MotionWarpingComponent.h"
 
@@ -122,6 +123,13 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 
 	Traversal = CreateDefaultSubobject<UShinobiTraversalComponent>(TEXT("Traversal"));
 	MotionWarping = CreateDefaultSubobject<UMotionWarpingComponent>(TEXT("MotionWarping"));
+
+	// The guard's ribcage: a body-hugging Susanoo (Scripts/setup_susanoo_ribs.py) that snaps up and down quickly.
+	Guard = CreateDefaultSubobject<UShinobiSusanooComponent>(TEXT("Guard"));
+	Guard->StateTag = ShinobiTags::State_Blocking;
+	Guard->Model = FSoftObjectPath(TEXT("/Game/Shinobi/Jutsu/SM_SusanooRibs.SM_SusanooRibs"));
+	Guard->FadeInSeconds = 0.15f;
+	Guard->FadeOutSeconds = 0.25f;
 }
 
 int32 AShinobiPlayerCharacter::FindRosterIndex(const FString& Name)

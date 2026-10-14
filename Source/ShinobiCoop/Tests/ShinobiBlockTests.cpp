@@ -10,6 +10,7 @@
 #include "Shinobi/Abilities/GA_Melee.h"
 #include "Shinobi/Abilities/GA_Sprint.h"
 #include "Shinobi/Abilities/GA_Susanoo.h"
+#include "Shinobi/VFX/ShinobiSusanooComponent.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlockDamageTest, "ShinobiCoop.Block.Damage.AFifthLandsForStamina", ShinobiTestFlags)
 bool FShinobiBlockDamageTest::RunTest(const FString& Parameters)
@@ -238,6 +239,28 @@ bool FShinobiBlockDownedEndsTest::RunTest(const FString& Parameters)
 	ShinobiTest::Press(P, EShinobiAbilityInputID::Block);
 	ShinobiTest::ApplyEffect(P, UGE_Downed::StaticClass());
 	TestFalse(TEXT("Downed: the guard ends"), ShinobiTest::IsActive(P, UGA_Block::StaticClass()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlockFigureTest, "ShinobiCoop.Block.Figure.StandsWhileGuarding", ShinobiTestFlags)
+bool FShinobiBlockFigureTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	UShinobiSusanooComponent* Guard = P->GetGuard();
+	if (!TestNotNull(TEXT("Players have a guard figure"), Guard))
+	{
+		return false;
+	}
+	TestTrue(TEXT("It is a second figure, not the Susanoo jutsu's"), Guard != P->GetSusanoo());
+	TestFalse(TEXT("Down before guarding"), Guard->IsShown());
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Block);
+	TestTrue(TEXT("Up while guarding"), Guard->IsShown());
+	TestFalse(TEXT("and the 6 m Susanoo stays down"), P->GetSusanoo()->IsShown());
+
+	ShinobiTest::Release(P, EShinobiAbilityInputID::Block);
+	TestFalse(TEXT("Down on release"), Guard->IsShown());
 	return true;
 }
 

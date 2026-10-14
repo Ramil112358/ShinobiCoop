@@ -8,6 +8,7 @@
 
 class UCameraComponent;
 class UShinobiOverheadTextComponent;
+class UShinobiSusanooComponent;
 class UShinobiSurfaceFxComponent;
 class UShinobiTraversalComponent;
 class UMotionWarpingComponent;
@@ -120,6 +121,9 @@ public:
 	/** Null when the player is the plain visible Manny (the fallback). */
 	USkeletalMeshComponent* GetHeroMesh() const { return HeroMesh; }
 	UShinobiOverheadTextComponent* GetNameTag() const { return NameTag; }
+
+	/** The ribcage that stands round the player while they guard (UGA_Block). */
+	UShinobiSusanooComponent* GetGuard() const { return Guard; }
 
 	/** The jutsu page keys 1-4 fire (1..ShinobiTags::NumJutsuPages). It is a loose tag on each machine's ability system:
 	 * the owning client applies a switch at once so activation predicts, and tells the server. */
@@ -254,6 +258,9 @@ private:
 	/** Teammates' names above their heads; hidden on your own character. */
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UShinobiOverheadTextComponent> NameTag;
+
+	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
+	TObjectPtr<UShinobiSusanooComponent> Guard;
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UShinobiSurfaceFxComponent> SurfaceFx;
