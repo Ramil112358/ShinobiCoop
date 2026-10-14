@@ -39,6 +39,7 @@ namespace ShinobiTags
 	UE_DEFINE_GAMEPLAY_TAG(State_AttackBoost, "State.AttackBoost"); // these three names are also looked up by the HUD's boost list
 	UE_DEFINE_GAMEPLAY_TAG(State_SpeedBoost, "State.SpeedBoost");
 	UE_DEFINE_GAMEPLAY_TAG(State_Shield, "State.Shield");
+	UE_DEFINE_GAMEPLAY_TAG(State_Blocking, "State.Blocking");
 	UE_DEFINE_GAMEPLAY_TAG(State_JutsuPage_1, "State.JutsuPage.1");
 	UE_DEFINE_GAMEPLAY_TAG(State_JutsuPage_2, "State.JutsuPage.2");
 	UE_DEFINE_GAMEPLAY_TAG(State_JutsuPage_3, "State.JutsuPage.3");
@@ -58,6 +59,7 @@ namespace ShinobiTags
 	UE_DEFINE_GAMEPLAY_TAG(Ability_Jutsu, "Ability.Jutsu");
 	UE_DEFINE_GAMEPLAY_TAG(Ability_Substitution, "Ability.Substitution");
 	UE_DEFINE_GAMEPLAY_TAG(Ability_Revive, "Ability.Revive");
+	UE_DEFINE_GAMEPLAY_TAG(Ability_Block, "Ability.Block");
 
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_Fireball, "Cooldown.Jutsu.Fireball");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_Chidori, "Cooldown.Jutsu.Chidori");

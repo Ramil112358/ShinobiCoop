@@ -196,6 +196,19 @@ public:
 	UGE_Susanoo();
 };
 
+/** Holding a guard (UGA_Block): State.Blocking and paused stamina regen until the ability removes it. UShinobiDamageExec cuts a
+ * blocked hit to DamageTakenScale and charges stamina for it; a hit the stamina can't pay for breaks the guard (removes this). */
+UCLASS()
+class SHINOBICOOP_API UGE_Blocking : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	static constexpr float DamageTakenScale = 0.2f; // read by UShinobiDamageExec
+	static constexpr float StaminaPerDamage = 0.5f; // of the hit before the guard's cut
+	static constexpr float MinStaminaCost = 5.f;
+	UGE_Blocking();
+};
+
 /** Riding the summoned dragon: 45 s of State.Mounted. UShinobiMovementComponent flies the rider while it lasts. Ends early when the
  * rider is downed or dies (AShinobiCharacterBase) or dismounts (UGA_DragonDismount). Recasting refreshes it. */
 UCLASS()
