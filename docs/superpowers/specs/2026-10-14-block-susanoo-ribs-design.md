@@ -50,8 +50,8 @@ New tags: `Ability.Block`, `State.Blocking`.
 - Generalise `UShinobiSusanooComponent`: tag, mesh path, fade-in/out seconds and attach offset become properties
   (defaults stay the current Susanoo values). Players get a second instance configured for `State.Blocking`,
   `SM_SusanooRibs`, 0.15 s fade-in, 0.25 s fade-out, same `M_Susanoo` glow material.
-- Spark burst: the existing `EShinobiBurst::SusanooRise` (violet), server-spawned and replicated: scale 0.35 at the feet
-  when the guard rises (`UGA_Block`), scale 0.15 at the victim on each blocked hit (`UShinobiDamageExec`).
+- Spark burst: the existing `EShinobiBurst::SusanooRise` (violet), server-spawned and replicated, at scale 0.15 at the
+  victim on each blocked hit (`UShinobiDamageExec`). Raising the guard has no burst (its star card read as a star over the head).
 
 ## Asset: `SM_SusanooRibs`
 
