@@ -123,6 +123,67 @@ namespace
 	}
 }
 
+namespace
+{
+	struct FWallTurn
+	{
+		float MaxRoot = 0.f; // the root bone's turn off the capsule, degrees
+		float MaxTilt = 0.f; // the spine's lean off the wall's normal, degrees
+	};
+
+	/** Runs at a wall, up it, then back down it, measuring every step on the wall. */
+	FWallTurn SampleWallTurn()
+	{
+		FDiagCVars Mode(true, true);
+		FShinobiTestWorld W;
+		UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+		auto Block = [&](const FVector& Center, const FVector& Scale)
+		{
+			AStaticMeshActor* Actor = W.Spawn<AStaticMeshActor>(Center);
+			Actor->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+			Actor->GetStaticMeshComponent()->SetStaticMesh(Cube);
+			Actor->SetActorScale3D(Scale);
+		};
+		Block(FVector(0.f, 0.f, -10.f), FVector(40.f, 40.f, 0.2f));
+		Block(FVector(300.f, 0.f, 1000.f), FVector(1.f, 20.f, 20.f));
+		AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, 0.f, 100.f));
+		W.Spawn<AAIController>()->Possess(P);
+		W.Tick(0.5f);
+		for (TObjectIterator<UPoseSearchDatabase> It; It; ++It)
+		{
+			using namespace UE::PoseSearch;
+			FAsyncPoseSearchDatabasesManagement::RequestAsyncBuildIndex(*It, ERequestAsyncBuildFlag::NewRequest | ERequestAsyncBuildFlag::WaitForCompletion);
+		}
+		USkeletalMeshComponent* Mesh = P->GetMesh();
+		const UShinobiMovementComponent* Movement = CastChecked<UShinobiMovementComponent>(P->GetCharacterMovement());
+		FWallTurn Result;
+		for (int32 Step = 0; Step < 70; ++Step)
+		{
+			P->AddMovementInput(!Movement->IsWallTraversing() ? FVector(1.f, 0.f, 0.f) : FVector(0.f, 0.f, Step < 40 ? 1.f : -1.f));
+			W.Tick(0.05f);
+			if (Movement->IsWallTraversing())
+			{
+				const FVector Spine = (Mesh->GetBoneLocation(TEXT("head")) - Mesh->GetBoneLocation(TEXT("pelvis"))).GetSafeNormal();
+				const float Tilt = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(Spine | -Movement->GetGravityDirection(), -1.f, 1.f)));
+				Result.MaxTilt = FMath::Max(Result.MaxTilt, Tilt);
+				Result.MaxRoot = FMath::Max(Result.MaxRoot, FMath::RadiansToDegrees(Mesh->GetComponentSpaceTransforms()[0].GetRotation().GetAngle()));
+			}
+		}
+		return Result;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiAnimWallTurnTest, "ShinobiCoop.AnimFidelity.WallTurnStaysOnTheWall", ShinobiTestFlags)
+bool FShinobiAnimWallTurnTest::RunTest(const FString& Parameters)
+{
+	// OffsetRootBone counters the capsule's turn as if it were about world Z: stepping onto a wall or turning round on it
+	// swung the root 80-85 degrees off the capsule and tilted the body out of the wall. It resets every frame on a wall now.
+	const FWallTurn Turn = SampleWallTurn();
+	TestTrue(FString::Printf(TEXT("The root stays with the capsule on the wall (%.0f degrees at most)"), Turn.MaxRoot), Turn.MaxRoot < 5.f);
+	TestTrue(FString::Printf(TEXT("The body leans no more than running on the ground (%.0f degrees at most)"), Turn.MaxTilt), Turn.MaxTilt < 45.f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiAnimWallTest, "ShinobiCoop.AnimFidelity.WallRunKeepsTheBodyOnTheWall", ShinobiTestFlags)
 bool FShinobiAnimWallTest::RunTest(const FString& Parameters)
 {
