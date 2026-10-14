@@ -24,8 +24,10 @@ the cost).
   (not activation-owned tags) so the tag replicates to every machine for the visual. On end it applies
   `UGE_StaminaRegenDelay` before removing `UGE_Blocking` (same ordering as sprint).
 - The ability also ends when `State.Blocking` is removed from outside (guard break), via a tag-removed wait.
-- Movement: `UShinobiMovementComponent::GetMaxSpeed` scales by `UGE_Blocking::SpeedScale = 0.4` while
-  `State.Blocking`.
+- Movement: guarding roots the player (decided after the spec review: the player AnimBP only has the full-body
+  `DefaultSlot`). `UShinobiMovementComponent::GetMaxSpeed` returns 0 while `State.Blocking`; the player still turns to
+  face their input. Dodge cancels the block (`Ability.Block` added to `UGA_Dodge::CancelAbilitiesWithTag`); a jutsu
+  being cast blocks it (`Ability.Block` added to `UShinobiJutsuAbility::BlockAbilitiesWithTag`).
 
 ### Damage (`UShinobiDamageExec`)
 
@@ -36,20 +38,20 @@ When the target has `State.Blocking`, after the existing Susanoo/attack-boost sc
 - Periodic damage (burning): scaled by `DamageTakenScale`, no stamina cost.
 - Direct hit: cost = `max(MinStaminaCost, StaminaPerDamage * Damage)` using the damage before the block scale.
   - Stamina >= cost: stamina base -= cost; damage *= `DamageTakenScale`; no `Event.Hit.Stagger`, no physical
-    reaction shove; send `Event.Block.Hit` (cue for the spark burst).
+    reaction shove; the exec spawns the spark burst (`AShinobiBurst`, `SusanooRise` at scale 0.15) at the victim.
   - Stamina < cost (guard break): stamina base set to 0; remove effects granting `State.Blocking`; the hit lands
-    unscaled; send `Event.Hit.Stagger` regardless of threshold (applies `UGE_Stagger`).
+    unscaled; applies `UGE_Stagger` and sends `Event.Hit.Stagger` once, regardless of the 20-damage threshold.
 - `State.Invulnerable` / `State.Phased` checks keep running first, unchanged.
 
-New tags: `Ability.Block`, `State.Blocking`, `Event.Block.Hit`.
+New tags: `Ability.Block`, `State.Blocking`.
 
 ## Visual
 
 - Generalise `UShinobiSusanooComponent`: tag, mesh path, fade-in/out seconds and attach offset become properties
   (defaults stay the current Susanoo values). Players get a second instance configured for `State.Blocking`,
   `SM_SusanooRibs`, 0.15 s fade-in, 0.25 s fade-out, same `M_Susanoo` glow material.
-- Spark burst: existing `ShinobiBurst` sprite VFX in purple, spawned locally when the armour rises and on each
-  `Event.Block.Hit` at the hit side of the ribcage.
+- Spark burst: the existing `EShinobiBurst::SusanooRise` (violet), server-spawned and replicated: scale 0.35 at the feet
+  when the guard rises (`UGA_Block`), scale 0.15 at the victim on each blocked hit (`UShinobiDamageExec`).
 
 ## Asset: `SM_SusanooRibs`
 
@@ -66,9 +68,10 @@ Fallback if the generated shell can't be opened up cleanly: a procedural rib mes
 
 ## Pose
 
-Mixamo "Standing Block Idle" (downloaded by the user), retargeted to Manny, played as a looping upper-body montage while
-`GA_Block` is active and stopped on end. The montage slot must exist in the player AnimBP; if not, add an upper-body
-slot blend in `SandboxCharacter_CMC_ABP`.
+Mixamo "Standing Block Idle" (downloaded by the user to `SourceArt/Mixamo/Standing Block Idle.fbx`), retargeted to
+Manny by `Scripts/setup_jutsu_anims.py` as `AM_Block_Guard`. Tag-driven like the mounted sit loop: while
+`State.Blocking` the player keeps it looping in the full-body `DefaultSlot` whenever no other montage plays, on every
+machine, and stops it when the tag goes.
 
 ## Testing (targeted only)
 
@@ -83,6 +86,6 @@ Automation tests in `Source/ShinobiCoop/Tests/`:
 
 ## Dependencies and risks
 
-- `unreal-mcp` must be connected for the import, montage and AnimBP work.
+- Imports run through `Scripts/run_python.ps1` (editor commandlet, GUI editor closed); `unreal-mcp` is not needed.
 - Rodin credits: one generation, more if the shell comes out closed.
 - Image-to-3D models usually come back as closed solids; opening up the ribs is the main risk (fallback above).
