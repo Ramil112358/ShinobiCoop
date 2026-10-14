@@ -38,6 +38,18 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	float JustLandedSeconds = 0.3f;
 
+	/** Weight of the AnimBP's foot placement and leg IK (bound to both nodes' Alpha). They plant the feet on the ground
+	 * below for locomotion; our montages (combos, jutsu, kicks) are authored whole and must keep their legs, and on a wall
+	 * the ground they search for is below in world space, so the legs dangled. 0 while the montage slot plays or on a
+	 * wall, eased back otherwise. */
+	UPROPERTY(BlueprintReadOnly, Transient, Category = "Shinobi")
+	float FootIKAlpha = 1.f;
+
+	/** Wall running (custom gravity). The AnimBP's Get_OffsetRoot*Mode release the root offset then, as they do for
+	 * montages: accumulating it kept the body upright in the world while the capsule turned onto the wall. */
+	UPROPERTY(BlueprintReadOnly, Transient, Category = "Shinobi")
+	bool bOnWall = false;
+
 protected:
 	virtual void NativeInitializeAnimation() override;
 
@@ -51,6 +63,7 @@ private:
 	void SetEnum(void* Container, FName Field, const TCHAR* DisplayName) const;
 
 	bool bWasInAir = false;
+	float WallFootIK = 1.f;
 	FVector LastAirVelocity = FVector::ZeroVector;
 	FVector LandVelocity = FVector::ZeroVector;
 	double LandedTime = -1.e9;

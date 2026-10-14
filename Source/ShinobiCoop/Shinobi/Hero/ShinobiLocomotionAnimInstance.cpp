@@ -1,10 +1,16 @@
 #include "Shinobi/Hero/ShinobiLocomotionAnimInstance.h"
 #include "GameFramework/Character.h"
+#include "HAL/IConsoleManager.h"
 #include "Shinobi/Hero/ShinobiBlueprintStruct.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 
 namespace
 {
+	TAutoConsoleVariable<bool> CVarMotionMatching(
+		TEXT("Shinobi.MotionMatching"),
+		true,
+		TEXT("Characters animate with the Game Animation Sample's motion-matching AnimBP; 0 = the template's ABP_Manny_Combat / ABP_Unarmed. Read when a character spawns."));
+
 	const FName CharacterPropertiesName(TEXT("CharacterProperties"));
 	const FName InputStateName(TEXT("InputState"));
 
@@ -29,7 +35,7 @@ namespace
 UClass* UShinobiLocomotionAnimInstance::LoadAnimBlueprintClass()
 {
 	static const TSoftClassPtr<UAnimInstance> AnimBlueprint(FSoftObjectPath(TEXT("/Game/Blueprints/SandboxCharacter_CMC_ABP.SandboxCharacter_CMC_ABP_C")));
-	return AnimBlueprint.LoadSynchronous();
+	return CVarMotionMatching.GetValueOnGameThread() ? AnimBlueprint.LoadSynchronous() : nullptr;
 }
 
 void UShinobiLocomotionAnimInstance::NativeInitializeAnimation()
@@ -107,6 +113,12 @@ void UShinobiLocomotionAnimInstance::UpdateCharacterProperties()
 	SetStruct(Field(TEXT("LandVelocity")), Properties, LandVelocity);
 	SetStruct(Field(TEXT("GroundNormal")), Properties, FVector(Movement->CurrentFloor.HitResult.ImpactNormal));
 	SetStruct(Field(TEXT("GroundLocation")), Properties, FVector(Movement->CurrentFloor.HitResult.ImpactPoint));
+
+	// The montage's own blend already eases it in and out; walls ease over a fifth of a second.
+	bOnWall = ShinobiMovement && ShinobiMovement->IsWallTraversing();
+	const float SlotWeight = GetSlotMontageGlobalWeight(TEXT("DefaultSlot"));
+	WallFootIK = FMath::FInterpConstantTo(WallFootIK, bOnWall ? 0.f : 1.f, GetDeltaSeconds(), 5.f);
+	FootIKAlpha = FMath::Min(1.f - SlotWeight, WallFootIK);
 
 	if (InputStateProperty)
 	{

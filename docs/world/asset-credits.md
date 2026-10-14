@@ -86,8 +86,12 @@ remaining trademarks: the TX4 taxi and double-decker bus shapes, London Eye and 
 
 - **Original** (this project): the Hiraishin marker kunai for Teleport (`Scripts/character/make_marker_kunai.py`, imported by
   `Scripts/setup_marker_kunai.py`). Two Hyper3D Rodin generations (a dagger and a cross-shaped blade) were tried and rejected, so no
-  Rodin output ships. The Earth Wall wears Poly Haven's rock_09 (CC0, already in the world library); the Water Wall, Kamui ghost and
-  all jutsu materials are built by `Scripts/setup_vfx.py`.
+  Rodin output ships. The Kamui ghost and the other jutsu materials are built by `Scripts/setup_vfx.py`.
+- **Hyper3D Rodin** (Gen-2.5 Medium, text-to-3D, 2026-10-14): the Earth Wall and Water Wall meshes. Four generations kept in
+  `SourceArt/World/Walls/Rodin` (EarthA/B, WaterA/B); EarthB (pillar wall) and WaterA (water curtain, used upside down) ship,
+  shaped by `Scripts/world/prep_wall.py` and imported by `Scripts/setup_walls.py`. The Earth Wall's rock is Poly Haven's
+  rock_face (CC0, world library) projected triplanar over Rodin's normal map and crevice shading; the Water Wall's
+  `M_WaterCurtain` is original.
 
 ## Summons
 

@@ -328,6 +328,7 @@ bool FShinobiChakraAuraTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Aura faded in"), Aura->GetFade(), 1.f);
 	TestTrue(TEXT("Overlay stays applied while charging"), Body->GetOverlayMaterial() == AuraMaterial);
 	TestEqual(TEXT("Fade param 1 while charging"), AuraMaterial->K2_GetScalarParameterValue(TEXT("Fade")), 1.f);
+	TestEqual(TEXT("Chakra flows around the body while charging (wisps, streams, ground swirl)"), Aura->NumVisibleFlowCards(), 19);
 
 	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
 	TestFalse(TEXT("Aura stops with the charge"), Aura->IsCharging());
@@ -335,6 +336,7 @@ bool FShinobiChakraAuraTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Aura faded out"), Aura->GetFade(), 0.f);
 	TestTrue(TEXT("Overlay stays applied after fade-out (Fade param hides it instead)"), Body->GetOverlayMaterial() == AuraMaterial);
 	TestEqual(TEXT("Fade param 0 after fade-out"), AuraMaterial->K2_GetScalarParameterValue(TEXT("Fade")), 0.f);
+	TestEqual(TEXT("Chakra flow hidden after fade-out"), Aura->NumVisibleFlowCards(), 0);
 	TestFalse(TEXT("Tick disabled after fade-out"), Aura->IsComponentTickEnabled());
 	return true;
 }

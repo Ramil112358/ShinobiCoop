@@ -114,6 +114,7 @@ namespace ShinobiVfx
 			static const TCHAR* Energy = TEXT("/Game/Shinobi/VFX/T_Energy.T_Energy");
 			static const TCHAR* TairnFire = TEXT("/Game/Shinobi/VFX/T_TairnFire.T_TairnFire");
 			static const TCHAR* CrimsonFire = TEXT("/Game/Shinobi/VFX/T_CrimsonFire.T_CrimsonFire");
+			static const TCHAR* ChakraFlow = TEXT("/Game/Shinobi/VFX/T_ChakraFlow.T_ChakraFlow");
 			static const FSpriteInfo Table[] = {
 				{Add, Flames, 0, 8},        // Flame
 				{Dark, Flames, 0, 8},       // BlackFlame
@@ -126,6 +127,8 @@ namespace ShinobiVfx
 				{Add, Energy, 7, 1},        // Burst
 				{Add, TairnFire, 0, 8},     // TairnFire
 				{Add, CrimsonFire, 0, 8},   // CrimsonFire
+				{Add, ChakraFlow, 0, 4},    // ChakraWisp
+				{Add, ChakraFlow, 4, 4},    // ChakraSwirl
 			};
 			return Table[static_cast<int32>(Kind)];
 		}

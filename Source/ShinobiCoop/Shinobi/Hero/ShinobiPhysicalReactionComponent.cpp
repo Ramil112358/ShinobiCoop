@@ -3,6 +3,7 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Chooser.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "HAL/IConsoleManager.h"
@@ -70,12 +71,22 @@ void UShinobiPhysicalReactionComponent::BeginPlay()
 	// The driver only queried until now. Its object type stays Pawn and Pawn stays ignored, so the bodies never push
 	// against their own capsule.
 	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	// By default a simulated root body (the pelvis) drives the component itself, which then wandered off the capsule
+	// with every tumble and never came back. The capsule places the mesh; the bodies only pose it.
+	Mesh->PhysicsTransformUpdateMode = EPhysicsTransformUpdateMode::ComponentTransformIsKinematic;
 	Physics->CreateControlsAndBodyModifiersFromPhysicsControlAsset(Mesh, nullptr, NAME_None);
 	for (const FName Name : Physics->GetBodyModifierNamesInSet(TEXT("All")))
 	{
 		if (Name.ToString().Contains(PelvisBone.ToString()))
 		{
 			PelvisModifiers.Add(Name);
+		}
+	}
+	for (const FName Name : Physics->GetControlNamesInSet(TEXT("WorldSpace")))
+	{
+		if (Name.ToString().Contains(PelvisBone.ToString()))
+		{
+			PelvisWorldControls.Add(Name);
 		}
 	}
 	SetProfile(PhysicalAnimationProfile);
@@ -154,9 +165,21 @@ void UShinobiPhysicalReactionComponent::MulticastKnockdown_Implementation(FVecto
 	{
 		AnimInstance->Montage_Stop(0.1f); // the sample stops what was playing, so the ragdoll isn't fighting an attack
 	}
+	// The ragdoll profile simulates the bodies; the mesh itself stays on the capsule (SetSimulatePhysics on it let the
+	// component follow the ragdoll off, metres from the character, for good). The pelvis is tethered to the capsule
+	// across the ground only, so the body flies with the launch and falls freely but can't slide away from it.
 	SetProfile(RagdollProfile);
-	Mesh->SetSimulatePhysics(true);
 	SetStrength(TumbleStrength);
+	FPhysicsControlData Tether;
+	Tether.LinearStrength = TetherStrength;
+	Tether.AngularStrength = 0.f;
+	FPhysicsControlMultiplier AcrossOnly;
+	AcrossOnly.LinearStrengthMultiplier = FVector(1.f, 1.f, 0.f);
+	for (const FName Name : PelvisWorldControls)
+	{
+		Physics->SetControlData(Name, Tether);
+		Physics->SetControlMultiplier(Name, AcrossOnly, true);
+	}
 	Mesh->SetAllPhysicsLinearVelocity(Velocity); // fly with the capsule, which the launch carries
 }
 
@@ -236,6 +259,13 @@ void UShinobiPhysicalReactionComponent::GetUp()
 	Released.AngularStrength = 0.f;
 	Physics->SetControlDatasInSet(ParentSpaceControls, Released);
 	Profile = NAME_None;
+	// The simulated pelvis dragged the mesh along: put it back where the character keeps it.
+	ACharacter* Character = CastChecked<ACharacter>(GetOwner());
+	if (Mesh->GetAttachParent() != Character->GetCapsuleComponent())
+	{
+		Mesh->AttachToComponent(Character->GetCapsuleComponent(), FAttachmentTransformRules::KeepWorldTransform);
+	}
+	Mesh->SetRelativeLocationAndRotation(Character->GetBaseTranslationOffset(), Character->GetBaseRotationOffset());
 	GetWorld()->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]()
 	{
 		if (!bDead)
