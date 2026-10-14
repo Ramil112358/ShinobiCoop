@@ -69,7 +69,7 @@ bool FShinobiHeroRagdollTest::RunTest(const FString& Parameters)
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::ApplyEffect(P, UGE_Dead::StaticClass());
 	// The visible body ragdolls itself, or follows the driver's ragdoll when physical reactions are on.
-	TestTrue(TEXT("The visible body ragdolls"), P->GetBodyMesh()->IsSimulatingPhysics() || P->GetMesh()->IsSimulatingPhysics());
+	TestTrue(TEXT("The visible body ragdolls"), P->GetBodyMesh()->IsSimulatingPhysics() || P->GetMesh()->IsSimulatingPhysics(TEXT("pelvis")));
 	return true;
 }
 

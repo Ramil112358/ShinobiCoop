@@ -61,9 +61,10 @@ bool FShinobiReactionsKnockdownTest::RunTest(const FString& Parameters)
 	P->LaunchCharacter(FVector(1200.f, 0.f, 300.f), true, true);
 	TestTrue(TEXT("A hard launch knocks down"), Reactions->IsKnockedDown());
 	TestTrue(TEXT("Held while down"), ShinobiTest::HasTag(P, ShinobiTags::State_Staggered));
-	TestTrue(TEXT("The driver tumbles as a ragdoll"), P->GetMesh()->IsSimulatingPhysics());
+	W.Tick(0.05f); // the physics control applies the ragdoll profile on its next tick
+	TestTrue(TEXT("The driver tumbles as a ragdoll"), P->GetMesh()->IsSimulatingPhysics(TEXT("pelvis")));
 
-	W.Tick(Reactions->KnockdownHoldSeconds + 0.2f);
+	W.Tick(Reactions->KnockdownHoldSeconds + 0.15f);
 	TestFalse(TEXT("Back up"), Reactions->IsKnockedDown());
 	TestFalse(TEXT("Free to act again"), ShinobiTest::HasTag(P, ShinobiTags::State_Staggered));
 	return true;
@@ -75,7 +76,7 @@ bool FShinobiReactionsDeathTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = ReactionTestPlayer(W);
 	ShinobiTest::ApplyEffect(P, UGE_Dead::StaticClass());
-	TestTrue(TEXT("The driver falls as a ragdoll"), P->GetMesh()->IsSimulatingPhysics());
+	TestTrue(TEXT("The driver falls as a ragdoll"), P->GetMesh()->IsSimulatingPhysics(TEXT("pelvis")));
 	return true;
 }
 

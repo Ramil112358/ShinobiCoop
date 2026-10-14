@@ -72,6 +72,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	float TumbleStrength = 0.3f;
 
+	/** How hard the tumbling pelvis is pulled back over the capsule (across the ground only). */
+	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
+	float TetherStrength = 4.f;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
@@ -96,6 +100,7 @@ private:
 
 	FName Profile;
 	TArray<FName> PelvisModifiers;
+	TArray<FName> PelvisWorldControls;
 	bool bKnockedDown = false;
 	bool bGettingUp = false;
 	bool bDead = false;
