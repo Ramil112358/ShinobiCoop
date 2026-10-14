@@ -384,7 +384,7 @@ void AShinobiPlayerController::RunFollowTest()
 	At(4.f, [this]() { ShinobiPage(4); });
 	At(4.3f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(4); }); // Pabu
 	At(5.5f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(2); }); // Toad
-	At(6.7f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(3); }); // Snake
+	At(6.7f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(3); }); // Misha
 	At(9.f, [Log]() { Log(TEXT("settled")); });
 	// Walk four seconds along the freest direction (the London start is hemmed in by buildings).
 	TSharedRef<FTimerHandle> Walk = MakeShared<FTimerHandle>();
@@ -831,10 +831,10 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(53.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_28_Toad")); });
 	At(54.4f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_28b_Toad")); });
 	At(54.8f, [BackToPlayer, ClearSummons]() { BackToPlayer(); ClearSummons(); });
-	At(55.0f, [CastJutsu]() { CastJutsu(3, 0.8f); }); // Snake: appears at 55.7
+	At(55.0f, [CastJutsu]() { CastJutsu(3, 0.8f); }); // Misha: appears at 55.7
 	At(56.2f, [FaceCamera]() { FaceCamera(70.f, 70.f, 500.f, 1200.f); });
-	At(56.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_29_Snake")); });
-	At(57.4f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_29b_Snake")); });
+	At(56.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_29_Misha")); });
+	At(57.4f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_29b_Misha")); });
 	At(57.8f, [BackToPlayer, ClearSummons]() { BackToPlayer(); ClearSummons(); });
 	At(58.2f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_30_HudPage4Full")); });
 	// The dragon (page 5): mount, ride in the default (pulled-back) view, breathe fire at the dummies, climb, dismount.

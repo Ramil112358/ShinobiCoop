@@ -251,7 +251,7 @@ shows the figure). `Scripts/smoke_m1.ps1` checks that the client sees its own ar
 
 ## 10. Summons (2026-10-03)
 
-Page 4, slots 2-4: Summon Toad (60 chakra, 45 s cooldown), Summon Snake (50, 40 s) and Summon Pabu (45, 30 s; it replaced the pack of four dogs on 2026-10-12). After the Kuchiyose seals
+Page 4, slots 2-4: Summon Toad (60 chakra, 45 s cooldown), Summon Misha (50, 40 s; he replaced the snake on 2026-10-14) and Summon Pabu (45, 30 s; it replaced the pack of four dogs on 2026-10-12). After the Kuchiyose seals
 (`AM_Summon_Seal`, a crouch with the right fist drawn up) and a palm slam (`AM_Summon_Release`, both built by
 `Scripts/character/build_jutsu_anims.py`, timeline `Summon`) the creature appears 4-5 m in front of the caster in a puff of smoke
 (`EShinobiBurst::SummonPoof`). A caster has one of each kind out at a time: calling it again replaces it.
@@ -264,16 +264,16 @@ not counted by waves or camps (only `FShinobiEncounter::Spawn` registers kills).
 | Kind | Health | Attack | Stays |
 |---|---|---|---|
 | Toad (x1) | 600 | `UGA_ToadSlam`: 60 to everything within 4.5 m of its feet, every 2.5 s | 12 s |
-| Snake (x1) | 350 | `UGA_SnakeStrike`: 70 from up to 8 m, every 2 s | 10 s |
+| Misha (x1) | 500 | `UGA_MishaBark`: 70 to everything in a 35-degree cone out to 8 m, each staggered and thrown back, every 2.2 s; hops at 380 | 12 s |
 | Pabu (x1) | 450 | `UGA_PabuBite`: 45 in front, every 0.8 s, run speed 650 | 15 s |
 
 Animation is `UShinobiCreatureAnimInstance` (no animation blueprint): it picks the clip from replicated state (velocity, health, the tag
 `State.SummonAttacking` that the three attack abilities grant) and cross-fades between idle, walk, run, attack, flinch (when hurt) and
 death over 0.2 s instead of cutting. Walk and run play at the speed the creature actually moves (Pabu's trot covers 144 cm/s and his gallop 480,
-as `build_pabu.py` prints them; the toad and snake play their one move clip at 1x at top speed), and the attack clip is stretched over
+as `build_pabu.py` prints them; Misha's hop covers 315 cm/s; the toad plays its one move clip at 1x at top speed), and the attack clip is stretched over
 the attack ability's wind-up plus recovery so the blow lands with the damage.
 
-Following: with nothing to fight a summon walks to a post beside its caster (`GetIdlePost`; the toad behind on one side, the snake on
+Following: with nothing to fight a summon walks to a post beside its caster (`GetIdlePost`; the toad behind on one side, Misha on
 the other, Pabu ahead of them), and if it is left more than 40 m behind (a teleport, a dragon ride) it reappears there in a
 puff of smoke. It only picks fights with enemies within 30 m of the caster.
 
@@ -289,11 +289,21 @@ Where the creatures come from (all in `docs/world/asset-credits.md`):
   Walk (a trot), Run (a gallop), Bite (the jaws close 0.4 s in, `UGA_PabuBite::WindUp`), Hit and Death with IK-driven paws. True corgi
   size (0.33 m at the withers), scaled 1.6 in code. He wears `M_Creature` (base colour, Tripo's normal map and its roughness, floored at
   0.55 so the fur is not glossy; `setup_creatures.py` uses it for any creature with `<png>_Normal.png` and `<png>_Roughness.png`) and waits
-  2.2 m from his caster, closer than the toad and snake. To rerun: `blender -b -P Scripts/character/build_pabu.py` (add `-- preview [Clip...]`
+  2.2 m from his caster, closer than the toad and Misha. To rerun: `blender -b -P Scripts/character/build_pabu.py` (add `-- preview [Clip...]`
   for renders in `Saved/`), then `Scripts/setup_creatures.py`.
-- **Snake**: the Mesh2Motion snake (CC0) with its own idle, side-winding, bite, hit and death clips, five times as thick and two and a
-  half times as long as the original. `Scripts/character/export_creature.py` turns a Mesh2Motion GLB to face +X, stands it on the
-  ground and writes one FBX per clip; `Scripts/setup_creatures.py` imports them under `/Game/Shinobi/Creatures/<Name>`.
+- **Misha**: the user's own plush puppy (photos in `SourceArt/Character/Photos/Misha`), a Tripo Studio model, auto-rigged by Tripo
+  (export in `SourceArt/Tripo/Misha`). Tripo kept the photo's pose, so Misha sits; he stays seated and gets about in seated hops, a toy
+  brought to life. Tripo's rig is not used (18 joints, one hind leg a single bone, no ears, three quarters of the vertices unweighted):
+  `Scripts/character/build_misha.py` builds a rig to his proportions (pelvis, spine, chest, neck, head, two bones per floppy ear, three per
+  front leg with IK paws, two per hind leg, four in the tail), weights it by bone heat (then hands the bib back from the front legs to
+  the chest and the crown back from the ears to the head) and keys Idle (breathing, looks about, head tilt, an ear shake, the tail sweeping
+  the ground), Move (one seated hop: the body sits still on the ground while the capsule moves on, then springs forward; the ears press
+  in on the way up, flare on the way down and flop on landing), Bark (draws back, throws his head forward 0.5 s in,
+  `UGA_MishaBark::WindUp`), Hit and Death (topples onto his side, held clear of the ground). Plush size (0.74 m to the top of his head),
+  scaled 4.5 in code: a giant plush, 3.3 m tall. He wears `M_Creature` like Pabu. To rerun: `blender -b -P Scripts/character/build_misha.py`
+  (add `-- preview [Clip...]` for clip renders or `-- rig` for joint and weight renders in `Saved/`), then `CREATURES_ONLY=Misha` and
+  `Scripts/setup_creatures.py`. The old Mesh2Motion snake (`Scripts/character/export_creature.py`) is still in
+  `/Game/Shinobi/Creatures/Snake` but nothing uses it.
 - **Toad**: a Hyper3D Rodin model (`SourceArt/Creatures/Toad/rodin_toad.glb`, one unrigged mesh). Mesh2Motion has no toad, so
   `Scripts/character/build_toad.py` builds a 17-bone quadruped rig to its proportions, weights it by distance (Blender's bone-heat
   weights failed on the mesh) and keys the clips: idle, a hop for movement, a slam (rears up, crashes down at 0.7 s, which is

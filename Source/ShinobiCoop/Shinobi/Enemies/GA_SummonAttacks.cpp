@@ -1,5 +1,6 @@
 #include "Shinobi/Enemies/GA_SummonAttacks.h"
 #include "Shinobi/ShinobiCombat.h"
+#include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
@@ -39,20 +40,43 @@ void UGA_ToadSlam::Strike()
 	Finish();
 }
 
-UGA_SnakeStrike::UGA_SnakeStrike()
+UGA_MishaBark::UGA_MishaBark()
 {
 	ActivationOwnedTags.AddTag(ShinobiTags::State_SummonAttacking);
 	WindUp = 0.5f;
-	Recovery = 0.4f;
+	Recovery = 0.5f;
 }
 
-void UGA_SnakeStrike::Strike()
+void UGA_MishaBark::Strike()
 {
-	const AShinobiEnemyCharacter* Self = GetEnemy();
-	AShinobiCharacterBase* Target = LockedTarget.Get();
-	if (Self && Target && Target->IsAlive() && FVector::Dist2D(Target->GetActorLocation(), Self->GetActorLocation()) <= Self->AttackRange * 1.3f)
+	AShinobiEnemyCharacter* Self = GetEnemy();
+	if (!Self)
 	{
-		ShinobiCombat::ApplyDamage(Self->GetAbilitySystemComponent(), Target, Self->AttackDamage);
+		EndNow();
+		return;
 	}
+	AShinobiCharacterBase* Locked = LockedTarget.Get();
+	if (Locked && Locked->IsAlive())
+	{
+		Self->SetActorRotation(FRotator(0.f, (Locked->GetActorLocation() - Self->GetActorLocation()).Rotation().Yaw, 0.f));
+	}
+	TArray<AShinobiCharacterBase*> Targets = FindHostilesInCone(Range, HalfAngle);
+	if (Locked && Locked->IsAlive() && FVector::Dist2D(Locked->GetActorLocation(), Self->GetActorLocation()) <= Range)
+	{
+		Targets.AddUnique(Locked);
+	}
+	for (AShinobiCharacterBase* Target : Targets)
+	{
+		if (!ApplyDamage(Target, Self->AttackDamage))
+		{
+			continue; // dodged (invulnerable) or phased: the bark passes through
+		}
+		ShinobiCombat::ApplyStatus(Self->GetAbilitySystemComponent(), Target, UGE_Stagger::StaticClass());
+		const FVector Away = (Target->GetActorLocation() - Self->GetActorLocation()).GetSafeNormal2D();
+		Target->LaunchCharacter((Away.IsNearlyZero() ? Self->GetActorForwardVector() : Away) * LaunchSpeed + FVector(0.f, 0.f, LaunchUp), true, true);
+	}
+	// The bark's ring of force rolls out over the ground in front of him.
+	const FVector Feet = Self->GetActorLocation() - FVector(0.f, 0.f, Self->GetSimpleCollisionHalfHeight());
+	AShinobiBurst::Spawn(Self->GetWorld(), EShinobiBurst::Shockwave, Feet + Self->GetActorForwardVector() * Range * 0.45f, Range / 1300.f);
 	Finish();
 }

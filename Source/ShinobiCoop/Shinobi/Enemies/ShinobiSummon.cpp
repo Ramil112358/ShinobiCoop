@@ -37,7 +37,7 @@ namespace
 	{
 		static const FSummonStats Table[] = {
 			{ 600.f, 60.f, 350.f, 2.5f, 350.f, 12.f, 1.0f, FLinearColor(0.1f, 0.4f, 0.1f), 1 },
-			{ 350.f, 70.f, 800.f, 2.0f, 500.f, 10.f, 1.0f, FLinearColor(0.35f, 0.1f, 0.5f), 1 },
+			{ 500.f, 70.f, 700.f, 2.2f, 380.f, 12.f, 1.0f, FLinearColor(0.55f, 0.35f, 0.2f), 1 },
 			{ 450.f, 45.f, 190.f, 0.8f, 650.f, 15.f, 1.0f, FLinearColor(0.75f, 0.5f, 0.3f), 1 }, // one Pabu worth about the old pack of four
 		};
 		return Table[static_cast<int32>(Kind)];
@@ -67,15 +67,16 @@ namespace
 		// ear tips; a summoned one is 1.6 times that. His trot covers 144 cm/s and his gallop 480 at play rate 1 (printed by the build script).
 		static const FCreatureLook Pabu = { TEXT("/Game/Shinobi/Creatures/Pabu/SK_Pabu"), TEXT("/Game/Shinobi/Creatures/Pabu/ANIM_Pabu_"),
 			TEXT("Idle"), TEXT("Walk"), TEXT("Run"), TEXT("Bite"), TEXT("Hit"), TEXT("Death"), 144.f, 480.f, 0.f, FVector(1.6f), 35.f, 38.f };
-		// The Mesh2Motion snake (Scripts/character/export_creature.py) faces +X, 4 m long; a summoned one is two and a half times as long and
-		// five times as thick. One winding clip, played at 1 when it moves at its top speed.
-		static const FCreatureLook Snake = { TEXT("/Game/Shinobi/Creatures/Snake/SK_Snake"), TEXT("/Game/Shinobi/Creatures/Snake/ANIM_Snake_"),
-			TEXT("Idle"), TEXT("Move"), nullptr, TEXT("Bite"), TEXT("Hit"), TEXT("Death"), 500.f, 500.f, 0.f, FVector(2.5f, 5.f, 5.f), 60.f, 40.f };
+		// Misha (Tripo model of the user's plush, rigged and keyed by Scripts/character/build_misha.py) sits facing +X, 0.74 m to the top of
+		// his head; a summoned one is a giant plush four and a half times that. He gets about in seated hops: one Move clip covering 315 cm/s
+		// at play rate 1 (printed by the build script).
+		static const FCreatureLook Misha = { TEXT("/Game/Shinobi/Creatures/Misha/SK_Misha"), TEXT("/Game/Shinobi/Creatures/Misha/ANIM_Misha_"),
+			TEXT("Idle"), TEXT("Move"), nullptr, TEXT("Bark"), TEXT("Hit"), TEXT("Death"), 315.f, 315.f, 0.f, FVector(4.5f), 110.f, 168.f };
 		// The Rodin toad (Scripts/character/build_toad.py) faces +X, 1.9 m long and 1.5 m tall; a summoned one is two and a half times that.
 		// One hop clip, played at 1 when it moves at its top speed.
 		static const FCreatureLook Toad = { TEXT("/Game/Shinobi/Creatures/Toad/SK_Toad"), TEXT("/Game/Shinobi/Creatures/Toad/ANIM_Toad_"),
 			TEXT("Idle"), TEXT("Move"), nullptr, TEXT("Slam"), TEXT("Hit"), TEXT("Death"), 350.f, 350.f, 0.f, FVector(2.5f), 170.f, 190.f };
-		return Kind == EShinobiSummonKind::Pabu ? Pabu : Kind == EShinobiSummonKind::Snake ? Snake : Toad;
+		return Kind == EShinobiSummonKind::Pabu ? Pabu : Kind == EShinobiSummonKind::Misha ? Misha : Toad;
 	}
 }
 
@@ -107,7 +108,7 @@ void AShinobiSummon::Configure()
 	AttackInterval = Stats.AttackInterval;
 	BodyTint = Stats.Tint;
 	AttackAbility = Kind == EShinobiSummonKind::Toad ? TSubclassOf<UShinobiGameplayAbility>(UGA_ToadSlam::StaticClass())
-		: Kind == EShinobiSummonKind::Snake ? TSubclassOf<UShinobiGameplayAbility>(UGA_SnakeStrike::StaticClass())
+		: Kind == EShinobiSummonKind::Misha ? TSubclassOf<UShinobiGameplayAbility>(UGA_MishaBark::StaticClass())
 		: TSubclassOf<UShinobiGameplayAbility>(UGA_PabuBite::StaticClass());
 	StartupAbilities = { AttackAbility }; // granted by the character base's BeginPlay, after this
 	GetCharacterMovement()->MaxWalkSpeed = Stats.Speed;
@@ -295,8 +296,8 @@ TArray<AShinobiSummon*> AShinobiSummon::Summon(AShinobiCharacterBase* Caster, ES
 			continue;
 		}
 		Summon->Kind = Kind;
-		// Where it waits beside the caster: the toad behind on one side, the snake on the other, Pabu in front; a pack (Count > 1) fans out all round.
-		Summon->FollowAngle = Kind == EShinobiSummonKind::Toad ? PI * 1.25f : Kind == EShinobiSummonKind::Snake ? PI * 0.75f : Stats.Count > 1 ? Angle : PI * 0.25f;
+		// Where it waits beside the caster: the toad behind on one side, Misha on the other, Pabu in front; a pack (Count > 1) fans out all round.
+		Summon->FollowAngle = Kind == EShinobiSummonKind::Toad ? PI * 1.25f : Kind == EShinobiSummonKind::Misha ? PI * 0.75f : Stats.Count > 1 ? Angle : PI * 0.25f;
 		Summon->FollowRadius = Kind == EShinobiSummonKind::Pabu ? 220.f : FollowDistance * 0.85f; // Pabu keeps close to his caster
 		Summon->Summoner = Caster;
 		Summon->Team = Caster->GetTeam(); // a caster on a PvP side brings the summon along
