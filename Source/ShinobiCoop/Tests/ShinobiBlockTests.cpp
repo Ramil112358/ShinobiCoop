@@ -10,6 +10,7 @@
 #include "Shinobi/Abilities/GA_Melee.h"
 #include "Shinobi/Abilities/GA_Sprint.h"
 #include "Shinobi/Abilities/GA_Susanoo.h"
+#include "Shinobi/VFX/ShinobiBurst.h"
 #include "Shinobi/VFX/ShinobiSusanooComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -281,8 +282,10 @@ bool FShinobiBlockModelTest::RunTest(const FString& Parameters)
 	{
 		TestEqual(TEXT("the guard ribcage"), Mesh->GetName(), FString(TEXT("SM_SusanooRibs")));
 		const FBox Box = Mesh->GetBoundingBox();
-		TestTrue(FString::Printf(TEXT("standing on the ground, about 2.2 m tall (Z %.0f to %.0f)"), Box.Min.Z, Box.Max.Z), Box.Min.Z > -20.0 && Box.Min.Z < 20.0 && Box.Max.Z > 190.0 && Box.Max.Z < 250.0);
-		TestTrue(FString::Printf(TEXT("wide enough to go round the body (Y %.0f to %.0f)"), Box.Min.Y, Box.Max.Y), Box.Max.Y - Box.Min.Y > 90.0);
+		// The capsule is 192 cm tall and the head's top is at about 180: the ribs stop below it.
+		TestTrue(FString::Printf(TEXT("standing on the ground, no taller than the head (Z %.0f to %.0f)"), Box.Min.Z, Box.Max.Z), Box.Min.Z > -20.0 && Box.Min.Z < 20.0 && Box.Max.Z > 160.0 && Box.Max.Z < 180.0);
+		// Hugging the body: the 42 cm capsule fits inside, with little room to spare.
+		TestTrue(FString::Printf(TEXT("close round the body (Y %.0f to %.0f)"), Box.Min.Y, Box.Max.Y), Box.Max.Y - Box.Min.Y > 90.0 && Box.Max.Y - Box.Min.Y < 115.0);
 		TestTrue(TEXT("centred on the player"), FMath::Abs(Box.GetCenter().X) < 25.0 && FMath::Abs(Box.GetCenter().Y) < 25.0);
 	}
 	return true;
@@ -349,6 +352,17 @@ bool FShinobiBlockPredictedRootTest::RunTest(const FString& Parameters)
 	Move->SetBlocking(false);
 	ShinobiTest::ApplyEffect(P, UGE_Blocking::StaticClass());
 	TestTrue(TEXT("The tag alone does not root"), Move->GetMaxSpeed() > 0.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlockQuietRiseTest, "ShinobiCoop.Block.Figure.RisesWithoutAFlash", ShinobiTestFlags)
+bool FShinobiBlockQuietRiseTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Block);
+	// The Susanoo rise burst's star card floated over the player's head: the ribcage fading in is the whole effect.
+	TestEqual(TEXT("No burst when the guard goes up"), ShinobiTest::CountActors<AShinobiBurst>(W), 0);
 	return true;
 }
 

@@ -3,11 +3,9 @@
 #include "Abilities/Tasks/AbilityTask_WaitGameplayTag.h"
 #include "Abilities/Tasks/AbilityTask_WaitInputRelease.h"
 #include "Shinobi/ShinobiAttributeSet.h"
-#include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiTags.h"
-#include "Shinobi/VFX/ShinobiBurst.h"
 
 UGA_Block::UGA_Block()
 {
@@ -58,11 +56,7 @@ void UGA_Block::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const F
 	{
 		return; // the guard itself is the server's (it replicates); the owning client only predicts the ability
 	}
-	GuardHandle = ApplyEffectToSelf(UGE_Blocking::StaticClass());
-	if (const AShinobiCharacterBase* Self = GetShinobiCharacter())
-	{
-		AShinobiBurst::Spawn(Self->GetWorld(), EShinobiBurst::SusanooRise, Self->GetActorLocation() - FVector(0.f, 0.f, Self->GetSimpleCollisionHalfHeight()), 0.35f);
-	}
+	GuardHandle = ApplyEffectToSelf(UGE_Blocking::StaticClass()); // no burst: the ribcage fading in is the whole effect
 	// A guard break (UShinobiDamageExec) or going down takes the tag away; the ability follows. Server only: on the client
 	// the tag arrives later by replication, and this task fires at once when the tag is missing.
 	UAbilityTask_WaitGameplayTagRemoved* Lost = UAbilityTask_WaitGameplayTagRemoved::WaitGameplayTagRemove(this, ShinobiTags::State_Blocking);

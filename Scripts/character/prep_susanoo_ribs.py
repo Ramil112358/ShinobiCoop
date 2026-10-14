@@ -1,10 +1,11 @@
 """Blender (5.2) headless prep of the guard ribcage GLB (Tripo or Rodin) for Scripts/setup_susanoo_ribs.py.
 
-  "C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe" -b -P Scripts/character/prep_susanoo_ribs.py -- <in.glb> [height_cm] [clear_radius_cm]
+  "C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe" -b -P Scripts/character/prep_susanoo_ribs.py -- <in.glb> [height_cm] [clear_radius_cm] [width_cm]
 
 Steps: import -> join -> apply transforms -> front (-Y in Blender, as glTF exports it) turned to +X -> scale to height_cm
-(default 220) -> feet at z = 0, centred -> delete faces inside a vertical cylinder of clear_radius_cm (default 36) round
-the axis between the shins and the head, so the player fits inside and shows through -> drop specks -> decimate to
+(default 175: the top stays below the player's head) -> feet at z = 0, centred -> delete faces inside a vertical cylinder
+of clear_radius_cm (default 0.165 x height) round the axis between the shins and the head, so the player fits inside and
+shows through -> drop specks -> squeeze X and Y alike to width_cm across (default 100: close round the 42 cm capsule) -> decimate to
 20k triangles -> one material slot -> SourceArt/Props/susanoo_ribs.fbx (centimetres; the exporter scales by 0.01) and
 Saved/SusanooRibsPreview_front.png / _side.png.
 """
@@ -30,10 +31,11 @@ def fail(message):
 
 args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 if not args:
-    fail("usage: -- <in.glb> [height_cm] [clear_radius_cm]")
+    fail("usage: -- <in.glb> [height_cm] [clear_radius_cm] [width_cm]")
 src = args[0]
-height = float(args[1]) if len(args) > 1 else 220.0
-clear = float(args[2]) if len(args) > 2 else 36.0
+height = float(args[1]) if len(args) > 1 else 175.0
+clear = float(args[2]) if len(args) > 2 else 0.165 * height  # the core the generator fills in, at its own proportions
+width = float(args[3]) if len(args) > 3 else 100.0
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=src)
@@ -87,6 +89,11 @@ bm.to_mesh(mesh)
 bm.free()
 mesh.update()
 print(f"[prep_susanoo_ribs] cut {len(inside)} faces inside a {clear:.0f} cm radius")
+
+# Then hug the body: the cut works on the model's own proportions, the squeeze brings the ribs in.
+ys = [v.co.y for v in mesh.vertices]
+squeeze = width / (max(ys) - min(ys))
+mesh.transform(Matrix.Diagonal(Vector((squeeze, squeeze, 1.0, 1.0))))
 
 tris = sum(len(p.vertices) - 2 for p in mesh.polygons)
 if tris > MAX_TRIS:

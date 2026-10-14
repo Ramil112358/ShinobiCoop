@@ -300,7 +300,7 @@ bool AShinobiBurst::BuildCards()
 		AddCard(Plane, ESprite::Vortex, FLinearColor(0.6f, 0.35f, 1.f), 2.f, FVector::ZeroVector, FVector2D(1100.f, 1100.f) * S, 0.f, true);
 		Cards.Last().Spin = 240.f;
 		AddCard(Plane, ESprite::Ring, FLinearColor(0.55f, 0.3f, 1.f), 1.8f, FVector::ZeroVector, FVector2D(1500.f, 1500.f) * S, 0.f, true);
-		AddCard(Plane, ESprite::Burst, FLinearColor(0.65f, 0.4f, 1.f), 1.6f, FVector(0.f, 0.f, 220.f), FVector2D(900.f, 900.f) * S);
+		AddCard(Plane, ESprite::Burst, FLinearColor(0.65f, 0.4f, 1.f), 1.6f, FVector(0.f, 0.f, 220.f) * S, FVector2D(900.f, 900.f) * S); // a smaller burst (a guarded hit) keeps it on the body
 		break;
 	case EShinobiBurst::SummonPoof:
 		// A summon arriving or leaving: a ring of smoke puffs billowing out from the ground.

@@ -4,7 +4,7 @@ Date: 2026-10-14. Status: approved in chat, awaiting spec review.
 
 ## Goal
 
-Players can hold a guard. While guarding, a close-fitting spectral Susanoo ribcage (purple, glowing, about 2.2 m tall)
+Players can hold a guard. While guarding, a close-fitting spectral Susanoo ribcage (the Susanoo jutsu's blue-violet M_Susanoo glow, 1.75 m tall so it stays below the head, 1 m across)
 wraps the character, as in Naruto to Boruto: Shinobi Striker's Sasuke guard. Blocking cuts incoming damage, costs
 stamina per hit, and breaks when stamina runs out.
 
