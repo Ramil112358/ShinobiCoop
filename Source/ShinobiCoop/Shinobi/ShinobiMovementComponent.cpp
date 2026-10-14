@@ -140,6 +140,10 @@ float UShinobiMovementComponent::GetMaxSpeed() const
 {
 	float Speed = (bWantsToSprint && MovementMode == MOVE_Walking) ? SprintSpeed : Super::GetMaxSpeed();
 	const AShinobiCharacterBase* Character = Cast<AShinobiCharacterBase>(GetOwner());
+	if (Character && Character->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Blocking))
+	{
+		return 0.f; // guarding roots the player (the guard pose is full-body); they still turn to face their input
+	}
 	if (MovementMode == MOVE_Flying && Character && Character->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Mounted))
 	{
 		Speed = FlightSpeed;

@@ -31,6 +31,7 @@ UShinobiJutsuAbility::UShinobiJutsuAbility()
 	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_Melee);
 	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);
 	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_ChakraCharge);
+	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_Block);
 }
 
 bool UShinobiJutsuAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, FGameplayTagContainer* OptionalRelevantTags) const

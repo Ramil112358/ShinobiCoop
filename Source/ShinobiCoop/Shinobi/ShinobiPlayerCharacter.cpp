@@ -23,6 +23,7 @@
 #include "Shinobi/Pvp/ShinobiPvpGameMode.h"
 #include "Shinobi/Abilities/GA_AlmightyPush.h"
 #include "Shinobi/Abilities/GA_Amaterasu.h"
+#include "Shinobi/Abilities/GA_Block.h"
 #include "Shinobi/Abilities/GA_ChakraCharge.h"
 #include "Shinobi/Abilities/GA_Chidori.h"
 #include "Shinobi/Abilities/GA_Dodge.h"
@@ -68,7 +69,7 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 	Team = EShinobiTeam::Players;
 	AbilitySystem->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
 	StartupAbilities = {
-		UGA_Melee::StaticClass(), UGA_Dodge::StaticClass(), UGA_Sprint::StaticClass(), UGA_ChakraCharge::StaticClass(),
+		UGA_Melee::StaticClass(), UGA_Dodge::StaticClass(), UGA_Sprint::StaticClass(), UGA_ChakraCharge::StaticClass(), UGA_Block::StaticClass(),
 		UGA_Fireball::StaticClass(), UGA_Chidori::StaticClass(), UGA_Rasengan::StaticClass(), UGA_Amaterasu::StaticClass(),
 		UGA_Substitution::StaticClass(), UGA_Revive::StaticClass(),
 		UGA_AlmightyPush::StaticClass(), UGA_Kamui::StaticClass(), UGA_KamuiExit::StaticClass(),

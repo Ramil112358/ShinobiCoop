@@ -4,6 +4,12 @@
 
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/ShinobiMovementComponent.h"
+#include "Shinobi/Abilities/GA_Block.h"
+#include "Shinobi/Abilities/GA_Dodge.h"
+#include "Shinobi/Abilities/GA_Melee.h"
+#include "Shinobi/Abilities/GA_Sprint.h"
+#include "Shinobi/Abilities/GA_Susanoo.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlockDamageTest, "ShinobiCoop.Block.Damage.AFifthLandsForStamina", ShinobiTestFlags)
 bool FShinobiBlockDamageTest::RunTest(const FString& Parameters)
@@ -123,6 +129,115 @@ bool FShinobiBlockDownedTest::RunTest(const FString& Parameters)
 	ShinobiTest::ApplyEffect(P, UGE_Blocking::StaticClass());
 	ShinobiTest::ApplyEffect(P, UGE_Downed::StaticClass());
 	TestFalse(TEXT("No guard on a downed player"), ShinobiTest::HasTag(P, ShinobiTags::State_Blocking));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlockHoldTest, "ShinobiCoop.Block.Ability.HoldToGuardReleaseToLower", ShinobiTestFlags)
+bool FShinobiBlockHoldTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	const UShinobiMovementComponent* Move = CastChecked<UShinobiMovementComponent>(P->GetCharacterMovement());
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Block);
+	TestTrue(TEXT("Guard up while held"), ShinobiTest::IsActive(P, UGA_Block::StaticClass()));
+	TestTrue(TEXT("Guarding"), ShinobiTest::HasTag(P, ShinobiTags::State_Blocking));
+	TestEqual(TEXT("Rooted while guarding"), Move->GetMaxSpeed(), 0.f);
+	W.Tick(1.f);
+	TestEqual(TEXT("Holding the guard costs nothing by itself"), ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute()), 100.f);
+
+	ShinobiTest::Release(P, EShinobiAbilityInputID::Block);
+	TestFalse(TEXT("Guard down on release"), ShinobiTest::IsActive(P, UGA_Block::StaticClass()));
+	TestFalse(TEXT("Not guarding"), ShinobiTest::HasTag(P, ShinobiTags::State_Blocking));
+	TestTrue(TEXT("Free to move again"), Move->GetMaxSpeed() > 0.f);
+	TestTrue(TEXT("Stamina regen waits a moment, as after a sprint"), ShinobiTest::HasTag(P, ShinobiTags::State_StaminaRegenBlocked));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlockExhaustedTest, "ShinobiCoop.Block.Ability.NoGuardWithoutStamina", ShinobiTestFlags)
+bool FShinobiBlockExhaustedTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Set(P, UShinobiAttributeSet::GetStaminaAttribute(), 0.f);
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Block);
+	TestFalse(TEXT("Can't raise a guard at 0 stamina"), ShinobiTest::IsActive(P, UGA_Block::StaticClass()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlockBreakEndsTest, "ShinobiCoop.Block.Ability.AGuardBreakEndsTheAbility", ShinobiTestFlags)
+bool FShinobiBlockBreakEndsTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* Enemy = W.Spawn<AShinobiCharacterBase>(FVector(300.f, 0.f, 0.f));
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Block);
+	ShinobiTest::Set(P, UShinobiAttributeSet::GetStaminaAttribute(), 10.f);
+	ShinobiCombat::ApplyDamage(Enemy->GetAbilitySystemComponent(), P, 100.f);
+	TestFalse(TEXT("The broken guard ends the ability"), ShinobiTest::IsActive(P, UGA_Block::StaticClass()));
+	TestTrue(TEXT("Staggered"), ShinobiTest::HasTag(P, ShinobiTags::State_Staggered));
+	TestEqual(TEXT("The hit landed in full"), ShinobiTest::Get(P, UShinobiAttributeSet::GetHealthAttribute()), 400.f);
+
+	ShinobiTest::Release(P, EShinobiAbilityInputID::Block);
+	W.Tick(0.6f); // the stagger is over
+	ShinobiTest::Set(P, UShinobiAttributeSet::GetStaminaAttribute(), 100.f);
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Block);
+	TestTrue(TEXT("The guard can go up again"), ShinobiTest::IsActive(P, UGA_Block::StaticClass()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlockNoAttackTest, "ShinobiCoop.Block.Ability.NoAttackingOrSprintingBehindTheGuard", ShinobiTestFlags)
+bool FShinobiBlockNoAttackTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Block);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Melee);
+	TestFalse(TEXT("No melee"), ShinobiTest::IsActive(P, UGA_Melee::StaticClass()));
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Sprint);
+	TestFalse(TEXT("No sprint"), ShinobiTest::IsActive(P, UGA_Sprint::StaticClass()));
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(4);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	TestFalse(TEXT("No jutsu"), ShinobiTest::IsActive(P, UGA_Susanoo::StaticClass()));
+	TestTrue(TEXT("Still guarding"), ShinobiTest::IsActive(P, UGA_Block::StaticClass()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlockDodgeOutTest, "ShinobiCoop.Block.Ability.ADodgeDropsTheGuard", ShinobiTestFlags)
+bool FShinobiBlockDodgeOutTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Block);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Dodge);
+	TestTrue(TEXT("The dodge goes"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
+	TestFalse(TEXT("and the guard drops"), ShinobiTest::IsActive(P, UGA_Block::StaticClass()));
+	TestFalse(TEXT("Not guarding"), ShinobiTest::HasTag(P, ShinobiTags::State_Blocking));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlockCastingTest, "ShinobiCoop.Block.Ability.NoGuardMidCast", ShinobiTestFlags)
+bool FShinobiBlockCastingTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(4);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1); // Susanoo's seals take 0.9 s
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Block);
+	TestFalse(TEXT("A jutsu being cast keeps the guard down"), ShinobiTest::IsActive(P, UGA_Block::StaticClass()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlockDownedEndsTest, "ShinobiCoop.Block.Ability.GoingDownEndsTheGuard", ShinobiTestFlags)
+bool FShinobiBlockDownedEndsTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Block);
+	ShinobiTest::ApplyEffect(P, UGE_Downed::StaticClass());
+	TestFalse(TEXT("Downed: the guard ends"), ShinobiTest::IsActive(P, UGA_Block::StaticClass()));
 	return true;
 }
 
