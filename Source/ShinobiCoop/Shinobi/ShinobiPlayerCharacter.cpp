@@ -51,6 +51,8 @@
 #include "Net/UnrealNetwork.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/VFX/ShinobiSurfaceFxComponent.h"
+#include "Shinobi/Traversal/ShinobiTraversalComponent.h"
+#include "MotionWarpingComponent.h"
 
 namespace
 {
@@ -116,6 +118,9 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 
 	SurfaceFx = CreateDefaultSubobject<UShinobiSurfaceFxComponent>(TEXT("SurfaceFx"));
 	SurfaceFx->SetupAttachment(RootComponent); // turns with the capsule onto walls
+
+	Traversal = CreateDefaultSubobject<UShinobiTraversalComponent>(TEXT("Traversal"));
+	MotionWarping = CreateDefaultSubobject<UMotionWarpingComponent>(TEXT("MotionWarping"));
 }
 
 int32 AShinobiPlayerCharacter::FindRosterIndex(const FString& Name)
@@ -874,6 +879,10 @@ void AShinobiPlayerCharacter::JumpPressed()
 	{
 		bFlightClimb = true; // on a dragon Space climbs
 		return;
+	}
+	if (Traversal->IsTraversing() || Traversal->TryTraversal())
+	{
+		return; // over or onto what is ahead instead of jumping
 	}
 	Jump();
 }

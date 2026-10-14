@@ -3,6 +3,8 @@
 #include "Shinobi/ShinobiAttributeSet.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
+#include "Shinobi/ShinobiCharacterBase.h"
+#include "Shinobi/Hero/ShinobiPhysicalReactionComponent.h"
 
 namespace
 {
@@ -94,6 +96,12 @@ void UShinobiDamageExec::Execute_Implementation(const FGameplayEffectCustomExecu
 	if (!bPeriodic && Damage >= StaggerThreshold)
 	{
 		SendEvent(Target, ShinobiTags::Event_Hit_Stagger, Attacker, Damage);
+	}
+	// The body takes the hit physically, away from the attacker (burning ticks don't shove it around).
+	const AShinobiCharacterBase* Victim = Cast<AShinobiCharacterBase>(Target->GetAvatarActor());
+	if (!bPeriodic && Attacker && Victim && Victim->GetPhysicalReactions())
+	{
+		Victim->GetPhysicalReactions()->Hit(Victim->GetActorLocation() - Attacker->GetActorLocation(), Damage);
 	}
 	OutExecutionOutput.AddOutputModifier(FGameplayModifierEvaluatedData(UShinobiAttributeSet::GetIncomingDamageAttribute(), EGameplayModOp::Additive, Damage));
 }

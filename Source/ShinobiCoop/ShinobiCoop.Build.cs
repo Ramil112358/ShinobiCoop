@@ -32,7 +32,12 @@ public class ShinobiCoop : ModuleRules
 			"RenderCore",
 			"RHI",
 			"MeshDescription",
-			"StaticMeshDescription"
+			"StaticMeshDescription",
+			"MotionWarping",
+			"Chooser",
+			"AnimationWarpingRuntime",
+			"PoseSearch",
+			"PhysicsControl"
 		});
 
 		if (Target.bBuildEditor)
