@@ -11,6 +11,8 @@
 #include "Shinobi/Abilities/GA_Sprint.h"
 #include "Shinobi/Abilities/GA_Susanoo.h"
 #include "Shinobi/VFX/ShinobiSusanooComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlockDamageTest, "ShinobiCoop.Block.Damage.AFifthLandsForStamina", ShinobiTestFlags)
 bool FShinobiBlockDamageTest::RunTest(const FString& Parameters)
@@ -261,6 +263,25 @@ bool FShinobiBlockFigureTest::RunTest(const FString& Parameters)
 
 	ShinobiTest::Release(P, EShinobiAbilityInputID::Block);
 	TestFalse(TEXT("Down on release"), Guard->IsShown());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlockModelTest, "ShinobiCoop.Block.Figure.IsTheBodyHuggingRibcage", ShinobiTestFlags)
+bool FShinobiBlockModelTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::ApplyEffect(P, UGE_Blocking::StaticClass()); // the figure is built when it is first wanted
+	const UStaticMeshComponent* Figure = P->GetGuard() ? P->GetGuard()->GetFigure() : nullptr;
+	const UStaticMesh* Mesh = Figure ? Figure->GetStaticMesh() : nullptr;
+	if (TestNotNull(TEXT("The guard figure has a mesh (run Scripts/setup_susanoo_ribs.py if not)"), Mesh))
+	{
+		TestEqual(TEXT("the guard ribcage"), Mesh->GetName(), FString(TEXT("SM_SusanooRibs")));
+		const FBox Box = Mesh->GetBoundingBox();
+		TestTrue(FString::Printf(TEXT("standing on the ground, about 2.2 m tall (Z %.0f to %.0f)"), Box.Min.Z, Box.Max.Z), Box.Min.Z > -20.0 && Box.Min.Z < 20.0 && Box.Max.Z > 190.0 && Box.Max.Z < 250.0);
+		TestTrue(FString::Printf(TEXT("wide enough to go round the body (Y %.0f to %.0f)"), Box.Min.Y, Box.Max.Y), Box.Max.Y - Box.Min.Y > 90.0);
+		TestTrue(TEXT("centred on the player"), FMath::Abs(Box.GetCenter().X) < 25.0 && FMath::Abs(Box.GetCenter().Y) < 25.0);
+	}
 	return true;
 }
 
