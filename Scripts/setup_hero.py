@@ -30,6 +30,7 @@ Run IK Rig op off). Root Motion op off too: the hero's root IS its pelvis (Hips)
 hips to Manny's floor-level root bone; the character moves by its capsule, not root motion.
 """
 import glob
+import math
 import os
 import re
 import subprocess
@@ -54,6 +55,8 @@ MEL = unreal.MaterialEditingLibrary
 # has them, a "No fingers" download doesn't).
 REQUIRED_CHAINS = ("Spine", "Neck", "Head", "LeftArm", "RightArm", "LeftLeg", "RightLeg")
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
+# How far each upper arm is swung out from the body on every character (spread_arms); tune by eye, then SETUP_HERO_ONLY=retargeters.
+ARM_SPREAD_DEGREES = float(os.environ.get("SETUP_HERO_ARM_SPREAD", "15"))
 
 
 def log(message):
@@ -182,6 +185,38 @@ def find_op(controller, op_class):
     raise RuntimeError(f"retargeter has no {op_class.__name__} op")
 
 
+def spread_arms(controller, ik_target):
+    """Raises each upper arm ARM_SPREAD_DEGREES out from the body in the target retarget pose. Manny's arms swing close to
+    his slim torso; copied 1:1 onto our bulkier bodies (and the cloaks over them) the hands sink into the hips. The FK chain
+    op carries a retarget-pose offset into every animation, so this widens idle, run and jump alike.
+    A pose delta is local (bone ref rotation * delta, IKRetargetProcessor.cpp), so the mesh-space swing is converted per bone."""
+    target = unreal.RetargetSourceOrTarget.TARGET
+    rig = unreal.IKRigController.get_controller(ik_target)
+    pose = unreal.AnimPoseExtensions.get_reference_pose(rig.get_skeletal_mesh().skeleton)
+    for bone in unreal.AnimPoseExtensions.get_bone_names(pose):  # the auto-aligned pose, so the arm's real direction is measured
+        local = unreal.AnimPoseExtensions.get_bone_pose(pose, bone)
+        local.rotation = local.rotation * controller.get_rotation_offset_for_retarget_pose_bone(bone, target)
+        pose = unreal.AnimPoseExtensions.set_bone_pose(pose, local, bone)  # returns the edited pose (UPARAM(ref)), never edits in place
+    world = unreal.AnimPoseSpaces.WORLD
+    for chain in ("LeftArm", "RightArm"):
+        upper, hand = rig.get_retarget_chain_start_bone(chain), rig.get_retarget_chain_end_bone(chain)
+        arm = unreal.AnimPoseExtensions.get_bone_pose(pose, hand, world).translation - unreal.AnimPoseExtensions.get_bone_pose(pose, upper, world).translation
+        # Rotating the arm about (arm x up) turns it toward up: away from the body for a hanging arm on either side.
+        swing = unreal.MathLibrary.rotator_from_axis_and_angle(arm.normal().cross(unreal.Vector(0, 0, 1)).normal(), ARM_SPREAD_DEGREES).quaternion()
+        bone_world = unreal.AnimPoseExtensions.get_bone_pose(pose, upper, world).rotation
+        delta = controller.get_rotation_offset_for_retarget_pose_bone(upper, target)
+        controller.set_rotation_offset_for_retarget_pose_bone(upper, delta * bone_world.inversed() * swing * bone_world, target)  # bone_world already holds delta
+        # Check: re-pose the arm with the new delta; it must hang ARM_SPREAD_DEGREES further from straight down.
+        local = unreal.AnimPoseExtensions.get_ref_bone_pose(pose, upper)
+        local.rotation = local.rotation * controller.get_rotation_offset_for_retarget_pose_bone(upper, target)
+        pose = unreal.AnimPoseExtensions.set_bone_pose(pose, local, upper)  # returns the edited pose (UPARAM(ref)), never edits in place
+        spread = unreal.AnimPoseExtensions.get_bone_pose(pose, hand, world).translation - unreal.AnimPoseExtensions.get_bone_pose(pose, upper, world).translation
+        down = lambda v: math.degrees(math.acos(-v.normal().z))
+        if abs(down(spread) - down(arm) - ARM_SPREAD_DEGREES) > 1:
+            raise RuntimeError(f"spread_arms: {chain} went {down(arm):.1f} -> {down(spread):.1f} deg from down, wanted +{ARM_SPREAD_DEGREES}")
+        log(f"{ik_target.get_name()} {chain}: {down(arm):.1f} -> {down(spread):.1f} deg from straight down")
+
+
 def build_retargeter(ik_manny, ik_hero, dest=HERO_DIR, name="RTG_MannyToHero"):
     retargeter = load_or_create(name, lambda: TOOLS.create_asset(name, dest, unreal.IKRetargeter, unreal.IKRetargetFactory()), dest)
     controller = unreal.IKRetargeterController.get_controller(retargeter)
@@ -195,6 +230,7 @@ def build_retargeter(ik_manny, ik_hero, dest=HERO_DIR, name="RTG_MannyToHero"):
     pose = controller.get_current_retarget_pose_name(unreal.RetargetSourceOrTarget.TARGET)
     controller.reset_retarget_pose(pose, [], unreal.RetargetSourceOrTarget.TARGET)
     controller.auto_align_all_bones(unreal.RetargetSourceOrTarget.TARGET, unreal.RetargetAutoAlignMethod.CHAIN_TO_CHAIN)
+    spread_arms(controller, ik_hero)
     for op_class in (unreal.IKRetargetRunIKRigController, unreal.IKRetargetRootMotionController):
         index = find_op(controller, op_class)
         controller.set_retarget_op_enabled(index, False)
@@ -368,6 +404,14 @@ def build_outfits():
 if os.environ.get("SETUP_HERO_ONLY") == "outfits":
     # Re-imports just the outfits (set SETUP_HERO_ONLY=outfits before Scripts/run_python.ps1), leaving every body alone.
     build_outfits()
+elif os.environ.get("SETUP_HERO_ONLY") == "retargeters":
+    # Re-configures every RTG_MannyTo<Id> in place on its existing IK rigs (e.g. after changing ARM_SPREAD_DEGREES).
+    for path in unreal.EditorAssetLibrary.list_assets("/Game/Shinobi", recursive=True):
+        name = path.rsplit(".", 1)[-1]
+        if name.startswith("RTG_MannyTo"):
+            controller = unreal.IKRetargeterController.get_controller(unreal.load_asset(path))
+            build_retargeter(controller.get_ik_rig(unreal.RetargetSourceOrTarget.SOURCE), controller.get_ik_rig(unreal.RetargetSourceOrTarget.TARGET),
+                             path.rsplit("/", 1)[0], name)
 else:
     fbx = HERO_FBX if os.path.exists(HERO_FBX) else STAND_IN_FBX
     log(f"source: {'hero' if fbx == HERO_FBX else 'STAND-IN'} {fbx}")
