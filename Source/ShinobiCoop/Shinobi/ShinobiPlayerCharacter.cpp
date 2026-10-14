@@ -546,7 +546,8 @@ void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
 	{
 		AddMovementInput(FVector::UpVector, (bFlightClimb ? 1.f : 0.f) - (bFlightDive ? 1.f : 0.f));
 	}
-	UpdateSeatedPose();
+	UpdateLoopPose(SeatedMontage, bSeatedLoadTried, TEXT("/Game/Shinobi/Anims/AM_Mount_Sit.AM_Mount_Sit"), ShinobiTags::State_Mounted, 0.3f);
+	UpdateLoopPose(GuardMontage, bGuardLoadTried, TEXT("/Game/Shinobi/Anims/AM_Block_Guard.AM_Block_Guard"), ShinobiTags::State_Blocking, 0.2f);
 	if (GetCharacterMovement()->IsFalling())
 	{
 		FallApexZ = FMath::Max(FallApexZ, GetActorLocation().Z);
@@ -580,37 +581,37 @@ void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
 	Controller->SetControlRotation(FMath::RInterpTo(Controller->GetControlRotation(), Desired, DeltaSeconds, 10.f));
 }
 
-void AShinobiPlayerCharacter::UpdateSeatedPose()
+void AShinobiPlayerCharacter::UpdateLoopPose(TObjectPtr<UAnimMontage>& Montage, bool& bLoadTried, const TCHAR* Path, const FGameplayTag& Tag, float BlendOutSeconds)
 {
 	UAnimInstance* Anim = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
 	if (!Anim || IsNetMode(NM_DedicatedServer))
 	{
 		return;
 	}
-	if (!SeatedMontage)
+	if (!Montage)
 	{
-		if (bSeatedLoadTried)
+		if (bLoadTried)
 		{
 			return;
 		}
-		bSeatedLoadTried = true; // once: a missing asset must not cost a failed load every frame
-		SeatedMontage = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Shinobi/Anims/AM_Mount_Sit.AM_Mount_Sit"), nullptr, LOAD_NoWarn | LOAD_Quiet);
-		if (!SeatedMontage)
+		bLoadTried = true; // once: a missing asset must not cost a failed load every frame
+		Montage = LoadObject<UAnimMontage>(nullptr, Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
+		if (!Montage)
 		{
 			return;
 		}
 	}
-	if (AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Mounted))
+	if (AbilitySystem->HasMatchingGameplayTag(Tag))
 	{
-		if (!Anim->IsAnyMontagePlaying()) // a jutsu's montage takes the pose for its moment, then the rider sits again
+		if (!Anim->IsAnyMontagePlaying()) // another montage (a jutsu) takes the pose for its moment, then the loop comes back
 		{
-			Anim->Montage_Play(SeatedMontage);
-			Anim->Montage_SetNextSection(TEXT("Default"), TEXT("Default"), SeatedMontage); // a loop
+			Anim->Montage_Play(Montage);
+			Anim->Montage_SetNextSection(TEXT("Default"), TEXT("Default"), Montage); // a loop
 		}
 	}
-	else if (Anim->Montage_IsPlaying(SeatedMontage))
+	else if (Anim->Montage_IsPlaying(Montage))
 	{
-		Anim->Montage_Stop(0.3f, SeatedMontage);
+		Anim->Montage_Stop(BlendOutSeconds, Montage);
 	}
 }
 

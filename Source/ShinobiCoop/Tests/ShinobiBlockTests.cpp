@@ -13,6 +13,9 @@
 #include "Shinobi/VFX/ShinobiSusanooComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
+#include "Components/SkeletalMeshComponent.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlockDamageTest, "ShinobiCoop.Block.Damage.AFifthLandsForStamina", ShinobiTestFlags)
 bool FShinobiBlockDamageTest::RunTest(const FString& Parameters)
@@ -282,6 +285,37 @@ bool FShinobiBlockModelTest::RunTest(const FString& Parameters)
 		TestTrue(FString::Printf(TEXT("wide enough to go round the body (Y %.0f to %.0f)"), Box.Min.Y, Box.Max.Y), Box.Max.Y - Box.Min.Y > 90.0);
 		TestTrue(TEXT("centred on the player"), FMath::Abs(Box.GetCenter().X) < 25.0 && FMath::Abs(Box.GetCenter().Y) < 25.0);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlockPoseTest, "ShinobiCoop.Block.Pose.GuardsWhileHeld", ShinobiTestFlags)
+bool FShinobiBlockPoseTest::RunTest(const FString& Parameters)
+{
+	// (run Scripts/setup_jutsu_anims.py with JUTSU_ONLY=Block if the montage is missing)
+	const UAnimMontage* Pose = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Shinobi/Anims/AM_Block_Guard.AM_Block_Guard"));
+	if (!TestNotNull(TEXT("guard montage"), Pose))
+	{
+		return false;
+	}
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	UAnimInstance* Anim = P->GetMesh()->GetAnimInstance();
+	if (!TestNotNull(TEXT("the character's animation instance"), Anim))
+	{
+		return false;
+	}
+	W.Tick(0.3f);
+	TestFalse(TEXT("No guard pose before guarding"), Anim->Montage_IsPlaying(Pose));
+
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Block);
+	W.Tick(0.3f);
+	TestTrue(TEXT("Guard pose while guarding"), Anim->Montage_IsPlaying(Pose));
+	W.Tick(Pose->GetPlayLength() * 2.5f);
+	TestTrue(TEXT("and still after the clip has looped"), Anim->Montage_IsPlaying(Pose));
+
+	ShinobiTest::Release(P, EShinobiAbilityInputID::Block);
+	W.Tick(1.f);
+	TestFalse(TEXT("Gone on release"), Anim->Montage_IsPlaying(Pose));
 	return true;
 }
 

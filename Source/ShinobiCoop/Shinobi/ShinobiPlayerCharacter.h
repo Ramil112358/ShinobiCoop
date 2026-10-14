@@ -172,11 +172,17 @@ protected:
 	virtual void FellOutOfWorld(const UDamageType& DamageType) override;
 
 private:
-	/** While mounted: keeps the seated loop (AM_Mount_Sit) playing whenever no other montage (a jutsu) is, and ends it on the dismount. */
-	void UpdateSeatedPose();
+	/** Keeps Montage looping while the player has Tag, whenever no other montage (a jutsu, a dodge) is playing, and stops it when
+	 * the tag goes. Tag-driven, so every machine shows it. Loads the montage once; a missing asset just means no pose. */
+	void UpdateLoopPose(TObjectPtr<UAnimMontage>& Montage, bool& bLoadTried, const TCHAR* Path, const FGameplayTag& Tag, float BlendOutSeconds);
 
+	/** While mounted: the seated loop (AM_Mount_Sit). */
 	UPROPERTY()
 	TObjectPtr<UAnimMontage> SeatedMontage;
+
+	/** While guarding: the guard pose (AM_Block_Guard). */
+	UPROPERTY()
+	TObjectPtr<UAnimMontage> GuardMontage;
 
 	/** The current fall's highest point (world Z); Tick raises it while falling. */
 	float FallApexZ = 0.f;
@@ -184,6 +190,7 @@ private:
 	bool bBoomPulledBack = false;
 	bool bSteeringByCamera = false;
 	bool bSeatedLoadTried = false;
+	bool bGuardLoadTried = false;
 	bool bFlightClimb = false;
 	bool bFlightDive = false;
 	bool bJutsuTargetPlacementActive = false;
