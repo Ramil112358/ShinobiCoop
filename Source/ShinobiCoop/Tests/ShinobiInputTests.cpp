@@ -86,6 +86,8 @@ bool FShinobiInputMappingsTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("RB + A casts jutsu 1"), FindMapping(JutsuMappings, Config->AbilityActions[EShinobiAbilityInputID::Jutsu1], EKeys::Gamepad_FaceButton_Bottom));
 	TestNotNull(TEXT("RB + Y casts jutsu 4"), FindMapping(JutsuMappings, Config->AbilityActions[EShinobiAbilityInputID::Jutsu4], EKeys::Gamepad_FaceButton_Top));
 	TestNotNull(TEXT("E revives"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Revive], EKeys::E));
+	TestNotNull(TEXT("F guards"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Block], EKeys::F));
+	TestNotNull(TEXT("LT guards"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Block], EKeys::Gamepad_LeftTrigger));
 	TestNotNull(TEXT("Y (without RB) revives"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Revive], EKeys::Gamepad_FaceButton_Top));
 
 	TestNotNull(TEXT("Q pages forward"), FindMapping(Mappings, Config->JutsuPageNext, EKeys::Q));

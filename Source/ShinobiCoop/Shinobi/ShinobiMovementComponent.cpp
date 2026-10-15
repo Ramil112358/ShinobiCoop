@@ -16,6 +16,7 @@ namespace
 		typedef FSavedMove_Character Super;
 
 		uint8 bSavedWantsToSprint : 1;
+		uint8 bSavedWantsToBlock : 1;
 		/** Gravity when the move started: moves across a wall attach or detach must not be combined, or the replay would run
 		 * the combined move entirely under one gravity. */
 		FVector SavedGravityDirection = UCharacterMovementComponent::DefaultGravityDirection;
@@ -24,6 +25,7 @@ namespace
 		{
 			Super::Clear();
 			bSavedWantsToSprint = false;
+			bSavedWantsToBlock = false;
 			SavedGravityDirection = UCharacterMovementComponent::DefaultGravityDirection;
 		}
 
@@ -34,13 +36,17 @@ namespace
 			{
 				Result |= FLAG_Custom_0;
 			}
+			if (bSavedWantsToBlock)
+			{
+				Result |= FLAG_Custom_1;
+			}
 			return Result;
 		}
 
 		virtual bool CanCombineWith(const FSavedMovePtr& NewMove, ACharacter* InCharacter, float MaxDelta) const override
 		{
 			const FShinobiSavedMove* Other = static_cast<FShinobiSavedMove*>(NewMove.Get());
-			if (bSavedWantsToSprint != Other->bSavedWantsToSprint || !SavedGravityDirection.Equals(Other->SavedGravityDirection))
+			if (bSavedWantsToSprint != Other->bSavedWantsToSprint || bSavedWantsToBlock != Other->bSavedWantsToBlock || !SavedGravityDirection.Equals(Other->SavedGravityDirection))
 			{
 				return false;
 			}
@@ -53,6 +59,7 @@ namespace
 			if (const UShinobiMovementComponent* Movement = Cast<UShinobiMovementComponent>(C->GetCharacterMovement()))
 			{
 				bSavedWantsToSprint = Movement->bWantsToSprint;
+				bSavedWantsToBlock = Movement->bWantsToBlock;
 				SavedGravityDirection = Movement->GetGravityDirection();
 			}
 		}
@@ -63,6 +70,7 @@ namespace
 			if (UShinobiMovementComponent* Movement = Cast<UShinobiMovementComponent>(C->GetCharacterMovement()))
 			{
 				Movement->bWantsToSprint = bSavedWantsToSprint;
+				Movement->bWantsToBlock = bSavedWantsToBlock;
 			}
 		}
 	};
@@ -85,6 +93,7 @@ namespace
 UShinobiMovementComponent::UShinobiMovementComponent()
 {
 	bWantsToSprint = false;
+	bWantsToBlock = false;
 	MaxWalkSpeed = 600.f;
 	BrakingDecelerationFlying = 2500.f; // a dragon stops and turns quickly
 	// Uncontrolled characters (dummies, knocked-back pawns, test actors) still need physics and root motion.
@@ -140,6 +149,10 @@ float UShinobiMovementComponent::GetMaxSpeed() const
 {
 	float Speed = (bWantsToSprint && MovementMode == MOVE_Walking) ? SprintSpeed : Super::GetMaxSpeed();
 	const AShinobiCharacterBase* Character = Cast<AShinobiCharacterBase>(GetOwner());
+	if (bWantsToBlock)
+	{
+		return 0.f; // guarding roots the player (the guard pose is full-body); they still turn to face their input
+	}
 	if (MovementMode == MOVE_Flying && Character && Character->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Mounted))
 	{
 		Speed = FlightSpeed;
@@ -162,6 +175,7 @@ void UShinobiMovementComponent::UpdateFromCompressedFlags(uint8 Flags)
 	// so GA_Sprint's server-side SetSprinting(false) isn't authoritative against a client that keeps
 	// sending the flag; acceptable for friends-only co-op, not for a competitive/anti-cheat setting.
 	bWantsToSprint = (Flags & FSavedMove_Character::FLAG_Custom_0) != 0;
+	bWantsToBlock = (Flags & FSavedMove_Character::FLAG_Custom_1) != 0; // the same caveat as sprint
 }
 
 FNetworkPredictionData_Client* UShinobiMovementComponent::GetPredictionData_Client() const
@@ -177,12 +191,14 @@ FNetworkPredictionData_Client* UShinobiMovementComponent::GetPredictionData_Clie
 bool UShinobiMovementComponent::ClientUpdatePositionAfterServerUpdate()
 {
 	// Super replays unacked moves via PrepMoveFor/UpdateFromCompressedFlags, which overwrites
-	// bWantsToSprint with each replayed move's flag in turn. The engine does the same
+	// bWantsToSprint (and bWantsToBlock) with each replayed move's flag in turn. The engine does the same
 	// save/restore for bWantsToCrouch around this call (CharacterMovementComponent.cpp), so we
 	// mirror that here: the last replayed move would otherwise win instead of the current input.
 	const bool bRealWantsToSprint = bWantsToSprint;
+	const bool bRealWantsToBlock = bWantsToBlock;
 	const bool bResult = Super::ClientUpdatePositionAfterServerUpdate();
 	bWantsToSprint = bRealWantsToSprint;
+	bWantsToBlock = bRealWantsToBlock;
 	return bResult;
 }
 

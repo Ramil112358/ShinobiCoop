@@ -49,6 +49,7 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_AttackBoost);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_SpeedBoost);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Shield);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Blocking); // holding a guard (UGA_Block): hits cost stamina instead of most of their damage
 
 	// Jutsu pages: exactly one is on a player's ability system (loose tag, set per machine); keys 1-4 fire that page's jutsu.
 	constexpr int32 NumJutsuPages = 5;
@@ -68,6 +69,7 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Jutsu);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Substitution);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Revive);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Block);
 
 	// Jutsu cooldowns (granted by GE_JutsuCooldown)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_Fireball);

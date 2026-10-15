@@ -86,6 +86,7 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 	AddAbility(EShinobiAbilityInputID::ChakraCharge, TEXT("IA_ChakraCharge"), EKeys::C, EKeys::Gamepad_LeftShoulder);
 	AddAbility(EShinobiAbilityInputID::Dismount, TEXT("IA_Dismount"), EKeys::X, EKeys::Gamepad_DPad_Down); // off the dragon, on any page
 	AddAbility(EShinobiAbilityInputID::Revive, TEXT("IA_Revive"), EKeys::E, EKeys::Gamepad_FaceButton_Top); // RB + Y is jutsu 4 (JutsuContext wins)
+	AddAbility(EShinobiAbilityInputID::Block, TEXT("IA_Block"), EKeys::F, EKeys::Gamepad_LeftTrigger); // hold
 
 	Config->LockOn = MakeAction(Config, TEXT("IA_LockOn"), EInputActionValueType::Boolean);
 	Ctx->MapKey(Config->LockOn, EKeys::Tab);

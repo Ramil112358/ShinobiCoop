@@ -8,6 +8,7 @@
 
 class UCameraComponent;
 class UShinobiOverheadTextComponent;
+class UShinobiSusanooComponent;
 class UShinobiSurfaceFxComponent;
 class UShinobiTraversalComponent;
 class UMotionWarpingComponent;
@@ -41,6 +42,9 @@ public:
 
 	/** False while charging chakra, shocked, staggered, reviving, downed or dead: move and jump input are ignored. */
 	bool CanMove() const;
+
+	/** Space may jump, vault or mantle: CanMove() and not guarding (a guard stays on the ground). */
+	bool CanJumpOrTraverse() const;
 
 	/** Flight while mounted: Space climbs, Control dives (both cancel). Ignored on the ground. */
 	void SetFlightClimb(bool bHeld) { bFlightClimb = bHeld; }
@@ -121,6 +125,9 @@ public:
 	USkeletalMeshComponent* GetHeroMesh() const { return HeroMesh; }
 	UShinobiOverheadTextComponent* GetNameTag() const { return NameTag; }
 
+	/** The ribcage that stands round the player while they guard (UGA_Block). */
+	UShinobiSusanooComponent* GetGuard() const { return Guard; }
+
 	/** The jutsu page keys 1-4 fire (1..ShinobiTags::NumJutsuPages). It is a loose tag on each machine's ability system:
 	 * the owning client applies a switch at once so activation predicts, and tells the server. */
 	int32 GetJutsuPage() const;
@@ -168,11 +175,17 @@ protected:
 	virtual void FellOutOfWorld(const UDamageType& DamageType) override;
 
 private:
-	/** While mounted: keeps the seated loop (AM_Mount_Sit) playing whenever no other montage (a jutsu) is, and ends it on the dismount. */
-	void UpdateSeatedPose();
+	/** Keeps Montage looping while the player has Tag, whenever no other montage (a jutsu, a dodge) is playing, and stops it when
+	 * the tag goes. Tag-driven, so every machine shows it. Loads the montage once; a missing asset just means no pose. */
+	void UpdateLoopPose(TObjectPtr<UAnimMontage>& Montage, bool& bLoadTried, const TCHAR* Path, const FGameplayTag& Tag, float BlendOutSeconds);
 
+	/** While mounted: the seated loop (AM_Mount_Sit). */
 	UPROPERTY()
 	TObjectPtr<UAnimMontage> SeatedMontage;
+
+	/** While guarding: the guard pose (AM_Block_Guard). */
+	UPROPERTY()
+	TObjectPtr<UAnimMontage> GuardMontage;
 
 	/** The current fall's highest point (world Z); Tick raises it while falling. */
 	float FallApexZ = 0.f;
@@ -180,6 +193,7 @@ private:
 	bool bBoomPulledBack = false;
 	bool bSteeringByCamera = false;
 	bool bSeatedLoadTried = false;
+	bool bGuardLoadTried = false;
 	bool bFlightClimb = false;
 	bool bFlightDive = false;
 	bool bJutsuTargetPlacementActive = false;
@@ -254,6 +268,9 @@ private:
 	/** Teammates' names above their heads; hidden on your own character. */
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UShinobiOverheadTextComponent> NameTag;
+
+	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
+	TObjectPtr<UShinobiSusanooComponent> Guard;
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UShinobiSurfaceFxComponent> SurfaceFx;

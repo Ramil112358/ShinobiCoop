@@ -240,7 +240,7 @@ One post-process material: lighting quantized into 3 bands (scene color divided 
 | Amaterasu | Black-flame shell mesh with dark-purple emissive rim |
 | Firestorm | Expanding fire sphere, light flash, shockwave ring mesh |
 | Substitution | Log mesh + smoke puff sphere at old position |
-| Chakra charge aura | Thin blue glow hugging the body: the character mesh's overlay material `M_ChakraBodyAura` (vertex-normal inflate ~2.5 cm, additive unlit, fresnel rim, faint upward noise wisps) + a soft, shadowless, diffuse-only blue point light at the capsule centre (tints the floor and nearby surfaces); ~0.15 s fade. Driven by `UShinobiChakraAuraComponent` following the replicated `State.ChakraCharging` tag |
+| Chakra charge aura | Thin blue glow hugging the body: the character mesh's overlay material `M_ChakraBodyAura` (vertex-normal inflate ~2.5 cm, additive unlit, fresnel rim, faint upward noise wisps) + a soft, shadowless, diffuse-only blue point light at the capsule centre (tints the floor and nearby surfaces); ~0.15 s fade. Chakra flows around the body: 14 camera-facing wisps rise off it, 4 arc streams spiral from the feet to the head lying along their orbit, and a swirl turns on the ground (SpriteCook `T_ChakraFlow` cards); the glow pulses. Driven by `UShinobiChakraAuraComponent` following the replicated `State.ChakraCharging` tag |
 
 All VFX are spawned through Gameplay Cues.
 

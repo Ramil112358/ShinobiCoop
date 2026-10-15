@@ -9,16 +9,12 @@
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/VFX/ShinobiVfx.h"
 
-namespace
-{
-	constexpr float SusanooFadeInSeconds = 0.8f;
-	constexpr float SusanooFadeOutSeconds = 0.5f;
-}
-
 UShinobiSusanooComponent::UShinobiSusanooComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.bStartWithTickEnabled = false; // only while the figure shows or fades
+	StateTag = ShinobiTags::State_Susanoo;
+	Model = FSoftObjectPath(TEXT("/Game/Shinobi/Jutsu/SM_Susanoo.SM_Susanoo"));
 }
 
 void UShinobiSusanooComponent::BeginPlay()
@@ -34,8 +30,8 @@ void UShinobiSusanooComponent::BeginPlay()
 	}
 	if (UAbilitySystemComponent* ASC = AbilitySystem.Get())
 	{
-		Handle = ASC->RegisterGameplayTagEvent(ShinobiTags::State_Susanoo).AddUObject(this, &UShinobiSusanooComponent::OnSusanooChanged);
-		bWanted = ASC->HasMatchingGameplayTag(ShinobiTags::State_Susanoo); // a client that joins mid-armour
+		Handle = ASC->RegisterGameplayTagEvent(StateTag).AddUObject(this, &UShinobiSusanooComponent::OnStateChanged);
+		bWanted = ASC->HasMatchingGameplayTag(StateTag); // a client that joins mid-armour
 		if (bWanted)
 		{
 			EnsureFigure();
@@ -50,15 +46,15 @@ void UShinobiSusanooComponent::EnsureFigure()
 	{
 		return;
 	}
-	// Built the first time the armour goes up, not at spawn: most characters (every enemy and villager) never wear it.
-	// The ribcage model (Scripts/character/make_susanoo.py, imported by Scripts/setup_susanoo.py) has its origin at the feet.
-	UStaticMesh* Model = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Shinobi/Jutsu/SM_Susanoo.SM_Susanoo"), nullptr, LOAD_NoWarn | LOAD_Quiet);
-	if (!Model)
+	// Built the first time the figure is wanted, not at spawn: most characters (every enemy and villager) never wear it.
+	// The models (SM_Susanoo: Scripts/setup_susanoo.py; SM_SusanooRibs: Scripts/setup_susanoo_ribs.py) have their origin at the feet.
+	UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, *Model.ToString(), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	if (!Mesh)
 	{
 		return;
 	}
 	Figure = NewObject<UStaticMeshComponent>(GetOwner(), MakeUniqueObjectName(GetOwner(), UStaticMeshComponent::StaticClass(), TEXT("SusanooFigure")));
-	Figure->SetStaticMesh(Model);
+	Figure->SetStaticMesh(Mesh);
 	Figure->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Figure->SetCastShadow(false);
 	Figure->SetVisibility(false);
@@ -74,7 +70,7 @@ void UShinobiSusanooComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	if (UAbilitySystemComponent* ASC = AbilitySystem.Get())
 	{
-		ASC->UnregisterGameplayTagEvent(Handle, ShinobiTags::State_Susanoo);
+		ASC->UnregisterGameplayTagEvent(Handle, StateTag);
 	}
 	if (Figure)
 	{
@@ -84,7 +80,7 @@ void UShinobiSusanooComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-void UShinobiSusanooComponent::OnSusanooChanged(const FGameplayTag Tag, int32 Count)
+void UShinobiSusanooComponent::OnStateChanged(const FGameplayTag Tag, int32 Count)
 {
 	bWanted = Count > 0;
 	if (bWanted)
@@ -98,7 +94,7 @@ void UShinobiSusanooComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	Age += DeltaTime;
-	Fade = bWanted ? FMath::Min(Fade + DeltaTime / SusanooFadeInSeconds, 1.f) : FMath::Max(Fade - DeltaTime / SusanooFadeOutSeconds, 0.f);
+	Fade = bWanted ? FMath::Min(Fade + DeltaTime / FadeInSeconds, 1.f) : FMath::Max(Fade - DeltaTime / FadeOutSeconds, 0.f);
 	if (Figure)
 	{
 		Figure->SetVisibility(Fade > 0.f);

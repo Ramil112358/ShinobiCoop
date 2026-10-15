@@ -67,4 +67,7 @@ private:
 
 	/** Seconds since this machine saw it: drives the rise from the ground. */
 	float Age = 0.f;
+
+	/** The mesh's resting height relative to the box: 0 for the centred fallback cube, the box's floor for the Rodin walls. */
+	float BaseZ = 0.f;
 };

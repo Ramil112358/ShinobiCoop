@@ -173,12 +173,12 @@ bool FShinobiTelegraphSimplePreviewTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMeteorPlacementRangeTest, "ShinobiCoop.Meteor.PlacementRangeIsReducedWithoutChangingArea", ShinobiTestFlags)
 bool FShinobiMeteorPlacementRangeTest::RunTest(const FString& Parameters)
 {
-	const UGA_FireMeteor* Fire = GetDefault<UGA_FireMeteor>();
-	const UGA_IceMeteor* Ice = GetDefault<UGA_IceMeteor>();
-	TestEqual(TEXT("Fire Meteor placement reaches 2000 units"), Fire->Range, 2000.f);
-	TestEqual(TEXT("Ice Meteors placement reaches 2000 units"), Ice->Range, 2000.f);
-	TestEqual(TEXT("Fire Meteor area radius is unchanged"), Fire->Radius, 450.f);
-	TestEqual(TEXT("Ice Meteors area radius is unchanged"), Ice->AreaRadius, 500.f);
+	const UGA_FireMeteor* FireCDO = GetDefault<UGA_FireMeteor>();
+	const UGA_IceMeteor* IceCDO = GetDefault<UGA_IceMeteor>();
+	TestEqual(TEXT("Fire Meteor placement reaches 2000 units"), FireCDO->Range, 2000.f);
+	TestEqual(TEXT("Ice Meteors placement reaches 2000 units"), IceCDO->Range, 2000.f);
+	TestEqual(TEXT("Fire Meteor area radius is unchanged"), FireCDO->Radius, 450.f);
+	TestEqual(TEXT("Ice Meteors area radius is unchanged"), IceCDO->AreaRadius, 500.f);
 	return true;
 }
 

@@ -184,16 +184,18 @@ bool FShinobiBarrierBurstTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	const FTransform Base(FRotator::ZeroRotator, FVector(300.f, 0.f, -100.f));
+	// The newest burst of Kind: a wall also bursts (smaller) as it rises.
 	const auto FindBurst = [&W](EShinobiBurst Kind) -> const AShinobiBurst*
 	{
+		const AShinobiBurst* Found = nullptr;
 		for (TActorIterator<AShinobiBurst> It(W.World); It; ++It)
 		{
 			if (It->GetKind() == Kind)
 			{
-				return *It;
+				Found = *It;
 			}
 		}
-		return nullptr;
+		return Found;
 	};
 
 	AShinobiBarrier::Spawn(W.World, Base, P, EShinobiBarrierKind::Earth)->ReceiveShinobiDamage(400.f, nullptr);

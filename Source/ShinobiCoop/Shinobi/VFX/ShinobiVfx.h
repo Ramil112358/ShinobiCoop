@@ -49,6 +49,8 @@ namespace ShinobiVfx
 		Burst,      // radial light rays, additive
 		TairnFire,  // tall jets of blue-white lightning fire, additive (8): Tairn's breath
 		CrimsonFire, // tall jets of orange dragon fire with embers, additive (8): the crimson dragon's breath
+		ChakraWisp, // soft rising wisp of blue chakra, additive (4): the chakra charge
+		ChakraSwirl, // curved blue chakra stream, head on the left, additive (4): the chakra charge
 	};
 
 	/** How many variants the sprite has (the Variant argument below wraps around this). */

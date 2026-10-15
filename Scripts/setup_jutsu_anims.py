@@ -9,6 +9,8 @@ Run setup_chakra_pose.py first (it creates the Mixamo skeleton/mesh and the reta
 build_jutsu_anims.py after any pose change. Close the GUI editor before running.
 """
 import os
+import shutil
+
 import unreal
 
 SOURCE_DIR = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir() + "SourceArt/Mixamo/Jutsu")
@@ -29,10 +31,11 @@ JUTSU = {
     "Summon": ("Seal", "Release"),  # shared by the toad, Misha, Pabu and dragon
     "Mount": ("Sit",),  # the rider's seated loop (AShinobiPlayerCharacter)
     "Land": ("Roll",),  # the roll after a long fall (AShinobiPlayerCharacter; Scripts/character/build_land_roll.py)
+    "Block": ("Guard",),  # the guard pose (AShinobiPlayerCharacter; the Mixamo Standing Block Idle below)
 }
 # Phase -> (blend in, blend out) seconds. The seals and the charge hand over to the next phase quickly; the release
 # blends back out to locomotion more slowly.
-PHASES = {"Seal": (0.1, 0.1), "Charge": (0.1, 0.1), "Release": (0.05, 0.25), "Sit": (0.3, 0.3), "Roll": (0.1, 0.3)}
+PHASES = {"Seal": (0.1, 0.1), "Charge": (0.1, 0.1), "Release": (0.05, 0.25), "Sit": (0.3, 0.3), "Roll": (0.1, 0.3), "Guard": (0.15, 0.2)}
 
 # Clips whose body turns over (see retarget()): the root track carries the turn, so it is not locked.
 ROOT_TURNS = {"Land_Roll"}
@@ -42,6 +45,8 @@ TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 # A Mixamo "Sitting Idle" (FBX, without skin, on the Power Up character) saved as SourceArt/Mixamo/Sitting Idle.fbx replaces the
 # generated seated loop (build_jutsu_anims.py, timeline Mount).
 MIXAMO_SIT = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir() + "SourceArt/Mixamo/Sitting Idle.fbx")
+# The guard pose: a Mixamo "Standing Block Idle" (FBX, without skin, on the Power Up character) as SourceArt/Mixamo/Standing Block Idle.fbx.
+MIXAMO_BLOCK = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir() + "SourceArt/Mixamo/Standing Block Idle.fbx")
 
 
 def load(path):
@@ -150,9 +155,10 @@ skeleton = load(MIXAMO_SKELETON_PATH)
 manny_mesh = load(MANNY_MESH_PATH)
 retargeter = load(RETARGETER_PATH)
 if os.path.exists(MIXAMO_SIT):
-    import shutil
     shutil.copyfile(MIXAMO_SIT, os.path.join(SOURCE_DIR, "Mount_Sit.fbx"))
     unreal.log("[setup_jutsu_anims] seated loop: using the Mixamo Sitting Idle")
+if os.path.exists(MIXAMO_BLOCK):
+    shutil.copyfile(MIXAMO_BLOCK, os.path.join(SOURCE_DIR, "Block_Guard.fbx"))
 ONLY = os.environ.get("JUTSU_ONLY")  # e.g. Mount: re-import just that jutsu
 for jutsu, phases in JUTSU.items():
     if ONLY and jutsu != ONLY:

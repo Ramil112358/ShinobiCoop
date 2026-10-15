@@ -14,6 +14,7 @@ Asset ids, prompts and the UI-kit id are in `SourceArt/SpriteCook/spritecook-ass
 | `VFX/flames_sheet.png` | 8 realistic fire tongues, 4 x 2 atlas on pure black | `/Game/Shinobi/VFX/T_Flames` |
 | `VFX/smoke_embers_sheet.png` | top row 4 smoke plumes, bottom row 4 ember sprays | `T_SmokeEmbers` |
 | `VFX/energy_sheet.png` | top row 4 lightning bolts; bottom row ring, vortex, slash, burst | `T_Energy` |
+| `VFX/chakra_flow_sheet.png` | top row 4 rising blue chakra wisps; bottom row 4 swirl arcs (head on the left). The chakra charge flow (`UShinobiChakraAuraComponent`) | `T_ChakraFlow` (`ESprite::ChakraWisp` / `ChakraSwirl`) |
 | `VFX/scorch_rgba.png` | charred ground mark, alpha cut from `scorch.png` (which was on white) | `T_Scorch` |
 | `UI/hud_final/*.png` | HUD kit pieces cropped from the UI-kit sheet, plus four status medallions | `/Game/Shinobi/UI/Hud/T_Hud_*` |
 | `World/forest_path*.png` | terrain candidates, **not used** (albedo only, smeared seams) | - |

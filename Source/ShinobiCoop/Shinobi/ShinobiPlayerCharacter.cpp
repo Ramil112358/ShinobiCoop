@@ -23,6 +23,7 @@
 #include "Shinobi/Pvp/ShinobiPvpGameMode.h"
 #include "Shinobi/Abilities/GA_AlmightyPush.h"
 #include "Shinobi/Abilities/GA_Amaterasu.h"
+#include "Shinobi/Abilities/GA_Block.h"
 #include "Shinobi/Abilities/GA_ChakraCharge.h"
 #include "Shinobi/Abilities/GA_Chidori.h"
 #include "Shinobi/Abilities/GA_Dodge.h"
@@ -51,6 +52,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/VFX/ShinobiSurfaceFxComponent.h"
+#include "Shinobi/VFX/ShinobiSusanooComponent.h"
 #include "Shinobi/Traversal/ShinobiTraversalComponent.h"
 #include "MotionWarpingComponent.h"
 
@@ -68,7 +70,7 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 	Team = EShinobiTeam::Players;
 	AbilitySystem->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
 	StartupAbilities = {
-		UGA_Melee::StaticClass(), UGA_Dodge::StaticClass(), UGA_Sprint::StaticClass(), UGA_ChakraCharge::StaticClass(),
+		UGA_Melee::StaticClass(), UGA_Dodge::StaticClass(), UGA_Sprint::StaticClass(), UGA_ChakraCharge::StaticClass(), UGA_Block::StaticClass(),
 		UGA_Fireball::StaticClass(), UGA_Chidori::StaticClass(), UGA_Rasengan::StaticClass(), UGA_Amaterasu::StaticClass(),
 		UGA_Substitution::StaticClass(), UGA_Revive::StaticClass(),
 		UGA_AlmightyPush::StaticClass(), UGA_Kamui::StaticClass(), UGA_KamuiExit::StaticClass(),
@@ -121,6 +123,13 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 
 	Traversal = CreateDefaultSubobject<UShinobiTraversalComponent>(TEXT("Traversal"));
 	MotionWarping = CreateDefaultSubobject<UMotionWarpingComponent>(TEXT("MotionWarping"));
+
+	// The guard's ribcage: a body-hugging Susanoo (Scripts/setup_susanoo_ribs.py) that snaps up and down quickly.
+	Guard = CreateDefaultSubobject<UShinobiSusanooComponent>(TEXT("Guard"));
+	Guard->StateTag = ShinobiTags::State_Blocking;
+	Guard->Model = FSoftObjectPath(TEXT("/Game/Shinobi/Jutsu/SM_SusanooRibs.SM_SusanooRibs"));
+	Guard->FadeInSeconds = 0.15f;
+	Guard->FadeOutSeconds = 0.25f;
 }
 
 int32 AShinobiPlayerCharacter::FindRosterIndex(const FString& Name)
@@ -537,7 +546,8 @@ void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
 	{
 		AddMovementInput(FVector::UpVector, (bFlightClimb ? 1.f : 0.f) - (bFlightDive ? 1.f : 0.f));
 	}
-	UpdateSeatedPose();
+	UpdateLoopPose(SeatedMontage, bSeatedLoadTried, TEXT("/Game/Shinobi/Anims/AM_Mount_Sit.AM_Mount_Sit"), ShinobiTags::State_Mounted, 0.3f);
+	UpdateLoopPose(GuardMontage, bGuardLoadTried, TEXT("/Game/Shinobi/Anims/AM_Block_Guard.AM_Block_Guard"), ShinobiTags::State_Blocking, 0.2f);
 	if (GetCharacterMovement()->IsFalling())
 	{
 		FallApexZ = FMath::Max(FallApexZ, GetActorLocation().Z);
@@ -571,37 +581,37 @@ void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
 	Controller->SetControlRotation(FMath::RInterpTo(Controller->GetControlRotation(), Desired, DeltaSeconds, 10.f));
 }
 
-void AShinobiPlayerCharacter::UpdateSeatedPose()
+void AShinobiPlayerCharacter::UpdateLoopPose(TObjectPtr<UAnimMontage>& Montage, bool& bLoadTried, const TCHAR* Path, const FGameplayTag& Tag, float BlendOutSeconds)
 {
 	UAnimInstance* Anim = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
 	if (!Anim || IsNetMode(NM_DedicatedServer))
 	{
 		return;
 	}
-	if (!SeatedMontage)
+	if (!Montage)
 	{
-		if (bSeatedLoadTried)
+		if (bLoadTried)
 		{
 			return;
 		}
-		bSeatedLoadTried = true; // once: a missing asset must not cost a failed load every frame
-		SeatedMontage = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Shinobi/Anims/AM_Mount_Sit.AM_Mount_Sit"), nullptr, LOAD_NoWarn | LOAD_Quiet);
-		if (!SeatedMontage)
+		bLoadTried = true; // once: a missing asset must not cost a failed load every frame
+		Montage = LoadObject<UAnimMontage>(nullptr, Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
+		if (!Montage)
 		{
 			return;
 		}
 	}
-	if (AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Mounted))
+	if (AbilitySystem->HasMatchingGameplayTag(Tag))
 	{
-		if (!Anim->IsAnyMontagePlaying()) // a jutsu's montage takes the pose for its moment, then the rider sits again
+		if (!Anim->IsAnyMontagePlaying()) // another montage (a jutsu) takes the pose for its moment, then the loop comes back
 		{
-			Anim->Montage_Play(SeatedMontage);
-			Anim->Montage_SetNextSection(TEXT("Default"), TEXT("Default"), SeatedMontage); // a loop
+			Anim->Montage_Play(Montage);
+			Anim->Montage_SetNextSection(TEXT("Default"), TEXT("Default"), Montage); // a loop
 		}
 	}
-	else if (Anim->Montage_IsPlaying(SeatedMontage))
+	else if (Anim->Montage_IsPlaying(Montage))
 	{
-		Anim->Montage_Stop(0.3f, SeatedMontage);
+		Anim->Montage_Stop(BlendOutSeconds, Montage);
 	}
 }
 
@@ -869,9 +879,14 @@ void AShinobiPlayerCharacter::ZoomCamera(const FInputActionValue& Value)
 	}
 }
 
+bool AShinobiPlayerCharacter::CanJumpOrTraverse() const
+{
+	return CanMove() && !AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Blocking);
+}
+
 void AShinobiPlayerCharacter::JumpPressed()
 {
-	if (!CanMove())
+	if (!CanJumpOrTraverse())
 	{
 		return;
 	}

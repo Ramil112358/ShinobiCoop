@@ -240,6 +240,16 @@ UGE_Susanoo::UGE_Susanoo()
 	UseSingleRefreshingStack();
 }
 
+UGE_Blocking::UGE_Blocking()
+{
+	DurationPolicy = EGameplayEffectDurationType::Infinite; // UGA_Block removes it on release, the damage exec on a guard break
+	GrantTag(ShinobiTags::State_Blocking);
+	GrantTag(ShinobiTags::State_StaminaRegenBlocked);
+	// A downed or dead player is not guarding (no ribcage over the body); losing the tag also ends UGA_Block.
+	InhibitWhileTargetHas(ShinobiTags::State_Downed);
+	InhibitWhileTargetHas(ShinobiTags::State_Dead);
+}
+
 UGE_Chill::UGE_Chill()
 {
 	SetDuration(Seconds);
