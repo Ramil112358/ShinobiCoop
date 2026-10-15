@@ -16,7 +16,7 @@ class UShinobiChakraAuraComponent;
 class UShinobiFeedbackComponent;
 class UShinobiPhaseFxComponent;
 class UShinobiPhysicalReactionComponent;
-class UShinobiSusanooComponent;
+class UShinobiPerfectSusanooComponent;
 
 UENUM(BlueprintType)
 enum class EShinobiTeam : uint8
@@ -52,8 +52,8 @@ public:
 
 	UShinobiBodyFlameComponent* GetBodyFlames() const { return BodyFlames; }
 
-	/** Susanoo's ribcage figure while the armour is up. */
-	UShinobiSusanooComponent* GetSusanoo() const { return Susanoo; }
+	/** Susanoo's figure (the Perfect Susanoo) while the armour is up. */
+	UShinobiPerfectSusanooComponent* GetSusanoo() const { return Susanoo; }
 
 	EShinobiTeam GetTeam() const { return Team; }
 	/** Server: changes sides, at any time (replicated to every client, also after the pawn first replicated), and re-outlines
@@ -147,7 +147,7 @@ protected:
 
 	/** Susanoo's figure (cosmetic, every machine that renders). */
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
-	TObjectPtr<UShinobiSusanooComponent> Susanoo;
+	TObjectPtr<UShinobiPerfectSusanooComponent> Susanoo;
 
 	UPROPERTY(EditDefaultsOnly, ReplicatedUsing = OnRep_Team, Category = "Shinobi")
 	EShinobiTeam Team = EShinobiTeam::Enemies;

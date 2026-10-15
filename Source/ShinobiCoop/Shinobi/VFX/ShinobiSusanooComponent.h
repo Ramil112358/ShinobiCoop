@@ -12,7 +12,8 @@ class UStaticMeshComponent;
 /**
  * A Susanoo figure: while its owner carries StateTag, Model (origin at the feet, in the glowing M_Susanoo) stands around them.
  * It fades in, breathes slowly, and fades out when the tag goes. The tag replicates, so every machine shows it. Cosmetic only.
- * Defaults: the Susanoo jutsu's 6 m ribcage (State.Susanoo, SM_Susanoo). Players have a second one for their guard (UGA_Block).
+ * Defaults: the players' guard ribcage (State.Blocking, SM_SusanooRibs, UGA_Block). The Susanoo jutsu itself is the rigged
+ * UShinobiPerfectSusanooComponent. M_Susanoo's panel lines are off here (LineGain 0): they follow the Perfect Susanoo's texture.
  */
 UCLASS(ClassGroup = (Shinobi))
 class SHINOBICOOP_API UShinobiSusanooComponent : public UActorComponent

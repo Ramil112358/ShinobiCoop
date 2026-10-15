@@ -120,7 +120,7 @@ void AShinobiBurst::BeginPlay()
 	case EShinobiBurst::Splash:       Color = ShinobiVfx::Colors::Chakra;    Duration = 0.5f; MaxScale = 3.f;  Intensity = 2.f;   LightIntensity = 0.f;     Core = 0.4f; break;
 	case EShinobiBurst::MeteorImpact: Color = ShinobiVfx::Colors::Fire;      Duration = 0.8f; MaxScale = 8.f;  Intensity = 3.f;   LightIntensity = 60000.f; Core = 0.2f; break;
 	case EShinobiBurst::FrostImpact:  Color = ShinobiVfx::Colors::Ice;       Duration = 0.5f; MaxScale = 2.f;  Intensity = 3.f;   LightIntensity = 12000.f; Core = 0.4f; break;
-	case EShinobiBurst::SusanooRise:  Color = FLinearColor(0.5f, 0.25f, 1.f); Duration = 0.9f; MaxScale = 6.f; Intensity = 2.5f; LightIntensity = 40000.f; Core = 0.3f; break;
+	case EShinobiBurst::SusanooRise:  Color = FLinearColor(0.1f, 0.45f, 1.f); Duration = 0.9f; MaxScale = 6.f; Intensity = 2.5f; LightIntensity = 40000.f; Core = 0.3f; break;
 	case EShinobiBurst::SummonPoof:   Color = ShinobiVfx::Colors::Smoke;     Duration = 0.7f; MaxScale = 4.f;  Intensity = 0.8f;  LightIntensity = 0.f;     Core = 0.6f; break;
 	case EShinobiBurst::DragonSplash: Color = ShinobiVfx::Colors::Chakra;    Duration = 0.7f; MaxScale = 5.f;  Intensity = 2.f;   LightIntensity = 10000.f; Core = 0.4f; break;
 	}
@@ -295,12 +295,12 @@ bool AShinobiBurst::BuildCards()
 		}
 		break;
 	case EShinobiBurst::SusanooRise:
-		// Susanoo rising: a violet spiral on the ground, a wide ring and a column of light.
+		// Susanoo rising: a blue chakra spiral on the ground, a wide ring and a column of light.
 		Duration = 1.0f;
-		AddCard(Plane, ESprite::Vortex, FLinearColor(0.6f, 0.35f, 1.f), 2.f, FVector::ZeroVector, FVector2D(1100.f, 1100.f) * S, 0.f, true);
+		AddCard(Plane, ESprite::Vortex, FLinearColor(0.2f, 0.55f, 1.f), 2.f, FVector::ZeroVector, FVector2D(1100.f, 1100.f) * S, 0.f, true);
 		Cards.Last().Spin = 240.f;
-		AddCard(Plane, ESprite::Ring, FLinearColor(0.55f, 0.3f, 1.f), 1.8f, FVector::ZeroVector, FVector2D(1500.f, 1500.f) * S, 0.f, true);
-		AddCard(Plane, ESprite::Burst, FLinearColor(0.65f, 0.4f, 1.f), 1.6f, FVector(0.f, 0.f, 220.f) * S, FVector2D(900.f, 900.f) * S); // a smaller burst (a guarded hit) keeps it on the body
+		AddCard(Plane, ESprite::Ring, FLinearColor(0.15f, 0.5f, 1.f), 1.8f, FVector::ZeroVector, FVector2D(1500.f, 1500.f) * S, 0.f, true);
+		AddCard(Plane, ESprite::Burst, FLinearColor(0.3f, 0.7f, 1.f), 1.6f, FVector(0.f, 0.f, 220.f) * S, FVector2D(900.f, 900.f) * S); // a smaller burst (a guarded hit) keeps it on the body
 		break;
 	case EShinobiBurst::SummonPoof:
 		// A summon arriving or leaving: a ring of smoke puffs billowing out from the ground.

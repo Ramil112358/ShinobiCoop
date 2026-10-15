@@ -50,3 +50,12 @@ __pycache__/
 
 SourceArt/World/PolyHaven/
 SourceArt/Creatures/*/*.fbm/
+# Perfect Susanoo (docs/vfx/sprite-vfx-guide.md): ChatGPT sheets and the rejected/raw generations stay local; the Tripo rig
+# (FBX + base colour), the Mixamo clips and Build/ (Scripts/character/build_susanoo.py output, read by setup_susanoo.py) are committed
+/SourceArt/Susanoo/Reference/
+/SourceArt/Susanoo/Models/*
+!/SourceArt/Susanoo/Models/tripo_rig/
+/SourceArt/Susanoo/Models/tripo_rig/*.fbm/*
+!/SourceArt/Susanoo/Models/tripo_rig/*.fbm/*basecolor*
+/SourceArt/Susanoo/Build/*.fbm/
+/SourceArt/Susanoo/Anims/*.zip

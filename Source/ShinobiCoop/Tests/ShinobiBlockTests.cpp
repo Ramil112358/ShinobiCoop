@@ -11,6 +11,7 @@
 #include "Shinobi/Abilities/GA_Sprint.h"
 #include "Shinobi/Abilities/GA_Susanoo.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
+#include "Shinobi/VFX/ShinobiPerfectSusanooComponent.h"
 #include "Shinobi/VFX/ShinobiSusanooComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -258,7 +259,7 @@ bool FShinobiBlockFigureTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
-	TestTrue(TEXT("It is a second figure, not the Susanoo jutsu's"), Guard != P->GetSusanoo());
+	TestTrue(TEXT("It is a second figure, not the Susanoo jutsu's"), static_cast<const UActorComponent*>(Guard) != P->GetSusanoo());
 	TestFalse(TEXT("Down before guarding"), Guard->IsShown());
 
 	ShinobiTest::Press(P, EShinobiAbilityInputID::Block);

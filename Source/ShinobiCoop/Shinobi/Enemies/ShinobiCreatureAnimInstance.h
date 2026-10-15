@@ -50,7 +50,7 @@ struct FShinobiCreatureLayer
 	float Weight = 0.f;
 };
 
-/** Evaluates the layers as one pose: the newest clip blends in while the older ones blend out. */
+/** Evaluates the layers as one pose: the newest clip blends in while the older ones blend out. Also drives the Susanoo figure. */
 USTRUCT()
 struct FShinobiCreatureAnimProxy : public FAnimInstanceProxy
 {
@@ -61,6 +61,12 @@ struct FShinobiCreatureAnimProxy : public FAnimInstanceProxy
 
 	virtual void UpdateAnimationNode(const FAnimationUpdateContext& InContext) override {}
 	virtual bool Evaluate(FPoseContext& Output) override;
+
+	/** Starts Clip on top (the older layers start fading out). Game thread. */
+	void Play(UAnimSequence* Clip, bool bLoop, float Rate);
+
+	/** Moves every layer's time on, fades the newest in and the rest out over BlendSeconds, drops faded ones. Game thread. */
+	void Advance(float DeltaSeconds, float BlendSeconds);
 
 	/** Oldest first; the last is the clip that is meant to be playing. */
 	TArray<FShinobiCreatureLayer> Layers;

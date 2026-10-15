@@ -74,6 +74,10 @@ void AShinobiPlayerController::BeginPlay()
 	{
 		RunFireShotTest();
 	}
+	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiSusanooShot")))
+	{
+		RunSusanooShotTest();
+	}
 	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiLookShot")))
 	{
 		RunLookShotTest();
@@ -673,6 +677,74 @@ void AShinobiPlayerController::RunFireShotTest()
 		At(When + 0.12f, [Index]() { FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Bursts[Index].Name), false, false); });
 	}
 	At(4.5f + UE_ARRAY_COUNT(Bursts) * 1.2f + 0.5f, [this]() { ConsoleCommand(TEXT("quit")); });
+}
+
+void AShinobiPlayerController::RunSusanooShotTest()
+{
+	// The Perfect Susanoo: cast it, film it from four sides far enough back for all 12 m, from the gameplay camera once the
+	// boom has pulled back, through a melee swing (it slashes with its owner), then walking.
+	auto At = [this](float Seconds, TFunction<void()> Fn)
+	{
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
+	};
+	auto Shot = [](const FString& Name)
+	{
+		FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Name), false, false);
+	};
+	auto Orbit = [this](float Yaw)
+	{
+		const APawn* Shinobi = GetPawn();
+		if (!Shinobi)
+		{
+			return;
+		}
+		const FVector Target = Shinobi->GetActorLocation() + FVector(0.f, 0.f, 520.f); // the figure's chest
+		const FVector Eye = Target + Shinobi->GetActorForwardVector().RotateAngleAxis(Yaw, FVector::UpVector) * 2600.f + FVector(0.f, 0.f, -150.f);
+		ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Target - Eye).Rotation());
+		Camera->GetCameraComponent()->SetFieldOfView(60.f);
+		Camera->SetLifeSpan(1.f);
+		SetViewTarget(Camera);
+	};
+	At(1.0f, [this]() { ShinobiPage(4); ShinobiDrainChakra(-100.f); });
+	At(1.2f, [this]() { ShinobiCast(1); }); // 0.6 s seals: the armour rises at about 1.9
+	const float Yaws[] = { 0.f, 0.f, 40.f, 90.f, 160.f }; // the front twice: the first frame after a camera cut can lag
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Yaws); ++Index)
+	{
+		const float When = 3.2f + Index * 0.5f;
+		At(When, [Orbit, Yaw = Yaws[Index]]() { Orbit(Yaw); });
+		At(When + 0.2f, [Shot, Index]() { Shot(FString::Printf(TEXT("ShinobiSusanooShot_0%d_Orbit"), Index + 1)); });
+	}
+	At(5.8f, [this]() { SetViewTarget(GetPawn()); });
+	At(7.6f, [Shot]() { Shot(TEXT("ShinobiSusanooShot_06_Gameplay")); }); // the boom has pulled back by now
+	At(7.8f, [this, Orbit]() { Orbit(40.f); if (AShinobiPlayerCharacter* P = Cast<AShinobiPlayerCharacter>(GetPawn())) { P->GetAbilitySystemComponent()->AbilityLocalInputPressed(static_cast<int32>(EShinobiAbilityInputID::Melee)); } });
+	At(7.95f, [this, Orbit]() { Orbit(40.f); });
+	for (int32 Index = 0; Index < 3; ++Index)
+	{
+		const float When = 8.1f + Index * 0.35f;
+		At(When - 0.05f, [Orbit]() { Orbit(40.f); });
+		At(When, [Shot, Index]() { Shot(FString::Printf(TEXT("ShinobiSusanooShot_0%d_Slash"), Index + 7)); });
+	}
+	// Walking: the figure strides along with its wearer (pushed forward for 2.5 s, filmed from the side).
+	At(9.8f, [this]()
+	{
+		FTimerHandle Walk;
+		const double Until = GetWorld()->GetTimeSeconds() + 2.5;
+		GetWorldTimerManager().SetTimer(Walk, FTimerDelegate::CreateWeakLambda(this, [this, Until]()
+		{
+			APawn* Shinobi = GetPawn();
+			if (Shinobi && GetWorld()->GetTimeSeconds() < Until)
+			{
+				Shinobi->AddMovementInput(Shinobi->GetActorForwardVector(), 0.6f);
+			}
+		}), 0.01f, true);
+	});
+	for (int32 Index = 0; Index < 2; ++Index)
+	{
+		At(10.6f + Index * 0.6f, [Orbit]() { Orbit(90.f); });
+		At(10.8f + Index * 0.6f, [Shot, Index]() { Shot(FString::Printf(TEXT("ShinobiSusanooShot_1%d_Walk"), Index)); });
+	}
+	At(12.6f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
 
 void AShinobiPlayerController::RunJutsuShotTest()
