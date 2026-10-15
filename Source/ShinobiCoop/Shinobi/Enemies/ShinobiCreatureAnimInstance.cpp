@@ -79,9 +79,8 @@ TArray<float> UShinobiCreatureAnimInstance::GetLayerWeights() const
 	return Weights;
 }
 
-void UShinobiCreatureAnimInstance::Play(UAnimSequence* Clip, bool bLoop, float Rate)
+void FShinobiCreatureAnimProxy::Play(UAnimSequence* Clip, bool bLoop, float Rate)
 {
-	TArray<FShinobiCreatureLayer>& Layers = GetProxyOnGameThread<FShinobiCreatureAnimProxy>().Layers;
 	FShinobiCreatureLayer Layer;
 	Layer.Clip = Clip;
 	Layer.bLoop = bLoop;
@@ -90,11 +89,8 @@ void UShinobiCreatureAnimInstance::Play(UAnimSequence* Clip, bool bLoop, float R
 	Layers.Add(Layer);
 }
 
-void UShinobiCreatureAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
+void FShinobiCreatureAnimProxy::Advance(float DeltaSeconds, float BlendSeconds)
 {
-	Super::NativeUpdateAnimation(DeltaSeconds);
-	TArray<FShinobiCreatureLayer>& Layers = GetProxyOnGameThread<FShinobiCreatureAnimProxy>().Layers;
-
 	// Time and blend weights move on: the newest clip fades in, the others out, and a clip that has faded out is dropped.
 	for (int32 Index = 0; Index < Layers.Num(); ++Index)
 	{
@@ -112,6 +108,19 @@ void UShinobiCreatureAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 			Layers.RemoveAt(Index);
 		}
 	}
+}
+
+void UShinobiCreatureAnimInstance::Play(UAnimSequence* Clip, bool bLoop, float Rate)
+{
+	GetProxyOnGameThread<FShinobiCreatureAnimProxy>().Play(Clip, bLoop, Rate);
+}
+
+void UShinobiCreatureAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
+{
+	Super::NativeUpdateAnimation(DeltaSeconds);
+	TArray<FShinobiCreatureLayer>& Layers = GetProxyOnGameThread<FShinobiCreatureAnimProxy>().Layers;
+
+	GetProxyOnGameThread<FShinobiCreatureAnimProxy>().Advance(DeltaSeconds, BlendSeconds);
 
 	const AShinobiCharacterBase* Owner = Cast<AShinobiCharacterBase>(GetOwningActor());
 	if (!Owner || !Clips.Idle || !Owner->GetAttributes())

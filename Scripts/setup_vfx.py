@@ -1,4 +1,4 @@
-"""Jutsu VFX materials. Idempotent: rebuilds M_ChakraBodyAura, M_Flame, M_FlameDark, M_Streak, M_Phased and M_WaterWall from scratch each run.
+"""Jutsu VFX materials. Idempotent: rebuilds M_ChakraBodyAura, M_Flame, M_FlameDark, M_Streak, M_Phased, M_WaterWall and M_Susanoo from scratch each run.
 
 Close the GUI editor before running: an editor that has this material loaded would silently
 overwrite the regenerated asset on its next Save All.
@@ -310,48 +310,95 @@ def build_phased():
     finish(m, emissive)
 
 
+SUSANOO_TEXTURE = "/Game/Shinobi/Jutsu/Susanoo/T_Susanoo"  # imported by Scripts/setup_susanoo.py
+
+
 def build_susanoo():
-    """M_Susanoo: Susanoo's armour. Additive and unlit, two-sided: a violet glow, brightest at the edges, with a slow band of
-    light drifting up the figure. Params: Color, Intensity, Fade."""
-    m = fresh_material("M_Susanoo", two_sided=True)
-    color = node(m, unreal.MaterialExpressionVectorParameter, -1000, -300,
-                 parameter_name="Color", default_value=unreal.LinearColor(0.32, 0.1, 1.0, 1.0))
-    intensity = node(m, unreal.MaterialExpressionScalarParameter, -1000, -150, parameter_name="Intensity", default_value=1.1)
-    fade = node(m, unreal.MaterialExpressionScalarParameter, -1000, 0, parameter_name="Fade", default_value=1.0)
-    rim = node(m, unreal.MaterialExpressionFresnel, -1000, 150, exponent=2.5, base_reflect_fraction=0.0)
-    rim_part = node(m, unreal.MaterialExpressionMultiply, -800, 150, const_b=0.75)
-    link(rim, rim_part, "A")
-    # A band of light climbing the figure: sine of (height * 0.02 - time).
-    world_pos = node(m, unreal.MaterialExpressionWorldPosition, -1000, 400)
-    height = node(m, unreal.MaterialExpressionComponentMask, -850, 400, r=False, g=False, b=True, a=False)
-    link(world_pos, height, "")
-    scaled = node(m, unreal.MaterialExpressionMultiply, -700, 400, const_b=0.02)
-    link(height, scaled, "A")
-    time = node(m, unreal.MaterialExpressionTime, -850, 520)
-    slowed = node(m, unreal.MaterialExpressionMultiply, -700, 520, const_b=1.5)
-    link(time, slowed, "A")
-    phase = node(m, unreal.MaterialExpressionSubtract, -550, 450)
-    link(scaled, phase, "A")
-    link(slowed, phase, "B")
-    wave = node(m, unreal.MaterialExpressionSine, -400, 450)
-    link(phase, wave, "")
-    band = node(m, unreal.MaterialExpressionMultiply, -250, 450, const_b=0.15)  # +-0.15 around the base
-    link(wave, band, "A")
-    base = node(m, unreal.MaterialExpressionAdd, -600, 150, const_b=0.3)
-    link(rim_part, base, "A")
-    body = node(m, unreal.MaterialExpressionAdd, -100, 250)
-    link(base, body, "A")
-    link(band, body, "B")
-    glow = node(m, unreal.MaterialExpressionMultiply, -700, -250)
-    link(color, glow, "A")
-    link(intensity, glow, "B")
-    faded = node(m, unreal.MaterialExpressionMultiply, -500, -150)
-    link(glow, faded, "A")
-    link(fade, faded, "B")
-    emissive = node(m, unreal.MaterialExpressionMultiply, -200, -50)
-    link(faded, emissive, "A")
-    link(body, emissive, "B")
-    finish(m, emissive)
+    """M_Susanoo: the Perfect Susanoo's armour, as in Ultimate Ninja Storm 4. Translucent (Opacity of the background hidden), unlit, two-sided (the inside of the
+    shell shows through, as in the game). Layers:
+    - deep blue body, brighter at the silhouette, shaded by the armour texture's blue (plates differ a little);
+    - bright cyan panel lines: the texture's thin cyan lines, picked out by their green (LineLow, LineGain);
+    - sparkles: small cyan points twinkling over the surface (world-space noise drifting up, thresholded);
+    - a slow band of light climbing the figure.
+    Params: Color, LineColor, Intensity, Fade, Opacity, LineLow, LineGain, Armour (texture). Skeletal-mesh usage is baked in."""
+    m = fresh_material("M_Susanoo", two_sided=True, blend=unreal.BlendMode.BLEND_TRANSLUCENT)
+
+    def mul(a, b=None, x=0, y=0, **k):
+        out = node(m, unreal.MaterialExpressionMultiply, x, y, **k)
+        link(a, out, "A")
+        if b is not None:
+            link(b, out, "B")
+        return out
+
+    def add(a, b=None, x=0, y=0, **k):
+        out = node(m, unreal.MaterialExpressionAdd, x, y, **k)
+        link(a, out, "A")
+        if b is not None:
+            link(b, out, "B")
+        return out
+
+    def scalar(name, value, y):
+        return node(m, unreal.MaterialExpressionScalarParameter, -1600, y, parameter_name=name, default_value=value)
+
+    color = node(m, unreal.MaterialExpressionVectorParameter, -1600, -500, parameter_name="Color",
+                 default_value=unreal.LinearColor(0.015, 0.1, 1.0, 1.0))
+    line_color = node(m, unreal.MaterialExpressionVectorParameter, -1600, -350, parameter_name="LineColor",
+                      default_value=unreal.LinearColor(0.25, 0.8, 1.0, 1.0))
+    intensity = scalar("Intensity", 0.7, -200)
+    fade = scalar("Fade", 1.0, -100)
+    line_low = scalar("LineLow", 0.045, 0)
+    line_gain = scalar("LineGain", 40.0, 100)
+    texture = unreal.load_asset(SUSANOO_TEXTURE) if unreal.EditorAssetLibrary.does_asset_exist(SUSANOO_TEXTURE) else None
+    armour = node(m, unreal.MaterialExpressionTextureSampleParameter2D, -1600, 250, parameter_name="Armour",
+                  **({"texture": texture} if texture else {}))
+
+    # Body: 0.1 everywhere + 0.7 at the rim, times the plate shading (0.5 + the texture's blue). Dim on purpose: the two-sided
+    # shell adds up front, back and inner faces, and the panel lines must stay brighter than the plates.
+    rim = node(m, unreal.MaterialExpressionFresnel, -1300, -650, exponent=2.5, base_reflect_fraction=0.0)
+    base = add(mul(rim, x=-1150, y=-650, const_b=0.7), x=-1000, y=-650, const_b=0.1)
+    blue = node(m, unreal.MaterialExpressionComponentMask, -1300, 250, r=False, g=False, b=True, a=False)
+    link(armour, blue, "", "RGB")
+    shading = add(mul(blue, x=-1150, y=250, const_b=1.0), x=-1000, y=250, const_b=0.5)
+    # A band of light climbing the figure: 0.12 x sin(height x 0.004 - time x 1.5) (the figure is 12 m tall).
+    height = node(m, unreal.MaterialExpressionComponentMask, -1300, 650, r=False, g=False, b=True, a=False)
+    link(node(m, unreal.MaterialExpressionWorldPosition, -1450, 650), height, "")
+    phase = node(m, unreal.MaterialExpressionSubtract, -1000, 650)
+    link(mul(height, x=-1150, y=650, const_b=0.004), phase, "A")
+    link(mul(node(m, unreal.MaterialExpressionTime, -1300, 750), x=-1150, y=750, const_b=1.5), phase, "B")
+    sine = node(m, unreal.MaterialExpressionSine, -850, 650)
+    link(phase, sine, "")
+    body = add(mul(base, shading, x=-850, y=-400), mul(sine, x=-700, y=650, const_b=0.12), x=-600, y=-300)
+    blue_glow = mul(color, body, x=-450, y=-450)
+
+    # Panel lines: the texture's green above LineLow, times LineGain, clamped.
+    green = node(m, unreal.MaterialExpressionComponentMask, -1300, 400, r=False, g=True, b=False, a=False)
+    link(armour, green, "", "RGB")
+    above = node(m, unreal.MaterialExpressionSubtract, -1150, 400)
+    link(green, above, "A")
+    link(line_low, above, "B")
+    lines = node(m, unreal.MaterialExpressionSaturate, -850, 400)
+    link(mul(above, line_gain, x=-1000, y=400), lines, "")
+
+    # Sparkles: world-space noise (about 1 m cells) drifting up, only its top 8% kept, sharpened.
+    world = mul(node(m, unreal.MaterialExpressionWorldPosition, -1450, 900), x=-1300, y=900, const_b=0.012)
+    drift = node(m, unreal.MaterialExpressionAppendVector, -1150, 1000)
+    link(node(m, unreal.MaterialExpressionConstant2Vector, -1300, 1000, r=0.0, g=0.0), drift, "A")
+    link(mul(node(m, unreal.MaterialExpressionTime, -1450, 1100), x=-1300, y=1100, const_b=-0.6), drift, "B")
+    noise = node(m, unreal.MaterialExpressionNoise, -1000, 900, scale=1.0, levels=1, output_min=0.0, output_max=1.0)
+    link(add(world, drift, x=-1150, y=900), noise, "World Position")
+    peak = node(m, unreal.MaterialExpressionSubtract, -850, 900, const_b=0.92)
+    link(noise, peak, "A")
+    sparkles = node(m, unreal.MaterialExpressionSaturate, -550, 900)
+    link(mul(peak, x=-700, y=900, const_b=30.0), sparkles, "")
+    cyan = mul(line_color, add(mul(lines, x=-550, y=400, const_b=2.0), mul(sparkles, x=-400, y=900, const_b=4.0), x=-400, y=500), x=-300, y=-150)
+
+    emissive = mul(mul(add(blue_glow, cyan, x=-200, y=-300), intensity, x=-100, y=-250), fade, x=0, y=-200)
+    # Coverage: the armour hides Opacity of what is behind it (times Fade), so it reads as a body, not a ghost.
+    opacity = scalar("Opacity", 0.35, 200)
+    transmittance = node(m, unreal.MaterialExpressionOneMinus, 100, 200)
+    link(mul(opacity, fade, x=-100, y=200), transmittance, "")
+    require_skeletal_mesh_usage(m)
+    finish(m, emissive, transmittance)
 
 
 def build_water_wall():
@@ -411,12 +458,13 @@ def build_water_wall():
     finish(m, emissive, transmittance)
 
 
-remove_if_exists(f"{VFX_DIR}/M_ChakraAura")
-remove_if_exists(f"{VFX_DIR}/M_ChakraRing")
-build_body_aura()
-build_flame("M_Flame", dark=False)
-build_flame("M_FlameDark", dark=True)
-build_streak()
-build_phased()
-build_water_wall()
-build_susanoo()
+if __name__ == "__main__":  # Scripts/setup_susanoo.py imports this module for build_susanoo
+    remove_if_exists(f"{VFX_DIR}/M_ChakraAura")
+    remove_if_exists(f"{VFX_DIR}/M_ChakraRing")
+    build_body_aura()
+    build_flame("M_Flame", dark=False)
+    build_flame("M_FlameDark", dark=True)
+    build_streak()
+    build_phased()
+    build_water_wall()
+    build_susanoo()

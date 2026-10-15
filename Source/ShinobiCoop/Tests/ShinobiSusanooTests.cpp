@@ -6,11 +6,15 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/Abilities/GA_Susanoo.h"
 #include "Animation/AnimMontage.h"
+#include "Animation/AnimSequence.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/Texture2D.h"
 #include "Engine/StaticMesh.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
-#include "Shinobi/VFX/ShinobiSusanooComponent.h"
+#include "Shinobi/VFX/ShinobiPerfectSusanooComponent.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSusanooDamageTest, "ShinobiCoop.Susanoo.HalvesDamageTakenAndBoostsDamageDealt", ShinobiTestFlags)
 bool FShinobiSusanooDamageTest::RunTest(const FString& Parameters)
@@ -116,34 +120,136 @@ bool FShinobiSusanooFigureTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
-	UShinobiSusanooComponent* Armour = P->GetSusanoo();
+	UShinobiPerfectSusanooComponent* Armour = P->GetSusanoo();
 	if (!TestNotNull(TEXT("Every character has the figure component"), Armour))
 	{
 		return false;
 	}
+	// Is any of the character's own body drawn (not the figure, its swords or its sparks)?
+	auto BodyShown = [P, Armour]()
+	{
+		TInlineComponentArray<UMeshComponent*> Meshes(P);
+		for (const UMeshComponent* Mesh : Meshes)
+		{
+			const bool bFigure = Mesh == Armour->GetFigure() || (Armour->GetFigure() && Mesh->IsAttachedTo(Armour->GetFigure())) || Mesh->GetName().StartsWith(TEXT("SusanooSpark"));
+			if (!bFigure && Mesh->IsVisible() && !Mesh->bHiddenInGame)
+			{
+				return true;
+			}
+		}
+		return false;
+	};
 	TestFalse(TEXT("No figure before the cast"), Armour->IsShown());
+	TestTrue(TEXT("The character is seen before the cast"), BodyShown());
 	ShinobiTest::ApplyEffect(P, UGE_Susanoo::StaticClass());
 	TestTrue(TEXT("The figure stands while the armour is up"), Armour->IsShown());
-	W.Tick(21.f);
+	W.Tick(1.f);
+	TestFalse(TEXT("and only the figure is seen: the character is hidden inside it"), BodyShown());
+	W.Tick(20.f);
 	TestFalse(TEXT("and goes when it ends"), Armour->IsShown());
+	TestTrue(TEXT("the character is seen again"), BodyShown());
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSusanooModelTest, "ShinobiCoop.Susanoo.FigureIsTheRibcageModelStandingOnTheGround", ShinobiTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSusanooModelTest, "ShinobiCoop.Susanoo.FigureIsThePerfectSusanooStandingTwelveMetresTall", ShinobiTestFlags)
 bool FShinobiSusanooModelTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::ApplyEffect(P, UGE_Susanoo::StaticClass()); // the figure is built when the armour first goes up
-	const UStaticMeshComponent* Figure = P->GetSusanoo() ? P->GetSusanoo()->GetFigure() : nullptr;
-	const UStaticMesh* Mesh = Figure ? Figure->GetStaticMesh() : nullptr;
-	if (TestNotNull(TEXT("The figure has a mesh (run Scripts/setup_susanoo.py if not)"), Mesh))
+	UShinobiPerfectSusanooComponent* Armour = P->GetSusanoo();
+	USkeletalMeshComponent* Figure = Armour ? Armour->GetFigure() : nullptr;
+	if (!TestNotNull(TEXT("The figure is built (run Scripts/setup_susanoo.py if not)"), Figure))
 	{
-		TestEqual(TEXT("the Susanoo ribcage"), Mesh->GetName(), FString(TEXT("SM_Susanoo")));
-		const FBox Box = Mesh->GetBoundingBox();
-		TestTrue(FString::Printf(TEXT("standing on the ground, about 6 m tall (Z %.0f to %.0f)"), Box.Min.Z, Box.Max.Z), Box.Min.Z > -20.0 && Box.Min.Z < 20.0 && Box.Max.Z > 500.0 && Box.Max.Z < 700.0);
-		TestTrue(TEXT("facing +X: the arms reach forward"), Box.Max.X > 120.0);
+		return false;
 	}
+	TestEqual(TEXT("the Perfect Susanoo"), Figure->GetSkeletalMeshAsset()->GetName(), FString(TEXT("SK_Susanoo")));
+	W.Tick(1.f);
+	const FBoxSphereBounds Bounds = Figure->CalcBounds(Figure->GetComponentTransform());
+	const float Feet = P->GetActorLocation().Z - P->GetSimpleCollisionHalfHeight();
+	TestTrue(FString::Printf(TEXT("about 12 m tall (%.0f)"), 2.f * Bounds.BoxExtent.Z), Bounds.BoxExtent.Z > 450.0 && Bounds.BoxExtent.Z < 700.0);
+	TestTrue(FString::Printf(TEXT("standing on the ground (lowest point %.0f above the feet)"), Bounds.Origin.Z - Bounds.BoxExtent.Z - Feet), FMath::Abs(Bounds.Origin.Z - Bounds.BoxExtent.Z - Feet) < 150.0);
+
+	// It faces where its owner faces: its toes are ahead of its heels.
+	auto Bone = [Figure](const TCHAR* Suffix)
+	{
+		for (int32 Index = 0; Index < Figure->GetNumBones(); ++Index)
+		{
+			if (Figure->GetBoneName(Index).ToString().EndsWith(Suffix))
+			{
+				return Figure->GetBoneName(Index);
+			}
+		}
+		return FName();
+	};
+	TestTrue(TEXT("its feet have the Mixamo bones"), !Bone(TEXT("LeftToeBase")).IsNone() && !Bone(TEXT("LeftFoot")).IsNone());
+	const FVector Toes = Figure->GetSocketLocation(Bone(TEXT("LeftToeBase")));
+	const FVector Heel = Figure->GetSocketLocation(Bone(TEXT("LeftFoot")));
+	TestTrue(TEXT("facing the owner's forward"), FVector::DotProduct((Toes - Heel).GetSafeNormal2D(), P->GetActorForwardVector()) > 0.5);
+
+	TestEqual(TEXT("a sword in each hand"), Armour->GetSwords().Num(), 2);
+	for (const UStaticMeshComponent* Sword : Armour->GetSwords())
+	{
+		TestTrue(TEXT("held by a hand bone"), Sword->GetAttachSocketName().ToString().EndsWith(TEXT("Hand")));
+		const FBoxSphereBounds Blade = Sword->CalcBounds(Sword->GetComponentTransform());
+		TestTrue(FString::Printf(TEXT("a blade about as long as the figure is tall (%.0f)"), Blade.SphereRadius * 2.f), Blade.SphereRadius > 400.f);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSusanooSlashTest, "ShinobiCoop.Susanoo.SwingsItsSwordsWithTheOwnersCombo", ShinobiTestFlags)
+bool FShinobiSusanooSlashTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::ApplyEffect(P, UGE_Susanoo::StaticClass());
+	UShinobiPerfectSusanooComponent* Armour = P->GetSusanoo();
+	W.Tick(0.5f);
+	UShinobiSusanooAnimInstance* Anim = Armour->GetFigureAnim();
+	if (!TestNotNull(TEXT("The figure animates"), Anim) || !TestTrue(TEXT("with slashes to swing"), Armour->GetSlashes().Num() >= 3))
+	{
+		return false;
+	}
+	TestEqual(TEXT("It holds its stance"), Anim->GetCurrentClip()->GetName(), FString(TEXT("A_Susanoo_Idle")));
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Melee); // the owner's first swing
+	W.Tick(0.1f);
+	TestEqual(TEXT("and swings with the right blade when its owner swings"), Anim->GetSlashClip(), Armour->GetSlashes()[0].Get());
+	TestEqual(TEXT("with its arms only: the legs keep the stance"), Anim->GetCurrentClip()->GetName(), FString(TEXT("A_Susanoo_Idle")));
+	W.Tick(4.f);
+	TestNull(TEXT("then lets go of the swing"), Anim->GetSlashClip());
+
+	Armour->Slash(1);
+	W.Tick(0.05f);
+	TestEqual(TEXT("The second hit is the left blade"), Anim->GetSlashClip(), Armour->GetSlashes()[1].Get());
+	Armour->Slash(2);
+	W.Tick(0.05f);
+	const UAnimSequence* Finisher = Anim->GetSlashClip();
+	Armour->Slash(2);
+	W.Tick(0.05f);
+	TestTrue(TEXT("and finishers take turns among the rest"), Armour->GetSlashes().Num() < 4 || Anim->GetSlashClip() != Finisher);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSusanooWalkTest, "ShinobiCoop.Susanoo.WalksAndRunsWithItsWearer", ShinobiTestFlags)
+bool FShinobiSusanooWalkTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::ApplyEffect(P, UGE_Susanoo::StaticClass());
+	W.Tick(0.5f);
+	UShinobiSusanooAnimInstance* Anim = P->GetSusanoo()->GetFigureAnim();
+	if (!TestNotNull(TEXT("The figure animates"), Anim))
+	{
+		return false;
+	}
+	TestEqual(TEXT("It stands while its wearer stands"), Anim->GetCurrentClip()->GetName(), FString(TEXT("A_Susanoo_Idle")));
+	P->GetCharacterMovement()->Velocity = FVector(400.f, 0.f, 0.f);
+	W.Tick(0.02f);
+	TestEqual(TEXT("walks while they walk (run Scripts/setup_susanoo.py with susanoo_walk.fbx if not)"), Anim->GetCurrentClip()->GetName(), FString(TEXT("A_Susanoo_Walk")));
+	P->GetCharacterMovement()->Velocity = FVector(1200.f, 0.f, 0.f);
+	W.Tick(0.02f);
+	TestEqual(TEXT("and runs when they go fast"), Anim->GetCurrentClip()->GetName(), FString(TEXT("A_Susanoo_Run")));
 	return true;
 }
 
@@ -162,7 +268,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSusanooLazyTest, "ShinobiCoop.Susanoo.F
 bool FShinobiSusanooLazyTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	AShinobiCharacterBase* Enemy = W.Spawn<AShinobiCharacterBase>(); // never armoured: it must not pay for a 6 m figure
+	AShinobiCharacterBase* Enemy = W.Spawn<AShinobiCharacterBase>(); // never armoured: it must not pay for a 12 m figure
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	TestNull(TEXT("No figure on an enemy"), Enemy->GetSusanoo()->GetFigure());
 	TestNull(TEXT("and none on a player who has not cast it"), P->GetSusanoo()->GetFigure());

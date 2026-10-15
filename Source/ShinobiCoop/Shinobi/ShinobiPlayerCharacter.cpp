@@ -521,13 +521,16 @@ void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	// Riding a dragon: the camera pulls back, and Space / Control climb and dive (the owner's input; a remote rider's flight arrives in its moves).
+	// Wearing the 12 m Perfect Susanoo, it pulls back further so the whole figure is in view.
 	const bool bMounted = AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Mounted);
-	if (bMounted || bBoomPulledBack)
+	const bool bSusanoo = AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Susanoo);
+	if (bMounted || bSusanoo || bBoomPulledBack)
 	{
-		// Only driven around a ride, so anything else that sets the boom (the world tour's close-ups) is left alone.
-		const float TargetArmLength = CameraZoomDistance + (bMounted ? MountedArmLength - FootArmLength : 0.f);
+		// Only driven around a ride or the armour, so anything else that sets the boom (the world tour's close-ups) is left alone.
+		const float TargetArmLength = CameraZoomDistance + (bMounted ? MountedArmLength - FootArmLength : 0.f) + (bSusanoo ? SusanooArmLength - FootArmLength : 0.f);
 		CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, TargetArmLength, DeltaSeconds, 2.f);
-		bBoomPulledBack = bMounted || !FMath::IsNearlyEqual(CameraBoom->TargetArmLength, CameraZoomDistance, 1.f);
+		CameraBoom->TargetOffset.Z = FMath::FInterpTo(CameraBoom->TargetOffset.Z, bSusanoo ? SusanooLookHeight : 0.f, DeltaSeconds, 2.f); // look up at its chest
+		bBoomPulledBack = bMounted || bSusanoo || !FMath::IsNearlyEqual(CameraBoom->TargetArmLength, CameraZoomDistance, 1.f) || CameraBoom->TargetOffset.Z > 1.f;
 	}
 	if (bMounted != bSteeringByCamera)
 	{

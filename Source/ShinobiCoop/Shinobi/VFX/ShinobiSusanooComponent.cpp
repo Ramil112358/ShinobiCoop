@@ -13,8 +13,8 @@ UShinobiSusanooComponent::UShinobiSusanooComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.bStartWithTickEnabled = false; // only while the figure shows or fades
-	StateTag = ShinobiTags::State_Susanoo;
-	Model = FSoftObjectPath(TEXT("/Game/Shinobi/Jutsu/SM_Susanoo.SM_Susanoo"));
+	StateTag = ShinobiTags::State_Blocking;
+	Model = FSoftObjectPath(TEXT("/Game/Shinobi/Jutsu/SM_SusanooRibs.SM_SusanooRibs"));
 }
 
 void UShinobiSusanooComponent::BeginPlay()
@@ -59,6 +59,10 @@ void UShinobiSusanooComponent::EnsureFigure()
 	Figure->SetCastShadow(false);
 	Figure->SetVisibility(false);
 	Material = ShinobiVfx::MakeSusanoo(this, 0.f);
+	if (Material)
+	{
+		Material->SetScalarParameterValue(TEXT("LineGain"), 0.f); // the lines come from the Perfect Susanoo's texture, not this mesh's
+	}
 	Figure->SetMaterial(0, Material);
 	Figure->SetupAttachment(GetOwner()->GetRootComponent());
 	const ACharacter* Character = Cast<ACharacter>(GetOwner());

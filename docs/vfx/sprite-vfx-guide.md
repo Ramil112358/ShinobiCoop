@@ -240,15 +240,37 @@ the damage they deal by 30% (`UShinobiDamageExec`: it reads the tag on the sourc
 armour against armour is x0.65), and adds a periodic +1 chakra every 0.25 s (+4/s) on top of the base regen. The jutsu is
 `UGA_Susanoo` (40 chakra, 60 s cooldown); it cannot be recast while the armour is up.
 
-The look is `UShinobiSusanooComponent` on every character: while the tag is on it fades in a 6 m ribcage guardian (`SM_Susanoo`,
-standing round the caster, facing the way they face) in the additive violet `M_Susanoo`, with a slow pulse, and fades it out
-when the armour ends. The model is procedural: `Scripts/character/make_susanoo.py` (Blender) builds spine, ribs, skull, arms
-and legs; `Scripts/setup_susanoo.py` imports it; `M_Susanoo` comes from `Scripts/setup_vfx.py`. A modelled armour can replace
-`SM_Susanoo` without code changes (origin between the feet, +X forward, about 6 m). The rising burst is
-`EShinobiBurst::SusanooRise`.
+The look is `UShinobiPerfectSusanooComponent` on every character (`UShinobiSusanooComponent` is now only the guard's static ribcage,
+with `M_Susanoo`'s panel lines off). While the tag is on it fades in Madara's Perfect Susanoo, as in
+Ultimate Ninja Storm 4. It's a 12 m armoured tengu-faced figure in blue (`SK_Susanoo` in `M_Susanoo`) standing round the caster
+and facing the way they face, with a chakra sword (`SM_SusanooSword`) in each fist and white-cyan sparks (`ESprite::Burst` cards)
+drifting up through it. Only the Susanoo is seen: the wearer's own meshes are hidden in game (name tag excepted) from halfway
+through the fade in until the armour ends. It holds a sword stance (`A_Susanoo_Idle`) and, while its wearer moves, walks
+(`A_Susanoo_Walk`, or `A_Susanoo_Run` above 9 m/s) at a rate matched to their speed; without those clips it stands. Whenever
+its owner starts a melee combo montage it slashes too, with the upper body only (the spine up), sped up to fit about 1.1 s: hit 1 is `A_Susanoo_Slash1` (right blade), hit 2 is `Slash2` (mirrored, left blade), and the finisher takes the remaining
+slashes in turn. It cross-fades through `UShinobiSusanooAnimInstance` (the summons' layer proxy, no animation blueprint). The tag
+and the montages replicate, so every machine sees the same. While it stands, the player's camera boom pulls back to 16 m and
+looks 3 m up. `M_Susanoo` is translucent (it hides `Opacity` 0.35 of what's behind) and two-sided: a dim deep-blue body with a fresnel rim, bright cyan panel lines picked from
+the armour texture's green (`LineLow`, `LineGain`), twinkling world-space sparkles and a slow band of light climbing it.
 
-Shots 25-26 of `Scripts/shot_chakra.ps1 -Jutsu` show it (the arena's walls hide the camera from one of the two angles; the other
-shows the figure). `Scripts/smoke_m1.ps1` checks that the client sees its own armour.
+How it's made (sources in `SourceArt/Susanoo/`):
+1. ChatGPT front, side and back sheets (`Reference/`, not committed). Then a Tripo Studio multiview model and Tripo's Humanoid
+   auto-rig with the Mixamo skeleton preset (65 bones), exported as FBX into `Models/tripo_rig/`. Mixamo's own auto-rig was
+   tried and dropped: it gave only 33 bones (no fingers to close round a sword), and its distance-based weights tied the skirt
+   and the shoulder plates to the arms, which stretched them into sheets.
+2. The clips go into `Anims/` (`susanoo_idle`, `_walk`, `_run`, `_slash1..N`). The idle and slashes are Mixamo "Sword And
+   Shield" clips (the second slash mirrored), downloaded Without Skin on a Mixamo rig of the same model. The walk and run are
+   Tripo Studio presets on the game's own rig, exported as FBX (Blender) with only that animation and "stay in Place" on.
+3. `Scripts/character/build_susanoo.py` (Blender) scales the rig to 180 cm and retargets each clip as world-space rotation
+   deltas, since the two rigs' bones rest in different orientations. It closes the fingers into a fist and writes `Build/`.
+   Each clip is exported with the mesh: an armature exported alone is written in its current pose as its rest pose.
+4. `Scripts/character/make_susanoo_sword.py` (Blender) builds the jagged crystal blade.
+5. `Scripts/setup_susanoo.py` imports it all into `/Game/Shinobi/Jutsu/Susanoo/` and rebuilds `M_Susanoo` with the texture.
+
+The rising burst is `EShinobiBurst::SusanooRise` (blue).
+
+`Scripts/shot_chakra.ps1 -Susanoo` films it from four sides, from the gameplay camera and through a melee slash.
+Shots 25-26 of `Scripts/shot_chakra.ps1 -Jutsu` show it too. `Scripts/smoke_m1.ps1` checks that the client sees its own armour.
 
 ## 10. Summons (2026-10-03)
 

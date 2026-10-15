@@ -206,6 +206,8 @@ private:
 
 	static constexpr float FootArmLength = 450.f;
 	static constexpr float MountedArmLength = 900.f;
+	static constexpr float SusanooArmLength = 1600.f; // the camera boom while the Perfect Susanoo stands (12 m tall)
+	static constexpr float SusanooLookHeight = 300.f; // and how far above the character it looks
 	static constexpr float MinCameraArmLength = 200.f;
 	static constexpr float MaxCameraArmLength = 1200.f;
 	static constexpr float CameraZoomStep = 100.f;
