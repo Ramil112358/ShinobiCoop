@@ -54,6 +54,57 @@ namespace
 	{
 		return Bone == INDEX_NONE ? FTransform::Identity : FAnimationRuntime::GetComponentSpaceTransformRefPose(Skeleton, Bone);
 	}
+
+	/**
+	 * The part of a slash clip worth swinging, in clip seconds: from a short wind-up before its strike (the moment a hand moves
+	 * fastest) to just after it settles. The clips spend a second or more on lead-in and recovery a combo has no time for.
+	 */
+	FVector2f StrikeWindow(const UAnimSequence* Clip)
+	{
+		constexpr float WindupSeconds = 0.4f;
+		constexpr float RecoverSeconds = 0.45f;
+		constexpr float SampleSeconds = 1.f / 30.f;
+		const float Length = Clip->GetPlayLength();
+		const USkeleton* Skeleton = Clip->GetSkeleton();
+		if (!Skeleton)
+		{
+			return FVector2f(0.f, Length);
+		}
+		const FReferenceSkeleton& Bones = Skeleton->GetReferenceSkeleton(); // skeleton indices, as the clip's tracks use
+		auto HandAt = [&](int32 Hand, float Time)
+		{
+			FTransform Pose = FTransform::Identity;
+			const FAnimExtractContext Context(static_cast<double>(Time));
+			for (int32 Bone = Hand; Bone != INDEX_NONE; Bone = Bones.GetParentIndex(Bone))
+			{
+				FTransform Local;
+				Clip->GetBoneTransform(Local, FSkeletonPoseBoneIndex(Bone), Context, false);
+				Pose = Pose * Local;
+			}
+			return Pose.GetLocation();
+		};
+		float Strike = -1.f;
+		float Fastest = 0.f;
+		for (const int32 Hand : {FindBone(Bones, TEXT("RightHand")), FindBone(Bones, TEXT("LeftHand"))})
+		{
+			if (Hand == INDEX_NONE)
+			{
+				continue;
+			}
+			FVector Last = HandAt(Hand, 0.f);
+			for (float Time = SampleSeconds; Time <= Length; Time += SampleSeconds)
+			{
+				const FVector At = HandAt(Hand, Time);
+				if (FVector::DistSquared(At, Last) > Fastest)
+				{
+					Fastest = FVector::DistSquared(At, Last);
+					Strike = Time - 0.5f * SampleSeconds;
+				}
+				Last = At;
+			}
+		}
+		return Strike < 0.f ? FVector2f(0.f, Length) : FVector2f(FMath::Max(0.f, Strike - WindupSeconds), FMath::Min(Length, Strike + RecoverSeconds));
+	}
 }
 
 bool FShinobiSusanooAnimProxy::Evaluate(FPoseContext& Output)
@@ -108,18 +159,40 @@ void UShinobiSusanooAnimInstance::Setup(const FShinobiSusanooClips& InClips)
 	}
 }
 
-void UShinobiSusanooAnimInstance::Slash(UAnimSequence* Clip)
+bool UShinobiSusanooAnimInstance::Slash(UAnimSequence* Clip)
 {
-	if (!Clip)
+	if (!Clip || Queued)
 	{
-		return;
+		return false;
 	}
+	if (GetProxyOnGameThread<FShinobiSusanooAnimProxy>().Upper.Clip)
+	{
+		Queued = Clip;
+		return true;
+	}
+	StartSlash(Clip);
+	return true;
+}
+
+FVector2f UShinobiSusanooAnimInstance::GetSlashWindow(const UAnimSequence* Clip)
+{
+	if (const FVector2f* Known = Windows.Find(Clip))
+	{
+		return *Known;
+	}
+	return Windows.Add(Clip, StrikeWindow(Clip));
+}
+
+void UShinobiSusanooAnimInstance::StartSlash(UAnimSequence* Clip)
+{
+	const FVector2f Window = GetSlashWindow(Clip);
 	FShinobiCreatureLayer& Upper = GetProxyOnGameThread<FShinobiSusanooAnimProxy>().Upper;
 	const bool bAlreadySwinging = Upper.Clip && Upper.Weight > 0.f;
 	Upper.Clip = Clip;
-	Upper.Time = 0.f;
+	Upper.Time = Window.X;
+	SlashEnd = Window.Y;
 	Upper.bLoop = false;
-	Upper.Rate = FMath::Max(1.f, Clip->GetPlayLength() / SlashSeconds);
+	Upper.Rate = FMath::Max(1.f, (Window.Y - Window.X) / SlashSeconds);
 	Upper.Weight = bAlreadySwinging ? Upper.Weight : 0.f; // a new hit takes over the arms from wherever the last one had them
 }
 
@@ -145,11 +218,15 @@ void UShinobiSusanooAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	FShinobiCreatureLayer& Upper = Proxy.Upper;
 	if (Upper.Clip)
 	{
-		const float Length = Upper.Clip->GetPlayLength();
-		Upper.Time = FMath::Min(Upper.Time + DeltaSeconds * Upper.Rate, Length);
-		const bool bEnding = Upper.Time >= Length - SlashBlendSeconds * Upper.Rate;
+		Upper.Time = FMath::Min(Upper.Time + DeltaSeconds * Upper.Rate, SlashEnd);
+		const bool bEnding = Upper.Time >= SlashEnd - SlashBlendSeconds * Upper.Rate;
 		Upper.Weight = FMath::Clamp(Upper.Weight + (bEnding ? -1.f : 1.f) * DeltaSeconds / SlashBlendSeconds, 0.f, 1.f);
-		if (bEnding && Upper.Weight <= 0.f)
+		if (bEnding && Queued)
+		{
+			StartSlash(Queued); // the next hit takes over the arms as this one lets go
+			Queued = nullptr;
+		}
+		else if (bEnding && Upper.Weight <= 0.f)
 		{
 			Upper.Clip = nullptr;
 		}
@@ -366,17 +443,19 @@ void UShinobiPerfectSusanooComponent::OnSusanooChanged(const FGameplayTag Tag, i
 	SetComponentTickEnabled(true); // fade in or out
 }
 
-void UShinobiPerfectSusanooComponent::Slash(int32 ComboIndex)
+void UShinobiPerfectSusanooComponent::Slash()
 {
 	UShinobiSusanooAnimInstance* Anim = GetFigureAnim();
 	if (!Anim || Slashes.Num() == 0)
 	{
 		return;
 	}
-	// Hit 1: right blade, hit 2: left blade (a mirrored clip), the finisher: whatever slashes are left, taking turns.
-	const int32 Fixed = FMath::Min(2, Slashes.Num());
-	const int32 Pick = ComboIndex < Fixed ? ComboIndex : (Slashes.Num() > Fixed ? Fixed + Finishers++ % (Slashes.Num() - Fixed) : Slashes.Num() - 1);
-	Anim->Slash(Slashes[Pick]);
+	// Every swing takes the next slash in turn, not the combo hit's own: the owner is hidden inside the figure, so most
+	// presses miss the combo window and would all be hit 1. A swing the figure has no room for is dropped, not skipped over.
+	if (Anim->Slash(Slashes[NextSlash % Slashes.Num()]))
+	{
+		++NextSlash;
+	}
 }
 
 void UShinobiPerfectSusanooComponent::FollowOwnerSwing()
@@ -394,12 +473,11 @@ void UShinobiPerfectSusanooComponent::FollowOwnerSwing()
 		return;
 	}
 	LastSwing = Playing->GetInstanceID();
-	const TArray<TSoftObjectPtr<UAnimMontage>>& Combo = GetDefault<UGA_Melee>()->ComboMontages;
-	for (int32 Index = 0; Index < Combo.Num(); ++Index)
+	for (const TSoftObjectPtr<UAnimMontage>& Swing : GetDefault<UGA_Melee>()->ComboMontages)
 	{
-		if (Combo[Index].Get() == Playing->Montage)
+		if (Swing.Get() == Playing->Montage)
 		{
-			Slash(Index);
+			Slash();
 			return;
 		}
 	}

@@ -59,7 +59,7 @@ class SHINOBICOOP_API UShinobiSusanooAnimInstance : public UAnimInstance
 public:
 	static constexpr float BlendSeconds = 0.25f;
 	static constexpr float SlashBlendSeconds = 0.12f;
-	/** A slash is played no slower than this many seconds from start to end (the combo's hits come about this often). */
+	/** A slash (its strike window, see GetSlashWindow) is played no slower than this many seconds from start to end. */
 	static constexpr float SlashSeconds = 1.1f;
 	/** World speeds (cm/s, the figure's 6.7x scale included) at which the walk and run cover the ground at rate 1. */
 	static constexpr float WalkSpeed = 850.f;
@@ -69,8 +69,11 @@ public:
 
 	void Setup(const FShinobiSusanooClips& InClips);
 
-	/** Swings Clip with the upper body, then lets go. */
-	void Slash(UAnimSequence* Clip);
+	/**
+	 * Swings Clip with the upper body, then lets go. While a slash swings, Clip waits and takes over as that one lets go, so a
+	 * mashed combo plays every slash through instead of restarting wind-ups. One waits at most: false if that place is taken.
+	 */
+	bool Slash(UAnimSequence* Clip);
 
 	/** The legs' clip (the newest base layer), or null before the first update. */
 	UAnimSequence* GetCurrentClip() const;
@@ -78,14 +81,29 @@ public:
 	/** The slash being swung, or null. */
 	UAnimSequence* GetSlashClip() const;
 
+	/** The clip seconds a slash swings: a wind-up before its strike (the hands' fastest moment) to just after. Found once per clip. */
+	FVector2f GetSlashWindow(const UAnimSequence* Clip);
+
 protected:
 	virtual FAnimInstanceProxy* CreateAnimInstanceProxy() override;
 	virtual void DestroyAnimInstanceProxy(FAnimInstanceProxy* InProxy) override;
 	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
 
 private:
+	void StartSlash(UAnimSequence* Clip);
+
 	UPROPERTY()
 	FShinobiSusanooClips Clips;
+
+	/** The slash waiting for the current one to finish, or null. */
+	UPROPERTY()
+	TObjectPtr<UAnimSequence> Queued;
+
+	/** Where the current slash's window ends, in clip seconds. */
+	float SlashEnd = 0.f;
+
+	/** Each slash clip's window, keyed by clips the Susanoo component keeps loaded. */
+	TMap<const UAnimSequence*, FVector2f> Windows;
 };
 
 /**
@@ -122,8 +140,8 @@ public:
 	/** The slash clips, Slash1 first. */
 	const TArray<TObjectPtr<UAnimSequence>>& GetSlashes() const { return Slashes; }
 
-	/** Swings for combo hit ComboIndex (0-based; 2 and up is the finisher). Called when the owner's melee swing starts. */
-	void Slash(int32 ComboIndex);
+	/** Swings the next slash in turn. Called when the owner's melee swing starts. */
+	void Slash();
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
@@ -177,5 +195,5 @@ private:
 	float Fade = 0.f;
 	float Age = 0.f;
 	int32 LastSwing = INDEX_NONE; // the montage instance the figure last followed
-	int32 Finishers = 0;
+	int32 NextSlash = 0;
 };
