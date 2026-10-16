@@ -56,7 +56,7 @@ MEL = unreal.MaterialEditingLibrary
 REQUIRED_CHAINS = ("Spine", "Neck", "Head", "LeftArm", "RightArm", "LeftLeg", "RightLeg")
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 # How far each upper arm is swung out from the body on every character (spread_arms); tune by eye, then SETUP_HERO_ONLY=retargeters.
-ARM_SPREAD_DEGREES = float(os.environ.get("SETUP_HERO_ARM_SPREAD", "15"))
+ARM_SPREAD_DEGREES = float(os.environ.get("SETUP_HERO_ARM_SPREAD", "6"))
 
 
 def log(message):
