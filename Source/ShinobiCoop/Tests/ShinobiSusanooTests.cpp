@@ -125,13 +125,13 @@ bool FShinobiSusanooFigureTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
-	// Is any of the character's own body drawn (not the figure, its swords or its sparks)?
+	// Is any of the character's own body drawn (not the figure, its swords, its hilt flares or its sparks)?
 	auto BodyShown = [P, Armour]()
 	{
 		TInlineComponentArray<UMeshComponent*> Meshes(P);
 		for (const UMeshComponent* Mesh : Meshes)
 		{
-			const bool bFigure = Mesh == Armour->GetFigure() || (Armour->GetFigure() && Mesh->IsAttachedTo(Armour->GetFigure())) || Mesh->GetName().StartsWith(TEXT("SusanooSpark"));
+			const bool bFigure = Mesh == Armour->GetFigure() || (Armour->GetFigure() && Mesh->IsAttachedTo(Armour->GetFigure())) || Mesh->GetName().StartsWith(TEXT("SusanooSpark")) || Mesh->GetName().StartsWith(TEXT("SusanooFlare"));
 			if (!bFigure && Mesh->IsVisible() && !Mesh->bHiddenInGame)
 			{
 				return true;

@@ -108,8 +108,8 @@ private:
 
 /**
  * Susanoo's look: while its owner carries State.Susanoo, Madara's Perfect Susanoo (Ultimate Ninja Storm 4) stands around them,
- * about 12 m tall: the glowing blue armoured figure (SK_Susanoo in M_Susanoo, Scripts/setup_susanoo.py) with a chakra sword in
- * each fist, cyan sparks drifting up around it. It fades in over a moment and out when the armour ends; while it stands, only it
+ * about 12 m tall: the near-solid royal-blue armoured figure (SK_Susanoo in M_PerfectSusanoo, Scripts/setup_susanoo.py) with a chakra sword
+ * (M_SusanooBlade) in each fist, a white spark flaring at each hilt, cyan sparks drifting up around it. It fades in over a moment and out when the armour ends; while it stands, only it
  * is seen: the wearer's own body (every mesh but the name tag) is hidden from halfway through the fade in until the armour ends.
  * It holds a sword stance and strides along as its wearer moves, and every time its owner swings (a melee combo montage starts) it swings too: the first and second hits with the right and
  * left blade, the finisher with the remaining slashes in turn. The tag and the montages replicate, so every machine shows it.
@@ -182,7 +182,10 @@ private:
 	TArray<TObjectPtr<UStaticMeshComponent>> SparkCards;
 
 	UPROPERTY()
-	TArray<TObjectPtr<UMaterialInstanceDynamic>> Materials; // the armour, the blades and every spark: all fade together
+	TArray<TObjectPtr<UStaticMeshComponent>> FlareCards; // a star burst at each sword's hilt, as the swords
+
+	UPROPERTY()
+	TArray<TObjectPtr<UMaterialInstanceDynamic>> Materials; // the armour, the blades, the flares and every spark (last): all fade together
 
 	UPROPERTY()
 	TArray<TObjectPtr<UAnimSequence>> Slashes;

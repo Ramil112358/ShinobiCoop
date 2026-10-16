@@ -5,8 +5,10 @@ Scripts/character/make_susanoo_sword.py first). Idempotent. Close the GUI editor
 - SK_Susanoo (+ SK_Susanoo_Skeleton): the 180 cm figure, scaled up to 12 m by UShinobiSusanooComponent. No physics asset.
 - A_Susanoo_<Clip>: Idle and Slash1..N on that skeleton.
 - SM_SusanooSword: the chakra blade it holds in each hand (no collision).
-- M_Susanoo (Scripts/setup_vfx.py's build_susanoo, rebuilt here so it picks up T_Susanoo) on the figure's slot.
+- M_Susanoo (Scripts/setup_vfx.py's build_susanoo, rebuilt here so it picks up T_Susanoo) on the figure's slot (the guard ribs'
+  translucent look; in game the figure wears M_PerfectSusanoo, rebuilt here too, as is the blades' M_SusanooBlade).
 Removes the old ribcage figure, SM_Susanoo.
+SUSANOO_ONLY=look rebuilds only the two jutsu materials and SM_SusanooSword (no Tripo source art needed).
 """
 import glob
 import os
@@ -57,11 +59,35 @@ def skeletal_options(skeleton=None):
     return options
 
 
+def import_sword():
+    options = unreal.FbxImportUI()
+    options.import_materials = False
+    options.import_textures = False
+    options.static_mesh_import_data.vertex_color_import_option = unreal.VertexColorImportOption.REPLACE  # the blade's core
+    import_file(os.path.join(ROOT, "SourceArt", "Susanoo", "susanoo_sword.fbx"), "SM_SusanooSword", options)
+    sword = unreal.load_asset(f"{DEST}/SM_SusanooSword")
+    if not isinstance(sword, unreal.StaticMesh):
+        raise RuntimeError("SM_SusanooSword was not imported")
+    unreal.StaticMeshEditorSubsystem().remove_collisions(sword)  # the commandlet has no editor subsystem to get
+    unreal.EditorAssetLibrary.save_loaded_asset(sword)
+    if unreal.EditorAssetLibrary.does_asset_exist(f"{DEST}/M_SusanooBlade_Slot"):  # the FBX's placeholder slot; the component sets the glow
+        unreal.EditorAssetLibrary.delete_asset(f"{DEST}/M_SusanooBlade_Slot")
+
+
+if os.environ.get("SUSANOO_ONLY") == "look":
+    setup_vfx.build_perfect_susanoo()
+    setup_vfx.build_susanoo_blade()
+    import_sword()
+    log("rebuilt M_PerfectSusanoo, M_SusanooBlade and SM_SusanooSword")
+    raise SystemExit(0)
+
 textures = glob.glob(os.path.join(ROOT, "SourceArt", "Susanoo", "Models", "tripo_rig", "*.fbm", "*basecolor*"))
 if not textures:
     raise RuntimeError("no Tripo base colour texture in SourceArt/Susanoo/Models/tripo_rig/*.fbm")
 import_file(textures[0], "T_Susanoo")
 setup_vfx.build_susanoo()
+setup_vfx.build_perfect_susanoo()
+setup_vfx.build_susanoo_blade()
 
 import_file(os.path.join(BUILD, "SK_Susanoo.fbx"), "SK_Susanoo", skeletal_options())
 mesh = unreal.load_asset(f"{DEST}/SK_Susanoo")
@@ -80,14 +106,7 @@ for clip in clips:
     if not any(isinstance(o, unreal.AnimSequence) for o in import_file(clip, name, skeletal_options(skeleton))):
         raise RuntimeError(f"{clip} produced no animation")
 
-import_file(os.path.join(ROOT, "SourceArt", "Susanoo", "susanoo_sword.fbx"), "SM_SusanooSword")
-sword = unreal.load_asset(f"{DEST}/SM_SusanooSword")
-if not isinstance(sword, unreal.StaticMesh):
-    raise RuntimeError("SM_SusanooSword was not imported")
-unreal.StaticMeshEditorSubsystem().remove_collisions(sword)  # the commandlet has no editor subsystem to get
-unreal.EditorAssetLibrary.save_loaded_asset(sword)
-if unreal.EditorAssetLibrary.does_asset_exist(f"{DEST}/M_SusanooBlade_Slot"):  # the FBX's placeholder slot; the component sets the glow
-    unreal.EditorAssetLibrary.delete_asset(f"{DEST}/M_SusanooBlade_Slot")
+import_sword()
 
 old = "/Game/Shinobi/Jutsu/SM_Susanoo"
 if unreal.EditorAssetLibrary.does_asset_exist(old):
