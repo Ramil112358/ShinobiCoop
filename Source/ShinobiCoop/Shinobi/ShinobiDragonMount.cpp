@@ -14,10 +14,11 @@
 
 namespace
 {
-	// Both models (Scripts/character/build_dragon.py for Tairn, build_dragon_crimson.py for the crimson one; each a Rodin generation) are
-	// about 1.9 m long in their rest pose, centred on the origin with their feet on the ground, facing +X; every flying clip tips them
-	// nose-down about the hips. Their backs in that flying pose, between the wings (the torso's top without the spikes), are at the Saddle
-	// points below (model centimetres, before the scale); the scale makes them dragon-sized and the saddle goes where a seated rider's hips
+	// Both models (Scripts/character/build_dragon.py for Tairn, a Rodin generation; build_dragon_crimson.py for the crimson one, a Tripo
+	// Studio model and rig) face +X with their feet on the ground in their rest pose; every flying clip lays them out level (Tairn's is
+	// tipped nose-down about the hips, the crimson one's neck and tail are stretched out). Their backs in that flying pose, between the
+	// wings (the torso's top without the spikes), are at the Saddle points below (model centimetres, before the scale; the preview run of
+	// each script prints them, and where the snout is); the scale makes them dragon-sized and the saddle goes where a seated rider's hips
 	// are. Tairn is among the biggest dragons in the books, so he is the bigger.
 	struct FDragonLook
 	{
@@ -31,7 +32,7 @@ namespace
 	const FDragonLook& DragonLookFor(EShinobiDragonKind Kind)
 	{
 		static const FDragonLook Tairn = { TEXT("Tairn"), 4.f, FVector(16.f, 0.f, 84.f), 380.f, 50.f };
-		static const FDragonLook Crimson = { TEXT("CrimsonDragon"), 3.5f, FVector(16.f, 0.f, 80.f), 330.f, 55.f };
+		static const FDragonLook Crimson = { TEXT("CrimsonDragon"), 3.5f, FVector(22.f, 0.f, 50.f), 250.f, -43.f }; // its head reaches forward, below the seat
 		return Kind == EShinobiDragonKind::Tairn ? Tairn : Crimson;
 	}
 

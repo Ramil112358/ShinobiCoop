@@ -402,9 +402,14 @@ hang below the rider, so a mount from the ground is a quick lift-off and a dive 
   `blender -b -P Scripts/character/build_dragon.py` (add `-- preview` for pose renders in `Saved/dragon_*.png`; it prints the back height the saddle
   is measured from), then `Scripts/setup_creatures.py`. The assets are `SK_Tairn`, `ANIM_Tairn_*` under `/Game/Shinobi/Creatures/Tairn`. The icon is a SpriteCook painting
   of Tairn.
-- **The crimson dragon's model** is the first Rodin dragon (`SourceArt/Creatures/DragonRodin/rodin_dragon.glb`, a red-and-grey upright dragon), rigged
-  the same way by `Scripts/character/build_dragon_crimson.py` (the script Tairn's grew out of: the same 34-bone rig and clips, without the club or the
-  wing tears; the bone coordinates there are the original measurements). `SK_CrimsonDragon` under `/Game/Shinobi/Creatures/CrimsonDragon`.
+- **The crimson dragon's model** is a Tripo Studio model, auto-rigged there (`SourceArt/Tripo/Dragon`: `dragon_rigged.glb`/`.zip` as
+  downloaded, the FBX and its textures unzipped in `fbx/`; a red dragon standing on all fours, wings raised). Tripo Studio cannot animate it: its
+  presets and "Create Your Own Animation" work only on humanoid rigs. `Scripts/character/build_dragon_crimson.py` keeps Tripo's 103-bone rig and
+  weights, cleans the weights (a toe of the doubled left hind leg reached into the head and wings, the right thigh owned a wing tip), adds a jaw
+  bone, builds a flying pose (neck forward, tail straight, legs tucked, wings swung out flat by their membrane plane) and keys Idle, Flap, Glide
+  and Breath on top of it. `-- preview` renders `Saved/dragon_*.png` and prints the saddle height and the snout for `ShinobiDragonMount.cpp`.
+  Lit with `M_Creature` (base colour, normal, roughness). `SK_CrimsonDragon` under `/Game/Shinobi/Creatures/CrimsonDragon`; the skeleton
+  changed, so delete that folder before re-importing a new rig. The first crimson dragon (a Rodin model) is in git history.
 - **The seated pose** is the Mixamo "Sitting Idle" (`SourceArt/Mixamo/Sitting Idle.fbx`, imported by `Scripts/setup_jutsu_anims.py` as `AM_Mount_Sit`).
   `AShinobiPlayerCharacter::UpdateSeatedPose` loops it while mounted and replays it whenever no jutsu montage is playing. Without that file the script
   falls back to a pose built by `build_jutsu_anims.py` (timeline `Mount`).
