@@ -2,8 +2,9 @@
 
 Run: blender -b -P Scripts/character/make_susanoo_sword.py
 
-A long straight blade with jagged, chipped edges like the swords in Ultimate Ninja Storm 4: a diamond cross-section (sharp
-edges, a ridge down the middle), wide near the fist and narrowing to a point, plus a short grip. Sized for the 180 cm Susanoo
+A long, slim chakra blade like the swords in Ultimate Ninja Storm 4: a diamond cross-section (a ridge down the middle), edges
+rippling like a flame, narrowing to a point, plus a short grip. Vertex colour red marks the ridge (1) against the edges (0):
+M_SusanooBlade makes that a white-hot core fading to blue. Sized for the 180 cm Susanoo
 skeleton it is held by (the figure is scaled up in Unreal, and the sword with it): the origin is the middle of the grip, the
 blade points up +Z. Units are centimetres; the exporter scales by 0.01. One material slot (Unreal puts M_SusanooBlade on it).
 Preview: Saved/SusanooSwordPreview.png.
@@ -19,42 +20,47 @@ DST = os.path.join(ROOT, "SourceArt", "Susanoo", "susanoo_sword.fbx")
 PREVIEW = os.path.join(ROOT, "Saved", "SusanooSwordPreview.png")
 
 BLADE_START = 9.0  # cm above the grip's middle: where the blade leaves the fist
-BLADE_LENGTH = 110.0
-STEPS = 60
-TEETH = 11  # chips along each edge
+BLADE_LENGTH = 140.0
+STEPS = 120
 random.seed(7)  # the same sword every run
-CHIP_DEPTHS = [random.uniform(0.15, 0.5) for _ in range(TEETH)]  # each chip a different size: crystal, not a saw
+TEETH = 16  # chips along each edge
+PHASES = [random.uniform(0.0, 2.0 * math.pi) for _ in range(2)]
+CHIPS = [[random.uniform(0.1, 0.4) for _ in range(TEETH)] for _ in range(2)]  # each chip a different size: chakra, not a saw
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 material = bpy.data.materials.new("M_SusanooBlade_Slot")
 material.diffuse_color = (0.2, 0.75, 1.0, 1.0)
 
 
-def half_width(t, phase):
-    """Half the blade's width at t (0 at the fist, 1 at the tip) on one edge: a taper with sawtooth chips cut into it."""
-    # Nearly full width (13 -> 10 cm) for most of the length, then a short point over the last 12%.
-    taper = 13.0 - 3.0 * t if t < 0.88 else 10.36 * ((1.0 - t) / 0.12) ** 0.8
-    tooth = (t * TEETH + phase) % 1.0  # 0..1 inside one chip
-    depth = CHIP_DEPTHS[int(t * TEETH + phase) % TEETH]
-    chip = 1.0 + depth * tooth if tooth < 0.75 else 1.0 + depth - 4.0 * depth * (tooth - 0.75)
-    return taper * chip
+def half_width(t, side):
+    """Half the blade's width at t (0 at the fist, 1 at the tip) on one edge (side 0 or 1): a slim taper, a slow ripple and
+    small irregular chips, each edge out of step with the other, as the chakra blades do in Storm 4."""
+    # 6 -> 4.5 cm for most of the length, then a point over the last 10%.
+    taper = 6.0 - 1.5 * t if t < 0.9 else 4.65 * ((1.0 - t) / 0.1) ** 0.85
+    offset = 0.37 * side
+    tooth = (t * TEETH + offset) % 1.0  # 0..1 inside one chip: a slow rise, then a sharp drop
+    depth = CHIPS[side][int(t * TEETH + offset) % TEETH]
+    chip = depth * tooth if tooth < 0.8 else depth * (1.0 - tooth) / 0.2
+    ripple = 0.12 * math.sin(2.0 * math.pi * 4.0 * t + PHASES[side])
+    return taper * (1.0 + ripple + chip)
 
 
-verts, faces = [], []
+verts, faces, core = [], [], []
 for i in range(STEPS + 1):
     t = i / STEPS
     z = BLADE_START + BLADE_LENGTH * t
     if i == STEPS:
-        verts += [(0.0, 0.0, z + 6.0)] * 4  # the tip: all four corners meet
+        verts += [(0.0, 0.0, z + 5.0)] * 4  # the tip: all four corners meet
+        core += [1.0] * 4
         continue
-    ridge = 2.2 * (1.0 - 0.8 * t)
-    jitter = random.uniform(-0.4, 0.4)
+    ridge = 1.5 * (1.0 - 0.7 * t)
     verts += [
-        (-half_width(t, 0.0) + jitter, 0.0, z),  # left edge
+        (-half_width(t, 0), 0.0, z),  # left edge
         (0.0, ridge, z),  # front ridge
-        (half_width(t, 0.45) - jitter, 0.0, z),  # right edge
+        (half_width(t, 1), 0.0, z),  # right edge
         (0.0, -ridge, z),  # back ridge
     ]
+    core += [0.0, 1.0, 0.0, 1.0]  # vertex colour red: 1 on the ridge (M_SusanooBlade's white core), 0 on the edges (blue)
 for i in range(STEPS):
     a, b = 4 * i, 4 * (i + 1)
     for k in range(4):
@@ -63,6 +69,9 @@ faces.append((3, 2, 1, 0))  # close the blade's base inside the fist
 
 mesh = bpy.data.meshes.new("SM_SusanooSword")
 mesh.from_pydata(verts, [], faces)
+colours = mesh.color_attributes.new("Col", "FLOAT_COLOR", "POINT")
+for index, value in enumerate(core):
+    colours.data[index].color = (value, value, value, 1.0)
 mesh.validate()
 blade = bpy.data.objects.new("SM_SusanooSword", mesh)
 bpy.context.scene.collection.objects.link(blade)
@@ -96,21 +105,21 @@ os.makedirs(os.path.dirname(PREVIEW), exist_ok=True)
 scene = bpy.context.scene
 scene.render.engine = "BLENDER_WORKBENCH"
 scene.display.shading.light = "STUDIO"
-scene.display.shading.color_type = "MATERIAL"
+scene.display.shading.color_type = "VERTEX"
 scene.render.resolution_x, scene.render.resolution_y = 300, 900
 scene.world = bpy.data.worlds.new("w")
 scene.world.color = (0.1, 0.1, 0.13)
 cam_data = bpy.data.cameras.new("cam")
 cam_data.type = "ORTHO"
-cam_data.ortho_scale = 150.0
+cam_data.ortho_scale = 180.0
 cam = bpy.data.objects.new("cam", cam_data)
 scene.collection.objects.link(cam)
 scene.camera = cam
-cam.location = (0, -400, 55)
+cam.location = (0, -400, 70)
 cam.rotation_euler = (math.radians(90), 0, 0)
 scene.render.filepath = PREVIEW
 bpy.ops.render.render(write_still=True)
 
 os.makedirs(os.path.dirname(DST), exist_ok=True)
-bpy.ops.export_scene.fbx(filepath=DST, use_selection=True, axis_forward="-Y", axis_up="Z", global_scale=0.01, apply_unit_scale=True, path_mode="COPY", mesh_smooth_type="FACE")
+bpy.ops.export_scene.fbx(filepath=DST, use_selection=True, axis_forward="-Y", axis_up="Z", global_scale=0.01, apply_unit_scale=True, path_mode="COPY", mesh_smooth_type="FACE", colors_type="LINEAR")
 print("[make_susanoo_sword] wrote " + DST)

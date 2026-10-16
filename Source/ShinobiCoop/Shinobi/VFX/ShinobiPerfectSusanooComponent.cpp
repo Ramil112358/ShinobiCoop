@@ -25,7 +25,8 @@ namespace
 	constexpr float SusanooFadeOutSeconds = 0.5f;
 	constexpr int32 SusanooSparkCount = 18;
 	constexpr float SusanooSparkRadius = 450.f;
-	const FLinearColor SusanooBlade(0.08f, 0.45f, 1.f);
+	constexpr float SusanooFlareSize = 280.f;
+	const FLinearColor SusanooFlare(0.3f, 0.7f, 1.f);
 	const FLinearColor SusanooSpark(0.3f, 0.75f, 1.f);
 	const TCHAR* SusanooDir = TEXT("/Game/Shinobi/Jutsu/Susanoo/");
 
@@ -322,7 +323,9 @@ void UShinobiPerfectSusanooComponent::EnsureFigure()
 	Figure->SetVisibility(false, true);
 	Figure->SetAnimInstanceClass(UShinobiSusanooAnimInstance::StaticClass());
 	Figure->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones; // the swords follow the hands even off screen
-	UMaterialInstanceDynamic* Armour = ShinobiVfx::MakeSusanoo(this, 0.f);
+	// M_PerfectSusanoo (near solid, lit); the guard ribs' translucent M_Susanoo if it is missing.
+	UMaterialInterface* Solid = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Shinobi/VFX/M_PerfectSusanoo.M_PerfectSusanoo"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	UMaterialInstanceDynamic* Armour = Solid ? UMaterialInstanceDynamic::Create(Solid, this) : ShinobiVfx::MakeSusanoo(this, 0.f);
 	for (int32 Slot = 0; Slot < Figure->GetNumMaterials(); ++Slot)
 	{
 		Figure->SetMaterial(Slot, Armour);
@@ -342,12 +345,31 @@ void UShinobiPerfectSusanooComponent::EnsureFigure()
 	// A sword in each fist, gripped across the palm with the blade pointing forward out of the thumb side (in the rest A-pose
 	// the hands hang at the sides, thumbs forward). Attached to the hand bones, so they swing with every clip.
 	UStaticMesh* Blade = LoadSusanoo<UStaticMesh>(TEXT("SM_SusanooSword"));
-	UMaterialInstanceDynamic* Glow = Blade ? ShinobiVfx::MakeGlow(this, SusanooBlade, 2.5f, 1.f) : nullptr;
+	UMaterialInterface* BladeLook = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Shinobi/VFX/M_SusanooBlade.M_SusanooBlade"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	UMaterialInstanceDynamic* Glow = Blade && BladeLook ? UMaterialInstanceDynamic::Create(BladeLook, this) : nullptr;
 	if (Glow)
 	{
 		Glow->SetScalarParameterValue(TEXT("Fade"), 0.f);
 		Materials.Add(Glow);
 	}
+	UStaticMesh* Plane = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
+	auto MakeCard = [this, Owner, Plane](const TCHAR* Name, UMaterialInstanceDynamic* Look)
+	{
+		Look->SetScalarParameterValue(TEXT("Fade"), 0.f);
+		UStaticMeshComponent* Card = NewObject<UStaticMeshComponent>(Owner, MakeUniqueObjectName(Owner, UStaticMeshComponent::StaticClass(), Name));
+		Card->SetStaticMesh(Plane);
+		Card->SetMaterial(0, Look);
+		Card->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Card->SetCastShadow(false);
+		Card->SetUsingAbsoluteLocation(true);
+		Card->SetUsingAbsoluteRotation(true);
+		Card->SetUsingAbsoluteScale(true);
+		Card->SetupAttachment(Owner->GetRootComponent());
+		Card->RegisterComponent();
+		Card->SetVisibility(false);
+		Materials.Add(Look);
+		return Card;
+	};
 	for (const TCHAR* Side : {TEXT("Right"), TEXT("Left")})
 	{
 		const int32 Hand = FindBone(Skeleton, FString(Side) + TEXT("Hand"));
@@ -370,10 +392,13 @@ void UShinobiPerfectSusanooComponent::EnsureFigure()
 		Sword->RegisterComponent();
 		Sword->SetVisibility(false);
 		Swords.Add(Sword);
+		if (UMaterialInstanceDynamic* Flare = Plane ? ShinobiVfx::MakeSprite(this, ShinobiVfx::ESprite::Burst, Swords.Num(), SusanooFlare, 4.f) : nullptr)
+		{
+			FlareCards.Add(MakeCard(TEXT("SusanooFlare"), Flare));
+		}
 	}
 
 	// Sparks: small star bursts drifting up through and around the figure, flickering between the sheet's variants.
-	UStaticMesh* Plane = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
 	FRandomStream Random(GetTypeHash(Owner->GetFName()));
 	for (int32 Index = 0; Plane && Index < SusanooSparkCount; ++Index)
 	{
@@ -389,20 +414,7 @@ void UShinobiPerfectSusanooComponent::EnsureFigure()
 		{
 			break;
 		}
-		Look->SetScalarParameterValue(TEXT("Fade"), 0.f);
-		UStaticMeshComponent* Card = NewObject<UStaticMeshComponent>(Owner, MakeUniqueObjectName(Owner, UStaticMeshComponent::StaticClass(), TEXT("SusanooSpark")));
-		Card->SetStaticMesh(Plane);
-		Card->SetMaterial(0, Look);
-		Card->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		Card->SetCastShadow(false);
-		Card->SetUsingAbsoluteLocation(true);
-		Card->SetUsingAbsoluteRotation(true);
-		Card->SetUsingAbsoluteScale(true);
-		Card->SetupAttachment(Owner->GetRootComponent());
-		Card->RegisterComponent();
-		Card->SetVisibility(false);
-		Materials.Add(Look);
-		SparkCards.Add(Card);
+		SparkCards.Add(MakeCard(TEXT("SusanooSpark"), Look));
 		Sparks.Add(Spark);
 	}
 }
@@ -422,12 +434,17 @@ void UShinobiPerfectSusanooComponent::EndPlay(const EEndPlayReason::Type EndPlay
 	{
 		Part->DestroyComponent();
 	}
+	for (UStaticMeshComponent* Part : FlareCards)
+	{
+		Part->DestroyComponent();
+	}
 	if (Figure)
 	{
 		Figure->DestroyComponent();
 	}
 	Swords.Reset();
 	SparkCards.Reset();
+	FlareCards.Reset();
 	Sparks.Reset();
 	Figure = nullptr;
 	Super::EndPlay(EndPlayReason);
@@ -512,6 +529,21 @@ void UShinobiPerfectSusanooComponent::UpdateSparks(float DeltaTime)
 		Card->SetWorldLocationAndRotation(At, FRotator(0.f, FaceYaw, 90.f));
 		Card->SetWorldScale3D(FVector(Spark.Size / 100.f, Spark.Size / 100.f, 1.f));
 	}
+	// The hilt flares: on each sword's grip, flickering through the sheet's variants and pulsing in size.
+	for (int32 Index = 0; Index < FlareCards.Num() && Index < Swords.Num(); ++Index)
+	{
+		const FVector At = Swords[Index]->GetComponentLocation();
+		const float FaceYaw = FMath::RadiansToDegrees(FMath::Atan2(CameraAt.Y - At.Y, CameraAt.X - At.X)) - 90.f;
+		const int32 Step = FMath::FloorToInt32(Age / 0.07f) + 3 * Index;
+		const float Size = SusanooFlareSize * (0.85f + 0.3f * FMath::Frac(Step * 0.618f));
+		UStaticMeshComponent* Card = FlareCards[Index];
+		Card->SetWorldLocationAndRotation(At, FRotator(0.f, FaceYaw, 90.f));
+		Card->SetWorldScale3D(FVector(Size / 100.f, Size / 100.f, 1.f));
+		if (UMaterialInstanceDynamic* Look = Cast<UMaterialInstanceDynamic>(Card->GetMaterial(0)))
+		{
+			ShinobiVfx::SetSpriteVariant(Look, ShinobiVfx::ESprite::Burst, Step % ShinobiVfx::SpriteVariants(ShinobiVfx::ESprite::Burst));
+		}
+	}
 }
 
 void UShinobiPerfectSusanooComponent::HideOwner(bool bHide)
@@ -533,7 +565,7 @@ void UShinobiPerfectSusanooComponent::HideOwner(bool bHide)
 	TInlineComponentArray<UPrimitiveComponent*> Parts(GetOwner());
 	for (UPrimitiveComponent* Part : Parts)
 	{
-		const bool bOurs = Part == Figure || Part->GetAttachParent() == Figure || SparkCards.Contains(Part);
+		const bool bOurs = Part == Figure || Part->GetAttachParent() == Figure || SparkCards.Contains(Part) || FlareCards.Contains(Part);
 		if (!bOurs && !Part->IsA<UWidgetComponent>() && !Part->bHiddenInGame)
 		{
 			Part->SetHiddenInGame(true);
@@ -551,6 +583,10 @@ void UShinobiPerfectSusanooComponent::TickComponent(float DeltaTime, ELevelTick 
 	{
 		Figure->SetVisibility(Fade > 0.f, true); // the swords too (attached to it)
 		for (UStaticMeshComponent* Card : SparkCards)
+		{
+			Card->SetVisibility(Fade > 0.f);
+		}
+		for (UStaticMeshComponent* Card : FlareCards)
 		{
 			Card->SetVisibility(Fade > 0.f);
 		}
