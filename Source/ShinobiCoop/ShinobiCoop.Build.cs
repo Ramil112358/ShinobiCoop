@@ -26,6 +26,7 @@ public class ShinobiCoop : ModuleRules
 			"OnlineSubsystem",
 			"OnlineSubsystemUtils",
 			"IKRig",
+			"AnimationCore",
 			"Landscape",
 			"ImageCore",
 			"NavigationSystem",

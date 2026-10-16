@@ -12,6 +12,7 @@
 #include "PoseSearch/PoseSearchLibrary.h"
 #include "Shinobi/Hero/ShinobiAnimSample.h"
 #include "Shinobi/Hero/ShinobiBlueprintStruct.h"
+#include "Shinobi/Hero/ShinobiRetargetAnimInstance.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiTags.h"
@@ -209,9 +210,12 @@ void UShinobiPhysicalReactionComponent::TickComponent(float DeltaTime, ELevelTic
 		return;
 	}
 	// Animation only while the animation moves the capsule (root motion: vaults, mantles), since a simulated pelvis drags
-	// the mesh and with it the root motion off course, and on a wall, where the world's gravity would pull the limbs off.
+	// the mesh and with it the root motion off course, on a wall, where the world's gravity would pull the limbs off, and
+	// through a jutsu cast, where sprung arms lag the hand seals and the hands' bodies keep each other apart.
 	const UShinobiMovementComponent* Movement = Cast<UShinobiMovementComponent>(Character->GetCharacterMovement());
-	const bool bAnimationOnly = Character->IsPlayingRootMotion() || (Movement && Movement->IsWallTraversing());
+	const UAnimInstance* AnimInstance = Character->GetMesh()->GetAnimInstance();
+	const bool bAnimationOnly = Character->IsPlayingRootMotion() || (Movement && Movement->IsWallTraversing()) ||
+		(AnimInstance && ShinobiIsJutsuCast(AnimInstance->GetCurrentActiveMontage()));
 	SetProfile(bAnimationOnly ? KinematicProfile : PhysicalAnimationProfile);
 	const float SinceHit = static_cast<float>(Now - HitTime);
 	if (Profile == PhysicalAnimationProfile && SinceHit < HitRecoverySeconds + DeltaTime)

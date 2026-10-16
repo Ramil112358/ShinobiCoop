@@ -50,8 +50,19 @@ V = Vector
 UP, DOWN, FWD, BACK, LEFT, RIGHT = V((0, 1, 0)), V((0, -1, 0)), V((0, 0, 1)), V((0, 0, -1)), V((1, 0, 0)), V((-1, 0, 0))
 
 
-def arm(wrist, pole, fingers, palm, curl=(10, 10, 10, 10, 10)):
-    return {"wrist": V(wrist), "pole": V(pole), "fingers": V(fingers), "palm": V(palm), "curl": curl}
+def arm(wrist, pole, fingers, palm, curl=(10, 10, 10, 10, 10), spread=(0, 0, 0, 0, 0), thumb=None):
+    """curl: per finger (thumb first) degrees towards the palm, one number for all three joints or a (j1, j2, j3) tuple;
+    a single number on the thumb is scaled by 0.6, a tuple is used as is.
+    spread: per finger degrees away from the middle finger (thumb: away from the index; middle: towards the thumb).
+    thumb: where Thumb1 points, (along the fingers, out of the palm, thumbwards), overriding its j1 curl and spread."""
+    spec = {"wrist": V(wrist), "pole": V(pole), "fingers": V(fingers), "palm": V(palm), "curl": curl, "spread": spread}
+    return {**spec, "thumb": thumb} if thumb else spec
+
+
+def mirror(spec, offset=(0, 0, 0)):
+    """The other hand: the spec mirrored through the body's midplane (x -> -x), then moved by offset (cm)."""
+    m = lambda v: V((-v.x, v.y, v.z))
+    return {**spec, "wrist": m(spec["wrist"]) + V(offset), "pole": m(spec["pole"]), "fingers": m(spec["fingers"]), "palm": m(spec["palm"])}
 
 
 def merge(*poses):
@@ -73,7 +84,7 @@ def shift(pose, side, offset):
 OPEN = (5, 5, 5, 5, 5)
 FIST = (40, 95, 95, 95, 95)
 CLAW = (30, 40, 45, 50, 55)
-TWO_UP = (15, 0, 0, 85, 85)  # index and middle straight, the rest folded (Tiger)
+TWO_UP = (15, 0, 0, 85, 85)  # index and middle straight, the rest folded
 ELBOW_R, ELBOW_L = (-1, -0.6, 0.1), (1, -0.6, 0.1)  # elbows out and down, as when holding hands at the chest
 
 # Stances. Right-handed: the right foot drops back for the ready stance and steps forward to strike.
@@ -98,26 +109,58 @@ ARMS_READY = {
 }
 READY_BODY = merge(READY, {"spine": (3, 9), "neck": (0, 2), "head": (-2, 3)}, ARMS_READY)  # shoulders turned back to the front
 
-# Hand seals: both hands in front of the chest. For the clasped ones each palm faces the other hand.
+# The twelve hand seals, after the official databook chart (Hiden Rin no Sho, "the twelve signs"): both hands in front
+# of the chest. curl tuples are (j1, j2, j3) degrees.
+# Interlaced fingers can't really pass between each other here: they curl round the back of the other hand and the
+# hands sit half a finger apart, which reads as interlaced from outside.
+WRAP = (80, 85, 45)       # a finger folded round the back of the other hand
+TUCK = (90, 100, 60)      # a finger folded into its own palm
+THUMB_UP = (0, 0, 0)      # thumb straight (with thumb=ALONG)
+THUMB_TUCK = (0, 15, 10)  # thumb across the folded fingers (with thumb=ACROSS)
+ALONG = (1, 0, 0.15)      # thumb directions (along the fingers, out of the palm, thumbwards)
+ACROSS = (0.8, 0.45, -0.4)
+_tiger_r = arm((-1.4, 110, 24), ELBOW_R, (0, 1, 0.2), LEFT, (THUMB_UP, 0, 0, WRAP, WRAP), thumb=ALONG)
+_snake_r = arm((-1.4, 111, 23), ELBOW_R, (0, 1, 0.5), LEFT, (THUMB_UP, (75, 70, 30), (75, 70, 30), (75, 70, 30), (75, 70, 30)), (0, 4, 0, 4, 8), ALONG)
+_dragon_r = arm((-1.4, 118, 21), ELBOW_R, (0, -0.4, 1), LEFT, ((-10, 0, 0), WRAP, WRAP, WRAP, (0, 0, 0)), (10, 4, 0, 4, 0))
+_horse_r = arm((-11.8, 117, 28), ELBOW_R, (0.75, 0.65, 0), BACK, ((0, 0, 0), (0, 0, 0), TUCK, TUCK, TUCK), (20, 0, 0, 0, 0))
+_bird_r = arm((-7, 111, 24), ELBOW_R, (0.42, 0.9, 0.12), (1, -0.42, 0), ((-10, 0, 0), 0, 0, 0, 0), (25, 0, 0, 0, 0))
+_boar_r = arm((-3.6, 127, 27), (-1, 0, -0.2), DOWN, BACK, ((20, 10, 0), (20, 30, 30), (20, 30, 30), (20, 30, 30), (20, 30, 30)), (-15, 0, 0, 0, 0))
 SEALS = {
-    # Tiger: palms together, index and middle up, the others interlaced.
-    "Tiger": {"R": arm((-4, 127, 20), ELBOW_R, (0.05, 1, 0.25), LEFT, TWO_UP),
-              "L": arm((4, 127, 20), ELBOW_L, (-0.05, 1, 0.25), RIGHT, TWO_UP)},
-    # Ram: right hand as Tiger; the left hand wraps round its two raised fingers.
-    "Ram": {"R": arm((-4, 127, 20), ELBOW_R, (0.05, 1, 0.25), LEFT, TWO_UP),
-            "L": arm((5, 124, 22), ELBOW_L, (-0.7, 0.4, 0.6), (-0.5, 0, -0.8), (30, 70, 75, 80, 85))},
-    # Snake: fingers interlaced, palms clasped.
-    "Snake": {"R": arm((-4, 125, 21), ELBOW_R, (0.35, 0.6, 0.7), LEFT, (25, 55, 55, 55, 55)),
-              "L": arm((4, 125, 21), ELBOW_L, (-0.35, 0.6, 0.7), RIGHT, (25, 55, 55, 55, 55))},
-    # Ox: right hand upright, left hand across it horizontally.
-    "Ox": {"R": arm((-3, 126, 19), ELBOW_R, (0, 1, 0.2), LEFT, (10, 10, 15, 20, 25)),
-           "L": arm((7, 130, 22), ELBOW_L, (-1, 0.1, 0.1), BACK, (10, 20, 25, 30, 35))},
-    # Monkey: palms together, the left hand's fingers folded over the right's.
-    "Monkey": {"R": arm((-4, 127, 20), ELBOW_R, (0.05, 1, 0.25), LEFT, OPEN),
-               "L": arm((4, 127, 20), ELBOW_L, (-0.05, 1, 0.25), RIGHT, (20, 45, 45, 45, 45))},
-    # Rabbit: left fist, right hand flat on top of it.
-    "Rabbit": {"R": arm((-3, 134, 19), ELBOW_R, (0.3, 0, 1), DOWN, OPEN),
-               "L": arm((3, 124, 18), ELBOW_L, (-0.2, 0.2, 1), RIGHT, FIST)},
+    # Rat: the left hand upright, index and middle up; the right fist closes round those two fingers.
+    "Rat": {"R": arm((-5, 122, 25.5), ELBOW_R, (1, 0.15, 0.1), BACK, (THUMB_TUCK, 80, 90, 95, 100), thumb=ACROSS),
+            "L": arm((0, 104, 22.5), ELBOW_L, (-0.05, 1, 0.05), BACK, ((20, 20, 10), 0, 0, TUCK, TUCK), (0, 0, 0, 0, 0))},
+    # Ox: the right hand horizontal in front, fingers straight across, thumb up; the left hand upright behind it.
+    "Ox": {"R": arm((-10, 121, 28), ELBOW_R, (1, 0, 0.1), BACK, ((-10, 0, 0), 0, 0, 0, 0), (45, 0, 0, 0, 0)),
+           "L": arm((3, 106, 25), ELBOW_L, (-0.2, 1, 0.05), BACK, ((10, 0, 0), 5, 5, 10, 15), (10, 0, 0, 0, 0))},
+    # Tiger: palms together, index and middle straight up and pressed together, ring and little fingers interlaced,
+    # both thumbs straight up.
+    "Tiger": {"R": _tiger_r, "L": mirror(_tiger_r, (0, 0, 0.9))},
+    # Hare: the left hand upright, thumb out; the right hand across the front of its fingers, curled except the pinky.
+    "Hare": {"R": arm((-10, 123, 28), ELBOW_R, (1, 0, 0.1), BACK, ((-10, 0, 0), 50, 55, 60, 0), (40, 0, 0, 0, 10)),
+             "L": arm((3, 106, 25), ELBOW_L, (-0.2, 1, 0.05), BACK, ((-20, 0, 0), 10, 10, 15, 20), (30, 0, 0, 0, 0))},
+    # Dragon: hands clasped pointing forward and down, fingers wrapped round each other's backs, little fingers straight
+    # and pressed together, thumbs crossed on top (left on top).
+    "Dragon": {"R": _dragon_r, "L": mirror(_dragon_r, (0, 0.6, 0.9))},
+    # Snake: palms clasped, all fingers interlaced over the backs of the hands, left thumb over the right.
+    "Snake": {"R": _snake_r, "L": {**mirror(_snake_r, (0, 0, 1.0)), "thumb": (0.8, 0.25, -0.3)}},
+    # Horse: elbows out, palms to the chest, index fingers meeting in a peak, the other fingers folded with their
+    # knuckles together, thumbs up.
+    "Horse": {"R": _horse_r, "L": mirror(_horse_r)},
+    # Ram: like Tiger, but the right hand is a fist below with its index and middle up; the left hand's two raised
+    # fingers lie along them and its other fingers and thumb close over the right fist.
+    "Ram": {"R": arm((-1.4, 107, 24), ELBOW_R, (0.15, 1, 0.2), LEFT, (THUMB_TUCK, 0, 0, TUCK, TUCK), thumb=ACROSS),
+            "L": arm((1.8, 111, 24.5), ELBOW_L, (-0.15, 1, 0.2), RIGHT, ((40, 20, 10), 0, 0, WRAP, WRAP), (0, 0, 0, 0, 0))},
+    # Monkey: hands flat and level, stacked palm to palm, fingers pointing opposite ways; each thumb lies flat along the
+    # other hand's little finger.
+    "Monkey": {"R": arm((-8, 123.3, 26), ELBOW_R, (1, 0, 0.1), DOWN, ((-15, 0, 0), 5, 5, 5, 5), (-15, 0, 0, 0, 0)),
+               "L": arm((8, 120.7, 26), ELBOW_L, (-1, 0, 0.1), UP, ((-15, 0, 0), 15, 15, 15, 15), (-15, 0, 0, 0, 0))},
+    # Bird: fingers straight and fingertips together in a peak, wrists apart, thumbs angled up and touching.
+    "Bird": {"R": _bird_r, "L": mirror(_bird_r)},
+    # Dog: the left hand flat on top of the right fist.
+    "Dog": {"R": arm((-6, 117, 23), ELBOW_R, (0.6, 0, 1), DOWN, (THUMB_TUCK, 90, 95, 100, 105), thumb=ACROSS),
+            "L": arm((1, 120.5, 24), ELBOW_L, (-0.75, 0, 0.6), DOWN, ((-10, 0, 0), 0, 0, 0, 0))},
+    # Boar: forearms level, wrists bent so the fingers hang down, palms to the chest, the hands side by side.
+    "Boar": {"R": _boar_r, "L": mirror(_boar_r)},
 }
 
 
@@ -178,7 +221,7 @@ def dash_release(hold, windup_arms, strike_arms):
 # Timelines: [(seconds, pose, ease)] per phase; ease shapes the move from that key to the next.
 # Charge is exactly 2.2 s (longer than the 2 s cap, so it never loops).
 # ---------------------------------------------------------------------------------------------------------------
-def seal_run(names, start, step=0.14, hold=0.07, body=()):
+def seal_run(names, start=0.06, step=0.12, hold=0.07, body=()):
     """Snappy seal changes: each seal is reached fast, then held."""
     keys = []
     t = start
@@ -218,9 +261,9 @@ def lerp_pose(a, b, t):
 
 
 def fireball():
-    seals, t = seal_run(("Snake", "Ram", "Tiger"), 0.1)
+    seals, t = seal_run(("Monkey", "Boar", "Horse", "Tiger"))  # canon: Snake, Ram, Monkey, Boar, Horse, Tiger
     return {
-        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.95, seal("Tiger", INHALE), "smooth")],
+        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(t + 0.1, seal("Tiger", INHALE), "smooth")],
         "Charge": [(round(i * 0.55, 3), seal("Tiger", INHALE if i % 2 == 0 else INHALE_DEEP), "smooth") for i in range(5)],
         "Release": [(0.0, seal("Tiger", INHALE), "smooth"),
                     (0.08, seal("Tiger", INHALE_DEEP), "snap"),      # the last gulp of air
@@ -231,17 +274,22 @@ def fireball():
 
 
 def chidori():
-    seals, t = seal_run(("Ox", "Rabbit", "Monkey"), 0.1)
+    seals, t = seal_run(("Ox", "Hare", "Monkey"))  # canon
     windup = {"R": arm((-24, 104, 4), (-0.6, 0, -1), (-0.2, -0.3, 1), DOWN, CLAW)}
     return {
-        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.85, CHIDORI_HOLD, "smooth")],
+        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(t + 0.18, CHIDORI_HOLD, "smooth")],
         "Charge": tremble(CHIDORI_HOLD, 2.2, 1.6, seed=2, step=0.1, build=lambda u: lerp_pose(CHIDORI_HOLD, CHIDORI_DEEP, u)),
         "Release": dash_release(CHIDORI_DEEP, windup, STRIKE_ARMS),
     }
 
 
+# The Rasengan has no seals: the left hand stirs chakra into the right palm held below it, then the palm opens.
+RASENGAN_GATHER = merge(NEUTRAL, READY, {"spine": (5, 4), "neck": (2, 3), "head": (4, 3),
+                                         "R": arm((-8, 106, 30), ELBOW_R, (0.5, 0, 1), UP, (15, 25, 30, 35, 40)),
+                                         "L": arm((4, 118, 30), ELBOW_L, (-0.5, 0, 1), DOWN, (15, 25, 30, 35, 40))})
+
+
 def rasengan():
-    seals, t = seal_run(("Ram", "Tiger"), 0.1)
     centre = RASENGAN_HOLD["L"]["wrist"]
 
     def charge_key(i):
@@ -252,16 +300,16 @@ def rasengan():
 
     windup = {"R": arm((-22, 106, 6), (-1, -0.4, -0.3), (0.2, 0, 1), UP, (20, 30, 30, 30, 30))}
     return {
-        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.7, RASENGAN_HOLD, "smooth")],
+        "Seal": [(0.0, NEUTRAL, "smooth"), (0.16, RASENGAN_GATHER, "smooth"), (0.26, shift(RASENGAN_GATHER, "L", (3, 0, 2)), "smooth"),
+                 (0.42, RASENGAN_HOLD, "smooth")],
         "Charge": [charge_key(i) for i in range(13)],
         "Release": dash_release(RASENGAN_HOLD, windup, PALM_ARMS),
     }
 
 
 def amaterasu():
-    seals, t = seal_run(("Tiger",), 0.12, hold=0.12)
-    return {
-        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.7, EYE_FOCUS, "smooth")],
+    return {  # no seals in canon: the Mangekyo's own
+        "Seal": [(0.0, NEUTRAL, "smooth"), (0.22, EYE_FOCUS, "snap"), (0.42, EYE_FOCUS, "smooth")],
         "Charge": tremble(EYE_FOCUS, 2.2, 0.4, seed=4, step=0.275, build=lambda u: lerp_pose(EYE_FOCUS, EYE_BOWED, min(u * 2, 1))),
         "Release": [(0.0, EYE_BOWED, "smooth"), (0.05, merge(EYE_BOWED, {"head": (20, 3)}), "snap"),
                     (0.12, STARE, "back"), (0.6, merge(STARE, ARMS_READY), "smooth")],
@@ -277,24 +325,28 @@ THROW_FOLLOW = merge(NEUTRAL, LUNGE, {"spine": (14, 12), "neck": (-6, 8), "head"
                                       "L": arm((24, 96, -20), (0.3, 0, 1), (0.2, -1, -0.4), RIGHT, (30, 40, 40, 40, 40))})
 
 
+# The one-handed Seal of Confrontation: index and middle up in front of the face.
+CONFRONT = merge(NEUTRAL, READY_BODY, {"R": arm((-5, 130, 22), ELBOW_R, (0, 1, 0.15), LEFT, (THUMB_TUCK, 0, 0, TUCK, TUCK), thumb=ACROSS)})
+
+
 def teleport():
-    seals, t = seal_run(("Tiger",), 0.1, hold=0.12)
     return {
-        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.62, THROW_COCK, "smooth")],
+        "Seal": [(0.0, NEUTRAL, "smooth"), (0.1, CONFRONT, "snap"), (0.24, CONFRONT, "snap"), (0.42, THROW_COCK, "smooth")],
         "Release": [(0.0, THROW_COCK, "smooth"), (0.1, THROW_FOLLOW, "back"),
                     (0.4, merge(THROW_FOLLOW, {"spine": (10, 8)}), "smooth"),
                     (0.8, merge(NEUTRAL, READY_BODY), "smooth")],
     }
 
 
-# Kamui: the Ram seal held while the body sinks, as if slipping into the ground.
-SINK = seal("Ram", {"hips": (14, -14, 6), "spine": (6, 9), "neck": (3, 2), "head": (4, 3)})
+# Kamui: no seals in canon; two fingers at the eye while the body sinks, as if slipping into the ground.
+SINK_START = merge(EYE_FOCUS, {"hips": (8, -14, 3)})
+SINK = merge(EYE_BOWED, {"hips": (14, -14, 6), "spine": (6, 9)})
 
 
 def kamui():
     return {
-        "Seal": [(0.0, NEUTRAL, "smooth"), (0.1, seal("Ram"), "snap"), (0.24, seal("Ram"), "snap"), (0.4, seal("Ram", {"hips": (8, -14, 3)}), "smooth")],
-        "Release": [(0.0, seal("Ram", {"hips": (8, -14, 3)}), "smooth"), (0.12, SINK, "smooth"), (0.45, SINK, "smooth"),
+        "Seal": [(0.0, NEUTRAL, "smooth"), (0.16, EYE_FOCUS, "snap"), (0.32, SINK_START, "smooth")],
+        "Release": [(0.0, SINK_START, "smooth"), (0.12, SINK, "smooth"), (0.45, SINK, "smooth"),
                     (0.9, merge(NEUTRAL, READY_BODY), "smooth")],
     }
 
@@ -309,9 +361,8 @@ PUSH_THRUST = merge(NEUTRAL, LUNGE, {"spine": (10, 10), "neck": (-4, 6), "head":
 
 
 def almighty_push():
-    seals, t = seal_run(("Tiger",), 0.1, hold=0.12)
-    return {
-        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.7, PUSH_READY, "smooth")],
+    return {  # no seals in canon
+        "Seal": [(0.0, NEUTRAL, "smooth"), (0.3, PUSH_READY, "back"), (0.5, PUSH_READY, "smooth")],
         "Charge": tremble(PUSH_READY, 2.2, 0.7, seed=5, step=0.2),
         "Release": [(0.0, PUSH_READY, "smooth"), (0.08, merge(PUSH_READY, {"spine": (-5, 4)}), "snap"),
                     (0.18, PUSH_THRUST, "back"), (0.5, merge(PUSH_THRUST, {"spine": (7, 8)}), "smooth"),
@@ -319,7 +370,7 @@ def almighty_push():
     }
 
 
-# Earth and Water Wall: the Tiger seal, hands raised high, then both palms slammed down to the ground in a crouch.
+# Earth and Water Wall: the seals, hands raised high, then both palms slammed down to the ground in a crouch.
 HANDS_HIGH = merge(NEUTRAL, BRACE, {"spine": (-3, 9), "neck": (-3, 2), "head": (-6, 3),
                                     "R": arm((-12, 154, 24), (-1, -0.2, -0.3), (0.1, 1, 0.3), LEFT, OPEN),
                                     "L": arm((12, 154, 24), (1, -0.2, -0.3), (-0.1, 1, 0.3), RIGHT, OPEN)})
@@ -328,10 +379,10 @@ PALMS_DOWN = merge(NEUTRAL, CROUCH, {"spine": (14, 6), "neck": (-8, 2), "head": 
                                      "L": arm((17, 22, 62), (1, 0.3, -0.2), (0, -0.3, 1), DOWN, OPEN)})
 
 
-def wall():
-    seals, t = seal_run(("Tiger",), 0.1, hold=0.1)
+def wall(names):
+    seals, t = seal_run(names)
     return {
-        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.6, HANDS_HIGH, "smooth")],
+        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(t + 0.12, HANDS_HIGH, "smooth")],
         "Release": [(0.0, HANDS_HIGH, "smooth"), (0.12, merge(HANDS_HIGH, {"spine": (-6, 9)}), "snap"),
                     (0.26, PALMS_DOWN, "back"), (0.75, PALMS_DOWN, "smooth"), (1.2, merge(NEUTRAL, READY_BODY), "smooth")],
     }
@@ -347,9 +398,9 @@ METEOR_POINT = merge(NEUTRAL, LUNGE, {"spine": (14, 10), "neck": (-4, 6), "head"
 
 
 def fire_meteor():
-    seals, t = seal_run(("Snake", "Tiger"), 0.1)
+    seals, t = seal_run(("Snake", "Horse", "Tiger"))  # fire ends on Tiger
     return {
-        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.7, SKY_POINT, "smooth")],
+        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(t + 0.15, SKY_POINT, "smooth")],
         "Release": [(0.0, SKY_POINT, "smooth"), (0.08, merge(SKY_POINT, {"spine": (-9, 9)}), "snap"),
                     (0.2, METEOR_POINT, "back"), (0.6, merge(METEOR_POINT, {"spine": (10, 8)}), "smooth"),
                     (1.0, merge(NEUTRAL, READY_BODY), "smooth")],
@@ -366,9 +417,9 @@ HANDS_SKY = merge(NEUTRAL, BRACE, {"spine": (-9, 9), "neck": (-9, 2), "head": (-
 
 
 def ice_meteor():
-    seals, t = seal_run(("Ox", "Rabbit"), 0.1)
+    seals, t = seal_run(("Rat", "Ox", "Dog"))  # not canon; Dog is the water/ice seal
     return {
-        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.6, HANDS_WIDE, "smooth")],
+        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(t + 0.12, HANDS_WIDE, "smooth")],
         "Release": [(0.0, HANDS_WIDE, "smooth"), (0.1, merge(HANDS_WIDE, {"hips": (9, -16, 0)}), "snap"),
                     (0.22, HANDS_SKY, "back"), (0.9, HANDS_SKY, "smooth"),
                     (1.3, merge(NEUTRAL, READY_BODY), "smooth")],
@@ -385,26 +436,26 @@ DRAGON_SWEEP = merge(NEUTRAL, LUNGE, {"spine": (12, 8), "neck": (-4, 6), "head":
 
 
 def water_dragon():
-    seals, t = seal_run(("Snake", "Ram", "Tiger"), 0.1)
+    seals, t = seal_run(("Ox", "Monkey", "Hare", "Rat"))  # the opening of the canon 44
     return {
-        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.85, DRAGON_GATHER, "smooth")],
+        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(t + 0.12, DRAGON_GATHER, "smooth")],
         "Release": [(0.0, DRAGON_GATHER, "smooth"), (0.1, merge(DRAGON_GATHER, {"spine": (-6, 6)}), "snap"),
                     (0.22, DRAGON_SWEEP, "back"), (0.7, merge(DRAGON_SWEEP, {"spine": (9, 8)}), "smooth"),
                     (1.1, merge(NEUTRAL, READY_BODY), "smooth")],
     }
 
 
-# Susanoo: the Tiger seal held at the chest, then both arms thrown wide and the head back as the armour rises.
+# Susanoo: the eye (no seals in canon), then both arms thrown wide and the head back as the armour rises.
 ARMS_WIDE = merge(NEUTRAL, BRACE, {"spine": (-8, 9), "neck": (-8, 2), "head": (-18, 3),
                                    "R": arm((-50, 166, 14), (-1, -0.2, -0.3), (-1, 0.4, 0.2), FWD, OPEN),
                                    "L": arm((50, 166, 14), (1, -0.2, -0.3), (1, 0.4, 0.2), FWD, OPEN)})
 
 
 def susanoo():
-    seals, t = seal_run(("Ram", "Tiger"), 0.1, hold=0.12)
-    return {
-        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.62, seal("Tiger", BRACE), "smooth")],
-        "Release": [(0.0, seal("Tiger", BRACE), "smooth"), (0.12, merge(seal("Tiger", BRACE), {"hips": (9, -16, 0)}), "snap"),
+    focus = merge(EYE_BOWED, BRACE)
+    return {  # no seals in canon: the Mangekyo's own
+        "Seal": [(0.0, NEUTRAL, "smooth"), (0.22, EYE_FOCUS, "snap"), (0.6, focus, "smooth")],
+        "Release": [(0.0, focus, "smooth"), (0.12, merge(focus, {"hips": (9, -16, 0)}), "snap"),
                     (0.3, ARMS_WIDE, "back"), (1.0, ARMS_WIDE, "smooth"), (1.5, merge(NEUTRAL, READY_BODY), "smooth")],
     }
 
@@ -417,9 +468,9 @@ SUMMON_GATHER = merge(NEUTRAL, CROUCH, {"spine": (10, 6), "neck": (-6, 2), "head
 
 
 def summon():
-    seals, t = seal_run(("Snake", "Ram", "Monkey"), 0.1)
+    seals, t = seal_run(("Boar", "Dog", "Bird", "Monkey", "Ram"), step=0.11)  # canon Kuchiyose
     return {
-        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(0.8, SUMMON_GATHER, "smooth")],
+        "Seal": [(0.0, NEUTRAL, "smooth")] + seals + [(t + 0.17, SUMMON_GATHER, "smooth")],
         "Release": [(0.0, SUMMON_GATHER, "smooth"), (0.1, merge(SUMMON_GATHER, {"spine": (-4, 6)}), "snap"),
                     (0.24, PALMS_DOWN, "back"), (0.8, PALMS_DOWN, "smooth"), (1.25, merge(NEUTRAL, READY_BODY), "smooth")],
     }
@@ -439,7 +490,8 @@ def mount():
 
 
 TIMELINES = {"Fireball": fireball(), "Chidori": chidori(), "Rasengan": rasengan(), "Amaterasu": amaterasu(),
-             "Teleport": teleport(), "Kamui": kamui(), "AlmightyPush": almighty_push(), "EarthWall": wall(), "WaterWall": wall(),
+             "Teleport": teleport(), "Kamui": kamui(), "AlmightyPush": almighty_push(), "EarthWall": wall(("Hare", "Boar", "Dog")),  # canon Tiger, Hare, Boar, Dog
+             "WaterWall": wall(("Ox", "Dog")),  # canon has its own seal; Dog is the water seal
              "FireMeteor": fire_meteor(), "IceMeteor": ice_meteor(), "WaterDragon": water_dragon(), "Susanoo": susanoo(), "Summon": summon(), "Mount": mount()}
 
 
@@ -523,12 +575,26 @@ def pose_arm(arm_obj, side, spec):
     fingers = spec["fingers"].normalized()
     palm = (spec["palm"] - fingers * spec["palm"].dot(fingers)).normalized()
     set_rotation(arm_obj, names[2], Matrix((fingers.cross(palm), fingers, palm)).transposed())
-    for finger, curl in zip(FINGERS, spec["curl"]):
-        for joint in (1, 2, 3):
+    # Finger bones: X across the hand (thumbwards on the right hand, pinkywards on the left), Z out of the palm. Turning
+    # about X curls towards the palm; turning about Z by +a swings the finger towards -X.
+    thumbward = -1 if side == "Right" else 1
+    for i, (finger, curl, spread) in enumerate(zip(FINGERS, spec["curl"], spec.get("spread", (0,) * 5))):
+        joints = curl if isinstance(curl, tuple) else (curl * (0.6 if finger == "Thumb" else 1.0),) * 3
+        for joint, angle in zip((1, 2, 3), joints):
             pb = arm_obj.pose.bones[f"{P}{side}Hand{finger}{joint}"]
-            # Thumb joints bend less; each joint turns about its own X, towards the palm.
-            angle = math.radians(curl * (0.6 if finger == "Thumb" else 1.0))
-            pb.rotation_quaternion = Matrix.Rotation(angle, 3, "X").to_quaternion()
+            rotation = Matrix.Rotation(math.radians(angle), 3, "X")
+            if joint == 1 and spread:
+                rotation = Matrix.Rotation(math.radians(thumbward * spread * (-1 if i > 2 else 1)), 3, "Z") @ rotation
+            pb.rotation_quaternion = rotation.to_quaternion()
+    if "thumb" in spec:
+        # Thumb1 swung to point along (along the fingers, out of the palm, thumbwards), hand terms; Thumb2/3 keep their curl.
+        along, out, thumbwise = spec["thumb"]
+        hand = arm_obj.pose.bones[names[2]].matrix.to_3x3()
+        target = hand.col[1] * along + hand.col[2] * out + hand.col[0] * thumbwise * (1 if side == "Right" else -1)
+        bpy.context.view_layer.update()
+        pb = arm_obj.pose.bones[f"{P}{side}HandThumb1"]
+        rotation = pb.matrix.to_3x3()
+        set_rotation(arm_obj, pb.name, rotation.col[1].rotation_difference(target.normalized()).to_matrix() @ rotation)
 
 
 def grip_spec(arm_obj, spec):

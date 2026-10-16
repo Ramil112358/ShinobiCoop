@@ -185,36 +185,97 @@ def find_op(controller, op_class):
     raise RuntimeError(f"retargeter has no {op_class.__name__} op")
 
 
+def retarget_pose(controller, ik_rig, side):
+    """{bone: world transform} of the rig's mesh in the retarget pose: the mesh's own reference pose (as the retargeter
+    uses it; its USkeleton's can be stale after a reimport, as SK_Hero's was by up to 33 degrees) with the retargeter's
+    offsets applied. A pose delta is local (bone ref rotation * delta, IKRetargetProcessor.cpp). Rotations are
+    normalised: the meshes carry a 100x scale and products drift off unit length, which reads as degrees of error."""
+    bones = unreal.SkeletonModifier()
+    bones.set_skeletal_mesh(unreal.IKRigController.get_controller(ik_rig).get_skeletal_mesh())
+    world = {}
+    for bone in bones.get_all_bone_names():  # parents first
+        local = bones.get_bone_transform(bone, False)
+        local.rotation = (local.rotation * controller.get_rotation_offset_for_retarget_pose_bone(bone, side)).normalized()
+        parent = str(bones.get_parent_name(bone))
+        world[str(bone)] = unreal.MathLibrary.compose_transforms(local, world[parent]) if parent in world else local
+    return world
+
+
+def turn_bone(controller, pose, bone, turn, side):
+    """Sets the bone's retarget-pose offset so the bone turns by turn (a world rotation) from where pose has it."""
+    bone_world = pose[bone].rotation.normalized()
+    delta = controller.get_rotation_offset_for_retarget_pose_bone(bone, side)
+    controller.set_rotation_offset_for_retarget_pose_bone(bone, (delta * bone_world.inversed() * turn * bone_world).normalized(), side)
+
+
 def spread_arms(controller, ik_target):
     """Raises each upper arm ARM_SPREAD_DEGREES out from the body in the target retarget pose. Manny's arms swing close to
     his slim torso; copied 1:1 onto our bulkier bodies (and the cloaks over them) the hands sink into the hips. The FK chain
-    op carries a retarget-pose offset into every animation, so this widens idle, run and jump alike.
-    A pose delta is local (bone ref rotation * delta, IKRetargetProcessor.cpp), so the mesh-space swing is converted per bone."""
+    op carries a retarget-pose offset into every animation, so this widens idle, run and jump alike."""
     target = unreal.RetargetSourceOrTarget.TARGET
     rig = unreal.IKRigController.get_controller(ik_target)
-    pose = unreal.AnimPoseExtensions.get_reference_pose(rig.get_skeletal_mesh().skeleton)
-    for bone in unreal.AnimPoseExtensions.get_bone_names(pose):  # the auto-aligned pose, so the arm's real direction is measured
-        local = unreal.AnimPoseExtensions.get_bone_pose(pose, bone)
-        local.rotation = local.rotation * controller.get_rotation_offset_for_retarget_pose_bone(bone, target)
-        pose = unreal.AnimPoseExtensions.set_bone_pose(pose, local, bone)  # returns the edited pose (UPARAM(ref)), never edits in place
-    world = unreal.AnimPoseSpaces.WORLD
     for chain in ("LeftArm", "RightArm"):
-        upper, hand = rig.get_retarget_chain_start_bone(chain), rig.get_retarget_chain_end_bone(chain)
-        arm = unreal.AnimPoseExtensions.get_bone_pose(pose, hand, world).translation - unreal.AnimPoseExtensions.get_bone_pose(pose, upper, world).translation
+        upper, hand = str(rig.get_retarget_chain_start_bone(chain)), str(rig.get_retarget_chain_end_bone(chain))
+        pose = retarget_pose(controller, ik_target, target)  # the auto-aligned pose, so the arm's real direction is measured
+        arm = pose[hand].translation - pose[upper].translation
         # Rotating the arm about (arm x up) turns it toward up: away from the body for a hanging arm on either side.
-        swing = unreal.MathLibrary.rotator_from_axis_and_angle(arm.normal().cross(unreal.Vector(0, 0, 1)).normal(), ARM_SPREAD_DEGREES).quaternion()
-        bone_world = unreal.AnimPoseExtensions.get_bone_pose(pose, upper, world).rotation
-        delta = controller.get_rotation_offset_for_retarget_pose_bone(upper, target)
-        controller.set_rotation_offset_for_retarget_pose_bone(upper, delta * bone_world.inversed() * swing * bone_world, target)  # bone_world already holds delta
+        turn_bone(controller, pose, upper, unreal.MathLibrary.rotator_from_axis_and_angle(arm.normal().cross(unreal.Vector(0, 0, 1)).normal(), ARM_SPREAD_DEGREES).quaternion(), target)
         # Check: re-pose the arm with the new delta; it must hang ARM_SPREAD_DEGREES further from straight down.
-        local = unreal.AnimPoseExtensions.get_ref_bone_pose(pose, upper)
-        local.rotation = local.rotation * controller.get_rotation_offset_for_retarget_pose_bone(upper, target)
-        pose = unreal.AnimPoseExtensions.set_bone_pose(pose, local, upper)  # returns the edited pose (UPARAM(ref)), never edits in place
-        spread = unreal.AnimPoseExtensions.get_bone_pose(pose, hand, world).translation - unreal.AnimPoseExtensions.get_bone_pose(pose, upper, world).translation
+        pose = retarget_pose(controller, ik_target, target)
+        spread = pose[hand].translation - pose[upper].translation
         down = lambda v: math.degrees(math.acos(-v.normal().z))
         if abs(down(spread) - down(arm) - ARM_SPREAD_DEGREES) > 1:
             raise RuntimeError(f"spread_arms: {chain} went {down(arm):.1f} -> {down(spread):.1f} deg from down, wanted +{ARM_SPREAD_DEGREES}")
         log(f"{ik_target.get_name()} {chain}: {down(arm):.1f} -> {down(spread):.1f} deg from straight down")
+
+
+# A Mixamo mitten hand's thumb frame (see align_hand_roll) in its own bone space, per side: measured on the mitten rigs that
+# have a thumb, within 6 degrees of this on each.
+MIXAMO_MITTEN = {"l": unreal.Rotator(roll=180, pitch=0, yaw=-90).quaternion(), "r": unreal.Rotator(roll=0, pitch=0, yaw=-90).quaternion()}
+
+
+def hand_frame(pose, hand, along, across_from, across_to):
+    """Rotation whose X runs from the wrist to along and whose Y runs (square to X) from across_from to across_to."""
+    at = lambda bone: pose[bone].translation
+    return unreal.MathLibrary.make_rot_from_xy(at(along) - at(hand), at(across_to) - at(across_from)).quaternion()
+
+
+def align_hand_roll(controller, ik_manny, ik_target):
+    """Turns each hand in the target retarget pose so it lies as Manny's does. The chain-to-chain auto-align matches bone
+    directions but not roll, which left every hero's hands turned up to ~100 degrees about the forearm (palms forward
+    where Manny's face each other: pressed hand seals opened into a V). How a hand's lie is read depends on its fingers:
+    a full hand by its knuckle row (little to index); a Mixamo mitten (one "index" for all four fingers) by the side its
+    thumb is on, or, without a thumb, by its bone's roll, which Mixamo sets the same way on every mitten. The fingers are
+    re-aligned after, since turning the hand turns them too."""
+    source, target = unreal.RetargetSourceOrTarget.SOURCE, unreal.RetargetSourceOrTarget.TARGET
+    rig = unreal.IKRigController.get_controller(ik_target)
+    manny = retarget_pose(controller, ik_manny, source)
+    names = list(retarget_pose(controller, ik_target, target))
+    fingers = []
+    for chain, s in (("LeftArm", "l"), ("RightArm", "r")):
+        hand = str(rig.get_retarget_chain_end_bone(chain))
+        index, middle, pinky, thumb = (f"{hand}{finger}1" for finger in ("Index", "Middle", "Pinky", "Thumb"))  # Mixamo: LeftHandIndex1, ...
+        pose = retarget_pose(controller, ik_target, target)
+        if middle in names and pinky in names:
+            should = hand_frame(manny, f"hand_{s}", f"middle_01_{s}", f"pinky_01_{s}", f"index_01_{s}")
+            frame = lambda p: hand_frame(p, hand, middle, pinky, index)
+        else:
+            should = hand_frame(manny, f"hand_{s}", f"middle_01_{s}", f"hand_{s}", f"thumb_01_{s}")
+            if thumb in names:
+                frame = lambda p: hand_frame(p, hand, index, hand, thumb)
+            else:
+                local = MIXAMO_MITTEN[s]
+                frame = lambda p: p[hand].rotation.normalized() * local
+        turn = (should * frame(pose).inversed()).normalized()
+        turn_bone(controller, pose, hand, turn, target)
+        # Check: the re-posed hand's frame must now be Manny's.
+        left = math.degrees((should * frame(retarget_pose(controller, ik_target, target)).inversed()).normalized().get_angle())
+        if left > 1:
+            raise RuntimeError(f"align_hand_roll: {chain} still {left:.1f} deg off Manny's hand (was {math.degrees(turn.get_angle()):.1f})")
+        log(f"{ik_target.get_name()} {chain}: hand turned {min(math.degrees(turn.get_angle()), 360 - math.degrees(turn.get_angle())):.1f} deg to Manny's")
+        fingers += [n for n in names if n.startswith(hand) and n != hand]
+    if fingers:
+        controller.auto_align_bones(fingers, unreal.RetargetAutoAlignMethod.CHAIN_TO_CHAIN, target)
 
 
 def build_retargeter(ik_manny, ik_hero, dest=HERO_DIR, name="RTG_MannyToHero"):
@@ -231,6 +292,7 @@ def build_retargeter(ik_manny, ik_hero, dest=HERO_DIR, name="RTG_MannyToHero"):
     controller.reset_retarget_pose(pose, [], unreal.RetargetSourceOrTarget.TARGET)
     controller.auto_align_all_bones(unreal.RetargetSourceOrTarget.TARGET, unreal.RetargetAutoAlignMethod.CHAIN_TO_CHAIN)
     spread_arms(controller, ik_hero)
+    align_hand_roll(controller, ik_manny, ik_hero)
     for op_class in (unreal.IKRetargetRunIKRigController, unreal.IKRetargetRootMotionController):
         index = find_op(controller, op_class)
         controller.set_retarget_op_enabled(index, False)

@@ -2,8 +2,16 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "AIController.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
+#include "PoseSearch/PoseSearchDatabase.h"
+#include "PoseSearch/PoseSearchDerivedData.h"
+#include "UObject/UObjectIterator.h"
 #include "Retargeter/IKRetargeter.h"
 #include "Shinobi/ShinobiPlayerController.h"
 #include "GameFramework/PlayerController.h"
@@ -122,6 +130,83 @@ bool FShinobiPickSwapsBodyTest::RunTest(const FString& Parameters)
 		++Checked;
 	}
 	AddInfo(FString::Printf(TEXT("Checked %d imported roster character(s)"), Checked));
+	TestTrue(TEXT("At least the hero was checked"), Checked > 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSealHandContactTest, "ShinobiCoop.Hero.SealHandsTouchOnEveryBody", ShinobiTestFlags)
+bool FShinobiSealHandContactTest::RunTest(const FString& Parameters)
+{
+	// The Fireball seals end on Tiger (palms pressed together, wrists ~3 cm apart in the source clip). Manny's clip has
+	// its hand contact baked (Scripts/setup_jutsu_anims.py); each hero keeps Manny's at runtime (UShinobiRetargetAnimInstance).
+	UAnimMontage* Seal = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Shinobi/Anims/AM_Fireball_Seal.AM_Fireball_Seal"));
+	if (!TestNotNull(TEXT("AM_Fireball_Seal"), Seal))
+	{
+		return false;
+	}
+	FShinobiTestWorld W;
+	AStaticMeshActor* Floor = W.Spawn<AStaticMeshActor>(FVector(0.f, 0.f, -10.f)); // standing: in the air the driver's arms do their own thing
+	Floor->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+	Floor->GetStaticMeshComponent()->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")));
+	Floor->SetActorScale3D(FVector(40.f, 40.f, 0.2f));
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, 0.f, 100.f));
+	if (!TestNotNull(TEXT("HeroMesh in use"), P->GetHeroMesh()))
+	{
+		return false;
+	}
+	W.Spawn<AAIController>()->Possess(P);
+	for (TObjectIterator<UPoseSearchDatabase> It; It; ++It) // the driver's motion matching needs its indexes to pose at all
+	{
+		using namespace UE::PoseSearch;
+		FAsyncPoseSearchDatabasesManagement::RequestAsyncBuildIndex(*It, ERequestAsyncBuildFlag::NewRequest | ERequestAsyncBuildFlag::WaitForCompletion);
+	}
+	W.Tick(0.5f);
+	int32 Checked = 0;
+	for (int32 Index = UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster) - 1; Index >= 0; --Index)
+	{
+		const FShinobiRosterEntry& Entry = AShinobiPlayerCharacter::Roster[Index];
+		if (!LoadObject<USkeletalMesh>(nullptr, Entry.Mesh, nullptr, LOAD_NoWarn | LOAD_Quiet) ||
+			!LoadObject<UIKRetargeter>(nullptr, Entry.Retargeter, nullptr, LOAD_NoWarn | LOAD_Quiet))
+		{
+			continue;
+		}
+		P->SetCharacterIndex(uint8(Index));
+		W.Tick(0.1f);
+		UAnimInstance* Driver = P->GetMesh()->GetAnimInstance();
+		Driver->Montage_Play(Seal, 1.f, EMontagePlayReturnType::MontageLength, 0.f);
+		for (int32 Step = 0; Step < 10; ++Step) // into the Tiger hold (0.42 s on)
+		{
+			W.Tick(0.05f);
+		}
+		TestTrue(Entry.Name + FString(TEXT(": seal playing")), Driver->Montage_IsPlaying(Seal));
+		const USkeletalMeshComponent* Manny = P->GetMesh();
+		const USkeletalMeshComponent* Body = P->GetHeroMesh();
+		const double MannyApart = FVector::Dist(Manny->GetBoneLocation(TEXT("hand_l")), Manny->GetBoneLocation(TEXT("hand_r")));
+		const double Scale = FVector::Dist(Body->GetBoneLocation(TEXT("RightHand")), Body->GetBoneLocation(TEXT("RightForeArm"))) /
+			FVector::Dist(Manny->GetBoneLocation(TEXT("hand_r")), Manny->GetBoneLocation(TEXT("lowerarm_r")));
+		const double BodyApart = FVector::Dist(Body->GetBoneLocation(TEXT("LeftHand")), Body->GetBoneLocation(TEXT("RightHand")));
+		const FString Name = Entry.Name;
+		// And each hand faces as Manny's does (setup_hero.py's align_hand_roll; mitten hands have no knuckle row to check).
+		for (const TCHAR* Side : {TEXT("Left"), TEXT("Right")})
+		{
+			if (Body->GetBoneIndex(*(Side + FString(TEXT("HandPinky1")))) == INDEX_NONE)
+			{
+				continue;
+			}
+			const FString S = FString(Side) == TEXT("Left") ? TEXT("l") : TEXT("r");
+			auto MannyDir = [&](const TCHAR* From, const TCHAR* To) { return (Manny->GetBoneLocation(*(To + S)) - Manny->GetBoneLocation(*(From + S))).GetSafeNormal(); };
+			auto BodyDir = [&](const TCHAR* From, const TCHAR* To) { return (Body->GetBoneLocation(*(Side + FString(To))) - Body->GetBoneLocation(*(Side + FString(From)))).GetSafeNormal(); };
+			const double Fingers = FMath::RadiansToDegrees(FMath::Acos(MannyDir(TEXT("hand_"), TEXT("middle_01_")) | BodyDir(TEXT("Hand"), TEXT("HandMiddle1"))));
+			const double Across = FMath::RadiansToDegrees(FMath::Acos(MannyDir(TEXT("pinky_01_"), TEXT("index_01_")) | BodyDir(TEXT("HandPinky1"), TEXT("HandIndex1"))));
+			TestTrue(FString::Printf(TEXT("%s %s hand points %.0f deg off Manny's"), *Name, Side, Fingers), Fingers < 5.0);
+			TestTrue(FString::Printf(TEXT("%s %s knuckle row %.0f deg off Manny's"), *Name, Side, Across), Across < 20.0);
+		}
+		TestTrue(FString::Printf(TEXT("%s: Manny's wrists %.1f cm apart in Tiger"), *Name, MannyApart), MannyApart < 6.0);
+		TestTrue(FString::Printf(TEXT("%s: wrists %.1f cm apart, Manny's scaled %.1f"), *Name, BodyApart, MannyApart * Scale),
+			FMath::Abs(BodyApart - MannyApart * Scale) < 1.5);
+		Driver->Montage_Stop(0.f, Seal);
+		++Checked;
+	}
 	TestTrue(TEXT("At least the hero was checked"), Checked > 0);
 	return true;
 }
