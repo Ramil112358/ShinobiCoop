@@ -247,8 +247,8 @@ and facing the way they face, with a chakra sword (`SM_SusanooSword`) in each fi
 drifting up through it. Only the Susanoo is seen: the wearer's own meshes are hidden in game (name tag excepted) from halfway
 through the fade in until the armour ends. It holds a sword stance (`A_Susanoo_Idle`) and, while its wearer moves, walks
 (`A_Susanoo_Walk`, or `A_Susanoo_Run` above 9 m/s) at a rate matched to their speed; without those clips it stands. Whenever
-its owner starts a melee combo montage it slashes too, with the upper body only (the spine up), sped up to fit about 1.1 s: hit 1 is `A_Susanoo_Slash1` (right blade), hit 2 is `Slash2` (mirrored, left blade), and the finisher takes the remaining
-slashes in turn. It cross-fades through `UShinobiSusanooAnimInstance` (the summons' layer proxy, no animation blueprint). The tag
+its owner starts a melee combo montage it slashes too, with the upper body only (the spine up), only the part around its strike (0.4 s before the hands' fastest moment to 0.45 s after, found at load), at its own speed: every swing takes the next of `A_Susanoo_Slash1..N` in turn, combo or not (the owner is hidden, so most presses miss the
+combo window and would all be hit 1). A swing that comes mid-slash waits for it to finish (one waits, more are dropped). It cross-fades through `UShinobiSusanooAnimInstance` (the summons' layer proxy, no animation blueprint). The tag
 and the montages replicate, so every machine sees the same. While it stands, the player's camera boom pulls back to 16 m and
 looks 3 m up. `M_Susanoo` is translucent (it hides `Opacity` 0.35 of what's behind) and two-sided: a dim deep-blue body with a fresnel rim, bright cyan panel lines picked from
 the armour texture's green (`LineLow`, `LineGain`), twinkling world-space sparkles and a slow band of light climbing it.

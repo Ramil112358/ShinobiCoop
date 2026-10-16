@@ -211,6 +211,14 @@ bool FShinobiSusanooSlashTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	TestEqual(TEXT("It holds its stance"), Anim->GetCurrentClip()->GetName(), FString(TEXT("A_Susanoo_Idle")));
+	for (const UAnimSequence* Clip : Armour->GetSlashes())
+	{
+		// Slash1's right hand strikes about 0.8 s into its 1.9 s (Blender): the lead-in and the recovery are cut.
+		const FVector2f Window = Anim->GetSlashWindow(Clip);
+		AddInfo(FString::Printf(TEXT("%s window %.2f-%.2f of %.2f s"), *Clip->GetName(), Window.X, Window.Y, Clip->GetPlayLength()));
+		TestTrue(FString::Printf(TEXT("%s swings around its strike (%.2f-%.2f of %.2f s)"), *Clip->GetName(), Window.X, Window.Y, Clip->GetPlayLength()),
+			Window.X > 0.1f && Window.Y < Clip->GetPlayLength() - 0.1f && Window.Y - Window.X > 0.5f);
+	}
 
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Melee); // the owner's first swing
 	W.Tick(0.1f);
@@ -219,15 +227,22 @@ bool FShinobiSusanooSlashTest::RunTest(const FString& Parameters)
 	W.Tick(4.f);
 	TestNull(TEXT("then lets go of the swing"), Anim->GetSlashClip());
 
-	Armour->Slash(1);
+	// A fresh combo (the window long closed) still swings the next slash, not the first one again.
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Melee);
+	W.Tick(0.1f);
+	TestEqual(TEXT("A new combo swings the next slash"), Anim->GetSlashClip(), Armour->GetSlashes()[1].Get());
+	// Mashed: swings that come while one slash swings wait for it instead of cutting it off.
+	Armour->Slash();
+	Armour->Slash(); // no room for this one
 	W.Tick(0.05f);
-	TestEqual(TEXT("The second hit is the left blade"), Anim->GetSlashClip(), Armour->GetSlashes()[1].Get());
-	Armour->Slash(2);
+	TestEqual(TEXT("A swing mid-slash lets the current one play on"), Anim->GetSlashClip(), Armour->GetSlashes()[1].Get());
+	W.Tick(0.9f);
+	TestEqual(TEXT("then the next slash follows it"), Anim->GetSlashClip(), Armour->GetSlashes()[2].Get());
+	W.Tick(4.f);
+	TestNull(TEXT("one swing waits at most"), Anim->GetSlashClip());
+	Armour->Slash();
 	W.Tick(0.05f);
-	const UAnimSequence* Finisher = Anim->GetSlashClip();
-	Armour->Slash(2);
-	W.Tick(0.05f);
-	TestTrue(TEXT("and finishers take turns among the rest"), Armour->GetSlashes().Num() < 4 || Anim->GetSlashClip() != Finisher);
+	TestEqual(TEXT("and a dropped swing does not skip a slash"), Anim->GetSlashClip(), Armour->GetSlashes()[3 % Armour->GetSlashes().Num()].Get());
 	return true;
 }
 
