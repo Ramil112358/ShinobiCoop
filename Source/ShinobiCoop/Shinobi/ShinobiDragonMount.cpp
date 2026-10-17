@@ -18,9 +18,9 @@
 
 namespace
 {
-	// Both models (Scripts/character/build_dragon.py for Tairn, a Rodin generation; build_dragon_crimson.py for the crimson one, a Tripo
-	// Studio model and rig) face +X with their feet on the ground in their rest pose; every flying clip lays them out level (Tairn's is
-	// tipped nose-down about the hips, the crimson one's neck and tail are stretched out). Their backs in that flying pose, between the
+	// Both models (Scripts/character/build_dragon.py for Tairn, build_dragon_crimson.py for the crimson one; each a Tripo Studio model and
+	// rig) face +X with their feet on the ground in their rest pose; every flying clip lays them out level (necks reached forward, tails
+	// stretched out behind). Their backs in that flying pose, between the
 	// wings (the torso's top without the spikes), are at the Saddle points below (model centimetres, before the scale; the preview run of
 	// each script prints them, and where the snout is); the scale makes them dragon-sized and the saddle goes where a seated rider's hips
 	// are. Tairn is among the biggest dragons in the books, so he is the bigger.
@@ -37,14 +37,14 @@ namespace
 		const TCHAR* CollarNext;
 		float CollarAt;
 		float CollarRadius;      // the neck's thickness there, model centimetres
-		float CollarDrop;        // how far below the joint the neck's middle is there (Tairn's neck hangs below its bones), model centimetres
+		float CollarDrop;        // how far below the joint the neck's middle is there (negative: Tairn's bones run under his neck), model centimetres
 	};
 
 	// The mouths and necks were measured on the meshes in Blender (the crimson rest pose has its head turned, hence the mouth's Y).
 	const FDragonLook& DragonLookFor(EShinobiDragonKind Kind)
 	{
-		static const FDragonLook Tairn = { TEXT("Tairn"), 4.f, FVector(16.f, 0.f, 84.f), 380.f, -31.f,
-			TEXT("head"), FVector(89.5f, 0.f, 107.5f), TEXT("neck1"), TEXT("neck2"), 0.6f, 13.f, 6.f };
+		static const FDragonLook Tairn = { TEXT("Tairn"), 4.5f, FVector(18.f, 0.f, 37.f), 252.f, -128.f, // his long neck holds the head low
+			TEXT("bone_9"), FVector(50.f, 0.f, 56.f), TEXT("bone_4"), TEXT("bone_5"), 0.7f, 5.7f, -3.6f };
 		static const FDragonLook Crimson = { TEXT("CrimsonDragon"), 3.5f, FVector(22.f, 0.f, 50.f), 247.f, -117.f, // its head reaches forward, below the seat
 			TEXT("Head_5"), FVector(68.3f, -21.f, 63.1f), TEXT("Head_1"), TEXT("Head_2"), 0.3f, 7.5f, 0.f };
 		return Kind == EShinobiDragonKind::Tairn ? Tairn : Crimson;
@@ -285,7 +285,7 @@ void AShinobiDragonMount::KeepSeatStill()
 	// frame, where the saddle was measured. The rider doesn't bob, so hang the body that much the other way: the back stays under the seat.
 	// The pose read is last frame's, a frame behind: too little to see.
 	const TArray<FTransform>& Pose = Body->GetComponentSpaceTransforms();
-	const int32 Bone = Body->GetBoneIndex(TEXT("Root")); // "root" on Tairn: names ignore case
+	const int32 Bone = Body->GetBoneIndex(TEXT("Root"));
 	if (!Playing || !Body->GetSkeletalMeshAsset() || !Pose.IsValidIndex(Bone))
 	{
 		return;

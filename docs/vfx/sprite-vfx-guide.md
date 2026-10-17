@@ -404,20 +404,22 @@ hang below the rider, so a mount from the ground is a quick lift-off and a dive 
 - **The dragon** is `AShinobiDragonMount`, a replicated actor with no collision or health, attached to the rider's mesh so it is smoothed on clients
   with the rider (the transform uses the mesh's default offset, not its current network-smoothed one).
 - **The kind** (`EShinobiDragonKind`, replicated with the dragon and its flame) picks the model, the scale, the saddle, the mouth and the fire: a `FDragonLook`
-  table at the top of `ShinobiDragonMount.cpp` (Tairn 4x, the crimson dragon 3.5x) and the particle recipes in `AShinobiDragonFlame::BeginPlay`. Dismounting
+  table at the top of `ShinobiDragonMount.cpp` (Tairn 4.5x, the crimson dragon 3.5x) and the particle recipes in `AShinobiDragonFlame::BeginPlay`. Dismounting
   and the breath work the same for both; the breath's hit burst is lightning for Tairn and fire for the crimson one. Adding a third dragon is a new
   kind, a look row, a recipe and a jutsu subclass.
-- **Tairn's model** is a Hyper3D Rodin generation prompted from the books (a Black Morningstartail: thick ridged black scales, a mane of pointed neck
-  spikes, giant golden eyes, scarred black wings, long taloned toes, a rock-hard underbelly; `SourceArt/Creatures/Tairn/rodin_tairn.glb`). Rodin
-  gave him a thin curl for a tail tip, but a Morningstartail ends in a club studded with lethal spikes, so `Scripts/character/build_dragon.py` cuts the
-  curl off and grafts on a Rodin-generated spiked ball (`rodin_tail_club2.glb`, from a second generation; the first came out as a fan of spikes) with 20
-  long procedural cones, and tears ragged holes out of the wing membranes for the scars. It then builds a 34-bone rig to it (spine, neck, jaw, a tail whose
-  last bone carries the club, arms, legs, five wing bones a side), weights it by distance (bone heat fails on it, like the toad), tips it nose-down about
-  the hips in every flying clip so the back is level, and keys the clips: Idle (hover), Flap (climbing and slow flight), Glide (fast and level) and Breath
-  (once per breath). Three material slots: the body and the ball (M_Character instances of `Tairn.png` and `TairnClub.png`) and the spikes (flat black).
+- **Tairn's model** is a Tripo Studio model, auto-rigged there (`SourceArt/Tripo/Tairn`: `tairn_rigged.glb`/`.zip` as downloaded, the FBX
+  and its base colour unzipped in `fbx/`). The reference images came from GPT Image 2.5 in Tripo Studio: a front concept prompted from the books (a
+  Black Morningstartail: matte black ridged scales, a mane of neck spikes, golden eyes, scalloped black wings, a tail ending in a morningstar club
+  of long spikes) in a neutral rigging pose, then left, back and right views made from it. Tripo kept the model's own pose: on all fours, neck up,
+  wings half raised, the tail curled round to its left. `Scripts/character/build_dragon.py` keeps Tripo's rig and weights (trimmed like the crimson
+  dragon's), cuts the mouth and adds a jaw bone, and re-bones the tail: Tripo's tail bones stopped at the top of the curl and cut its corner, so the
+  tail from Tail_2 to the club is marched along the mesh's centre line (12 bones) and re-weighted by distance. The flying pose levels the chest,
+  reaches the neck forward, straightens the tail and opens the folded wings bone by bone (arm, forearm, three fingers fanned flat, each rolled
+  so the membrane around it lies level: aimed alone, the left wing's membrane hung down the leg); the clips are
+  the crimson dragon's (Idle, Flap, Glide, Breath). One material slot (M_Character on `Tairn.png`: Tripo gave no normal or roughness map).
   `blender -b -P Scripts/character/build_dragon.py` (add `-- preview` for pose renders in `Saved/dragon_*.png`; it prints the back height the saddle
-  is measured from), then `Scripts/setup_creatures.py`. The assets are `SK_Tairn`, `ANIM_Tairn_*` under `/Game/Shinobi/Creatures/Tairn`. The icon is a SpriteCook painting
-  of Tairn.
+  is measured from), then `Scripts/setup_creatures.py` (after a skeleton change, delete `/Game/Shinobi/Creatures/Tairn` first). The assets are
+  `SK_Tairn`, `ANIM_Tairn_*` under `/Game/Shinobi/Creatures/Tairn`. The icon is a SpriteCook painting of Tairn.
 - **The crimson dragon's model** is a Tripo Studio model, auto-rigged there (`SourceArt/Tripo/Dragon`: `dragon_rigged.glb`/`.zip` as
   downloaded, the FBX and its textures unzipped in `fbx/`; a red dragon standing on all fours, wings raised). Tripo Studio cannot animate it: its
   presets and "Create Your Own Animation" work only on humanoid rigs. `Scripts/character/build_dragon_crimson.py` keeps Tripo's 103-bone rig and
@@ -431,4 +433,4 @@ hang below the rider, so a mount from the ground is a quick lift-off and a dive 
   falls back to a pose built by `build_jutsu_anims.py` (timeline `Mount`).
 
 Shots 31-34 of `Scripts/shot_chakra.ps1 -Jutsu` show the ride, the rider close up, the breath, a climb and the page-5 HUD; `Scripts/smoke_m1.ps1` checks
-the client sees itself mounted and the dragon actor. Not done: the rider cannot steer by pitch (Space and Control are the only vertical control), and the eyes are Rodin's small golden ones.
+the client sees itself mounted and the dragon actor. Not done: the rider cannot steer by pitch (Space and Control are the only vertical control), and Tairn's eyes are the model's small amber ones.
