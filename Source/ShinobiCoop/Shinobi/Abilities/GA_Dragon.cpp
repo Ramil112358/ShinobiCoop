@@ -101,15 +101,23 @@ void UGA_DragonBreath::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 	Pulses = 0;
 	Ignited.Reset();
 	LastPatchAt = FVector(TNumericLimits<float>::Max());
-	if (HasAuthority(&ActivationInfo))
-	{
-		const AShinobiDragonMount* Dragon = GetShinobiCharacter() ? AShinobiDragonMount::Find(*GetShinobiCharacter()) : nullptr;
-		BreathKind = Dragon ? Dragon->GetKind() : EShinobiDragonKind::Tairn;
-		Flame = AShinobiDragonFlame::Spawn(GetShinobiCharacter(), BreathKind);
-	}
+	const AShinobiDragonMount* Dragon = GetShinobiCharacter() ? AShinobiDragonMount::Find(*GetShinobiCharacter()) : nullptr;
+	BreathKind = Dragon ? Dragon->GetKind() : EShinobiDragonKind::Tairn;
 	UAbilityTask_WaitGameplayEvent* Interrupt = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, ShinobiTags::Event_Hit_Stagger, nullptr, true);
 	Interrupt->EventReceived.AddDynamic(this, &UGA_DragonBreath::OnStaggered);
 	Interrupt->ReadyForActivation();
+	// The breath tag starts the dragon's breath clip: the head rears back and the jaws open, and only then comes the fire.
+	UAbilityTask_WaitDelay* Open = UAbilityTask_WaitDelay::WaitDelay(this, AShinobiDragonMount::BreathOpenSeconds);
+	Open->OnFinish.AddDynamic(this, &UGA_DragonBreath::Ignite);
+	Open->ReadyForActivation();
+}
+
+void UGA_DragonBreath::Ignite()
+{
+	if (HasAuthority(&CurrentActivationInfo))
+	{
+		Flame = AShinobiDragonFlame::Spawn(GetShinobiCharacter(), BreathKind);
+	}
 	Pulse();
 }
 

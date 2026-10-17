@@ -476,13 +476,14 @@ def summon():
     }
 
 
-# Riding the dragon: seated, thighs level, feet forward, leaning a little and gripping ahead. A loop, not a jutsu: held while State.Mounted
-# lasts (AShinobiPlayerCharacter replays it). A Mixamo "Sitting Idle" at SourceArt/Mixamo/Sitting Idle.fbx replaces it
-# (Scripts/setup_jutsu_anims.py).
-SEATED = merge(NEUTRAL, {"hips": (46, 0, 0), "feet": {"R": (-14, 42, 0), "L": (14, 42, 0)}, "spine": (6, 0), "neck": (-4, 0), "head": (-6, 0),
-                         "R": arm((-17, 70, 38), (-1, -0.2, 0), (0, -0.5, 1), LEFT, FIST),
-                         "L": arm((17, 70, 38), (1, -0.2, 0), (0, -0.5, 1), RIGHT, FIST)})
-SEATED_BREATH = merge(SEATED, {"spine": (8, 0), "neck": (-5, 0), "head": (-5, 0)})
+# Riding the dragon: kneeling in seiza on its back, sitting on the heels, shins flat behind, fists forward holding the reins (AShinobiDragonMount lays them from the collar to the fists). A dragon's back is
+# about a metre across, too wide to straddle: every part of a kneeling rider stays on top of it. Posed on the floor (Y 0), which
+# the retarget keeps at the floor for every hero; AShinobiDragonMount puts the dragon's back there. A loop, not a jutsu: held while
+# State.Mounted lasts (AShinobiPlayerCharacter replays it).
+SEATED = merge(NEUTRAL, {"hips": (67, 0, 0), "feet": {"R": (-7, -6, 0, True), "L": (7, -6, 0, True)}, "spine": (8, 0), "neck": (-4, 0), "head": (-6, 0),
+                         "R": arm((-12, 58, 32), (-1, -0.3, -0.4), (0, -0.2, 1), (0.4, -0.9, 0), (THUMB_TUCK, 95, 95, 95, 95), thumb=ACROSS),
+                         "L": arm((12, 58, 32), (1, -0.3, -0.4), (0, -0.2, 1), (-0.4, -0.9, 0), (THUMB_TUCK, 95, 95, 95, 95), thumb=ACROSS)})
+SEATED_BREATH = merge(SEATED, {"spine": (10, 0), "neck": (-5, 0), "head": (-5, 0)})
 
 
 def mount():
@@ -552,14 +553,20 @@ def pose_hips(arm_obj, pose):
 
 
 def pose_leg(arm_obj, side, foot):
-    x, z, yaw = foot
+    """foot: (x, z, yaw), or (x, z, yaw, True) for a kneel: the ankle a little lower and the foot pointed along the shin, its top
+    on the ground."""
+    x, z, yaw, pointed = (*foot, False)[:4]
     names = [f"{P}{side}UpLeg", f"{P}{side}Leg", f"{P}{side}Foot"]
     hip = arm_obj.pose.bones[names[0]].head.copy()
     # Knees bend forward and a little out, following the foot's turn.
     pole = Matrix.Rotation(math.radians(yaw), 3, "Y") @ V((0.25 if side == "Left" else -0.25, 0, 1))
-    knee, ankle, _ = two_bone(hip, V((x, ANKLE_HEIGHT, z)), bone_length(arm_obj, names[0]), bone_length(arm_obj, names[1]), pole)
+    knee, ankle, _ = two_bone(hip, V((x, 6.0 if pointed else ANKLE_HEIGHT, z)), bone_length(arm_obj, names[0]), bone_length(arm_obj, names[1]), pole)
     set_rotation(arm_obj, names[0], swung(arm_obj, names[0], knee - hip))
     set_rotation(arm_obj, names[1], swung(arm_obj, names[1], ankle - knee))
+    if pointed:
+        shin = (ankle - knee).normalized()
+        set_rotation(arm_obj, names[2], swung(arm_obj, names[2], V((shin.x, min(shin.y, 0.0) - 0.15, shin.z))))
+        return
     # The foot stays flat, turned by its yaw.
     set_rotation(arm_obj, names[2], Matrix.Rotation(math.radians(yaw), 3, "Y") @ rest_rotation(arm_obj, names[2]))
 

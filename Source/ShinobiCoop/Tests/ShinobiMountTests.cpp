@@ -232,7 +232,7 @@ bool FShinobiDragonLimitTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDragonLookTest, "ShinobiCoop.Mount.TheDragonFlapsHoversAndGlides", ShinobiTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDragonLookTest, "ShinobiCoop.Mount.TheDragonFlapsAndHovers", ShinobiTestFlags)
 bool FShinobiDragonLookTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
@@ -252,14 +252,14 @@ bool FShinobiDragonLookTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Climbing: wings beating"), DragonClip(Dragon), FString(TEXT("ANIM_Tairn_Flap")));
 	P->SetFlightClimb(false);
 	W.Tick(1.5f);
-	// Flying level and fast: gliding.
+	// Flying level and fast: beating hard too.
 	for (int32 Step = 0; Step < 30; ++Step)
 	{
 		P->AddMovementInput(FVector::ForwardVector, 1.f);
 		W.Tick(0.05f);
 	}
 	TestTrue(FString::Printf(TEXT("up to speed (%.0f)"), P->GetVelocity().Size2D()), P->GetVelocity().Size2D() > 800.f);
-	TestEqual(TEXT("Fast and level: gliding"), DragonClip(Dragon), FString(TEXT("ANIM_Tairn_Glide")));
+	TestEqual(TEXT("Fast and level: flapping"), DragonClip(Dragon), FString(TEXT("ANIM_Tairn_Flap")));
 	return true;
 }
 
@@ -292,7 +292,7 @@ bool FShinobiBreathTest::RunTest(const FString& Parameters)
 	ShinobiTest::Press(P, EShinobiAbilityInputID::Melee);
 	TestTrue(TEXT("The swing button breathes fire"), ShinobiTest::IsActive(P, UGA_DragonBreath::StaticClass()));
 	TestEqual(TEXT("for 15 chakra"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 85.f);
-	W.Tick(2.f);
+	W.Tick(AShinobiDragonMount::BreathOpenSeconds + 2.f);
 	TestFalse(TEXT("It is over after a moment"), ShinobiTest::IsActive(P, UGA_DragonBreath::StaticClass()));
 	TestTrue(FString::Printf(TEXT("The enemy ahead took several pulses (%.0f left)"), ShinobiTest::Get(Front, Health)), ShinobiTest::Get(Front, Health) <= 500.f - 3 * UGA_DragonBreath::PulseDamage);
 	TestTrue(TEXT("and burns"), ShinobiTest::HasTag(Front, ShinobiTags::State_Burning));
@@ -314,7 +314,7 @@ bool FShinobiBreathRulesTest::RunTest(const FString& Parameters)
 
 	AShinobiPlayerCharacter* P = Rider(W, FVector(0.f, 5000.f, 0.f));
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Melee);
-	W.Tick(2.f);
+	W.Tick(AShinobiDragonMount::BreathOpenSeconds + 2.f);
 	TestTrue(TEXT("Cooling down"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_DragonBreath));
 	ShinobiTest::Press(P, EShinobiAbilityInputID::Melee);
 	TestFalse(TEXT("so a second breath has to wait"), ShinobiTest::IsActive(P, UGA_DragonBreath::StaticClass()));
@@ -500,6 +500,8 @@ bool FShinobiBreathAnimTest::RunTest(const FString& Parameters)
 	W.Tick(0.2f);
 	TestTrue(TEXT("The breath tag is up"), ShinobiTest::HasTag(P, ShinobiTags::State_DragonBreathing));
 	TestEqual(TEXT("The dragon plays its breath clip"), DragonClip(Dragon), FString(TEXT("ANIM_Tairn_Breath")));
+	TestEqual(TEXT("No fire while the jaws open"), ShinobiTest::CountActors<AShinobiDragonFlame>(W), 0);
+	W.Tick(AShinobiDragonMount::BreathOpenSeconds);
 	TestEqual(TEXT("One jet of flame"), ShinobiTest::CountActors<AShinobiDragonFlame>(W), 1);
 	for (TActorIterator<AShinobiDragonFlame> It(W.World); It; ++It)
 	{
@@ -566,7 +568,7 @@ bool FShinobiDragonFireTest::RunTest(const FString& Parameters)
 
 	ShinobiTest::Press(A, EShinobiAbilityInputID::Melee);
 	ShinobiTest::Press(B, EShinobiAbilityInputID::Melee);
-	W.Tick(0.2f);
+	W.Tick(AShinobiDragonMount::BreathOpenSeconds + 0.2f);
 	int32 Blue = 0, Orange = 0;
 	for (TActorIterator<AShinobiDragonFlame> It(W.World); It; ++It)
 	{
@@ -637,8 +639,15 @@ bool FShinobiBreathAimTest::RunTest(const FString& Parameters)
 	const FVector Direction = AShinobiDragonMount::BreathDirection(*P);
 	TestTrue(TEXT("The direction is the facing..."), FVector(Direction.X, Direction.Y, 0.f).GetSafeNormal().Equals(FVector(0.f, 1.f, 0.f), 0.01f));
 	TestTrue(FString::Printf(TEXT("...tilted slightly down, %.0f degrees (z %.2f)"), AShinobiDragonMount::BreathPitch, Direction.Z), FMath::IsNearlyEqual(Direction.Z, -FMath::Sin(FMath::DegreesToRadians(AShinobiDragonMount::BreathPitch)), 0.01f));
-	ShinobiTest::Press(P, EShinobiAbilityInputID::Melee); // the first pulse fires at once
-	W.Tick(0.05f);
+	ShinobiTest::Press(P, EShinobiAbilityInputID::Melee); // the first pulse fires as the jaws open
+	// While the jaws open a mounted rider would turn to the camera's yaw and lift off the floor: keep it where it was.
+	P->GetCharacterMovement()->bUseControllerDesiredRotation = false;
+	const FVector Start = P->GetActorLocation();
+	for (float Waited = 0.f; Waited < AShinobiDragonMount::BreathOpenSeconds + 0.05f; Waited += 0.05f)
+	{
+		P->SetActorLocation(Start);
+		W.Tick(0.05f);
+	}
 	TestTrue(TEXT("What the dragon faces is burnt"), ShinobiTest::Get(Ahead, UShinobiAttributeSet::GetHealthAttribute()) < 500.f);
 	TestEqual(TEXT("what the camera looks at is not"), ShinobiTest::Get(WhereTheCameraLooks, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
 	return true;
