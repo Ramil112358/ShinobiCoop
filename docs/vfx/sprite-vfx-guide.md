@@ -279,10 +279,11 @@ Shots 25-26 of `Scripts/shot_chakra.ps1 -Jutsu` show it too. `Scripts/smoke_m1.p
 
 ## 10. Summons (2026-10-03)
 
-Page 4, slots 2-4: Summon Toad (60 chakra, 45 s cooldown), Summon Misha (50, 40 s; he replaced the snake on 2026-10-14) and Summon Pabu (45, 30 s; it replaced the pack of four dogs on 2026-10-12). After the Kuchiyose seals
+Page 4, slots 2-4: Summon Owl (60 chakra, 45 s cooldown; she replaced the toad on 2026-10-17), Summon Misha (50, 40 s; he replaced the snake on 2026-10-14) and Summon Pabu (45, 30 s; it replaced the pack of four dogs on 2026-10-12). After the Kuchiyose seals
 (`AM_Summon_Seal`, a crouch with the right fist drawn up) and a palm slam (`AM_Summon_Release`, both built by
 `Scripts/character/build_jutsu_anims.py`, timeline `Summon`) the creature appears 4-5 m in front of the caster in a puff of smoke
-(`EShinobiBurst::SummonPoof`). A caster has one of each kind out at a time: calling it again replaces it.
+(`EShinobiBurst::SummonPoof`). A caster has one of each kind out at a time: calling it again replaces it. The owl is the exception
+to the ground summons below: see "The owl" at the end of this section.
 
 A summon is `AShinobiSummon`, an `AShinobiEnemyCharacter` on the **players'** team, so the existing enemy AI, health, attack abilities and
 death do the work: it chases the nearest hostile, enemies pick it as a target like a player, and the caster's area jutsu skip it. It is
@@ -291,18 +292,17 @@ not counted by waves or camps (only `FShinobiEncounter::Spawn` registers kills).
 
 | Kind | Health | Attack | Stays |
 |---|---|---|---|
-| Toad (x1) | 600 | `UGA_ToadSlam`: 60 to everything within 4.5 m of its feet, every 2.5 s | 12 s |
 | Misha (x1) | 500 | `UGA_MishaBark`: 70 to everything in a 35-degree cone out to 8 m, each staggered and thrown back, every 2.2 s; hops at 380 | 12 s |
 | Pabu (x1) | 450 | `UGA_PabuBite`: 45 in front, every 0.8 s, run speed 650 | 15 s |
 
 Animation is `UShinobiCreatureAnimInstance` (no animation blueprint): it picks the clip from replicated state (velocity, health, the tag
 `State.SummonAttacking` that the three attack abilities grant) and cross-fades between idle, walk, run, attack, flinch (when hurt) and
 death over 0.2 s instead of cutting. Walk and run play at the speed the creature actually moves (Pabu's trot covers 144 cm/s and his gallop 480,
-as `build_pabu.py` prints them; Misha's hop covers 315 cm/s; the toad plays its one move clip at 1x at top speed), and the attack clip is stretched over
+as `build_pabu.py` prints them; Misha's hop covers 315 cm/s), and the attack clip is stretched over
 the attack ability's wind-up plus recovery so the blow lands with the damage.
 
-Following: with nothing to fight a summon walks to a post beside its caster (`GetIdlePost`; the toad behind on one side, Misha on
-the other, Pabu ahead of them), and if it is left more than 40 m behind (a teleport, a dragon ride) it reappears there in a
+Following: with nothing to fight a summon walks to a post beside its caster (`GetIdlePost`; Misha behind on one side,
+Pabu ahead on the other), and if it is left more than 40 m behind (a teleport, a dragon ride) it reappears there in a
 puff of smoke. It only picks fights with enemies within 30 m of the caster.
 
 Where the creatures come from (all in `docs/world/asset-credits.md`):
@@ -317,7 +317,7 @@ Where the creatures come from (all in `docs/world/asset-credits.md`):
   Walk (a trot), Run (a gallop), Bite (the jaws close 0.4 s in, `UGA_PabuBite::WindUp`), Hit and Death with IK-driven paws. True corgi
   size (0.33 m at the withers), scaled 1.6 in code. He wears `M_Creature` (base colour, Tripo's normal map and its roughness, floored at
   0.55 so the fur is not glossy; `setup_creatures.py` uses it for any creature with `<png>_Normal.png` and `<png>_Roughness.png`) and waits
-  2.2 m from his caster, closer than the toad and Misha. To rerun: `blender -b -P Scripts/character/build_pabu.py` (add `-- preview [Clip...]`
+  2.2 m from his caster, closer than Misha. To rerun: `blender -b -P Scripts/character/build_pabu.py` (add `-- preview [Clip...]`
   for renders in `Saved/`), then `Scripts/setup_creatures.py`.
 - **Misha**: the user's own plush puppy (photos in `SourceArt/Character/Photos/Misha`), a Tripo Studio model, auto-rigged by Tripo
   (export in `SourceArt/Tripo/Misha`). Tripo kept the photo's pose, so Misha sits; he stays seated and gets about in seated hops, a toy
@@ -332,12 +332,26 @@ Where the creatures come from (all in `docs/world/asset-credits.md`):
   (add `-- preview [Clip...]` for clip renders or `-- rig` for joint and weight renders in `Saved/`), then `CREATURES_ONLY=Misha` and
   `Scripts/setup_creatures.py`. The old Mesh2Motion snake (`Scripts/character/export_creature.py`) is still in
   `/Game/Shinobi/Creatures/Snake` but nothing uses it.
-- **Toad**: a Hyper3D Rodin model (`SourceArt/Creatures/Toad/rodin_toad.glb`, one unrigged mesh). Mesh2Motion has no toad, so
-  `Scripts/character/build_toad.py` builds a 17-bone quadruped rig to its proportions, weights it by distance (Blender's bone-heat
-  weights failed on the mesh) and keys the clips: idle, a hop for movement, a slam (rears up, crashes down at 0.7 s, which is
-  `UGA_ToadSlam::WindUp`), hit and death. To rerun: `blender -b -P Scripts/character/build_toad.py` (add `-- preview`
-  for pose renders in `Saved/`), then `Scripts/setup_creatures.py`.
+- **Owl**: the user's own snowy-owl plush (photos and the GPT Image front/left/back views in `SourceArt/Tripo/Owl`), a Tripo Studio
+  model (Smart Mesh, auto-rigged as Humanoid). Tripo's Mixamo-named rig fits her (arms along the wings, legs to the felt feet) and every
+  vertex is weighted, so `Scripts/character/build_owl.py` keeps it, folds the finger joints into the hand, turns her to face +X, takes
+  the base colour out of the GLB (the FBX has no texture) and keys Hover (a 0.5 s flapping loop) and Strike (wings up, a hard
+  down-beat 0.4 s in, `AShinobiOwl::WindUp`, back to Hover's first pose). Model size 1.0 m, shown at 0.45. To rerun:
+  `blender -b -P Scripts/character/build_owl.py` (add `-- preview [Clip...]` or `-- rig` for renders in `Saved/`), then
+  `CREATURES_ONLY=Owl` and `Scripts/setup_creatures.py`.
+- **Toad** (retired 2026-10-17, replaced by the owl): the Rodin toad and `Scripts/character/build_toad.py` are still in the project
+  (`/Game/Shinobi/Creatures/Toad`) but nothing uses them.
 - To add a creature: put it in `CREATURES` in `setup_creatures.py`, a look in `CreatureLookFor` and a row in `SummonStatsFor`.
+
+**The owl** (`AShinobiOwl`, `UGA_SummonOwl`) is no ground summon and no combatant: a plain replicated actor, not a character, with
+no health and no collision, so enemies never target or hit her. She hovers at her caster's left shoulder (60 cm left, 30 cm behind,
+160 cm above their feet: the camera looks over the right shoulder) for 15 s. Every machine flies her to that post itself (movement is
+not replicated; she snaps there when more than 15 m off), facing where her caster faces. Every 2 s (first 0.5 s after she arrives)
+the server picks the nearest hostile within 20 m of the caster that she can see (a trace against world geometry only), plays Strike
+and 0.4 s later, if caster and target are both still standing, deals 55 through `UGE_DamageNoStagger` (no stagger, no shove, no
+status) and drops `EShinobiBurst::SkyBolt` on the target's feet: Chidori-blue bolt cards stacked 15 m up, each a moment after the one
+above so the bolt falls, and the Lightning flash where it lands. She leaves in a small puff when her time is up or her caster is
+downed, dies or leaves. Tests: the `ShinobiCoop.Summons.Owl*` group and `ShinobiCoop.Pvp.OwlStrikesTheCastersFoesInPvp`.
 
 Shots 27-30 of `Scripts/shot_chakra.ps1 -Jutsu` show the three arrivals and the full page-4 HUD; `Scripts/smoke_m1.ps1` checks the client
 sees Pabu. Not done: turn clips, a jaw (Pabu bites with a lunge and a head shake; his mouth stays shut). A summon leaves the moment its caster is downed,
