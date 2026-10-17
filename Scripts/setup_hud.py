@@ -32,6 +32,7 @@ TEXTURES = {
     "jutsu_summontoad.png": ("T_Jutsu_SummonToad", 128),
     "jutsu_summonmisha.png": ("T_Jutsu_SummonMisha", 128),
     "jutsu_summonpabu.png": ("T_Jutsu_SummonPabu", 128),
+    "jutsu_summonpusho.png": ("T_Jutsu_SummonPusho", 128),
     "jutsu_summondragon.png": ("T_Jutsu_SummonDragon", 128),
     "jutsu_summoncrimson.png": ("T_Jutsu_SummonCrimson", 128),
 }
@@ -64,7 +65,8 @@ def import_texture(png, name, max_size):
     log(f"{png} -> {texture.get_path_name()} ({max_size} px)")
 
 
-for file, (name, max_size) in TEXTURES.items():
+ONLY = [n for n in os.environ.get("HUD_ONLY", "").split(",") if n]  # e.g. HUD_ONLY=T_Jutsu_SummonPusho: import just those
+for file, (name, max_size) in ((f, t) for f, t in TEXTURES.items() if not ONLY or t[0] in ONLY):
     png = os.path.join(SOURCE, file)
     if os.path.exists(png):
         import_texture(png, name, max_size)

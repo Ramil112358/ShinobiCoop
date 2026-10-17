@@ -90,8 +90,8 @@ bool FShinobiSusanooCastTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(4);
-	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	P->ApplyJutsuPage(5);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	TestEqual(TEXT("Cost 40 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 60.f);
 	TestFalse(TEXT("Not armoured during the seals"), ShinobiTest::HasTag(P, ShinobiTags::State_Susanoo));
 	W.Tick(0.9f);
@@ -99,19 +99,21 @@ bool FShinobiSusanooCastTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Cooldown running"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Susanoo));
 	TestFalse(TEXT("The jutsu itself is over"), ShinobiTest::IsActive(P, UGA_Susanoo::StaticClass()));
 
-	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	TestFalse(TEXT("It cannot be recast while it is up"), ShinobiTest::IsActive(P, UGA_Susanoo::StaticClass()));
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSusanooPageTest, "ShinobiCoop.Susanoo.OnlyFiresFromPageFour", ShinobiTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSusanooPageTest, "ShinobiCoop.Susanoo.OnlyFiresFromPageFive", ShinobiTestFlags)
 bool FShinobiSusanooPageTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
-	P->ApplyJutsuPage(2); // key 1 is Teleport there
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(4); // its old page: key 1 is Summon Pusho now, key 3 Misha
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
-	TestFalse(TEXT("Not on page 2"), ShinobiTest::IsActive(P, UGA_Susanoo::StaticClass()));
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
+	TestFalse(TEXT("Not on page 4"), ShinobiTest::IsActive(P, UGA_Susanoo::StaticClass()));
 	return true;
 }
 

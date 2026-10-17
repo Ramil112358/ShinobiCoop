@@ -27,6 +27,16 @@ protected:
 	float Clearance = 250.f;
 };
 
+/** Page 4, slot 1: Pusho, a big long-haired cat who pounces and claws. */
+UCLASS()
+class SHINOBICOOP_API UGA_SummonPusho : public UGA_SummonBase
+{
+	GENERATED_BODY()
+
+public:
+	UGA_SummonPusho();
+};
+
 /** Page 4, slot 2: a giant toad, slow and tough, that slams the ground. */
 UCLASS()
 class SHINOBICOOP_API UGA_SummonToad : public UGA_SummonBase

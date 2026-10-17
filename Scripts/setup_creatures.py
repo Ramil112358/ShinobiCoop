@@ -18,6 +18,7 @@ CREATURES = {
     "CrimsonDragon": (None, ["Idle", "Flap", "Glide", "Breath"], "CrimsonDragon.png"),  # Scripts/character/build_dragon_crimson.py (Tripo)
     "Toad": (None, ["Idle", "Move", "Slam", "Hit", "Death"], "Toad.png"),
     "Pabu": (None, ["Idle", "Walk", "Run", "Bite", "Hit", "Death"], "Pabu.png"),  # Scripts/character/build_pabu.py
+    "Pusho": (None, ["Idle", "Walk", "Run", "Pounce", "Hit", "Death"], "Pusho.png"),  # Scripts/character/build_pusho.py
 }
 LEGACY = ["/Game/Shinobi/Creatures/Dragon"]  # the one dragon before there were two: now Tairn and CrimsonDragon
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()

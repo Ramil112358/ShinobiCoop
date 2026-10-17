@@ -1,4 +1,5 @@
 #include "Shinobi/Enemies/GA_SummonAttacks.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
@@ -15,6 +16,57 @@ UGA_PabuBite::UGA_PabuBite()
 	WindUpMontage = nullptr; // Pabu plays its own clip, on State.SummonAttacking
 	FollowUpMontage = nullptr;
 	ActivationOwnedTags.AddTag(ShinobiTags::State_SummonAttacking);
+}
+
+UGA_PushoPounce::UGA_PushoPounce()
+{
+	Hits = 1;
+	WindUp = 0.45f;
+	Recovery = 0.45f;
+	Range = 200.f;
+	HalfAngle = 70.f;
+	WindUpMontage = nullptr; // Pusho plays his own clip, on State.SummonAttacking
+	FollowUpMontage = nullptr;
+	ActivationOwnedTags.AddTag(ShinobiTags::State_SummonAttacking);
+}
+
+void UGA_PushoPounce::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
+{
+	bLeapt = false;
+	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
+}
+
+void UGA_PushoPounce::Strike()
+{
+	if (bLeapt)
+	{
+		Super::Strike(); // landed: the claw
+		return;
+	}
+	bLeapt = true;
+	AShinobiEnemyCharacter* Self = GetEnemy();
+	if (!Self)
+	{
+		EndNow();
+		return;
+	}
+	// A ballistic arc that comes down LeapSeconds from now just short of where the target is (or on the spot, with no target). Never
+	// aimed downward: a target lower down is reached by falling further, so there is always a hop.
+	const FVector Feet = Self->GetActorLocation() - FVector(0.f, 0.f, Self->GetSimpleCollisionHalfHeight());
+	FVector Land = Feet;
+	if (const AShinobiCharacterBase* Target = LockedTarget.Get(); Target && Target->IsAlive())
+	{
+		const FVector TargetFeet = Target->GetActorLocation() - FVector(0.f, 0.f, Target->GetSimpleCollisionHalfHeight());
+		const FVector To = TargetFeet - Feet;
+		const float Gap = Self->GetSimpleCollisionRadius() + Target->GetSimpleCollisionRadius() + StopShort;
+		Land = Feet + To.GetSafeNormal2D() * FMath::Max(To.Size2D() - Gap, 0.f) + FVector(0.f, 0.f, FMath::Max(To.Z, 0.f));
+		Self->SetActorRotation(FRotator(0.f, To.Rotation().Yaw, 0.f));
+	}
+	const FVector Delta = Land - Feet;
+	FVector Velocity = Delta / LeapSeconds;
+	Velocity.Z -= 0.5f * Self->GetCharacterMovement()->GetGravityZ() * LeapSeconds;
+	Self->LaunchCharacter(Velocity, true, true);
+	StrikeAfter(LeapSeconds);
 }
 
 UGA_ToadSlam::UGA_ToadSlam()

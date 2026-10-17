@@ -18,6 +18,7 @@
 #include "Animation/AnimMontage.h"
 #include "Engine/Texture2D.h"
 #include "Shinobi/Abilities/GA_AlmightyPush.h"
+#include "Shinobi/Abilities/GA_Amaterasu.h"
 #include "Shinobi/Abilities/GA_EarthWall.h"
 #include "Shinobi/Abilities/GA_Kamui.h"
 #include "Shinobi/Abilities/GA_Melee.h"
@@ -36,12 +37,12 @@ bool FShinobiOffPageJutsuTest::RunTest(const FString& Parameters)
 	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
 
 	TestTrue(TEXT("Starts on page 1"), ShinobiTest::HasTag(P, ShinobiTags::JutsuPage(1)));
-	P->ApplyJutsuPage(5); // keys 3 and 4 are empty there (the two dragons live on keys 1 and 2)
+	P->ApplyJutsuPage(5); // key 4 is empty there (the two dragons live on keys 1 and 2, Susanoo on 3)
 	TestFalse(TEXT("Page 1 tag removed"), ShinobiTest::HasTag(P, ShinobiTags::JutsuPage(1)));
 	TestEqual(TEXT("On page 5"), P->GetJutsuPage(), 5);
 
-	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
-	TestFalse(TEXT("Rasengan is on page 1: key 3 does nothing on page 5"), ShinobiTest::IsActive(P, UGA_Rasengan::StaticClass()));
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
+	TestFalse(TEXT("Amaterasu is on page 1: key 4 does nothing on page 5"), ShinobiTest::IsActive(P, UGA_Amaterasu::StaticClass()));
 	TestEqual(TEXT("Nothing spent"), ShinobiTest::Get(P, Chakra), 100.f);
 
 	P->ApplyJutsuPage(1);
@@ -288,9 +289,9 @@ bool FShinobiPageCycleTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Forward from 2"), P->TryCycleJutsuPage(1));
 	TestEqual(TEXT("to 3"), P->GetJutsuPage(), 3);
 	TestTrue(TEXT("Forward from 3"), P->TryCycleJutsuPage(1));
-	TestEqual(TEXT("to 4 (Susanoo)"), P->GetJutsuPage(), 4);
+	TestEqual(TEXT("to 4 (the summons)"), P->GetJutsuPage(), 4);
 	TestTrue(TEXT("Forward from 4"), P->TryCycleJutsuPage(1));
-	TestEqual(TEXT("to 5 (the Dragon)"), P->GetJutsuPage(), 5);
+	TestEqual(TEXT("to 5 (the dragons and Susanoo)"), P->GetJutsuPage(), 5);
 	TestTrue(TEXT("Forward from 5"), P->TryCycleJutsuPage(1));
 	TestEqual(TEXT("wraps to 1"), P->GetJutsuPage(), 1);
 	TestTrue(TEXT("Back from 1"), P->TryCycleJutsuPage(-1));
