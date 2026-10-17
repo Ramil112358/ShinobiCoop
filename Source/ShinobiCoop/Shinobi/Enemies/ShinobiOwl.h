@@ -10,7 +10,7 @@ class USkeletalMeshComponent;
 
 /**
  * The summoned owl (UGA_SummonOwl): the user's snowy-owl plush, she/her. She hovers at her caster's left shoulder for Lifetime
- * seconds and calls lightning down from the sky onto the nearest hostile she can see within StrikeRange of the caster: Damage
+ * seconds and calls lightning down from the sky onto the nearest targetable hostile in her caster's sight within StrikeRange: Damage
  * that neither staggers nor shoves. She is no combatant: not a character, no health, no collision, so nothing targets or hits
  * her. Server authoritative. Her movement is not replicated: every machine flies her to GetPost of her replicated caster, so she
  * keeps to the shoulder smoothly; only her caster, her target and a strike counter (which plays Strike on clients) replicate.
@@ -26,7 +26,8 @@ public:
 	/** Server only: calls Caster's owl to their shoulder, dismissing the one they had out. Null on a client or with no caster. */
 	static AShinobiOwl* Summon(AShinobiCharacterBase* Caster);
 
-	/** Where her body's middle hovers beside Caster: PostLeft to their left, PostBehind behind, PostHeight above their feet. */
+	/** Where her body's middle hovers beside Caster: PostLeft to their left, PostBehind behind, PostHeight above their feet, in the
+	 * caster's own frame (on a wall-run, "above" is away from the wall). */
 	static FVector GetPost(const AShinobiCharacterBase& Caster);
 
 	AShinobiCharacterBase* GetSummoner() const { return Summoner; }

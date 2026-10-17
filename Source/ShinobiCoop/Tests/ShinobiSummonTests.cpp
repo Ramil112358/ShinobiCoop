@@ -842,12 +842,14 @@ bool FShinobiOwlSightTest::RunTest(const FString& Parameters)
 	ShinobiTest::Hover(Caster);
 	AShinobiCharacterBase* Hidden = Foe(W, FVector(0.f, 800.f, 0.f));
 	AShinobiCharacterBase* Distant = Foe(W, FVector(-2500.f, 0.f, 0.f));
+	AShinobiCharacterBase* InView = Foe(W, FVector(0.f, -1500.f, 0.f)); // farther than the hidden one, but in plain view
 	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
 	const float Full = ShinobiTest::Get(Hidden, Health);
 	AShinobiOwl::Summon(Caster);
 	W.Tick(3.f);
 	TestEqual(TEXT("Not through a wall"), ShinobiTest::Get(Hidden, Health), Full);
 	TestEqual(TEXT("Not beyond 20 m"), ShinobiTest::Get(Distant, Health), Full);
+	TestTrue(TEXT("but the foe in view is struck"), ShinobiTest::Get(InView, Health) < Full);
 	return true;
 }
 
@@ -933,6 +935,78 @@ bool FShinobiOwlLookTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("She strikes"), OwlClip(Owl), FString(TEXT("ANIM_Owl_Strike")));
 	W.Tick(1.f);
 	TestEqual(TEXT("then hovers again"), OwlClip(Owl), FString(TEXT("ANIM_Owl_Hover")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOwlPhasedTest, "ShinobiCoop.Summons.OwlIgnoresFoesInKamui", ShinobiTestFlags)
+bool FShinobiOwlPhasedTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	AShinobiCharacterBase* Phased = Foe(W, FVector(500.f, 0.f, 0.f));
+	AShinobiCharacterBase* Open = Foe(W, FVector(900.f, 0.f, 0.f));
+	ShinobiTest::ApplyEffect(Phased, UGE_Kamui::StaticClass());
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+	const float Full = ShinobiTest::Get(Open, Health);
+	AShinobiOwl* Owl = AShinobiOwl::Summon(Caster);
+	W.Tick(1.f);
+	TestTrue(TEXT("She passes over the phased foe"), Owl && Owl->GetTarget() == Open);
+	TestEqual(TEXT("and strikes the one in the open"), ShinobiTest::Get(Open, Health), Full - 55.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOwlWallRunTest, "ShinobiCoop.Summons.OwlKeepsToTheShoulderOnAWall", ShinobiTestFlags)
+bool FShinobiOwlWallRunTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	// Running up a wall whose face looks along -X: the caster's up is -X and they face straight up.
+	Caster->SetActorRotation(FRotationMatrix::MakeFromXZ(FVector::UpVector, FVector(-1.f, 0.f, 0.f)).Rotator());
+	const FVector Up = Caster->GetActorUpVector();
+	const FVector Feet = Caster->GetActorLocation() - Up * Caster->GetSimpleCollisionHalfHeight();
+	const FVector Post = AShinobiOwl::GetPost(*Caster);
+	const FVector Offset = Post - Feet;
+	TestTrue(FString::Printf(TEXT("Shoulder height off the wall, along the caster's up (%.0f)"), Offset | Up), FMath::Abs((Offset | Up) - 160.f) <= 5.f);
+	TestTrue(FString::Printf(TEXT("to the caster's left (%.0f)"), Offset | -Caster->GetActorRightVector()), FMath::Abs((Offset | -Caster->GetActorRightVector()) - 60.f) <= 5.f);
+	TestTrue(FString::Printf(TEXT("and a little behind (%.0f)"), Offset | Caster->GetActorForwardVector()), FMath::Abs((Offset | Caster->GetActorForwardVector()) + 30.f) <= 5.f);
+
+	AShinobiOwl* Owl = AShinobiOwl::Summon(Caster);
+	if (!TestNotNull(TEXT("The owl came"), Owl))
+	{
+		return false;
+	}
+	W.Tick(1.f);
+	TestTrue(TEXT("She hovers there"), FVector::Dist(Owl->GetActorLocation(), AShinobiOwl::GetPost(*Caster)) <= 20.f);
+	TestTrue(TEXT("upright to the wall like her caster"), (Owl->GetActorUpVector() | Caster->GetActorUpVector()) > 0.9f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOwlWallBesideTest, "ShinobiCoop.Summons.OwlStrikesWithAWallBesideHerCaster", ShinobiTestFlags)
+bool FShinobiOwlWallBesideTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	if (!TestNotNull(TEXT("engine cube"), Cube))
+	{
+		return false;
+	}
+	// A wall along the caster's left side, close enough that her post (60 cm left) is inside it.
+	AStaticMeshActor* Wall = W.World->SpawnActor<AStaticMeshActor>(FVector(0.f, -90.f, 0.f), FRotator::ZeroRotator);
+	Wall->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+	Wall->GetStaticMeshComponent()->SetStaticMesh(Cube);
+	Wall->SetActorScale3D(FVector(30.f, 1.f, 30.f));
+	Wall->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	AShinobiCharacterBase* Ahead = Foe(W, FVector(800.f, 0.f, 0.f));
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+	const float Full = ShinobiTest::Get(Ahead, Health);
+	AShinobiOwl::Summon(Caster);
+	W.Tick(1.f);
+	TestEqual(TEXT("A foe in plain view of her caster is struck"), ShinobiTest::Get(Ahead, Health), Full - 55.f);
 	return true;
 }
 

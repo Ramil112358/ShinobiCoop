@@ -45,8 +45,9 @@ void AShinobiOwl::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 
 FVector AShinobiOwl::GetPost(const AShinobiCharacterBase& Caster)
 {
-	const FVector Feet = Caster.GetActorLocation() - FVector(0.f, 0.f, Caster.GetSimpleCollisionHalfHeight());
-	return Feet + FRotator(0.f, Caster.GetActorRotation().Yaw, 0.f).RotateVector(FVector(-PostBehind, -PostLeft, PostHeight));
+	// In the caster's own frame, which a wall-run turns with gravity: up is away from the wall they run on.
+	const FVector Feet = Caster.GetActorLocation() - Caster.GetActorUpVector() * Caster.GetSimpleCollisionHalfHeight();
+	return Feet + Caster.GetActorQuat().RotateVector(FVector(-PostBehind, -PostLeft, PostHeight));
 }
 
 AShinobiOwl* AShinobiOwl::Summon(AShinobiCharacterBase* Caster)
@@ -68,7 +69,7 @@ AShinobiOwl* AShinobiOwl::Summon(AShinobiCharacterBase* Caster)
 	{
 		Old->Dismiss();
 	}
-	const FTransform Where(FRotator(0.f, Caster->GetActorRotation().Yaw, 0.f), GetPost(*Caster));
+	const FTransform Where(Caster->GetActorRotation(), GetPost(*Caster));
 	AShinobiOwl* Owl = World->SpawnActorDeferred<AShinobiOwl>(StaticClass(), Where, Caster, Caster, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 	if (!Owl)
 	{
@@ -124,8 +125,8 @@ void AShinobiOwl::Tick(float DeltaSeconds)
 	const FVector There = FVector::Dist(Here, Post) > SnapDistance ? Post : FMath::VInterpTo(Here, Post, DeltaSeconds, FollowSpeed);
 	// She looks where her caster looks, and at her target while she strikes.
 	const bool bStriking = IsValid(Target) && Target->IsAlive() && Body->GetSingleNodeInstance() && StrikeClip && Body->IsPlaying() && Body->GetSingleNodeInstance()->GetAnimationAsset() == StrikeClip;
-	const float Yaw = bStriking ? (Target->GetActorLocation() - There).Rotation().Yaw : Summoner->GetActorRotation().Yaw;
-	SetActorLocationAndRotation(There, FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Yaw, 0.f), DeltaSeconds, FollowSpeed));
+	const FRotator Facing = bStriking ? FRotationMatrix::MakeFromXZ(Target->GetActorLocation() - There, Summoner->GetActorUpVector()).Rotator() : Summoner->GetActorRotation();
+	SetActorLocationAndRotation(There, FMath::RInterpTo(GetActorRotation(), Facing, DeltaSeconds, FollowSpeed));
 	if (HoverClip && !Body->IsPlaying())
 	{
 		PlayClip(HoverClip, true); // a strike has played out
@@ -136,11 +137,16 @@ AShinobiCharacterBase* AShinobiOwl::FindTarget() const
 {
 	AShinobiCharacterBase* Best = nullptr;
 	float BestDistance = TNumericLimits<float>::Max();
-	const FVector From = GetActorLocation();
+	// Seen from her caster, not from her: with a wall at the caster's left she hovers half inside it.
+	const FVector From = Summoner->GetActorLocation();
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(OwlSight), false, this);
 	Params.AddIgnoredActor(Summoner);
 	for (AShinobiCharacterBase* Candidate : ShinobiCombat::FindHostilesInRadius(Summoner, Summoner->GetActorLocation(), StrikeRange))
 	{
+		if (!Candidate->IsTargetable())
+		{
+			continue; // in Kamui: untouchable and unseen, as the enemy AI treats it
+		}
 		const float Distance = FVector::DistSquared(Candidate->GetActorLocation(), Summoner->GetActorLocation());
 		FHitResult Hit;
 		// Only the world's walls and roofs hide a foe from her: by object type, as characters block the WorldStatic channel too.
@@ -171,7 +177,7 @@ void AShinobiOwl::StartStrike()
 
 void AShinobiOwl::LandStrike()
 {
-	if (!IsValid(Summoner) || !Summoner->IsAlive() || !IsValid(Target) || !Target->IsAlive())
+	if (!IsValid(Summoner) || !Summoner->IsAlive() || !IsValid(Target) || !Target->IsTargetable())
 	{
 		return;
 	}

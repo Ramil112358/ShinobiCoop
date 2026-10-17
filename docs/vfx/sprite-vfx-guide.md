@@ -345,9 +345,11 @@ Where the creatures come from (all in `docs/world/asset-credits.md`):
 
 **The owl** (`AShinobiOwl`, `UGA_SummonOwl`) is no ground summon and no combatant: a plain replicated actor, not a character, with
 no health and no collision, so enemies never target or hit her. She hovers at her caster's left shoulder (60 cm left, 30 cm behind,
-160 cm above their feet: the camera looks over the right shoulder) for 15 s. Every machine flies her to that post itself (movement is
+160 cm above their feet, in the caster's own frame, so on a wall-run "above" is away from the wall: the camera looks over the right
+shoulder) for 15 s. A PvP round reset dismisses her with the ground summons. Every machine flies her to that post itself (movement is
 not replicated; she snaps there when more than 15 m off), facing where her caster faces. Every 2 s (first 0.5 s after she arrives)
-the server picks the nearest hostile within 20 m of the caster that she can see (a trace against world geometry only), plays Strike
+the server picks the nearest hostile within 20 m of the caster that is not in Kamui and that the caster can see (a trace from the
+caster against world geometry only: with a wall at the caster's left she hovers half inside it), plays Strike
 and 0.4 s later, if caster and target are both still standing, deals 55 through `UGE_DamageNoStagger` (no stagger, no shove, no
 status) and drops `EShinobiBurst::SkyBolt` on the target's feet: Chidori-blue bolt cards stacked 15 m up, each a moment after the one
 above so the bolt falls, and the Lightning flash where it lands. She leaves in a small puff when her time is up or her caster is

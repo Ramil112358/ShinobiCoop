@@ -1066,4 +1066,20 @@ bool FShinobiPvpOwlTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpOwlRoundTest, "ShinobiCoop.Pvp.Mode.TheOwlLeavesWithTheRound", ShinobiTestFlags)
+bool FShinobiPvpOwlRoundTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPvpGameMode* Mode = W.Spawn<AShinobiPvpGameMode>();
+	Mode->PvpFormat = EShinobiPvpFormat::OneVsOne;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	P->SetTeam(EShinobiTeam::TeamA);
+	ShinobiTest::Hover(P);
+	AShinobiOwl::Summon(P);
+	TestEqual(TEXT("Her owl is out"), ShinobiTest::CountActors<AShinobiOwl>(W), 1);
+	Mode->ResetCharacters();
+	TestEqual(TEXT("and leaves with the round, like the ground summons"), ShinobiTest::CountActors<AShinobiOwl>(W), 0);
+	return true;
+}
+
 #endif
