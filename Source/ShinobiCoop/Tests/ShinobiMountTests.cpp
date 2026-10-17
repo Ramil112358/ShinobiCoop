@@ -278,11 +278,12 @@ bool FShinobiBreathTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = Rider(W);
-	AShinobiCharacterBase* Front = W.Spawn<AShinobiCharacterBase>(FVector(800.f, 0.f, 0.f));
-	AShinobiCharacterBase* Side = W.Spawn<AShinobiCharacterBase>(FVector(800.f, 600.f, 0.f)); // 37 degrees off
-	AShinobiCharacterBase* Behind = W.Spawn<AShinobiCharacterBase>(FVector(-800.f, 0.f, 0.f));
-	AShinobiCharacterBase* TooFar = W.Spawn<AShinobiCharacterBase>(FVector(3000.f, 0.f, 0.f));
-	AShinobiPlayerCharacter* Friend = W.Spawn<AShinobiPlayerCharacter>(FVector(800.f, -40.f, 0.f));
+	const float Z = AShinobiDragonMount::MouthLocation(*P).Z; // level with the mouth, which hangs below the seat
+	AShinobiCharacterBase* Front = W.Spawn<AShinobiCharacterBase>(FVector(800.f, 0.f, Z));
+	AShinobiCharacterBase* Side = W.Spawn<AShinobiCharacterBase>(FVector(800.f, 600.f, Z)); // 37 degrees off
+	AShinobiCharacterBase* Behind = W.Spawn<AShinobiCharacterBase>(FVector(-800.f, 0.f, Z));
+	AShinobiCharacterBase* TooFar = W.Spawn<AShinobiCharacterBase>(FVector(3000.f, 0.f, Z));
+	AShinobiPlayerCharacter* Friend = W.Spawn<AShinobiPlayerCharacter>(FVector(800.f, -40.f, Z));
 	for (AShinobiCharacterBase* Each : { Front, Side, Behind, TooFar, (AShinobiCharacterBase*)Friend })
 	{
 		ShinobiTest::Hover(Each);
@@ -631,8 +632,9 @@ bool FShinobiBreathAimTest::RunTest(const FString& Parameters)
 	Eyes->Possess(P);
 	P->SetActorRotation(FRotator(0.f, 90.f, 0.f)); // facing +Y
 	Eyes->SetControlRotation(FRotator(30.f, 0.f, 0.f)); // the camera looks along +X and down: the breath ignores it
-	AShinobiCharacterBase* Ahead = W.Spawn<AShinobiCharacterBase>(FVector(0.f, 900.f, 0.f));
-	AShinobiCharacterBase* WhereTheCameraLooks = W.Spawn<AShinobiCharacterBase>(FVector(900.f, 0.f, 0.f));
+	const float Z = AShinobiDragonMount::MouthLocation(*P).Z; // level with the mouth, which hangs below the seat
+	AShinobiCharacterBase* Ahead = W.Spawn<AShinobiCharacterBase>(FVector(0.f, 900.f, Z));
+	AShinobiCharacterBase* WhereTheCameraLooks = W.Spawn<AShinobiCharacterBase>(FVector(900.f, 0.f, Z));
 	ShinobiTest::Hover(Ahead);
 	ShinobiTest::Hover(WhereTheCameraLooks);
 

@@ -18,7 +18,7 @@ public:
 protected:
 	virtual void ExecuteJutsu() override;
 
-	EShinobiSummonKind SummonKind = EShinobiSummonKind::Toad;
+	EShinobiSummonKind SummonKind = EShinobiSummonKind::Misha;
 
 	/** How far in front of the caster it appears. */
 	float Distance = 400.f;
@@ -37,14 +37,18 @@ public:
 	UGA_SummonPusho();
 };
 
-/** Page 4, slot 2: a giant toad, slow and tough, that slams the ground. */
+/** Page 4, slot 2: the owl (AShinobiOwl), the plush snowy owl who hovers at the caster's shoulder and calls lightning
+ * down from the sky on their foes. She is no ground summon: this calls her straight to the shoulder. */
 UCLASS()
-class SHINOBICOOP_API UGA_SummonToad : public UGA_SummonBase
+class SHINOBICOOP_API UGA_SummonOwl : public UGA_SummonBase
 {
 	GENERATED_BODY()
 
 public:
-	UGA_SummonToad();
+	UGA_SummonOwl();
+
+protected:
+	virtual void ExecuteJutsu() override;
 };
 
 /** Page 4, slot 3: Misha, a giant plush puppy who barks a shockwave from a distance. */

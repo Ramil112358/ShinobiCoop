@@ -53,6 +53,13 @@ public:
 	UGE_Damage();
 };
 
+/** Damage that neither staggers nor shoves the target (the summoned owl's lightning): otherwise exactly UGE_Damage. */
+UCLASS()
+class SHINOBICOOP_API UGE_DamageNoStagger : public UGE_Damage
+{
+	GENERATED_BODY()
+};
+
 /** Instant chakra gain. Magnitude: SetByCaller Data.ChakraGain. */
 UCLASS()
 class SHINOBICOOP_API UGE_ChakraGain : public UShinobiEffect

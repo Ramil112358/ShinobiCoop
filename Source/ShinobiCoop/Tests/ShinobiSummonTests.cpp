@@ -6,6 +6,9 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 #include "Shinobi/Enemies/ShinobiSummon.h"
+#include "Shinobi/Enemies/ShinobiOwl.h"
+#include "Animation/AnimSingleNodeInstance.h"
+#include "Shinobi/VFX/ShinobiBurst.h"
 #include "Shinobi/Abilities/GA_Summons.h"
 #include "Animation/AnimSequence.h"
 #include "Shinobi/Enemies/ShinobiCreatureAnimInstance.h"
@@ -39,8 +42,8 @@ bool FShinobiSummonTeamTest::RunTest(const FString& Parameters)
 	ShinobiTest::Hover(Caster);
 	ShinobiTest::Hover(Ninja);
 
-	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Toad, FVector(300.f, 0.f, 0.f));
-	TestEqual(TEXT("One toad"), Pack.Num(), 1);
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Misha, FVector(300.f, 0.f, 0.f));
+	TestEqual(TEXT("One Misha"), Pack.Num(), 1);
 	if (Pack.Num() != 1)
 	{
 		return false;
@@ -49,7 +52,7 @@ bool FShinobiSummonTeamTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Hostile to enemies"), Pack[0]->IsHostileTo(Ninja) && Ninja->IsHostileTo(Pack[0]));
 	TestFalse(TEXT("Not hostile to the caster"), Pack[0]->IsHostileTo(Caster) || Caster->IsHostileTo(Pack[0]));
 	TestTrue(TEXT("Remembers its summoner"), Pack[0]->GetSummoner() == Caster);
-	TestEqual(TEXT("Toad health"), ShinobiTest::Get(Pack[0], UShinobiAttributeSet::GetMaxHealthAttribute()), 600.f);
+	TestEqual(TEXT("Misha health"), ShinobiTest::Get(Pack[0], UShinobiAttributeSet::GetMaxHealthAttribute()), 500.f);
 
 	// A jutsu that hits everything hostile around the caster leaves the summon alone.
 	const TArray<AShinobiCharacterBase*> Hit = ShinobiCombat::FindHostilesInRadius(Caster, FVector::ZeroVector, 1000.f);
@@ -65,16 +68,16 @@ bool FShinobiSummonFightTest::RunTest(const FString& Parameters)
 	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>();
 	ShinobiTest::Hover(Caster);
 	ShinobiTest::Hover(Ninja);
-	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Toad, FVector(400.f, 0.f, 0.f));
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Misha, FVector(400.f, 0.f, 0.f));
 	if (Pack.Num() != 1)
 	{
 		return false;
 	}
 
 	W.Tick(0.6f);
-	TestTrue(TEXT("The ninja heads for the toad, not the far-off caster"), Ninja->GetActorLocation().X > 100.f);
+	TestTrue(TEXT("The ninja heads for Misha, not the far-off caster"), Ninja->GetActorLocation().X > 100.f);
 	W.Tick(3.f);
-	TestTrue(TEXT("The toad hurt the ninja"), ShinobiTest::Get(Ninja, UShinobiAttributeSet::GetHealthAttribute()) < 200.f);
+	TestTrue(TEXT("Misha hurt the ninja"), ShinobiTest::Get(Ninja, UShinobiAttributeSet::GetHealthAttribute()) < 200.f);
 	TestEqual(TEXT("The caster was never touched"), ShinobiTest::Get(Caster, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
 	return true;
 }
@@ -104,15 +107,15 @@ bool FShinobiSummonLimitTest::RunTest(const FString& Parameters)
 	ShinobiTest::Hover(Caster);
 	ShinobiTest::Hover(Other);
 
-	Summon(Caster, EShinobiSummonKind::Toad, FVector(300.f, 0.f, 0.f));
+	Summon(Caster, EShinobiSummonKind::Misha, FVector(300.f, 0.f, 0.f));
 	W.Tick(0.1f);
-	Summon(Caster, EShinobiSummonKind::Toad, FVector(300.f, 300.f, 0.f));
-	TestEqual(TEXT("The second toad replaced the first"), ShinobiTest::CountActors<AShinobiSummon>(W), 1);
+	Summon(Caster, EShinobiSummonKind::Misha, FVector(300.f, 300.f, 0.f));
+	TestEqual(TEXT("The second Misha replaced the first"), ShinobiTest::CountActors<AShinobiSummon>(W), 1);
 
-	Summon(Caster, EShinobiSummonKind::Misha, FVector(-500.f, 0.f, 0.f));
-	TestEqual(TEXT("Misha joins the toad"), ShinobiTest::CountActors<AShinobiSummon>(W), 2);
-	Summon(Other, EShinobiSummonKind::Toad, FVector(0.f, 3300.f, 0.f));
-	TestEqual(TEXT("Another caster's toad is not replaced"), ShinobiTest::CountActors<AShinobiSummon>(W), 3);
+	Summon(Caster, EShinobiSummonKind::Pabu, FVector(-500.f, 0.f, 0.f));
+	TestEqual(TEXT("Pabu joins Misha"), ShinobiTest::CountActors<AShinobiSummon>(W), 2);
+	Summon(Other, EShinobiSummonKind::Misha, FVector(0.f, 3300.f, 0.f));
+	TestEqual(TEXT("Another caster's Misha is not replaced"), ShinobiTest::CountActors<AShinobiSummon>(W), 3);
 	return true;
 }
 
@@ -153,35 +156,6 @@ bool FShinobiSummonDeathTest::RunTest(const FString& Parameters)
 		Alive += It->IsAlive() ? 1 : 0;
 	}
 	TestEqual(TEXT("One living Pabu"), Alive, 1);
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonCastToadTest, "ShinobiCoop.Summons.ToadJutsuCostsChakraThenCallsTheToad", ShinobiTestFlags)
-bool FShinobiSummonCastToadTest::RunTest(const FString& Parameters)
-{
-	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
-	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(4);
-	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
-	TestEqual(TEXT("Cost 60 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 40.f);
-	TestEqual(TEXT("No toad during the seals"), ShinobiTest::CountActors<AShinobiSummon>(W), 0);
-	W.Tick(1.2f);
-	TestTrue(TEXT("Cooldown running"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonToad));
-	TestFalse(TEXT("The jutsu itself is over"), ShinobiTest::IsActive(P, UGA_SummonToad::StaticClass()));
-
-	AShinobiSummon* Toad = nullptr;
-	for (TActorIterator<AShinobiSummon> It(W.World); It; ++It)
-	{
-		Toad = *It;
-	}
-	if (!TestNotNull(TEXT("The toad is here"), Toad))
-	{
-		return false;
-	}
-	TestEqual(TEXT("It is a toad"), Toad->GetKind(), EShinobiSummonKind::Toad);
-	TestTrue(TEXT("It is the caster's"), Toad->GetSummoner() == P);
-	TestTrue(FString::Printf(TEXT("and stands in front of the caster (X %.0f)"), Toad->GetActorLocation().X), Toad->GetActorLocation().X > 200.f && Toad->GetActorLocation().X < 600.f);
 	return true;
 }
 
@@ -239,40 +213,13 @@ bool FShinobiSummonPageTest::RunTest(const FString& Parameters)
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
 	W.Tick(1.5f);
-	TestEqual(TEXT("No summon appeared"), ShinobiTest::CountActors<AShinobiSummon>(W), 0);
-	TestFalse(TEXT("No summon cooldown started"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonToad) || ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonMisha)
-		|| ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonPabu) || ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonPusho));
+	TestEqual(TEXT("No summon appeared"), ShinobiTest::CountActors<AShinobiSummon>(W) + ShinobiTest::CountActors<AShinobiOwl>(W), 0);
+	TestFalse(TEXT("No summon cooldown started"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonOwl) || ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonMisha) || ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonPabu)
+		|| ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonPusho));
 	TestFalse(TEXT("Pusho not on page 2"), ShinobiTest::IsActive(P, UGA_SummonPusho::StaticClass()));
-	TestFalse(TEXT("Toad not on page 2"), ShinobiTest::IsActive(P, UGA_SummonToad::StaticClass()));
+	TestFalse(TEXT("The owl not on page 2"), ShinobiTest::IsActive(P, UGA_SummonOwl::StaticClass()));
 	TestFalse(TEXT("Misha not on page 2"), ShinobiTest::IsActive(P, UGA_SummonMisha::StaticClass()));
 	TestFalse(TEXT("Pabu not on page 2"), ShinobiTest::IsActive(P, UGA_SummonPabu::StaticClass()));
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiToadSlamTest, "ShinobiCoop.Summons.ToadSlamHitsEveryoneAroundIt", ShinobiTestFlags)
-bool FShinobiToadSlamTest::RunTest(const FString& Parameters)
-{
-	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(2500.f, 0.f, 0.f));
-	AShinobiRogueNinja* InFront = W.Spawn<AShinobiRogueNinja>(FVector(350.f, 0.f, 0.f));
-	AShinobiRogueNinja* Behind = W.Spawn<AShinobiRogueNinja>(FVector(-300.f, 0.f, 0.f));
-	AShinobiRogueNinja* Far = W.Spawn<AShinobiRogueNinja>(FVector(0.f, 1500.f, 0.f));
-	for (AShinobiCharacterBase* Each : { (AShinobiCharacterBase*)Caster, (AShinobiCharacterBase*)InFront, (AShinobiCharacterBase*)Behind, (AShinobiCharacterBase*)Far })
-	{
-		ShinobiTest::Hover(Each);
-	}
-	// Held still, so only the slam can have hurt them.
-	for (AShinobiRogueNinja* Each : { InFront, Behind, Far })
-	{
-		ShinobiTest::ApplyEffect(Each, UGE_Shock::StaticClass());
-	}
-	Summon(Caster, EShinobiSummonKind::Toad, FVector::ZeroVector);
-
-	W.Tick(1.2f);
-	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
-	TestEqual(TEXT("In front: one slam of 60"), ShinobiTest::Get(InFront, Health), 140.f);
-	TestEqual(TEXT("Behind: the slam is all around"), ShinobiTest::Get(Behind, Health), 140.f);
-	TestEqual(TEXT("Out of reach: untouched"), ShinobiTest::Get(Far, Health), 200.f);
 	return true;
 }
 
@@ -425,51 +372,11 @@ bool FShinobiMishaLookTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiToadLookTest, "ShinobiCoop.Summons.ToadIsTheRiggedToadThatHopsAndSlams", ShinobiTestFlags)
-bool FShinobiToadLookTest::RunTest(const FString& Parameters)
-{
-	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
-	ShinobiTest::Hover(Caster);
-	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Toad, FVector(500.f, 0.f, 0.f));
-	if (Pack.Num() != 1)
-	{
-		return false;
-	}
-	AShinobiSummon* Toad = Pack[0];
-	const USkeletalMeshComponent* Body = Toad->GetBodyMesh();
-	if (!TestTrue(TEXT("The toad model is the visible body (run Scripts/setup_creatures.py if not)"), Body != Toad->GetMesh() && Body->GetSkeletalMeshAsset()))
-	{
-		return false;
-	}
-	TestEqual(TEXT("the toad"), Body->GetSkeletalMeshAsset()->GetName(), FString(TEXT("SK_Toad")));
-	const FBoxSphereBounds Bounds = Body->Bounds;
-	TestTrue(FString::Printf(TEXT("a giant: %.0f long, %.0f tall"), Bounds.BoxExtent.X * 2.f, Bounds.BoxExtent.Z * 2.f), Bounds.BoxExtent.X * 2.f > 400.f && Bounds.BoxExtent.Z * 2.f > 300.f);
-	const float FeetGap = (Bounds.Origin.Z - Bounds.BoxExtent.Z) - (Toad->GetActorLocation().Z - Toad->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
-	TestTrue(FString::Printf(TEXT("standing on the capsule's floor (off by %.0f)"), FeetGap), FMath::Abs(FeetGap) < 20.f);
-	W.Tick(4.f); // settled at its post
-	TestEqual(TEXT("It idles"), PlayingClip(Toad), FString(TEXT("ANIM_Toad_Idle")));
-
-	// Something to slam: held still next to it.
-	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(Toad->GetActorLocation() + FVector(300.f, 0.f, 0.f));
-	ShinobiTest::Hover(Ninja);
-	ShinobiTest::ApplyEffect(Ninja, UGE_Shock::StaticClass());
-	bool bSlamming = false;
-	for (int32 Step = 0; Step < 30 && !bSlamming; ++Step)
-	{
-		W.Tick(0.05f);
-		bSlamming = ShinobiTest::HasTag(Toad, ShinobiTags::State_SummonAttacking);
-	}
-	TestTrue(TEXT("It rears up to slam"), bSlamming);
-	TestEqual(TEXT("with the slam clip"), PlayingClip(Toad), FString(TEXT("ANIM_Toad_Slam")));
-	return true;
-}
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonAssetsTest, "ShinobiCoop.Summons.JutsuHaveSealAnimationsAndIcons", ShinobiTestFlags)
 bool FShinobiSummonAssetsTest::RunTest(const FString& Parameters)
 {
 	// (run Scripts/setup_jutsu_anims.py and Scripts/setup_hud.py if an asset is missing)
-	for (const UGA_SummonBase* Jutsu : { (const UGA_SummonBase*)GetDefault<UGA_SummonToad>(), (const UGA_SummonBase*)GetDefault<UGA_SummonMisha>(), (const UGA_SummonBase*)GetDefault<UGA_SummonPabu>(),
+	for (const UGA_SummonBase* Jutsu : { (const UGA_SummonBase*)GetDefault<UGA_SummonOwl>(), (const UGA_SummonBase*)GetDefault<UGA_SummonMisha>(), (const UGA_SummonBase*)GetDefault<UGA_SummonPabu>(),
 		(const UGA_SummonBase*)GetDefault<UGA_SummonPusho>() })
 	{
 		const FString Name = Jutsu->DisplayName.ToString();
@@ -506,15 +413,15 @@ bool FShinobiSummonCasterGoneTest::RunTest(const FString& Parameters)
 	ShinobiTest::Hover(Downed);
 	ShinobiTest::Hover(Leaver);
 	ShinobiTest::Hover(Steady);
-	Summon(Downed, EShinobiSummonKind::Toad, FVector(300.f, 0.f, 0.f));
-	Summon(Leaver, EShinobiSummonKind::Toad, FVector(300.f, 4000.f, 0.f));
-	Summon(Steady, EShinobiSummonKind::Toad, FVector(300.f, -4000.f, 0.f));
-	TestEqual(TEXT("Three toads"), ShinobiTest::CountActors<AShinobiSummon>(W), 3);
+	Summon(Downed, EShinobiSummonKind::Misha, FVector(300.f, 0.f, 0.f));
+	Summon(Leaver, EShinobiSummonKind::Misha, FVector(300.f, 4000.f, 0.f));
+	Summon(Steady, EShinobiSummonKind::Misha, FVector(300.f, -4000.f, 0.f));
+	TestEqual(TEXT("Three Mishas"), ShinobiTest::CountActors<AShinobiSummon>(W), 3);
 
 	ShinobiTest::Damage(Downed, 600.f); // downed
 	Leaver->Destroy(); // left the game
 	W.Tick(0.2f);
-	TestEqual(TEXT("Only the standing caster's toad remains"), ShinobiTest::CountActors<AShinobiSummon>(W), 1);
+	TestEqual(TEXT("Only the standing caster's Misha remains"), ShinobiTest::CountActors<AShinobiSummon>(W), 1);
 	return true;
 }
 
@@ -558,18 +465,18 @@ bool FShinobiSummonWallTest::RunTest(const FString& Parameters)
 	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(Caster);
 	Caster->ApplyJutsuPage(4);
-	ShinobiTest::Tap(Caster, EShinobiAbilityInputID::Jutsu2);
+	ShinobiTest::Tap(Caster, EShinobiAbilityInputID::Jutsu3);
 	W.Tick(1.2f);
-	AShinobiSummon* Toad = nullptr;
+	AShinobiSummon* Misha = nullptr;
 	for (TActorIterator<AShinobiSummon> It(W.World); It; ++It)
 	{
-		Toad = *It;
+		Misha = *It;
 	}
-	if (!TestNotNull(TEXT("The toad came"), Toad))
+	if (!TestNotNull(TEXT("Misha came"), Misha))
 	{
 		return false;
 	}
-	TestTrue(FString::Printf(TEXT("and stands clear of the wall, its 1.7 m radius short of X = 300 (X %.0f)"), Toad->GetActorLocation().X), Toad->GetActorLocation().X < 300.f - 150.f);
+	TestTrue(FString::Printf(TEXT("and stands clear of the wall, his 1.1 m radius short of X = 300 (X %.0f)"), Misha->GetActorLocation().X), Misha->GetActorLocation().X < 300.f - 110.f);
 	return true;
 }
 
@@ -579,31 +486,31 @@ bool FShinobiSummonFollowTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(Caster);
-	const TArray<AShinobiSummon*> Toad = Summon(Caster, EShinobiSummonKind::Toad, FVector(400.f, 0.f, 0.f));
+	const TArray<AShinobiSummon*> Misha = Summon(Caster, EShinobiSummonKind::Misha, FVector(400.f, 0.f, 0.f));
 	const TArray<AShinobiSummon*> Pabu = Summon(Caster, EShinobiSummonKind::Pabu, FVector(-400.f, 0.f, 0.f));
-	if (Toad.Num() != 1 || Pabu.Num() != 1)
+	if (Misha.Num() != 1 || Pabu.Num() != 1)
 	{
 		return false;
 	}
 
 	Caster->SetActorLocation(FVector(1500.f, 800.f, 0.f), false, nullptr, ETeleportType::TeleportPhysics);
-	float ToadTop = 0.f;
+	float MishaTop = 0.f;
 	for (int32 Step = 0; Step < 20; ++Step)
 	{
 		W.Tick(0.25f);
-		ToadTop = FMath::Max(ToadTop, Toad[0]->GetVelocity().Size2D());
+		MishaTop = FMath::Max(MishaTop, Misha[0]->GetVelocity().Size2D());
 	}
-	TestTrue(FString::Printf(TEXT("The toad hurried, faster than its usual 350 (%.0f)"), ToadTop), ToadTop > 500.f);
-	const float ToadGap = FVector::Dist2D(Toad[0]->GetActorLocation(), Caster->GetActorLocation());
-	TestTrue(FString::Printf(TEXT("The toad caught up (%.0f from the caster)"), ToadGap), ToadGap < AShinobiSummon::FollowDistance + 300.f);
+	TestTrue(FString::Printf(TEXT("Misha hurried, faster than his usual 380 (%.0f)"), MishaTop), MishaTop > 500.f);
+	const float MishaGap = FVector::Dist2D(Misha[0]->GetActorLocation(), Caster->GetActorLocation());
+	TestTrue(FString::Printf(TEXT("Misha caught up (%.0f from the caster)"), MishaGap), MishaGap < AShinobiSummon::FollowDistance + 300.f);
 	const float PabuGap = FVector::Dist2D(Pabu[0]->GetActorLocation(), Caster->GetActorLocation());
 	TestTrue(FString::Printf(TEXT("and so did Pabu (%.0f)"), PabuGap), PabuGap < AShinobiSummon::FollowDistance + 300.f);
-	TestTrue(TEXT("They wait in different spots, not stacked"), FVector::Dist2D(Pabu[0]->GetActorLocation(), Toad[0]->GetActorLocation()) > 150.f);
+	TestTrue(TEXT("They wait in different spots, not stacked"), FVector::Dist2D(Pabu[0]->GetActorLocation(), Misha[0]->GetActorLocation()) > 150.f);
 
 	// Arrived: standing, in the idle clip, not shuffling about.
 	W.Tick(2.f);
-	TestTrue(TEXT("The toad has settled"), Toad[0]->GetVelocity().Size2D() < 30.f);
-	TestTrue(FString::Printf(TEXT("and idles (%s)"), *PlayingClip(Toad[0])), PlayingClip(Toad[0]).Contains(TEXT("Idle")));
+	TestTrue(TEXT("Misha has settled"), Misha[0]->GetVelocity().Size2D() < 30.f);
+	TestTrue(FString::Printf(TEXT("and idles (%s)"), *PlayingClip(Misha[0])), PlayingClip(Misha[0]).Contains(TEXT("Idle")));
 	return true;
 }
 
@@ -722,16 +629,16 @@ bool FShinobiSummonHitReactTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(Caster);
-	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Toad, FVector(400.f, 0.f, 0.f));
-	const AShinobiSummon* Toad = Pack[0];
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Misha, FVector(400.f, 0.f, 0.f));
+	const AShinobiSummon* Misha = Pack[0];
 	W.Tick(4.f);
-	TestTrue(TEXT("Idle first"), PlayingClip(Toad).Contains(TEXT("Idle")));
+	TestTrue(TEXT("Idle first"), PlayingClip(Misha).Contains(TEXT("Idle")));
 
-	ShinobiTest::Damage(const_cast<AShinobiSummon*>(Toad), 40.f);
+	ShinobiTest::Damage(const_cast<AShinobiSummon*>(Misha), 40.f);
 	W.Tick(0.15f);
-	TestEqual(TEXT("A blow makes it flinch"), PlayingClip(Toad), FString(TEXT("ANIM_Toad_Hit")));
+	TestEqual(TEXT("A blow makes it flinch"), PlayingClip(Misha), FString(TEXT("ANIM_Misha_Hit")));
 	W.Tick(1.2f);
-	TestTrue(FString::Printf(TEXT("and then it carries on (%s)"), *PlayingClip(Toad)), PlayingClip(Toad).Contains(TEXT("Idle")));
+	TestTrue(FString::Printf(TEXT("and then it carries on (%s)"), *PlayingClip(Misha)), PlayingClip(Misha).Contains(TEXT("Idle")));
 	return true;
 }
 
@@ -771,15 +678,15 @@ bool FShinobiSummonIdleCatchUpTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(Caster);
-	const TArray<AShinobiSummon*> Toad = Summon(Caster, EShinobiSummonKind::Toad, FVector(400.f, 0.f, 0.f));
-	if (Toad.Num() != 1)
+	const TArray<AShinobiSummon*> Misha = Summon(Caster, EShinobiSummonKind::Misha, FVector(400.f, 0.f, 0.f));
+	if (Misha.Num() != 1)
 	{
 		return false;
 	}
 	Caster->SetActorLocation(FVector(2400.f, 0.f, 0.f), false, nullptr, ETeleportType::TeleportPhysics); // not far enough to jump if it were fighting
 	W.Tick(0.5f);
-	const float Gap = FVector::Dist2D(Toad[0]->GetActorLocation(), Caster->GetActorLocation());
-	TestTrue(FString::Printf(TEXT("Idle and 24 m off, the toad is back beside its caster (%.0f away)"), Gap), Gap < AShinobiSummon::FollowDistance + 400.f);
+	const float Gap = FVector::Dist2D(Misha[0]->GetActorLocation(), Caster->GetActorLocation());
+	TestTrue(FString::Printf(TEXT("Idle and 24 m off, Misha is back beside his caster (%.0f away)"), Gap), Gap < AShinobiSummon::FollowDistance + 400.f);
 	return true;
 }
 
@@ -795,6 +702,335 @@ bool FShinobiSummonFightsFirstTest::RunTest(const FString& Parameters)
 	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Pabu, FVector(1500.f, 0.f, 0.f));
 	W.Tick(1.2f);
 	TestTrue(TEXT("With an enemy in reach it goes for it, not back to the caster"), Pack[0]->GetActorLocation().X > 1500.f);
+	return true;
+}
+
+namespace
+{
+	/** The owl Caster has out, if any. */
+	AShinobiOwl* OwlOf(const FShinobiTestWorld& W, const AShinobiCharacterBase* Caster)
+	{
+		for (TActorIterator<AShinobiOwl> It(W.World); It; ++It)
+		{
+			if (It->GetSummoner() == Caster)
+			{
+				return *It;
+			}
+		}
+		return nullptr;
+	}
+
+	/** A foe that stays where it is put (no AI), on the enemies' side. */
+	AShinobiCharacterBase* Foe(FShinobiTestWorld& W, const FVector& Where)
+	{
+		AShinobiCharacterBase* Foe = W.Spawn<AShinobiCharacterBase>(Where);
+		ShinobiTest::Hover(Foe);
+		return Foe;
+	}
+
+	FString OwlClip(const AShinobiOwl* Owl)
+	{
+		const UAnimSingleNodeInstance* Single = Owl && Owl->GetBody() ? Owl->GetBody()->GetSingleNodeInstance() : nullptr;
+		return Single && Single->GetAnimationAsset() ? Single->GetAnimationAsset()->GetName() : FString();
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOwlCastTest, "ShinobiCoop.Summons.OwlJutsuCostsChakraThenCallsTheOwl", ShinobiTestFlags)
+bool FShinobiOwlCastTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(4);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
+	TestEqual(TEXT("Cost 60 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 40.f);
+	TestEqual(TEXT("No owl during the seals"), ShinobiTest::CountActors<AShinobiOwl>(W), 0);
+	W.Tick(1.2f);
+	TestTrue(TEXT("Cooldown running"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonOwl));
+	TestFalse(TEXT("The jutsu itself is over"), ShinobiTest::IsActive(P, UGA_SummonOwl::StaticClass()));
+	TestEqual(TEXT("One owl"), ShinobiTest::CountActors<AShinobiOwl>(W), 1);
+	TestEqual(TEXT("and no ground summon"), ShinobiTest::CountActors<AShinobiSummon>(W), 0);
+	TestNotNull(TEXT("She is the caster's"), OwlOf(W, P));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOwlReplaceTest, "ShinobiCoop.Summons.OwlReplacesHerselfOnly", ShinobiTestFlags)
+bool FShinobiOwlReplaceTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiPlayerCharacter* Other = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, 3000.f, 0.f));
+	ShinobiTest::Hover(Caster);
+	ShinobiTest::Hover(Other);
+	Summon(Caster, EShinobiSummonKind::Misha, FVector(400.f, 0.f, 0.f));
+	Summon(Caster, EShinobiSummonKind::Pabu, FVector(-400.f, 0.f, 0.f));
+	AShinobiOwl::Summon(Caster);
+	W.Tick(0.1f);
+	AShinobiOwl::Summon(Caster);
+	TestEqual(TEXT("The second owl replaced the first"), ShinobiTest::CountActors<AShinobiOwl>(W), 1);
+	TestEqual(TEXT("Misha and Pabu stay"), ShinobiTest::CountActors<AShinobiSummon>(W), 2);
+	AShinobiOwl::Summon(Other);
+	TestEqual(TEXT("Another caster's owl joins her"), ShinobiTest::CountActors<AShinobiOwl>(W), 2);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOwlPostTest, "ShinobiCoop.Summons.OwlHoversAtTheLeftShoulder", ShinobiTestFlags)
+bool FShinobiOwlPostTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	const float Feet = -Caster->GetSimpleCollisionHalfHeight();
+	const FVector Post = AShinobiOwl::GetPost(*Caster);
+	TestTrue(FString::Printf(TEXT("The post is off the left shoulder (Y %.0f)"), Post.Y), Post.Y >= -70.f && Post.Y <= -50.f);
+	TestTrue(FString::Printf(TEXT("a little behind (X %.0f)"), Post.X), Post.X >= -40.f && Post.X <= -20.f);
+	TestTrue(FString::Printf(TEXT("at shoulder height (%.0f above the feet)"), Post.Z - Feet), FMath::Abs(Post.Z - Feet - 160.f) <= 5.f);
+
+	AShinobiOwl* Owl = AShinobiOwl::Summon(Caster);
+	if (!TestNotNull(TEXT("The owl came"), Owl))
+	{
+		return false;
+	}
+	W.Tick(1.f);
+	TestTrue(TEXT("She hovers there"), FVector::Dist(Owl->GetActorLocation(), AShinobiOwl::GetPost(*Caster)) <= 20.f);
+
+	Caster->SetActorLocationAndRotation(FVector(800.f, 0.f, 0.f), FRotator(0.f, 90.f, 0.f));
+	W.Tick(1.f);
+	const FVector Turned = AShinobiOwl::GetPost(*Caster);
+	TestTrue(FString::Printf(TEXT("Facing +Y, the left shoulder is towards +X (X %.0f)"), Turned.X), Turned.X > 840.f && Turned.X < 880.f);
+	TestTrue(TEXT("and she follows the caster there"), FVector::Dist(Owl->GetActorLocation(), Turned) <= 20.f);
+
+	Caster->SetActorLocation(FVector(6000.f, 0.f, 0.f));
+	W.Tick(0.05f);
+	TestTrue(TEXT("Left far behind (a teleport), she snaps back to the shoulder"), FVector::Dist(Owl->GetActorLocation(), AShinobiOwl::GetPost(*Caster)) <= 20.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOwlBodyTest, "ShinobiCoop.Summons.OwlHasNoBodyToHit", ShinobiTestFlags)
+bool FShinobiOwlBodyTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	AShinobiOwl* Owl = AShinobiOwl::Summon(Caster);
+	if (!TestNotNull(TEXT("The owl came"), Owl))
+	{
+		return false;
+	}
+	TestFalse(TEXT("She collides with nothing"), Owl->GetActorEnableCollision() && Owl->GetBody()->IsCollisionEnabled());
+	AShinobiCharacterBase* Enemy = Foe(W, Owl->GetActorLocation() + FVector(200.f, 0.f, 0.f));
+	const TArray<AShinobiCharacterBase*> Around = ShinobiCombat::FindHostilesInRadius(Enemy, Owl->GetActorLocation(), 500.f);
+	TestFalse(TEXT("An enemy's area attack finds only the caster, never her"), Around.ContainsByPredicate([Owl](const AShinobiCharacterBase* C) { return static_cast<const AActor*>(C) == Owl; }));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOwlStrikeTest, "ShinobiCoop.Summons.OwlStrikesTheNearestEnemyInSight", ShinobiTestFlags)
+bool FShinobiOwlStrikeTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	AShinobiCharacterBase* Near = Foe(W, FVector(800.f, 0.f, 0.f));
+	AShinobiCharacterBase* Far = Foe(W, FVector(1500.f, 0.f, 0.f));
+	ShinobiTest::FEventCounter Staggers(Near, ShinobiTags::Event_Hit_Stagger);
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+	const float Full = ShinobiTest::Get(Near, Health);
+	AShinobiOwl::Summon(Caster);
+
+	W.Tick(1.f); // her first strike starts 0.5 s in and lands 0.4 s later
+	TestEqual(TEXT("The nearer foe lost 55"), ShinobiTest::Get(Near, Health), Full - 55.f);
+	TestEqual(TEXT("The farther one nothing"), ShinobiTest::Get(Far, Health), Full);
+	TestEqual(TEXT("Her lightning does not stagger"), Staggers.Count, 0);
+	W.Tick(2.2f); // the world steps 50 ms at a time, so each timer fires up to a step late
+	TestEqual(TEXT("Two seconds later, a second bolt"), ShinobiTest::Get(Near, Health), Full - 110.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOwlSightTest, "ShinobiCoop.Summons.OwlIgnoresEnemiesOutOfRangeOrBehindWalls", ShinobiTestFlags)
+bool FShinobiOwlSightTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	if (!TestNotNull(TEXT("engine cube"), Cube))
+	{
+		return false;
+	}
+	// A wall across +Y, 4 m out: it hides the foe 8 m out on that side.
+	AStaticMeshActor* Wall = W.World->SpawnActor<AStaticMeshActor>(FVector(0.f, 400.f, 0.f), FRotator::ZeroRotator);
+	Wall->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+	Wall->GetStaticMeshComponent()->SetStaticMesh(Cube);
+	Wall->SetActorScale3D(FVector(30.f, 1.f, 30.f));
+	Wall->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	AShinobiCharacterBase* Hidden = Foe(W, FVector(0.f, 800.f, 0.f));
+	AShinobiCharacterBase* Distant = Foe(W, FVector(-2500.f, 0.f, 0.f));
+	AShinobiCharacterBase* InView = Foe(W, FVector(0.f, -1500.f, 0.f)); // farther than the hidden one, but in plain view
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+	const float Full = ShinobiTest::Get(Hidden, Health);
+	AShinobiOwl::Summon(Caster);
+	W.Tick(3.f);
+	TestEqual(TEXT("Not through a wall"), ShinobiTest::Get(Hidden, Health), Full);
+	TestEqual(TEXT("Not beyond 20 m"), ShinobiTest::Get(Distant, Health), Full);
+	TestTrue(TEXT("but the foe in view is struck"), ShinobiTest::Get(InView, Health) < Full);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOwlFallenTargetTest, "ShinobiCoop.Summons.OwlBoltSparesATargetThatFellMeanwhile", ShinobiTestFlags)
+bool FShinobiOwlFallenTargetTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	AShinobiCharacterBase* Target = Foe(W, FVector(800.f, 0.f, 0.f));
+	AShinobiOwl* Owl = AShinobiOwl::Summon(Caster);
+	W.Tick(0.6f); // the strike has started
+	TestTrue(TEXT("She has picked her target"), Owl && Owl->GetTarget() == Target);
+	ShinobiTest::ApplyEffect(Target, UGE_Dead::StaticClass());
+	TestFalse(TEXT("It has fallen"), Target->IsAlive());
+	W.Tick(0.5f);
+	int32 Bolts = 0;
+	for (TActorIterator<AShinobiBurst> It(W.World); It; ++It)
+	{
+		Bolts += It->GetKind() != EShinobiBurst::SummonPoof;
+	}
+	TestEqual(TEXT("and no bolt falls on it"), Bolts, 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOwlLifetimeTest, "ShinobiCoop.Summons.OwlLeavesWhenHerTimeIsUp", ShinobiTestFlags)
+bool FShinobiOwlLifetimeTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	AShinobiOwl::Summon(Caster);
+	W.Tick(AShinobiOwl::Lifetime - 0.5f);
+	TestEqual(TEXT("Still here before her time"), ShinobiTest::CountActors<AShinobiOwl>(W), 1);
+	W.Tick(1.f);
+	TestEqual(TEXT("Gone after her 15 s"), ShinobiTest::CountActors<AShinobiOwl>(W), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOwlCasterFallsTest, "ShinobiCoop.Summons.OwlLeavesWhenHerCasterFalls", ShinobiTestFlags)
+bool FShinobiOwlCasterFallsTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiPlayerCharacter* Leaver = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, 4000.f, 0.f));
+	ShinobiTest::Hover(Caster);
+	ShinobiTest::Hover(Leaver);
+	AShinobiCharacterBase* Target = Foe(W, FVector(800.f, 0.f, 0.f));
+	const float Full = ShinobiTest::Get(Target, UShinobiAttributeSet::GetHealthAttribute());
+	AShinobiOwl::Summon(Caster);
+	AShinobiOwl::Summon(Leaver);
+	W.Tick(0.6f); // a strike under way
+	ShinobiTest::Damage(Caster, 600.f); // downed
+	Leaver->Destroy(); // left the game
+	W.Tick(0.5f);
+	TestEqual(TEXT("Both owls are gone"), ShinobiTest::CountActors<AShinobiOwl>(W), 0);
+	TestEqual(TEXT("and the bolt under way never landed"), ShinobiTest::Get(Target, UShinobiAttributeSet::GetHealthAttribute()), Full);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOwlLookTest, "ShinobiCoop.Summons.OwlWearsThePlushAndHovers", ShinobiTestFlags)
+bool FShinobiOwlLookTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	AShinobiOwl* Owl = AShinobiOwl::Summon(Caster);
+	if (!TestNotNull(TEXT("The owl came"), Owl))
+	{
+		return false;
+	}
+	const USkeletalMeshComponent* Body = Owl->GetBody();
+	if (!TestTrue(TEXT("She wears the plush (run Scripts/setup_creatures.py if not)"), Body && Body->GetSkeletalMeshAsset()))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the owl"), Body->GetSkeletalMeshAsset()->GetName(), FString(TEXT("SK_Owl")));
+	TestTrue(TEXT("at plush size"), Body->GetComponentScale().Equals(FVector(AShinobiOwl::Scale)));
+	W.Tick(0.1f);
+	TestEqual(TEXT("She hovers"), OwlClip(Owl), FString(TEXT("ANIM_Owl_Hover")));
+	Foe(W, FVector(800.f, 0.f, 0.f));
+	W.Tick(0.5f); // her strike starts at 0.5 s
+	TestEqual(TEXT("She strikes"), OwlClip(Owl), FString(TEXT("ANIM_Owl_Strike")));
+	W.Tick(1.f);
+	TestEqual(TEXT("then hovers again"), OwlClip(Owl), FString(TEXT("ANIM_Owl_Hover")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOwlPhasedTest, "ShinobiCoop.Summons.OwlIgnoresFoesInKamui", ShinobiTestFlags)
+bool FShinobiOwlPhasedTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	AShinobiCharacterBase* Phased = Foe(W, FVector(500.f, 0.f, 0.f));
+	AShinobiCharacterBase* Open = Foe(W, FVector(900.f, 0.f, 0.f));
+	ShinobiTest::ApplyEffect(Phased, UGE_Kamui::StaticClass());
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+	const float Full = ShinobiTest::Get(Open, Health);
+	AShinobiOwl* Owl = AShinobiOwl::Summon(Caster);
+	W.Tick(1.f);
+	TestTrue(TEXT("She passes over the phased foe"), Owl && Owl->GetTarget() == Open);
+	TestEqual(TEXT("and strikes the one in the open"), ShinobiTest::Get(Open, Health), Full - 55.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOwlWallRunTest, "ShinobiCoop.Summons.OwlKeepsToTheShoulderOnAWall", ShinobiTestFlags)
+bool FShinobiOwlWallRunTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	// Running up a wall whose face looks along -X: the caster's up is -X and they face straight up.
+	Caster->SetActorRotation(FRotationMatrix::MakeFromXZ(FVector::UpVector, FVector(-1.f, 0.f, 0.f)).Rotator());
+	const FVector Up = Caster->GetActorUpVector();
+	const FVector Feet = Caster->GetActorLocation() - Up * Caster->GetSimpleCollisionHalfHeight();
+	const FVector Post = AShinobiOwl::GetPost(*Caster);
+	const FVector Offset = Post - Feet;
+	TestTrue(FString::Printf(TEXT("Shoulder height off the wall, along the caster's up (%.0f)"), Offset | Up), FMath::Abs((Offset | Up) - 160.f) <= 5.f);
+	TestTrue(FString::Printf(TEXT("to the caster's left (%.0f)"), Offset | -Caster->GetActorRightVector()), FMath::Abs((Offset | -Caster->GetActorRightVector()) - 60.f) <= 5.f);
+	TestTrue(FString::Printf(TEXT("and a little behind (%.0f)"), Offset | Caster->GetActorForwardVector()), FMath::Abs((Offset | Caster->GetActorForwardVector()) + 30.f) <= 5.f);
+
+	AShinobiOwl* Owl = AShinobiOwl::Summon(Caster);
+	if (!TestNotNull(TEXT("The owl came"), Owl))
+	{
+		return false;
+	}
+	W.Tick(1.f);
+	TestTrue(TEXT("She hovers there"), FVector::Dist(Owl->GetActorLocation(), AShinobiOwl::GetPost(*Caster)) <= 20.f);
+	TestTrue(TEXT("upright to the wall like her caster"), (Owl->GetActorUpVector() | Caster->GetActorUpVector()) > 0.9f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOwlWallBesideTest, "ShinobiCoop.Summons.OwlStrikesWithAWallBesideHerCaster", ShinobiTestFlags)
+bool FShinobiOwlWallBesideTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	if (!TestNotNull(TEXT("engine cube"), Cube))
+	{
+		return false;
+	}
+	// A wall along the caster's left side, close enough that her post (60 cm left) is inside it.
+	AStaticMeshActor* Wall = W.World->SpawnActor<AStaticMeshActor>(FVector(0.f, -90.f, 0.f), FRotator::ZeroRotator);
+	Wall->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+	Wall->GetStaticMeshComponent()->SetStaticMesh(Cube);
+	Wall->SetActorScale3D(FVector(30.f, 1.f, 30.f));
+	Wall->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	AShinobiCharacterBase* Ahead = Foe(W, FVector(800.f, 0.f, 0.f));
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+	const float Full = ShinobiTest::Get(Ahead, Health);
+	AShinobiOwl::Summon(Caster);
+	W.Tick(1.f);
+	TestEqual(TEXT("A foe in plain view of her caster is struck"), ShinobiTest::Get(Ahead, Health), Full - 55.f);
 	return true;
 }
 

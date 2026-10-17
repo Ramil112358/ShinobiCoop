@@ -31,6 +31,7 @@ enum class EShinobiBurst : uint8
 	DragonSplash,     // Water Dragon ending
 	SusanooRise,      // Susanoo rising around the caster
 	SummonPoof,       // a summon arriving or leaving: a big puff of smoke
+	SkyBolt,          // the owl's lightning: a bolt from the sky down onto the burst's spot (the target's feet)
 };
 
 /**

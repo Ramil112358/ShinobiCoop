@@ -57,6 +57,7 @@ void UShinobiDamageExec::Execute_Implementation(const FGameplayEffectCustomExecu
 	// Only direct hits send events. They come from instant effects, whose spec is the applier's own copy, so a
 	// listener that removes effects from the target (e.g. chakra charge ending) can't invalidate it mid-execution.
 	const bool bPeriodic = Spec.GetPeriod() > 0.f;
+	const bool bNoStagger = Spec.Def && Spec.Def->IsA<UGE_DamageNoStagger>(); // the owl's lightning: it hurts, nothing more
 	const AActor* Attacker = Source ? Source->GetAvatarActor() : nullptr;
 	if (!bPeriodic)
 	{
@@ -129,13 +130,13 @@ void UShinobiDamageExec::Execute_Implementation(const FGameplayEffectCustomExecu
 		}
 	}
 
-	if (!bPeriodic && !bBlocked && (bGuardBroken || Damage >= StaggerThreshold))
+	if (!bPeriodic && !bBlocked && !bNoStagger && (bGuardBroken || Damage >= StaggerThreshold))
 	{
 		SendEvent(Target, ShinobiTags::Event_Hit_Stagger, Attacker, Damage);
 	}
 	// The body takes the hit physically, away from the attacker (burning ticks don't shove it around, nor does a guarded hit).
 	const AShinobiCharacterBase* Victim = Cast<AShinobiCharacterBase>(Target->GetAvatarActor());
-	if (!bPeriodic && !bBlocked && Attacker && Victim && Victim->GetPhysicalReactions())
+	if (!bPeriodic && !bBlocked && !bNoStagger && Attacker && Victim && Victim->GetPhysicalReactions())
 	{
 		Victim->GetPhysicalReactions()->Hit(Victim->GetActorLocation() - Attacker->GetActorLocation(), Damage);
 	}

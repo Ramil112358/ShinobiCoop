@@ -99,14 +99,17 @@ remaining trademarks: the TX4 taxi and double-decker bus shapes, London Eye and 
   until Pabu replaced them (2026-10-12); no longer used.
 - **Tripo Studio** (generated for this project, the user's Pro plan): Pabu, from photos of the user's own dog (`SourceArt/Tripo/Pabu`,
   rigged and animated in Blender by `Scripts/character/build_pabu.py`), and Misha, from photos of the user's own plush toy
-  (`SourceArt/Tripo/Misha`, rigged and animated by `Scripts/character/build_misha.py`), and Pusho, from photos of the user's own cat
-  via a GPT Image 2.5 side view (`SourceArt/Tripo/Cat`, Tripo's joints, re-weighted and animated by `Scripts/character/build_pusho.py`),
-  and the crimson dragon, the rideable one on page 5
-  slot 2 (`SourceArt/Tripo/Dragon`, Tripo's auto-rig, animated by `Scripts/character/build_dragon_crimson.py`).
+  (`SourceArt/Tripo/Misha`, rigged and animated by `Scripts/character/build_misha.py`), the owl, from photos of the user's own snowy-owl
+  plush turned into front/left/back views with GPT Image 2.5 in Tripo Studio (`SourceArt/Tripo/Owl`, `Scripts/character/build_owl.py`), Pusho, from photos of the user's own cat via a GPT Image 2.5 side view
+  (`SourceArt/Tripo/Cat`, Tripo's joints, re-weighted and animated by `Scripts/character/build_pusho.py`), and the crimson dragon, the rideable one on page 5
+  slot 2 (`SourceArt/Tripo/Dragon`, Tripo's auto-rig, animated by `Scripts/character/build_dragon_crimson.py`), and Tairn, the rideable
+  dragon on page 5 slot 1 (`SourceArt/Tripo/Tairn`, from GPT Image 2.5 concept and turnaround images in Tripo Studio, Tripo's auto-rig,
+  animated by `Scripts/character/build_dragon.py`; Tairn is a character from Rebecca Yarros's *Fourth Wing*, so he is a fan tribute: check
+  before any public release).
 - **Mesh2Motion** (https://github.com/scottpetrovic/mesh2motion-app, art assets CC0): the snake model, rig and animations (the snake summon until Misha replaced it, 2026-10-14; no longer used)
   (`SourceArt/Mesh2Motion/snake-animations.glb`, exported by `Scripts/character/export_creature.py`). The fox, dragon and kaiju rigs and animations were downloaded there too
-  and are unused (the rideable dragon is the Rodin Tairn below).
+  and are unused.
 - **Hyper3D Rodin** (generated for this project): the toad (`SourceArt/Creatures/Toad/rodin_toad.glb`, rigged and animated in
-  Blender by `Scripts/character/build_toad.py`) and Tairn, the rideable dragon on page 5 slot 1 (`SourceArt/Creatures/Tairn/rodin_tairn.glb`, with a tail club from `rodin_tail_club2.glb`, `build_dragon.py`; Tairn is a character from Rebecca Yarros's *Fourth Wing*, so he is a fan tribute: check before any public release).
-- **SpriteCook** (generated for this project): the summon jutsu icons (toad, snake (unused), dogs (unused), Pabu, Misha, Pusho (GPT-Image-2, from the user's photo), Tairn, the crimson dragon) and the two dragon-fire sprite sheets.
+  Blender by `Scripts/character/build_toad.py`; retired, unused since the owl replaced it). Tairn was a Rodin model until the Tripo one replaced it (2026-10-17).
+- **SpriteCook** (generated for this project): the summon jutsu icons (owl, toad (unused), snake (unused), dogs (unused), Pabu, Misha, Pusho (GPT-Image-2, from the user's photo), Tairn, the crimson dragon) and the two dragon-fire sprite sheets.
 

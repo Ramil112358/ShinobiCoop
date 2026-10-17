@@ -18,6 +18,7 @@
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 #include "Shinobi/Enemies/ShinobiSummon.h"
+#include "Shinobi/Enemies/ShinobiOwl.h"
 #include "Shinobi/Pvp/ShinobiPickup.h"
 
 namespace
@@ -579,6 +580,15 @@ void AShinobiPvpGameMode::ResetCharacters()
 	for (AShinobiSummon* Summon : Summons)
 	{
 		Summon->Dismiss();
+	}
+	TArray<AShinobiOwl*> Owls;
+	for (TActorIterator<AShinobiOwl> It(GetWorld()); It; ++It)
+	{
+		Owls.Add(*It);
+	}
+	for (AShinobiOwl* Owl : Owls)
+	{
+		Owl->Dismiss();
 	}
 
 	for (const EShinobiTeam Team : { EShinobiTeam::TeamA, EShinobiTeam::TeamB })

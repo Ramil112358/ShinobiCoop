@@ -36,7 +36,6 @@ namespace
 	const FSummonStats& SummonStatsFor(EShinobiSummonKind Kind)
 	{
 		static const FSummonStats Table[] = {
-			{ 600.f, 60.f, 350.f, 2.5f, 350.f, 12.f, 1.0f, FLinearColor(0.1f, 0.4f, 0.1f), 1 },
 			{ 500.f, 70.f, 700.f, 2.2f, 380.f, 12.f, 1.0f, FLinearColor(0.55f, 0.35f, 0.2f), 1 },
 			{ 450.f, 45.f, 190.f, 0.8f, 650.f, 15.f, 1.0f, FLinearColor(0.75f, 0.5f, 0.3f), 1 }, // one Pabu worth about the old pack of four
 			{ 500.f, 65.f, 650.f, 1.6f, 600.f, 15.f, 1.0f, FLinearColor(0.7f, 0.55f, 0.35f), 1 }, // Pusho: AttackRange is how far he pounces from
@@ -73,10 +72,6 @@ namespace
 		// at play rate 1 (printed by the build script).
 		static const FCreatureLook Misha = { TEXT("/Game/Shinobi/Creatures/Misha/SK_Misha"), TEXT("/Game/Shinobi/Creatures/Misha/ANIM_Misha_"),
 			TEXT("Idle"), TEXT("Move"), nullptr, TEXT("Bark"), TEXT("Hit"), TEXT("Death"), 315.f, 315.f, 0.f, FVector(4.5f), 110.f, 168.f };
-		// The Rodin toad (Scripts/character/build_toad.py) faces +X, 1.9 m long and 1.5 m tall; a summoned one is two and a half times that.
-		// One hop clip, played at 1 when it moves at its top speed.
-		static const FCreatureLook Toad = { TEXT("/Game/Shinobi/Creatures/Toad/SK_Toad"), TEXT("/Game/Shinobi/Creatures/Toad/ANIM_Toad_"),
-			TEXT("Idle"), TEXT("Move"), nullptr, TEXT("Slam"), TEXT("Hit"), TEXT("Death"), 350.f, 350.f, 0.f, FVector(2.5f), 170.f, 190.f };
 		// Pusho (Tripo model of the user's cat, rigged and keyed by Scripts/character/build_pusho.py) faces +X at true cat size, 0.36 m to the
 		// ear tips; a summoned one is a panther-sized 2.75 times that, 1 m. His walk covers 165 cm/s and his gallop 605 at play rate 1.
 		static const FCreatureLook Pusho = { TEXT("/Game/Shinobi/Creatures/Pusho/SK_Pusho"), TEXT("/Game/Shinobi/Creatures/Pusho/ANIM_Pusho_"),
@@ -84,9 +79,8 @@ namespace
 		switch (Kind)
 		{
 		case EShinobiSummonKind::Pabu: return Pabu;
-		case EShinobiSummonKind::Misha: return Misha;
 		case EShinobiSummonKind::Pusho: return Pusho;
-		default: return Toad;
+		default: return Misha;
 		}
 	}
 }
@@ -120,7 +114,6 @@ void AShinobiSummon::Configure()
 	BodyTint = Stats.Tint;
 	switch (Kind)
 	{
-	case EShinobiSummonKind::Toad: AttackAbility = UGA_ToadSlam::StaticClass(); break;
 	case EShinobiSummonKind::Misha: AttackAbility = UGA_MishaBark::StaticClass(); break;
 	case EShinobiSummonKind::Pusho: AttackAbility = UGA_PushoPounce::StaticClass(); break;
 	default: AttackAbility = UGA_PabuBite::StaticClass(); break;
@@ -311,11 +304,10 @@ TArray<AShinobiSummon*> AShinobiSummon::Summon(AShinobiCharacterBase* Caster, ES
 			continue;
 		}
 		Summon->Kind = Kind;
-		// Where it waits beside the caster: the toad behind on one side, Misha on the other, Pabu in front, Pusho in front on the other
-		// side; a pack (Count > 1) fans out all round.
-		Summon->FollowAngle = Kind == EShinobiSummonKind::Toad ? PI * 1.25f : Kind == EShinobiSummonKind::Misha ? PI * 0.75f
-			: Kind == EShinobiSummonKind::Pusho ? PI * 1.75f : Stats.Count > 1 ? Angle : PI * 0.25f;
-		Summon->FollowRadius = Kind == EShinobiSummonKind::Pabu || Kind == EShinobiSummonKind::Pusho ? 250.f : FollowDistance * 0.85f; // the small ones keep close
+		// Where it waits beside the caster: Misha behind on one side, Pabu in front on the other, Pusho in front across
+		// from Pabu; a pack (Count > 1) fans out all round.
+		Summon->FollowAngle = Kind == EShinobiSummonKind::Misha ? PI * 0.75f : Kind == EShinobiSummonKind::Pusho ? PI * 1.75f : Stats.Count > 1 ? Angle : PI * 0.25f;
+		Summon->FollowRadius = Kind == EShinobiSummonKind::Pabu ? 220.f : Kind == EShinobiSummonKind::Pusho ? 250.f : FollowDistance * 0.85f; // the small ones keep close
 		Summon->Summoner = Caster;
 		Summon->Team = Caster->GetTeam(); // a caster on a PvP side brings the summon along
 		Summon->FinishSpawning(Where);

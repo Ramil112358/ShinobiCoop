@@ -23,7 +23,7 @@ namespace ShinobiCombat
 		}
 	}
 
-	bool ApplyDamage(UAbilitySystemComponent* Source, const AShinobiCharacterBase* Target, float Amount)
+	bool ApplyDamage(UAbilitySystemComponent* Source, const AShinobiCharacterBase* Target, float Amount, bool bStagger)
 	{
 		if (!Source || !Target)
 		{
@@ -31,7 +31,7 @@ namespace ShinobiCombat
 		}
 		// Decided before applying: the exec negates hits on invulnerable targets, so this is what "landed" means.
 		const bool bLanded = !IsInvulnerable(Target);
-		Apply(Source, Target, UGE_Damage::StaticClass(), Amount);
+		Apply(Source, Target, bStagger ? UGE_Damage::StaticClass() : UGE_DamageNoStagger::StaticClass(), Amount);
 		return bLanded;
 	}
 
