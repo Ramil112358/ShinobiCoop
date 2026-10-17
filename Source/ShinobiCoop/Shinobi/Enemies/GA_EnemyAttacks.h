@@ -36,6 +36,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Enemy")
 	TSoftObjectPtr<UAnimMontage> WindUpMontage;
 
+	/** Seconds from activation to the end of the attack (a summon's attack clip is fitted to it). */
+	virtual float GetTotalSeconds() const { return WindUp + Recovery; }
+
 protected:
 	/** Called WindUp after activation. Must end in Finish() (directly or after more timed steps). */
 	virtual void Strike() PURE_VIRTUAL(UGA_EnemyAttack::Strike, );

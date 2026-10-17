@@ -18,6 +18,7 @@ CREATURES = {
     "Tairn": (None, ["Idle", "Flap", "Glide", "Breath"], "Tairn.png"),  # Scripts/character/build_dragon.py (Tripo)
     "CrimsonDragon": (None, ["Idle", "Flap", "Glide", "Breath"], "CrimsonDragon.png"),  # Scripts/character/build_dragon_crimson.py (Tripo)
     "Pabu": (None, ["Idle", "Walk", "Run", "Bite", "Hit", "Death"], "Pabu.png"),  # Scripts/character/build_pabu.py
+    "Pusho": (None, ["Idle", "Walk", "Run", "Pounce", "Hit", "Death"], "Pusho.png"),  # Scripts/character/build_pusho.py
 }
 # The toad (Scripts/character/build_toad.py) was retired when the owl took its slot: still in /Game/Shinobi/Creatures/Toad, unused.
 LEGACY = ["/Game/Shinobi/Creatures/Dragon"]  # the one dragon before there were two: now Tairn and CrimsonDragon

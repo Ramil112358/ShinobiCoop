@@ -85,3 +85,16 @@ UGA_SummonPabu::UGA_SummonPabu()
 	Distance = 350.f;
 	Clearance = 250.f;
 }
+
+UGA_SummonPusho::UGA_SummonPusho()
+{
+	InputID = EShinobiAbilityInputID::Jutsu1;
+	DisplayName = INVTEXT("Summon Pusho");
+	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonPusho.T_Jutsu_SummonPusho")));
+	ChakraCost = 45.f;
+	Cooldown = 35.f;
+	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_SummonPusho);
+	SummonKind = EShinobiSummonKind::Pusho;
+	Distance = 350.f;
+	Clearance = 250.f;
+}

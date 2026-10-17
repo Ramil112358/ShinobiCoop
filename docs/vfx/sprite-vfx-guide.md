@@ -235,7 +235,7 @@ and the phase replicate.
 
 ## 9. Susanoo (2026-10-03)
 
-Page 4, slot 1: a power-up, not an attack. `UGE_Susanoo` (20 s, tag `State.Susanoo`) halves the damage its wearer takes and raises
+Page 5, slot 3 (page 4, slot 1 until Summon Pusho took it on 2026-10-17, so all the summons share page 4): a power-up, not an attack. `UGE_Susanoo` (20 s, tag `State.Susanoo`) halves the damage its wearer takes and raises
 the damage they deal by 30% (`UShinobiDamageExec`: it reads the tag on the source and on the target, burning included, so
 armour against armour is x0.65), and adds a periodic +1 chakra every 0.25 s (+4/s) on top of the base regen. The jutsu is
 `UGA_Susanoo` (40 chakra, 60 s cooldown); it cannot be recast while the armour is up.
@@ -279,7 +279,7 @@ Shots 25-26 of `Scripts/shot_chakra.ps1 -Jutsu` show it too. `Scripts/smoke_m1.p
 
 ## 10. Summons (2026-10-03)
 
-Page 4, slots 2-4: Summon Owl (60 chakra, 45 s cooldown; she replaced the toad on 2026-10-17), Summon Misha (50, 40 s; he replaced the snake on 2026-10-14) and Summon Pabu (45, 30 s; it replaced the pack of four dogs on 2026-10-12). After the Kuchiyose seals
+Page 4, slots 1-4: Summon Pusho (45 chakra, 35 s cooldown; added 2026-10-17, Susanoo moved to page 5 slot 3 for him), Summon Owl (60, 45 s; she replaced the toad on 2026-10-17), Summon Misha (50, 40 s; he replaced the snake on 2026-10-14) and Summon Pabu (45, 30 s; it replaced the pack of four dogs on 2026-10-12). After the Kuchiyose seals
 (`AM_Summon_Seal`, a crouch with the right fist drawn up) and a palm slam (`AM_Summon_Release`, both built by
 `Scripts/character/build_jutsu_anims.py`, timeline `Summon`) the creature appears 4-5 m in front of the caster in a puff of smoke
 (`EShinobiBurst::SummonPoof`). A caster has one of each kind out at a time: calling it again replaces it. The owl is the exception
@@ -294,15 +294,16 @@ not counted by waves or camps (only `FShinobiEncounter::Spawn` registers kills).
 |---|---|---|---|
 | Misha (x1) | 500 | `UGA_MishaBark`: 70 to everything in a 35-degree cone out to 8 m, each staggered and thrown back, every 2.2 s; hops at 380 | 12 s |
 | Pabu (x1) | 450 | `UGA_PabuBite`: 45 in front, every 0.8 s, run speed 650 | 15 s |
+| Pusho (x1) | 500 | `UGA_PushoPounce`: from up to 6.5 m, crouches 0.45 s, leaps 0.6 s (a 44 cm high arc landing 30 cm short of the target), claws 65 in front; every 1.6 s, run speed 600 | 15 s |
 
 Animation is `UShinobiCreatureAnimInstance` (no animation blueprint): it picks the clip from replicated state (velocity, health, the tag
 `State.SummonAttacking` that the three attack abilities grant) and cross-fades between idle, walk, run, attack, flinch (when hurt) and
 death over 0.2 s instead of cutting. Walk and run play at the speed the creature actually moves (Pabu's trot covers 144 cm/s and his gallop 480,
-as `build_pabu.py` prints them; Misha's hop covers 315 cm/s), and the attack clip is stretched over
-the attack ability's wind-up plus recovery so the blow lands with the damage.
+as `build_pabu.py` prints them; Pusho's walk 165 and gallop 605; Misha's hop covers 315 cm/s), and the attack clip is stretched over
+the whole attack (`UGA_EnemyAttack::GetTotalSeconds`: wind-up plus recovery, plus the leap for Pusho) so the blow lands with the damage.
 
 Following: with nothing to fight a summon walks to a post beside its caster (`GetIdlePost`; Misha behind on one side,
-Pabu ahead on the other), and if it is left more than 40 m behind (a teleport, a dragon ride) it reappears there in a
+Pabu ahead on the other, Pusho ahead across from Pabu), and if it is left more than 40 m behind (a teleport, a dragon ride) it reappears there in a
 puff of smoke. It only picks fights with enemies within 30 m of the caster.
 
 Where the creatures come from (all in `docs/world/asset-credits.md`):
@@ -319,6 +320,18 @@ Where the creatures come from (all in `docs/world/asset-credits.md`):
   0.55 so the fur is not glossy; `setup_creatures.py` uses it for any creature with `<png>_Normal.png` and `<png>_Roughness.png`) and waits
   2.2 m from his caster, closer than Misha. To rerun: `blender -b -P Scripts/character/build_pabu.py` (add `-- preview [Clip...]`
   for renders in `Saved/`), then `Scripts/setup_creatures.py`.
+- **Pusho**: the user's own long-haired golden tabby cat (he/him). The two photos went to GPT Image 2.5 (in Tripo Studio) for a
+  standing side view with the head edited into profile, then Tripo multi-view, Smart Mesh, auto-rig "Other" (export
+  `SourceArt/Tripo/Cat/cat_rigged.zip`; the quadruped walk preset worked this time but tears the flank, because the weights are bad).
+  `Scripts/character/build_pusho.py` keeps Tripo's 40 joints (shoulders re-parented from the neck to the chest, ears extended to their
+  tips), turns the model straight (34 degrees off) and its face to the front (42 degrees), poses it square as the rest pose, and weights
+  it by bone heat on a watertight voxel copy of the skin, copied back to the fur mesh (bone heat finds no solution on the fur itself; the
+  whiskers copy their nearest skin). Clips: Idle (looks about, ear flicks, a low tail with a twitching tip), Walk (a cat's walk, tail up
+  with the tip curled), Run (a gallop), Pounce (crouch and rump wiggle, the stretched leap, a right-paw swipe on landing; its length is
+  `UGA_PushoPounce::GetTotalSeconds`, so change `POUNCE_*` in the script with the ability), Hit and Death. True cat size (0.36 m to the
+  ear tips), scaled 2.75 in code: a panther-sized ninneko, 1 m tall. Base colour only, so `M_Character`. To rerun:
+  `blender -b -P Scripts/character/build_pusho.py` (add `-- preview [Clip...]` for renders in `Saved/`), then `CREATURES_ONLY=Pusho`
+  and `Scripts/setup_creatures.py`.
 - **Misha**: the user's own plush puppy (photos in `SourceArt/Character/Photos/Misha`), a Tripo Studio model, auto-rigged by Tripo
   (export in `SourceArt/Tripo/Misha`). Tripo kept the photo's pose, so Misha sits; he stays seated and gets about in seated hops, a toy
   brought to life. Tripo's rig is not used (18 joints, one hind leg a single bone, no ears, three quarters of the vertices unweighted):
@@ -355,7 +368,7 @@ status) and drops `EShinobiBurst::SkyBolt` on the target's feet: Chidori-blue bo
 above so the bolt falls, and the Lightning flash where it lands. She leaves in a small puff when her time is up or her caster is
 downed, dies or leaves. Tests: the `ShinobiCoop.Summons.Owl*` group and `ShinobiCoop.Pvp.OwlStrikesTheCastersFoesInPvp`.
 
-Shots 27-30 of `Scripts/shot_chakra.ps1 -Jutsu` show the three arrivals and the full page-4 HUD; `Scripts/smoke_m1.ps1` checks the client
+Shots 27-30 (29c/29d Pusho) of `Scripts/shot_chakra.ps1 -Jutsu` show the arrivals and the full page-4 HUD; `Scripts/smoke_m1.ps1` checks the client
 sees Pabu. Not done: turn clips, a jaw (Pabu bites with a lunge and a head shake; his mouth stays shut). A summon leaves the moment its caster is downed,
 dies or leaves the game, and one cast next to a wall is pulled back in front of it and put on the floor.
 

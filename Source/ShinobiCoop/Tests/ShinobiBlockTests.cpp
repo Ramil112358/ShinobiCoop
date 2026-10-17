@@ -205,8 +205,8 @@ bool FShinobiBlockNoAttackTest::RunTest(const FString& Parameters)
 	ShinobiTest::Press(P, EShinobiAbilityInputID::Sprint);
 	TestFalse(TEXT("No sprint"), ShinobiTest::IsActive(P, UGA_Sprint::StaticClass()));
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(4);
-	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	P->ApplyJutsuPage(5);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	TestFalse(TEXT("No jutsu"), ShinobiTest::IsActive(P, UGA_Susanoo::StaticClass()));
 	TestTrue(TEXT("Still guarding"), ShinobiTest::IsActive(P, UGA_Block::StaticClass()));
 	return true;
@@ -231,8 +231,8 @@ bool FShinobiBlockCastingTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(4);
-	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1); // Susanoo's seals take 0.9 s
+	P->ApplyJutsuPage(5);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3); // Susanoo's seals take 0.9 s
 	ShinobiTest::Press(P, EShinobiAbilityInputID::Block);
 	TestFalse(TEXT("A jutsu being cast keeps the guard down"), ShinobiTest::IsActive(P, UGA_Block::StaticClass()));
 	return true;

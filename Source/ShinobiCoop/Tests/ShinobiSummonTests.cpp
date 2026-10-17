@@ -181,6 +181,26 @@ bool FShinobiSummonCastMishaAndPabuTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonCastPushoTest, "ShinobiCoop.Summons.PushoJutsuIsPageFourSlotOne", ShinobiTestFlags)
+bool FShinobiSummonCastPushoTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	P->ApplyJutsuPage(4);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	TestEqual(TEXT("Pusho costs 45"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 55.f);
+	W.Tick(1.2f);
+	TestTrue(TEXT("Pusho cooldown"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonPusho));
+	TArray<AShinobiSummon*> Called;
+	for (TActorIterator<AShinobiSummon> It(W.World); It; ++It)
+	{
+		Called.Add(*It);
+	}
+	TestTrue(TEXT("Pusho alone, of his kind"), Called.Num() == 1 && Called[0]->GetKind() == EShinobiSummonKind::Pusho);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonPageTest, "ShinobiCoop.Summons.OnlyCallableFromPageFour", ShinobiTestFlags)
 bool FShinobiSummonPageTest::RunTest(const FString& Parameters)
 {
@@ -188,12 +208,15 @@ bool FShinobiSummonPageTest::RunTest(const FString& Parameters)
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
 	P->ApplyJutsuPage(2);
-	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2); // other jutsu live on these keys here: they may run, the summons must not
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1); // other jutsu live on these keys here: they may run, the summons must not
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
 	W.Tick(1.5f);
 	TestEqual(TEXT("No summon appeared"), ShinobiTest::CountActors<AShinobiSummon>(W) + ShinobiTest::CountActors<AShinobiOwl>(W), 0);
-	TestFalse(TEXT("No summon cooldown started"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonOwl) || ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonMisha) || ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonPabu));
+	TestFalse(TEXT("No summon cooldown started"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonOwl) || ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonMisha) || ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonPabu)
+		|| ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonPusho));
+	TestFalse(TEXT("Pusho not on page 2"), ShinobiTest::IsActive(P, UGA_SummonPusho::StaticClass()));
 	TestFalse(TEXT("The owl not on page 2"), ShinobiTest::IsActive(P, UGA_SummonOwl::StaticClass()));
 	TestFalse(TEXT("Misha not on page 2"), ShinobiTest::IsActive(P, UGA_SummonMisha::StaticClass()));
 	TestFalse(TEXT("Pabu not on page 2"), ShinobiTest::IsActive(P, UGA_SummonPabu::StaticClass()));
@@ -353,7 +376,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonAssetsTest, "ShinobiCoop.Summons.
 bool FShinobiSummonAssetsTest::RunTest(const FString& Parameters)
 {
 	// (run Scripts/setup_jutsu_anims.py and Scripts/setup_hud.py if an asset is missing)
-	for (const UGA_SummonBase* Jutsu : { (const UGA_SummonBase*)GetDefault<UGA_SummonOwl>(), (const UGA_SummonBase*)GetDefault<UGA_SummonMisha>(), (const UGA_SummonBase*)GetDefault<UGA_SummonPabu>() })
+	for (const UGA_SummonBase* Jutsu : { (const UGA_SummonBase*)GetDefault<UGA_SummonOwl>(), (const UGA_SummonBase*)GetDefault<UGA_SummonMisha>(), (const UGA_SummonBase*)GetDefault<UGA_SummonPabu>(),
+		(const UGA_SummonBase*)GetDefault<UGA_SummonPusho>() })
 	{
 		const FString Name = Jutsu->DisplayName.ToString();
 		TestNotNull(Name + TEXT(" seal montage"), Jutsu->SealMontage.LoadSynchronous());
@@ -1007,6 +1031,78 @@ bool FShinobiOwlWallBesideTest::RunTest(const FString& Parameters)
 	AShinobiOwl::Summon(Caster);
 	W.Tick(1.f);
 	TestEqual(TEXT("A foe in plain view of her caster is struck"), ShinobiTest::Get(Ahead, Health), Full - 55.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPushoPounceTest, "ShinobiCoop.Summons.PushoPouncesFromAfarAndClaws", ShinobiTestFlags)
+bool FShinobiPushoPounceTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	if (!TestNotNull(TEXT("engine cube"), Cube))
+	{
+		return false;
+	}
+	// A floor (top at Z = 0): the leap is a real jump under gravity.
+	AStaticMeshActor* Floor = W.World->SpawnActor<AStaticMeshActor>(FVector(0.f, 0.f, -50.f), FRotator::ZeroRotator);
+	Floor->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+	Floor->GetStaticMeshComponent()->SetStaticMesh(Cube);
+	Floor->SetActorScale3D(FVector(100.f, 100.f, 1.f));
+	Floor->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-2000.f, 0.f, 100.f));
+	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(FVector(600.f, 0.f, 100.f));
+	ShinobiTest::ApplyEffect(Ninja, UGE_Shock::StaticClass()); // rooted: only the pounce can reach it
+	const TArray<AShinobiSummon*> Pack = AShinobiSummon::Summon(Caster, EShinobiSummonKind::Pusho, FVector::ZeroVector);
+	if (Pack.Num() != 1)
+	{
+		return false;
+	}
+	const AShinobiSummon* Pusho = Pack[0];
+	const float StartZ = Pusho->GetActorLocation().Z;
+	const float StartGap = FVector::Dist2D(Pusho->GetActorLocation(), Ninja->GetActorLocation());
+	float Highest = StartZ;
+	bool bClip = false;
+	for (int32 Step = 0; Step < 40; ++Step)
+	{
+		W.Tick(0.05f);
+		Highest = FMath::Max(Highest, Pusho->GetActorLocation().Z);
+		bClip |= PlayingClip(Pusho) == TEXT("ANIM_Pusho_Pounce");
+	}
+	const float EndGap = FVector::Dist2D(Pusho->GetActorLocation(), Ninja->GetActorLocation());
+	TestTrue(FString::Printf(TEXT("He leaps (rose %.0f; the arc tops out about 44 up)"), Highest - StartZ), Highest - StartZ > 30.f);
+	TestTrue(FString::Printf(TEXT("onto the ninja: from %.0f away to %.0f"), StartGap, EndGap), StartGap > 500.f && EndGap < 200.f);
+	TestEqual(TEXT("and claws it once, for 65"), ShinobiTest::Get(Ninja, UShinobiAttributeSet::GetHealthAttribute()), 135.f);
+	TestTrue(TEXT("with the pounce clip (run Scripts/setup_creatures.py)"), bClip);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPushoLookTest, "ShinobiCoop.Summons.PushoWearsTheCatFacingForward", ShinobiTestFlags)
+bool FShinobiPushoLookTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Pusho, FVector(400.f, 0.f, 0.f));
+	if (Pack.Num() != 1)
+	{
+		return false;
+	}
+	const AShinobiSummon* Pusho = Pack[0];
+	const USkeletalMeshComponent* Body = Pusho->GetBodyMesh();
+	if (!TestNotNull(TEXT("The cat's mesh (run Scripts/setup_creatures.py)"), Body->GetSkeletalMeshAsset()))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Pusho's model"), Body->GetSkeletalMeshAsset()->GetName(), FString(TEXT("SK_Pusho")));
+	TestFalse(TEXT("The mannequin under it is hidden"), Pusho->GetMesh()->IsVisible());
+	TestTrue(TEXT("It faces the way Pusho does (the model faces +X)"), FVector::DotProduct(Body->GetComponentTransform().TransformVectorNoScale(FVector(1.f, 0.f, 0.f)), Pusho->GetActorForwardVector()) > 0.99f);
+	const float Height = Body->Bounds.BoxExtent.Z * 2.f;
+	TestTrue(FString::Printf(TEXT("Panther-sized, about 1 m tall (%.0f cm)"), Height), Height > 85.f && Height < 120.f);
+	const float FeetGap = (Body->Bounds.Origin.Z - Body->Bounds.BoxExtent.Z) - (Pusho->GetActorLocation().Z - Pusho->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+	TestTrue(FString::Printf(TEXT("Paws on the capsule's floor (off by %.0f)"), FeetGap), FMath::Abs(FeetGap) < 20.f);
+	W.Tick(3.f);
+	TestTrue(FString::Printf(TEXT("Idle with nothing to fight (%s)"), *PlayingClip(Pusho)), PlayingClip(Pusho).Contains(TEXT("Idle")));
 	return true;
 }
 

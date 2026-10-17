@@ -11,6 +11,7 @@ enum class EShinobiSummonKind : uint8
 {
 	Misha, // a giant plush puppy: hops, barks a shockwave from afar
 	Pabu,  // a corgi ninken: one, quick, bites
+	Pusho, // a big long-haired cat: pounces from afar and claws
 };
 
 /**
@@ -75,7 +76,7 @@ private:
 	/** Applies Kind's numbers, size and look. Runs on every machine, before the enemy base reads them. */
 	void Configure();
 
-	/** Dresses the summon in its creature (Pabu, Misha) over the hidden
+	/** Dresses the summon in its creature (Pabu, Misha, Pusho) over the hidden
 	 * mannequin. Does nothing on a dedicated server or when the creature is not imported. */
 	void WearCreature();
 

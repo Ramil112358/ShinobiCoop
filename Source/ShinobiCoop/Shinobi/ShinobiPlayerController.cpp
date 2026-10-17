@@ -707,8 +707,8 @@ void AShinobiPlayerController::RunSusanooShotTest()
 		Camera->SetLifeSpan(1.f);
 		SetViewTarget(Camera);
 	};
-	At(1.0f, [this]() { ShinobiPage(4); ShinobiDrainChakra(-100.f); });
-	At(1.2f, [this]() { ShinobiCast(1); }); // 0.6 s seals: the armour rises at about 1.9
+	At(1.0f, [this]() { ShinobiPage(5); ShinobiDrainChakra(-100.f); });
+	At(1.2f, [this]() { ShinobiCast(3); }); // 0.6 s seals: the armour rises at about 1.9
 	const float Yaws[] = { 0.f, 0.f, 40.f, 90.f, 160.f }; // the front twice: the first frame after a camera cut can lag
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Yaws); ++Index)
 	{
@@ -874,19 +874,20 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(45.0f, [this]() { ShinobiCast(1); }); // the same key jumps to a kunai
 	At(45.5f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_19_TeleportArrival")); });
 
-	// Page 4: Susanoo. A tall figure, so the camera stands back and watches from the side.
-	At(46.0f, [this, RestoreAim]() { ShinobiPage(4); RestoreAim(); });
-	At(46.2f, [CastJutsu]() { CastJutsu(1, 0.7f); }); // Susanoo: 0.6 s seals, the armour rises at 46.9
+	// Page 5, slot 3: Susanoo. A tall figure, so the camera stands back and watches from the side.
+	At(46.0f, [this, RestoreAim]() { ShinobiPage(5); RestoreAim(); });
+	At(46.2f, [CastJutsu]() { CastJutsu(3, 0.7f); }); // Susanoo: 0.6 s seals, the armour rises at 46.9
 	At(47.4f, [FaceCamera]() { FaceCamera(80.f, -60.f, 0.f, 1000.f); });
 	At(47.55f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_25_Susanoo")); });
 	At(47.7f, [FaceCamera]() { FaceCamera(80.f, 150.f, 0.f, 1000.f); }); // two angles: the arena's walls hide one or the other
 	At(47.85f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_25b_Susanoo")); });
 	At(48.2f, BackToPlayer);
-	At(49.0f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_26_HudPage4")); });
+	At(49.0f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_26_HudSusanoo")); });
 
-	// The summons (page 4 slots 4, 2, 3), each watched from the side as it arrives and goes for the dummies.
+	// The summons (page 4 slots 4, 2, 3, 1), each watched from the side as it arrives and goes for the dummies.
 	At(49.1f, [this, Start, RestoreAim]() // the teleport and the dashes left the caster somewhere else: back to where it started
 	{
+		ShinobiPage(4);
 		if (APawn* Shinobi = GetPawn())
 		{
 			Shinobi->SetActorTransform(*Start, false, nullptr, ETeleportType::TeleportPhysics);
@@ -913,50 +914,55 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(56.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_29_Misha")); });
 	At(57.4f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_29b_Misha")); });
 	At(57.8f, [BackToPlayer, ClearSummons]() { BackToPlayer(); ClearSummons(); });
-	At(58.2f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_30_HudPage4Full")); });
+	At(58.0f, [CastJutsu]() { CastJutsu(1, 0.8f); }); // Pusho: appears at 58.7 and pounces on a dummy
+	At(59.2f, [FaceCamera]() { FaceCamera(70.f, 70.f, 400.f, 900.f); });
+	At(59.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_29c_Pusho")); });
+	At(60.1f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_29d_Pusho")); });
+	At(60.4f, [BackToPlayer, ClearSummons]() { BackToPlayer(); ClearSummons(); });
+	At(60.8f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_30_HudPage4Full")); });
 	// The dragon (page 5): mount, ride in the default (pulled-back) view, breathe fire at the dummies, climb, dismount.
 	auto Rider = [this]() { return GetPawn<AShinobiPlayerCharacter>(); };
-	At(58.4f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_Susanoo)); } }); // the armour hides the rider
-	At(58.6f, [this, RestoreAim]() { ShinobiPage(5); RestoreAim(); });
-	At(58.8f, [CastJutsu]() { CastJutsu(1, 0.9f); }); // Summon Dragon: 0.8 s seals, mounted from about 59.6
-	At(61.6f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_31_DragonRide")); });
-	At(61.8f, [FaceCamera]() { FaceCamera(75.f, 60.f, 0.f, 2300.f); });
-	At(61.95f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_31b_DragonSide")); });
-	At(62.0f, [FaceCamera]() { FaceCamera(45.f, 70.f, 0.f, 800.f); }); // the rider close up
-	At(62.05f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_31c_DragonRider")); });
-	At(62.2f, BackToPlayer);
-	At(62.4f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->AbilityLocalInputPressed(static_cast<int32>(EShinobiAbilityInputID::Melee)); } }); // breath
-	At(62.8f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_32_DragonBreath")); });
-	At(62.85f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_32c_DragonCrosshair")); }); // with the HUD: the crosshair where the fire goes
-	At(63.1f, [FaceCamera]() { FaceCamera(75.f, 60.f, 500.f, 2300.f); });
-	At(63.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_32b_DragonBreath")); });
-	At(63.4f, BackToPlayer);
-	At(63.9f, [FaceCamera]() { FaceCamera(75.f, 80.f, 900.f, 2400.f); }); // the ground where the fire fell
-	At(64.0f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_32d_DragonGroundFire")); });
-	At(64.1f, BackToPlayer);
-	At(63.6f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->AbilityLocalInputReleased(static_cast<int32>(EShinobiAbilityInputID::Melee)); P->SetFlightClimb(true); } });
-	At(65.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_33_DragonClimb")); });
-	At(65.3f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->SetFlightClimb(false); P->SetFlightDive(true); } });
-	At(65.5f, [this]() { SetControlRotation(GetControlRotation() + FRotator(0.f, 120.f, 0.f)); }); // a sharp turn to the right: the dragon banks into it
-	At(65.62f, [FaceCamera]() { FaceCamera(70.f, 0.f, 0.f, 2200.f); }); // from the front
-	At(65.7f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_33b_DragonBank")); });
-	At(65.85f, BackToPlayer);
-	At(66.6f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->SetFlightDive(false); } });
-	At(67.0f, [this]() { ShinobiCast(1); }); // the same key: dismount
+	At(61.0f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_Susanoo)); } }); // the armour hides the rider
+	At(61.2f, [this, RestoreAim]() { ShinobiPage(5); RestoreAim(); });
+	At(61.4f, [CastJutsu]() { CastJutsu(1, 0.9f); }); // Summon Dragon: 0.8 s seals, mounted from about 62.2
+	At(64.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_31_DragonRide")); });
+	At(64.4f, [FaceCamera]() { FaceCamera(75.f, 60.f, 0.f, 2300.f); });
+	At(64.55f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_31b_DragonSide")); });
+	At(64.6f, [FaceCamera]() { FaceCamera(45.f, 70.f, 0.f, 800.f); }); // the rider close up
+	At(64.65f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_31c_DragonRider")); });
+	At(64.8f, BackToPlayer);
+	At(65.0f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->AbilityLocalInputPressed(static_cast<int32>(EShinobiAbilityInputID::Melee)); } }); // breath
+	At(65.4f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_32_DragonBreath")); });
+	At(65.45f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_32c_DragonCrosshair")); }); // with the HUD: the crosshair where the fire goes
+	At(65.7f, [FaceCamera]() { FaceCamera(75.f, 60.f, 500.f, 2300.f); });
+	At(65.8f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_32b_DragonBreath")); });
+	At(66.0f, BackToPlayer);
+	At(66.5f, [FaceCamera]() { FaceCamera(75.f, 80.f, 900.f, 2400.f); }); // the ground where the fire fell
+	At(66.6f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_32d_DragonGroundFire")); });
+	At(66.7f, BackToPlayer);
+	At(66.2f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->AbilityLocalInputReleased(static_cast<int32>(EShinobiAbilityInputID::Melee)); P->SetFlightClimb(true); } });
+	At(67.8f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_33_DragonClimb")); });
+	At(67.9f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->SetFlightClimb(false); P->SetFlightDive(true); } });
+	At(68.1f, [this]() { SetControlRotation(GetControlRotation() + FRotator(0.f, 120.f, 0.f)); }); // a sharp turn to the right: the dragon banks into it
+	At(68.22f, [FaceCamera]() { FaceCamera(70.f, 0.f, 0.f, 2200.f); }); // from the front
+	At(68.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_33b_DragonBank")); });
+	At(68.45f, BackToPlayer);
+	At(69.2f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->SetFlightDive(false); } });
+	At(69.6f, [this]() { ShinobiCast(1); }); // the same key: dismount
 	// The other dragon (page 5, slot 2): the crimson one, with ordinary orange fire.
-	At(67.6f, [CastJutsu]() { CastJutsu(2, 0.9f); }); // mounted from about 68.4
-	At(70.0f, [FaceCamera]() { FaceCamera(75.f, 60.f, 0.f, 2300.f); });
-	At(70.1f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_35_CrimsonDragon")); });
-	At(70.2f, [FaceCamera]() { FaceCamera(45.f, 70.f, 0.f, 800.f); }); // the rider close up
-	At(70.25f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_35c_CrimsonRider")); });
-	At(70.3f, BackToPlayer);
-	At(70.5f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->AbilityLocalInputPressed(static_cast<int32>(EShinobiAbilityInputID::Melee)); } });
-	At(71.2f, [FaceCamera]() { FaceCamera(75.f, 60.f, 500.f, 2300.f); });
-	At(71.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_35b_CrimsonBreath")); });
-	At(71.6f, [FaceCamera]() { FaceCamera(75.f, 80.f, 900.f, 2400.f); });
-	At(71.7f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_35d_CrimsonGroundFire")); });
-	At(71.9f, BackToPlayer);
-	At(72.2f, [this]() { ShinobiCast(1); }); // the same key: dismount
-	At(73.0f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_34_HudPage5")); });
-	At(73.6f, [this]() { ConsoleCommand(TEXT("quit")); });
+	At(70.2f, [CastJutsu]() { CastJutsu(2, 0.9f); }); // mounted from about 71.0
+	At(72.6f, [FaceCamera]() { FaceCamera(75.f, 60.f, 0.f, 2300.f); });
+	At(72.7f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_35_CrimsonDragon")); });
+	At(72.8f, [FaceCamera]() { FaceCamera(45.f, 70.f, 0.f, 800.f); }); // the rider close up
+	At(72.85f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_35c_CrimsonRider")); });
+	At(72.9f, BackToPlayer);
+	At(73.1f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->AbilityLocalInputPressed(static_cast<int32>(EShinobiAbilityInputID::Melee)); } });
+	At(73.8f, [FaceCamera]() { FaceCamera(75.f, 60.f, 500.f, 2300.f); });
+	At(73.9f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_35b_CrimsonBreath")); });
+	At(74.2f, [FaceCamera]() { FaceCamera(75.f, 80.f, 900.f, 2400.f); });
+	At(74.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_35d_CrimsonGroundFire")); });
+	At(74.5f, BackToPlayer);
+	At(74.8f, [this]() { ShinobiCast(1); }); // the same key: dismount
+	At(75.6f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_34_HudPage5")); });
+	At(76.2f, [this]() { ConsoleCommand(TEXT("quit")); });
 }

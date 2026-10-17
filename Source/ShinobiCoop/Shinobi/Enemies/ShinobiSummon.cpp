@@ -38,6 +38,7 @@ namespace
 		static const FSummonStats Table[] = {
 			{ 500.f, 70.f, 700.f, 2.2f, 380.f, 12.f, 1.0f, FLinearColor(0.55f, 0.35f, 0.2f), 1 },
 			{ 450.f, 45.f, 190.f, 0.8f, 650.f, 15.f, 1.0f, FLinearColor(0.75f, 0.5f, 0.3f), 1 }, // one Pabu worth about the old pack of four
+			{ 500.f, 65.f, 650.f, 1.6f, 600.f, 15.f, 1.0f, FLinearColor(0.7f, 0.55f, 0.35f), 1 }, // Pusho: AttackRange is how far he pounces from
 		};
 		return Table[static_cast<int32>(Kind)];
 	}
@@ -71,7 +72,16 @@ namespace
 		// at play rate 1 (printed by the build script).
 		static const FCreatureLook Misha = { TEXT("/Game/Shinobi/Creatures/Misha/SK_Misha"), TEXT("/Game/Shinobi/Creatures/Misha/ANIM_Misha_"),
 			TEXT("Idle"), TEXT("Move"), nullptr, TEXT("Bark"), TEXT("Hit"), TEXT("Death"), 315.f, 315.f, 0.f, FVector(4.5f), 110.f, 168.f };
-		return Kind == EShinobiSummonKind::Pabu ? Pabu : Misha;
+		// Pusho (Tripo model of the user's cat, rigged and keyed by Scripts/character/build_pusho.py) faces +X at true cat size, 0.36 m to the
+		// ear tips; a summoned one is a panther-sized 2.75 times that, 1 m. His walk covers 165 cm/s and his gallop 605 at play rate 1.
+		static const FCreatureLook Pusho = { TEXT("/Game/Shinobi/Creatures/Pusho/SK_Pusho"), TEXT("/Game/Shinobi/Creatures/Pusho/ANIM_Pusho_"),
+			TEXT("Idle"), TEXT("Walk"), TEXT("Run"), TEXT("Pounce"), TEXT("Hit"), TEXT("Death"), 165.f, 605.f, 0.f, FVector(2.75f), 45.f, 50.f };
+		switch (Kind)
+		{
+		case EShinobiSummonKind::Pabu: return Pabu;
+		case EShinobiSummonKind::Pusho: return Pusho;
+		default: return Misha;
+		}
 	}
 }
 
@@ -102,8 +112,12 @@ void AShinobiSummon::Configure()
 	AttackRange = Stats.AttackRange;
 	AttackInterval = Stats.AttackInterval;
 	BodyTint = Stats.Tint;
-	AttackAbility = Kind == EShinobiSummonKind::Misha ? TSubclassOf<UShinobiGameplayAbility>(UGA_MishaBark::StaticClass())
-		: TSubclassOf<UShinobiGameplayAbility>(UGA_PabuBite::StaticClass());
+	switch (Kind)
+	{
+	case EShinobiSummonKind::Misha: AttackAbility = UGA_MishaBark::StaticClass(); break;
+	case EShinobiSummonKind::Pusho: AttackAbility = UGA_PushoPounce::StaticClass(); break;
+	default: AttackAbility = UGA_PabuBite::StaticClass(); break;
+	}
 	StartupAbilities = { AttackAbility }; // granted by the character base's BeginPlay, after this
 	GetCharacterMovement()->MaxWalkSpeed = Stats.Speed;
 	SetActorScale3D(FVector(Stats.Scale));
@@ -139,7 +153,7 @@ void AShinobiSummon::WearCreature()
 	Clips.RunSpeed = Look->RunSpeed;
 	if (const UGA_EnemyAttack* Attack = AttackAbility ? Cast<UGA_EnemyAttack>(AttackAbility->GetDefaultObject()) : nullptr)
 	{
-		Clips.AttackSeconds = Attack->WindUp + Attack->Recovery; // the clip spans the whole attack, so its blow lands with the ability's
+		Clips.AttackSeconds = Attack->GetTotalSeconds(); // the clip spans the whole attack, so its blow lands with the ability's
 	}
 
 	Creature = NewObject<USkeletalMeshComponent>(this, TEXT("Creature"));
@@ -290,9 +304,10 @@ TArray<AShinobiSummon*> AShinobiSummon::Summon(AShinobiCharacterBase* Caster, ES
 			continue;
 		}
 		Summon->Kind = Kind;
-		// Where it waits beside the caster: Misha behind on one side, Pabu in front on the other; a pack (Count > 1) fans out all round.
-		Summon->FollowAngle = Kind == EShinobiSummonKind::Misha ? PI * 0.75f : Stats.Count > 1 ? Angle : PI * 0.25f;
-		Summon->FollowRadius = Kind == EShinobiSummonKind::Pabu ? 220.f : FollowDistance * 0.85f; // Pabu keeps close to his caster
+		// Where it waits beside the caster: Misha behind on one side, Pabu in front on the other, Pusho in front across
+		// from Pabu; a pack (Count > 1) fans out all round.
+		Summon->FollowAngle = Kind == EShinobiSummonKind::Misha ? PI * 0.75f : Kind == EShinobiSummonKind::Pusho ? PI * 1.75f : Stats.Count > 1 ? Angle : PI * 0.25f;
+		Summon->FollowRadius = Kind == EShinobiSummonKind::Pabu ? 220.f : Kind == EShinobiSummonKind::Pusho ? 250.f : FollowDistance * 0.85f; // the small ones keep close
 		Summon->Summoner = Caster;
 		Summon->Team = Caster->GetTeam(); // a caster on a PvP side brings the summon along
 		Summon->FinishSpawning(Where);
