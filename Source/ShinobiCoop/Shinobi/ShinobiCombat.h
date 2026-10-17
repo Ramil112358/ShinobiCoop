@@ -14,9 +14,9 @@ namespace ShinobiCombat
 	 * Applies GE_Damage (Data.Damage = Amount) from Source to Target and returns whether the hit landed: false
 	 * with no source/target, or when the target is invulnerable. An invulnerable target still receives the
 	 * effect so the damage exec can negate it and request Substitution; it just doesn't count as a hit (no
-	 * chakra, knockback or status for the attacker).
+	 * chakra, knockback or status for the attacker). With bStagger false the hit neither staggers nor shoves the target.
 	 */
-	SHINOBICOOP_API bool ApplyDamage(UAbilitySystemComponent* Source, const AShinobiCharacterBase* Target, float Amount);
+	SHINOBICOOP_API bool ApplyDamage(UAbilitySystemComponent* Source, const AShinobiCharacterBase* Target, float Amount, bool bStagger = true);
 
 	/**
 	 * Applies a status effect (Burn, Shock, ...) from Source to Target, with Data.Damage = DamagePerTick for

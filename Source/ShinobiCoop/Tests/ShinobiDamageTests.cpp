@@ -4,6 +4,7 @@
 
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/Abilities/GA_Summons.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiStaggerThresholdTest, "ShinobiCoop.Damage.StaggerEventAtTwentyOrMore", ShinobiTestFlags)
 bool FShinobiStaggerThresholdTest::RunTest(const FString& Parameters)
@@ -23,6 +24,35 @@ bool FShinobiStaggerThresholdTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("20 damage dealt"), ShinobiTest::Get(Target, Health), 461.f);
 	TestEqual(TEXT("20 damage staggers"), Staggers.Count, 1);
 	TestTrue(TEXT("Stagger names the attacker"), Staggers.LastInstigator == Attacker);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiNoStaggerHitTest, "ShinobiCoop.Damage.NoStaggerHitLeavesAJutsuRunning", ShinobiTestFlags)
+bool FShinobiNoStaggerHitTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(3000.f, 0.f, 0.f));
+	UAbilitySystemComponent* Source = E->GetAbilitySystemComponent();
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+
+	// The owl's bolt: it hurts, but a summoning mid-seal carries on.
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	ShinobiTest::FEventCounter Staggers(P, ShinobiTags::Event_Hit_Stagger);
+	P->ApplyJutsuPage(4);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
+	TestTrue(TEXT("A no-stagger hit lands"), ShinobiCombat::ApplyDamage(Source, P, 55.f, false));
+	TestEqual(TEXT("and deals its 55"), ShinobiTest::Get(P, Health), 445.f);
+	TestEqual(TEXT("without a stagger"), Staggers.Count, 0);
+	TestTrue(TEXT("The jutsu is still being cast"), ShinobiTest::IsActive(P, UGA_SummonMisha::StaticClass()));
+
+	// An ordinary hit of the same size interrupts it.
+	AShinobiPlayerCharacter* Q = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, 3000.f, 0.f));
+	ShinobiTest::Hover(Q);
+	Q->ApplyJutsuPage(4);
+	ShinobiTest::Tap(Q, EShinobiAbilityInputID::Jutsu3);
+	ShinobiCombat::ApplyDamage(Source, Q, 55.f);
+	TestFalse(TEXT("An ordinary hit interrupts the jutsu"), ShinobiTest::IsActive(Q, UGA_SummonMisha::StaticClass()));
 	return true;
 }
 
