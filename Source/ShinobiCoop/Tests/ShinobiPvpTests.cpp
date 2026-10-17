@@ -14,6 +14,7 @@
 #include "Shinobi/Abilities/GA_Sprint.h"
 #include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
 #include "Shinobi/Enemies/ShinobiSummon.h"
+#include "Shinobi/Enemies/ShinobiOwl.h"
 #include "Shinobi/Online/ShinobiSessionSubsystem.h"
 #include "Shinobi/UI/ShinobiOverheadTextComponent.h"
 #include "AIController.h"
@@ -1040,6 +1041,28 @@ bool FShinobiPvpTravelOptionsTest::RunTest(const FString& Parameters)
 		}
 	}
 	TestEqual(TEXT("Exactly four arenas"), ArenaCount, 4);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPvpOwlTest, "ShinobiCoop.Pvp.OwlStrikesTheCastersFoesInPvp", ShinobiTestFlags)
+bool FShinobiPvpOwlTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiPlayerCharacter* Mate = W.Spawn<AShinobiPlayerCharacter>(FVector(800.f, 0.f, 0.f));
+	AShinobiPlayerCharacter* Rival = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, 800.f, 0.f));
+	Caster->SetTeam(EShinobiTeam::TeamA);
+	Mate->SetTeam(EShinobiTeam::TeamA);
+	Rival->SetTeam(EShinobiTeam::TeamB);
+	for (AShinobiPlayerCharacter* Each : { Caster, Mate, Rival })
+	{
+		ShinobiTest::Hover(Each);
+	}
+	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
+	AShinobiOwl::Summon(Caster);
+	W.Tick(1.f);
+	TestEqual(TEXT("The rival team's player took her bolt"), ShinobiTest::Get(Rival, Health), 445.f);
+	TestEqual(TEXT("her caster's teammate none"), ShinobiTest::Get(Mate, Health), 500.f);
 	return true;
 }
 

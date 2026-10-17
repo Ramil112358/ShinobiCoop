@@ -87,6 +87,7 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_Susanoo);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_SummonDragon);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_SummonCrimsonDragon);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_SummonOwl);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_SummonMisha);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_SummonPabu);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_DragonBreath);

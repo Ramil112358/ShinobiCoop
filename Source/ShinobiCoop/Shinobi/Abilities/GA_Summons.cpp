@@ -2,6 +2,7 @@
 #include "Engine/World.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiTags.h"
+#include "Shinobi/Enemies/ShinobiOwl.h"
 
 UGA_SummonBase::UGA_SummonBase()
 {
@@ -35,6 +36,26 @@ void UGA_SummonBase::ExecuteJutsu()
 			Spot = Hit.ImpactPoint;
 		}
 		AShinobiSummon::Summon(Self, SummonKind, Spot);
+	}
+	EndJutsu();
+}
+
+UGA_SummonOwl::UGA_SummonOwl()
+{
+	InputID = EShinobiAbilityInputID::Jutsu2;
+	DisplayName = INVTEXT("Summon Owl");
+	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonOwl.T_Jutsu_SummonOwl")));
+	ChakraCost = 60.f;
+	Cooldown = 45.f;
+	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_SummonOwl);
+}
+
+void UGA_SummonOwl::ExecuteJutsu()
+{
+	FaceAim(nullptr);
+	if (HasAuthority(&CurrentActivationInfo))
+	{
+		AShinobiOwl::Summon(GetShinobiCharacter());
 	}
 	EndJutsu();
 }
