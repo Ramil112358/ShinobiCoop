@@ -21,6 +21,7 @@ namespace
 AShinobiDragonFlame::AShinobiDragonFlame()
 {
 	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.TickGroup = TG_PostUpdateWork; // the dragon's head is posed by then
 	bReplicates = true;
 	SetReplicatingMovement(true); // the server turns it with the aim
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
@@ -133,11 +134,6 @@ void AShinobiDragonFlame::BeginPlay()
 	{
 		AddParticle(Plane, Fire, FLinearColor(1.4f, 1.4f, 1.4f), 3.2f, Index / 12.f, 0.3f, FMath::FRandRange(120.f, 190.f), 0.02f, 0.5f);
 	}
-	// The flash at the mouth.
-	for (int32 Index = 0; Index < 3; ++Index)
-	{
-		AddParticle(Plane, static_cast<uint8>(ESprite::Burst), bTairn ? FLinearColor(0.6f, 0.8f, 1.f) : FLinearColor(1.f, 0.7f, 0.3f), 2.f, Index / 3.f, 0.22f, 420.f, 0.f, 0.02f);
-	}
 	if (bTairn)
 	{
 		// Bolts of lightning forking along the jet.
@@ -184,7 +180,15 @@ void AShinobiDragonFlame::Tick(float DeltaSeconds)
 		return;
 	}
 	const FVector Forward = GetActorForwardVector();
-	const FVector Mouth = GetActorLocation();
+	if (!Dragon.IsValid() && IsValid(Rider))
+	{
+		Dragon = AShinobiDragonMount::Find(*Rider);
+	}
+	if (StoppedAt < 0.f || MouthAt.IsZero())
+	{
+		MouthAt = Dragon.IsValid() ? Dragon->GetMouthLocation() : GetActorLocation(); // a stopped jet dies away where it was
+	}
+	const FVector Mouth = MouthAt;
 	const APlayerCameraManager* Camera = UGameplayStatics::GetPlayerCameraManager(this, 0);
 	const FVector CameraAt = Camera ? Camera->GetCameraLocation() : Mouth - Forward * 1000.f;
 	const float Dying = StoppedAt >= 0.f ? FMath::Clamp(1.f - (Age - StoppedAt) / FlameFadeOutSeconds, 0.f, 1.f) : 1.f;
@@ -231,6 +235,6 @@ void AShinobiDragonFlame::Tick(float DeltaSeconds)
 		}
 	}
 	// The light rides a third of the way down the jet and gutters.
-	Light->SetRelativeLocation(FVector(Reach * 0.3f, 0.f, 0.f));
+	Light->SetWorldLocation(Mouth + Forward * (Reach * 0.3f));
 	Light->SetIntensity(FlameLightIntensity * Dying * FMath::FRandRange(0.8f, 1.2f));
 }

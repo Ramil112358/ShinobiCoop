@@ -18,7 +18,9 @@ import math
 import os
 import sys
 
+import bmesh
 import bpy
+import numpy as np
 from mathutils import Matrix, Vector
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -55,13 +57,63 @@ def smooth(x):
     return x * x * (3 - 2 * x)
 
 
+MOUTH_Z, CORNER_Y, CHIN_Z = 0.445, -0.355, 0.38
+
+
+def in_jaw(p):
+    return p.y < CORNER_Y and CHIN_Z < p.z < MOUTH_Z and -0.02 < p.x < 0.24
+
+
+# Tripo's mouth is one closed surface: opening the jaw stretched the lips into a sheet. Cut it along the mouth line (each lip gets its
+# own vertices) and bridge the cut with faces on the texture's darkest patch, the inside of the mouth: flat while the mouth is shut, a
+# dark gap between the lips when it opens.
+basecolor = next(i for i in bpy.data.images if i.name.lower().endswith("basecolor"))
+width, height = basecolor.size
+texels = np.array(basecolor.pixels[:], dtype=np.float32).reshape(height, width, 4)[:, :, :3]
+block = 16
+blocks = texels[:height // block * block, :width // block * block].reshape(height // block, block, width // block, block, 3).mean(axis=(1, 3))
+lum = blocks.mean(axis=2)
+# The darkest patch that is skin (deep red, not the atlas's black padding), away from the atlas's edges.
+skin = (lum > 0.03) & (blocks[:, :, 0] > 1.4 * blocks[:, :, 1])
+skin[:2, :] = skin[-2:, :] = skin[:, :2] = skin[:, -2:] = False
+dark_row, dark_col = np.unravel_index(np.argmin(np.where(skin, lum, np.inf)), lum.shape)
+DARK_UV = ((dark_col + 0.5) * block / width, (dark_row + 0.5) * block / height)
+
+world = body.matrix_world
+bm = bmesh.new()
+bm.from_mesh(body.data)
+uv_layer = bm.loops.layers.uv.active
+jaw_faces = {f for f in bm.faces if in_jaw(world @ f.calc_center_median())}
+lips = []  # (s, t): the lip edge as the upper lip's face runs it
+for e in bm.edges:
+    if len(e.link_faces) == 2 and (e.link_faces[0] in jaw_faces) != (e.link_faces[1] in jaw_faces) and \
+            all((world @ v.co).z > MOUTH_Z - 0.02 and (world @ v.co).y < CORNER_Y + 0.005 for v in e.verts):
+        upper = e.link_faces[0] if e.link_faces[1] in jaw_faces else e.link_faces[1]
+        loop = next(l for l in upper.loops if l.edge == e)
+        lips.append((loop.vert, loop.link_loop_next.vert))
+lower = {v: bm.verts.new(v.co, v) for v in {v for pair in lips for v in pair}}  # the lower lip's copy, with the same weights for now
+for f in [f for f in jaw_faces if any(v in lower for v in f.verts)]:
+    rebuilt = bm.faces.new([lower.get(v, v) for v in f.verts], f)
+    for old, new in zip(f.loops, rebuilt.loops):
+        new.copy_from(old)
+    jaw_faces.discard(f)
+    jaw_faces.add(rebuilt)
+    bm.faces.remove(f)
+for s, t in lips:
+    inside = bm.faces.new((t, s, lower[s], lower[t]))
+    for loop in inside.loops:
+        loop[uv_layer].uv = DARK_UV
+bm.verts.index_update()
+upper_lip = {v.index for v in lower}
+jaw_verts = {v.index: v.co.copy() for f in jaw_faces for v in f.verts if v.index not in upper_lip}
+bm.to_mesh(body.data)
+bm.free()
 jaw_weights = {}
-for v in body.data.vertices:
-    p = body.matrix_world @ v.co
-    if p.y < -0.355 and p.z < 0.445 and p.z > 0.38 and -0.02 < p.x < 0.24:
-        w = smooth((-0.355 - p.y) / 0.03) * smooth((0.445 - p.z) / 0.01)
-        if w > 0:
-            jaw_weights[v.index] = w
+for index, co in jaw_verts.items():
+    w = smooth((CORNER_Y - (world @ co).y) / 0.03)  # the whole lower jaw, easing in from the mouth's corner
+    if w > 0:
+        jaw_weights[index] = w
+print("[build_dragon] mouth cut along", len(lips), "edges; inside on the texel at", tuple(round(c, 3) for c in DARK_UV))
 JAW = (Vector((0.105, -0.365, 0.445)), Vector((0.12, -0.48, 0.432)))
 
 # --- fit: face +X, scale, centre the spine on Y = 0 ---------------------------------------------------------------------------
@@ -300,7 +352,7 @@ def breath():  # rears the head back and opens wide (0-10), thrusts and holds th
     for f in range(0, 49, 2):
         draw = smooth(f / 10) * (1 - smooth((f - 40) / 8))
         thrust = smooth((f - 10) / 3) * (1 - smooth((f - 40) / 8))
-        key(f, flap=3 * math.sin(f / 6.0), neck=30 * (draw - thrust), head=20 * draw - 25 * thrust, jaw=14 * draw + 6 * thrust, lift=0.02 * thrust)
+        key(f, flap=3 * math.sin(f / 6.0), neck=30 * (draw - thrust), head=20 * draw - 25 * thrust, jaw=10 * draw + 4 * thrust, lift=0.02 * thrust)
 
 
 CLIPS = (("Idle", 60, idle), ("Flap", 18, flap), ("Glide", 48, glide), ("Breath", 48, breath))

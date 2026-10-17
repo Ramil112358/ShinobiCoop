@@ -11,8 +11,8 @@ class UPointLightComponent;
 class UStaticMeshComponent;
 
 /**
- * The dragon's fire-breath as one continuous jet (UGA_DragonBreath spawns it for the breath's length): a muzzle flash at the mouth and
- * a stream of flame, ember and smoke sprites that stream out along the rider's aim, spreading as they go, with a flickering light that
+ * The dragon's fire-breath as one continuous jet (UGA_DragonBreath spawns it for the breath's length): a
+ * stream of flame, ember and smoke sprites that stream out along the rider's aim, spreading as they go, with a flickering light that
  * rides the flames. The server moves the actor with the aim (movement replicates); every machine that renders animates its own
  * particles from the clock, so nothing but the actor itself crosses the wire. Cosmetic: the damage is the ability's.
  */
@@ -80,6 +80,9 @@ private:
 	TObjectPtr<UPointLightComponent> Light;
 
 	TArray<FParticle> Particles;
+	/** The rider's dragon, whose animated mouth the jet is drawn from (the actor itself follows the fixed MouthLocation). */
+	TWeakObjectPtr<AShinobiDragonMount> Dragon;
+	FVector MouthAt = FVector::ZeroVector;
 	float Age = 0.f;
 	float StoppedAt = -1.f;
 };

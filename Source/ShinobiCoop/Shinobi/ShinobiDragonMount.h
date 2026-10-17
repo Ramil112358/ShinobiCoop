@@ -15,6 +15,7 @@ enum class EShinobiDragonKind : uint8
 };
 class UAnimSequence;
 class USkeletalMeshComponent;
+class UStaticMeshComponent;
 
 /**
  * The dragon a rider sits on (Summon Dragon, page 5). A purely visual, replicated actor: the rider keeps its own character and
@@ -41,9 +42,15 @@ public:
 	AShinobiCharacterBase* GetRider() const { return Rider; }
 	USkeletalMeshComponent* GetBody() const { return Body; }
 
-	/** Where the breath comes from: the dragon's mouth, at a fixed offset from the rider (the same on every machine). */
+	/** Where the fire is drawn from: the mouth on the animated skull (bank, bob and breath included); MouthLocation where there is no skeleton. */
 	FVector GetMouthLocation() const;
+	/** Where the breath's damage comes from: the mouth in the breath's pose, at a fixed offset from the rider (the same on every machine). */
 	static FVector MouthLocation(const AShinobiCharacterBase& Rider, EShinobiDragonKind Kind = EShinobiDragonKind::Tairn);
+
+	/** The breath clip opens the jaws by its 10th frame (of 30 a second) and holds them open to its 40th; played at this rate the opening
+	 * takes BreathOpenSeconds and the hold lasts the breath's pulses (UGA_DragonBreath, 5 x 0.3 s), so the fire comes out of an open mouth. */
+	static constexpr float BreathOpenSeconds = 0.5f;
+	static constexpr float BreathPlayRate = (10.f / 30.f) / BreathOpenSeconds;
 
 	/** How far the fire reaches from the mouth. */
 	static constexpr float BreathRange = 1500.f;
@@ -75,6 +82,12 @@ private:
 	/** Leans the dragon about the seat: the right wing drops in a right turn, the nose rises in a climb. Cosmetic, computed on each machine. */
 	void UpdateBank(float DeltaSeconds);
 
+	/** Cancels the clips' body bob at the seat, so the rider stays on the dragon's back. Cosmetic, on each machine with a mesh. */
+	void KeepSeatStill();
+
+	/** Lays the reins: a rope collar round the neck and a line from it to each of the rider's fists. Cosmetic, on each machine with a mesh. */
+	void UpdateReins();
+
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<USkeletalMeshComponent> Body;
 
@@ -92,9 +105,14 @@ private:
 	UPROPERTY()
 	TObjectPtr<UAnimSequence> FlapClip;
 	UPROPERTY()
-	TObjectPtr<UAnimSequence> GlideClip;
-	UPROPERTY()
 	TObjectPtr<UAnimSequence> Playing;
+
+	/** The collar's segments, then the left and right reins. */
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> Rope;
+
+	/** The mouth in the skull bone's frame, from the reference pose. */
+	FVector MouthInSkull = FVector::ZeroVector;
 
 	FTransform MeshDefaultInverse = FTransform::Identity;
 	float LastRiderYaw = 0.f;

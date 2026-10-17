@@ -64,7 +64,7 @@ public:
 	UGA_DragonDismountKey();
 };
 
-/** While mounted, the swing button breathes fire from the dragon's mouth along the camera's aim: PulseCount pulses PulseGap apart, each
+/** While mounted, the swing button breathes fire from the dragon's mouth along the camera's aim: once its jaws are open, PulseCount pulses PulseGap apart, each
  * PulseDamage to every hostile in a narrow cone (3D) up to Range away; the first to hit also sets them alight. 15 chakra, 4 s cooldown. */
 UCLASS()
 class SHINOBICOOP_API UGA_DragonBreath : public UShinobiGameplayAbility
@@ -84,6 +84,10 @@ public:
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
 
 private:
+	/** The jaws are open (AShinobiDragonMount::BreathOpenSeconds in): the fire starts. */
+	UFUNCTION()
+	void Ignite();
+
 	UFUNCTION()
 	void Pulse();
 
