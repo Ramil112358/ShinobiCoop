@@ -131,6 +131,7 @@ material.use_nodes = True
 nodes = material.node_tree.nodes
 texture = nodes.new("ShaderNodeTexImage")
 texture.image = image
+nodes.active = texture  # the workbench previews show the active image node
 bsdf = next(n for n in nodes if n.type == "BSDF_PRINCIPLED")
 material.node_tree.links.new(texture.outputs["Color"], bsdf.inputs["Base Color"])
 if not (PREVIEW or RIG_CHECK):
