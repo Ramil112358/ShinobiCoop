@@ -15,7 +15,7 @@ CREATURES = {
     # The files are SourceArt/Creatures/<name>/<name>*.fbx.
     "Owl": (None, ["Hover", "Strike"], "Owl.png"),  # Scripts/character/build_owl.py (Tripo); she took the toad's slot
     "Misha": (None, ["Idle", "Move", "Bark", "Hit", "Death"], "Misha.png"),  # Scripts/character/build_misha.py; he replaced the snake (still in /Game/Shinobi/Creatures/Snake, unused)
-    "Tairn": (None, ["Idle", "Flap", "Glide", "Breath"], ["Tairn.png", "TairnClub.png", (0.02, 0.02, 0.025)]),  # body, club ball, club spikes
+    "Tairn": (None, ["Idle", "Flap", "Glide", "Breath"], "Tairn.png"),  # Scripts/character/build_dragon.py (Tripo)
     "CrimsonDragon": (None, ["Idle", "Flap", "Glide", "Breath"], "CrimsonDragon.png"),  # Scripts/character/build_dragon_crimson.py (Tripo)
     "Pabu": (None, ["Idle", "Walk", "Run", "Bite", "Hit", "Death"], "Pabu.png"),  # Scripts/character/build_pabu.py
 }
