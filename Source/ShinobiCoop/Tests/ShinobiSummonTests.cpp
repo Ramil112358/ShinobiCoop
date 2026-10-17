@@ -353,7 +353,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonAssetsTest, "ShinobiCoop.Summons.
 bool FShinobiSummonAssetsTest::RunTest(const FString& Parameters)
 {
 	// (run Scripts/setup_jutsu_anims.py and Scripts/setup_hud.py if an asset is missing)
-	for (const UGA_SummonBase* Jutsu : { (const UGA_SummonBase*)GetDefault<UGA_SummonMisha>(), (const UGA_SummonBase*)GetDefault<UGA_SummonPabu>() })
+	for (const UGA_SummonBase* Jutsu : { (const UGA_SummonBase*)GetDefault<UGA_SummonOwl>(), (const UGA_SummonBase*)GetDefault<UGA_SummonMisha>(), (const UGA_SummonBase*)GetDefault<UGA_SummonPabu>() })
 	{
 		const FString Name = Jutsu->DisplayName.ToString();
 		TestNotNull(Name + TEXT(" seal montage"), Jutsu->SealMontage.LoadSynchronous());
