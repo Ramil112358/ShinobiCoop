@@ -76,7 +76,6 @@ namespace ShinobiTags
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_Susanoo, "Cooldown.Jutsu.Susanoo");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_SummonDragon, "Cooldown.Jutsu.SummonDragon");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_SummonCrimsonDragon, "Cooldown.Jutsu.SummonCrimsonDragon");
-	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_SummonToad, "Cooldown.Jutsu.SummonToad");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_SummonMisha, "Cooldown.Jutsu.SummonMisha");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_SummonPabu, "Cooldown.Jutsu.SummonPabu");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_DragonBreath, "Cooldown.DragonBreath");

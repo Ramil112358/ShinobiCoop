@@ -18,23 +18,13 @@ public:
 protected:
 	virtual void ExecuteJutsu() override;
 
-	EShinobiSummonKind SummonKind = EShinobiSummonKind::Toad;
+	EShinobiSummonKind SummonKind = EShinobiSummonKind::Misha;
 
 	/** How far in front of the caster it appears. */
 	float Distance = 400.f;
 
 	/** Room it needs: a wall nearer than Distance + Clearance pulls it back, so a big creature does not appear inside one. */
 	float Clearance = 250.f;
-};
-
-/** Page 4, slot 2: a giant toad, slow and tough, that slams the ground. */
-UCLASS()
-class SHINOBICOOP_API UGA_SummonToad : public UGA_SummonBase
-{
-	GENERATED_BODY()
-
-public:
-	UGA_SummonToad();
 };
 
 /** Page 4, slot 3: Misha, a giant plush puppy who barks a shockwave from a distance. */

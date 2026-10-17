@@ -39,19 +39,6 @@ void UGA_SummonBase::ExecuteJutsu()
 	EndJutsu();
 }
 
-UGA_SummonToad::UGA_SummonToad()
-{
-	InputID = EShinobiAbilityInputID::Jutsu2;
-	DisplayName = INVTEXT("Summon Toad");
-	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonToad.T_Jutsu_SummonToad")));
-	ChakraCost = 60.f;
-	Cooldown = 45.f;
-	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_SummonToad);
-	SummonKind = EShinobiSummonKind::Toad;
-	Distance = 500.f;
-	Clearance = 300.f;
-}
-
 UGA_SummonMisha::UGA_SummonMisha()
 {
 	InputID = EShinobiAbilityInputID::Jutsu3;

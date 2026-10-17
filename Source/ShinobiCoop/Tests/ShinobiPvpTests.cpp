@@ -76,14 +76,14 @@ bool FShinobiPvpSummonTeamTest::RunTest(const FString& Parameters)
 	ShinobiTest::Hover(Caster);
 	ShinobiTest::Hover(Foe);
 
-	const TArray<AShinobiSummon*> Pack = AShinobiSummon::Summon(Caster, EShinobiSummonKind::Toad, FVector(300.f, 0.f, 0.f));
-	TestEqual(TEXT("One toad"), Pack.Num(), 1);
+	const TArray<AShinobiSummon*> Pack = AShinobiSummon::Summon(Caster, EShinobiSummonKind::Misha, FVector(300.f, 0.f, 0.f));
+	TestEqual(TEXT("One Misha"), Pack.Num(), 1);
 	if (Pack.Num() != 1)
 	{
 		return false;
 	}
 	ShinobiTest::Hover(Pack[0]);
-	TestEqual(TEXT("The toad fights for team B"), Pack[0]->GetTeam(), EShinobiTeam::TeamB);
+	TestEqual(TEXT("Misha fights for team B"), Pack[0]->GetTeam(), EShinobiTeam::TeamB);
 	TestTrue(TEXT("A team A player is hostile to it"), Foe->IsHostileTo(Pack[0]) && Pack[0]->IsHostileTo(Foe));
 	TestFalse(TEXT("Its own caster is not"), Pack[0]->IsHostileTo(Caster));
 	return true;
@@ -213,11 +213,11 @@ bool FShinobiPvpGatherStatusTest::RunTest(const FString& Parameters)
 	ShinobiTest::Hover(A2);
 	ShinobiTest::Hover(B1);
 	// A team A summon shares the side but is not a fighter slot.
-	const TArray<AShinobiSummon*> Toad = AShinobiSummon::Summon(A2, EShinobiSummonKind::Toad, FVector(0.f, 900.f, 0.f));
-	TestEqual(TEXT("A toad on team A"), Toad.Num(), 1);
+	const TArray<AShinobiSummon*> Misha = AShinobiSummon::Summon(A2, EShinobiSummonKind::Misha, FVector(0.f, 900.f, 0.f));
+	TestEqual(TEXT("Misha on team A"), Misha.Num(), 1);
 
 	const FShinobiTeamStatus Full = Mode->GatherStatus(EShinobiTeam::TeamA);
-	TestEqual(TEXT("Both team A players alive (the toad is not counted)"), Full.Alive, 2);
+	TestEqual(TEXT("Both team A players alive (Misha is not counted)"), Full.Alive, 2);
 	TestEqual(TEXT("Full health"), Full.HealthFraction, 1.f, 0.001f);
 
 	// Downed is out, whatever health it still shows (here full).
@@ -854,11 +854,11 @@ bool FShinobiPvpBotStatusTest::RunTest(const FString& Parameters)
 	{
 		ShinobiTest::Hover(Body);
 	}
-	const TArray<AShinobiSummon*> Toad = AShinobiSummon::Summon(Human, EShinobiSummonKind::Toad, FVector(0.f, 900.f, 0.f));
-	TestEqual(TEXT("A toad on team A"), Toad.Num(), 1);
+	const TArray<AShinobiSummon*> Misha = AShinobiSummon::Summon(Human, EShinobiSummonKind::Misha, FVector(0.f, 900.f, 0.f));
+	TestEqual(TEXT("Misha on team A"), Misha.Num(), 1);
 
 	const FShinobiTeamStatus Full = Mode->GatherStatus(EShinobiTeam::TeamA);
-	TestEqual(TEXT("The human and the bot (not the toad, not the ninja)"), Full.Alive, 2);
+	TestEqual(TEXT("The human and the bot (not Misha, not the ninja)"), Full.Alive, 2);
 	TestEqual(TEXT("Full health"), Full.HealthFraction, 1.f, 0.001f);
 	TestEqual(TEXT("Team B's bot counts for B"), Mode->GatherStatus(EShinobiTeam::TeamB).Alive, 1);
 

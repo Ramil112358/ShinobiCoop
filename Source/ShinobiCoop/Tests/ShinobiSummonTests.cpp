@@ -39,8 +39,8 @@ bool FShinobiSummonTeamTest::RunTest(const FString& Parameters)
 	ShinobiTest::Hover(Caster);
 	ShinobiTest::Hover(Ninja);
 
-	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Toad, FVector(300.f, 0.f, 0.f));
-	TestEqual(TEXT("One toad"), Pack.Num(), 1);
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Misha, FVector(300.f, 0.f, 0.f));
+	TestEqual(TEXT("One Misha"), Pack.Num(), 1);
 	if (Pack.Num() != 1)
 	{
 		return false;
@@ -49,7 +49,7 @@ bool FShinobiSummonTeamTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Hostile to enemies"), Pack[0]->IsHostileTo(Ninja) && Ninja->IsHostileTo(Pack[0]));
 	TestFalse(TEXT("Not hostile to the caster"), Pack[0]->IsHostileTo(Caster) || Caster->IsHostileTo(Pack[0]));
 	TestTrue(TEXT("Remembers its summoner"), Pack[0]->GetSummoner() == Caster);
-	TestEqual(TEXT("Toad health"), ShinobiTest::Get(Pack[0], UShinobiAttributeSet::GetMaxHealthAttribute()), 600.f);
+	TestEqual(TEXT("Misha health"), ShinobiTest::Get(Pack[0], UShinobiAttributeSet::GetMaxHealthAttribute()), 500.f);
 
 	// A jutsu that hits everything hostile around the caster leaves the summon alone.
 	const TArray<AShinobiCharacterBase*> Hit = ShinobiCombat::FindHostilesInRadius(Caster, FVector::ZeroVector, 1000.f);
@@ -65,16 +65,16 @@ bool FShinobiSummonFightTest::RunTest(const FString& Parameters)
 	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>();
 	ShinobiTest::Hover(Caster);
 	ShinobiTest::Hover(Ninja);
-	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Toad, FVector(400.f, 0.f, 0.f));
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Misha, FVector(400.f, 0.f, 0.f));
 	if (Pack.Num() != 1)
 	{
 		return false;
 	}
 
 	W.Tick(0.6f);
-	TestTrue(TEXT("The ninja heads for the toad, not the far-off caster"), Ninja->GetActorLocation().X > 100.f);
+	TestTrue(TEXT("The ninja heads for Misha, not the far-off caster"), Ninja->GetActorLocation().X > 100.f);
 	W.Tick(3.f);
-	TestTrue(TEXT("The toad hurt the ninja"), ShinobiTest::Get(Ninja, UShinobiAttributeSet::GetHealthAttribute()) < 200.f);
+	TestTrue(TEXT("Misha hurt the ninja"), ShinobiTest::Get(Ninja, UShinobiAttributeSet::GetHealthAttribute()) < 200.f);
 	TestEqual(TEXT("The caster was never touched"), ShinobiTest::Get(Caster, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
 	return true;
 }
@@ -104,15 +104,15 @@ bool FShinobiSummonLimitTest::RunTest(const FString& Parameters)
 	ShinobiTest::Hover(Caster);
 	ShinobiTest::Hover(Other);
 
-	Summon(Caster, EShinobiSummonKind::Toad, FVector(300.f, 0.f, 0.f));
+	Summon(Caster, EShinobiSummonKind::Misha, FVector(300.f, 0.f, 0.f));
 	W.Tick(0.1f);
-	Summon(Caster, EShinobiSummonKind::Toad, FVector(300.f, 300.f, 0.f));
-	TestEqual(TEXT("The second toad replaced the first"), ShinobiTest::CountActors<AShinobiSummon>(W), 1);
+	Summon(Caster, EShinobiSummonKind::Misha, FVector(300.f, 300.f, 0.f));
+	TestEqual(TEXT("The second Misha replaced the first"), ShinobiTest::CountActors<AShinobiSummon>(W), 1);
 
-	Summon(Caster, EShinobiSummonKind::Misha, FVector(-500.f, 0.f, 0.f));
-	TestEqual(TEXT("Misha joins the toad"), ShinobiTest::CountActors<AShinobiSummon>(W), 2);
-	Summon(Other, EShinobiSummonKind::Toad, FVector(0.f, 3300.f, 0.f));
-	TestEqual(TEXT("Another caster's toad is not replaced"), ShinobiTest::CountActors<AShinobiSummon>(W), 3);
+	Summon(Caster, EShinobiSummonKind::Pabu, FVector(-500.f, 0.f, 0.f));
+	TestEqual(TEXT("Pabu joins Misha"), ShinobiTest::CountActors<AShinobiSummon>(W), 2);
+	Summon(Other, EShinobiSummonKind::Misha, FVector(0.f, 3300.f, 0.f));
+	TestEqual(TEXT("Another caster's Misha is not replaced"), ShinobiTest::CountActors<AShinobiSummon>(W), 3);
 	return true;
 }
 
@@ -156,35 +156,6 @@ bool FShinobiSummonDeathTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonCastToadTest, "ShinobiCoop.Summons.ToadJutsuCostsChakraThenCallsTheToad", ShinobiTestFlags)
-bool FShinobiSummonCastToadTest::RunTest(const FString& Parameters)
-{
-	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
-	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(4);
-	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
-	TestEqual(TEXT("Cost 60 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 40.f);
-	TestEqual(TEXT("No toad during the seals"), ShinobiTest::CountActors<AShinobiSummon>(W), 0);
-	W.Tick(1.2f);
-	TestTrue(TEXT("Cooldown running"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonToad));
-	TestFalse(TEXT("The jutsu itself is over"), ShinobiTest::IsActive(P, UGA_SummonToad::StaticClass()));
-
-	AShinobiSummon* Toad = nullptr;
-	for (TActorIterator<AShinobiSummon> It(W.World); It; ++It)
-	{
-		Toad = *It;
-	}
-	if (!TestNotNull(TEXT("The toad is here"), Toad))
-	{
-		return false;
-	}
-	TestEqual(TEXT("It is a toad"), Toad->GetKind(), EShinobiSummonKind::Toad);
-	TestTrue(TEXT("It is the caster's"), Toad->GetSummoner() == P);
-	TestTrue(FString::Printf(TEXT("and stands in front of the caster (X %.0f)"), Toad->GetActorLocation().X), Toad->GetActorLocation().X > 200.f && Toad->GetActorLocation().X < 600.f);
-	return true;
-}
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonCastMishaAndPabuTest, "ShinobiCoop.Summons.MishaAndPabuJutsuCallTheirKind", ShinobiTestFlags)
 bool FShinobiSummonCastMishaAndPabuTest::RunTest(const FString& Parameters)
 {
@@ -219,37 +190,9 @@ bool FShinobiSummonPageTest::RunTest(const FString& Parameters)
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
 	W.Tick(1.5f);
 	TestEqual(TEXT("No summon appeared"), ShinobiTest::CountActors<AShinobiSummon>(W), 0);
-	TestFalse(TEXT("No summon cooldown started"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonToad) || ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonMisha) || ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonPabu));
-	TestFalse(TEXT("Toad not on page 2"), ShinobiTest::IsActive(P, UGA_SummonToad::StaticClass()));
+	TestFalse(TEXT("No summon cooldown started"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonMisha) || ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_SummonPabu));
 	TestFalse(TEXT("Misha not on page 2"), ShinobiTest::IsActive(P, UGA_SummonMisha::StaticClass()));
 	TestFalse(TEXT("Pabu not on page 2"), ShinobiTest::IsActive(P, UGA_SummonPabu::StaticClass()));
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiToadSlamTest, "ShinobiCoop.Summons.ToadSlamHitsEveryoneAroundIt", ShinobiTestFlags)
-bool FShinobiToadSlamTest::RunTest(const FString& Parameters)
-{
-	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(2500.f, 0.f, 0.f));
-	AShinobiRogueNinja* InFront = W.Spawn<AShinobiRogueNinja>(FVector(350.f, 0.f, 0.f));
-	AShinobiRogueNinja* Behind = W.Spawn<AShinobiRogueNinja>(FVector(-300.f, 0.f, 0.f));
-	AShinobiRogueNinja* Far = W.Spawn<AShinobiRogueNinja>(FVector(0.f, 1500.f, 0.f));
-	for (AShinobiCharacterBase* Each : { (AShinobiCharacterBase*)Caster, (AShinobiCharacterBase*)InFront, (AShinobiCharacterBase*)Behind, (AShinobiCharacterBase*)Far })
-	{
-		ShinobiTest::Hover(Each);
-	}
-	// Held still, so only the slam can have hurt them.
-	for (AShinobiRogueNinja* Each : { InFront, Behind, Far })
-	{
-		ShinobiTest::ApplyEffect(Each, UGE_Shock::StaticClass());
-	}
-	Summon(Caster, EShinobiSummonKind::Toad, FVector::ZeroVector);
-
-	W.Tick(1.2f);
-	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
-	TestEqual(TEXT("In front: one slam of 60"), ShinobiTest::Get(InFront, Health), 140.f);
-	TestEqual(TEXT("Behind: the slam is all around"), ShinobiTest::Get(Behind, Health), 140.f);
-	TestEqual(TEXT("Out of reach: untouched"), ShinobiTest::Get(Far, Health), 200.f);
 	return true;
 }
 
@@ -402,51 +345,11 @@ bool FShinobiMishaLookTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiToadLookTest, "ShinobiCoop.Summons.ToadIsTheRiggedToadThatHopsAndSlams", ShinobiTestFlags)
-bool FShinobiToadLookTest::RunTest(const FString& Parameters)
-{
-	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
-	ShinobiTest::Hover(Caster);
-	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Toad, FVector(500.f, 0.f, 0.f));
-	if (Pack.Num() != 1)
-	{
-		return false;
-	}
-	AShinobiSummon* Toad = Pack[0];
-	const USkeletalMeshComponent* Body = Toad->GetBodyMesh();
-	if (!TestTrue(TEXT("The toad model is the visible body (run Scripts/setup_creatures.py if not)"), Body != Toad->GetMesh() && Body->GetSkeletalMeshAsset()))
-	{
-		return false;
-	}
-	TestEqual(TEXT("the toad"), Body->GetSkeletalMeshAsset()->GetName(), FString(TEXT("SK_Toad")));
-	const FBoxSphereBounds Bounds = Body->Bounds;
-	TestTrue(FString::Printf(TEXT("a giant: %.0f long, %.0f tall"), Bounds.BoxExtent.X * 2.f, Bounds.BoxExtent.Z * 2.f), Bounds.BoxExtent.X * 2.f > 400.f && Bounds.BoxExtent.Z * 2.f > 300.f);
-	const float FeetGap = (Bounds.Origin.Z - Bounds.BoxExtent.Z) - (Toad->GetActorLocation().Z - Toad->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
-	TestTrue(FString::Printf(TEXT("standing on the capsule's floor (off by %.0f)"), FeetGap), FMath::Abs(FeetGap) < 20.f);
-	W.Tick(4.f); // settled at its post
-	TestEqual(TEXT("It idles"), PlayingClip(Toad), FString(TEXT("ANIM_Toad_Idle")));
-
-	// Something to slam: held still next to it.
-	AShinobiRogueNinja* Ninja = W.Spawn<AShinobiRogueNinja>(Toad->GetActorLocation() + FVector(300.f, 0.f, 0.f));
-	ShinobiTest::Hover(Ninja);
-	ShinobiTest::ApplyEffect(Ninja, UGE_Shock::StaticClass());
-	bool bSlamming = false;
-	for (int32 Step = 0; Step < 30 && !bSlamming; ++Step)
-	{
-		W.Tick(0.05f);
-		bSlamming = ShinobiTest::HasTag(Toad, ShinobiTags::State_SummonAttacking);
-	}
-	TestTrue(TEXT("It rears up to slam"), bSlamming);
-	TestEqual(TEXT("with the slam clip"), PlayingClip(Toad), FString(TEXT("ANIM_Toad_Slam")));
-	return true;
-}
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonAssetsTest, "ShinobiCoop.Summons.JutsuHaveSealAnimationsAndIcons", ShinobiTestFlags)
 bool FShinobiSummonAssetsTest::RunTest(const FString& Parameters)
 {
 	// (run Scripts/setup_jutsu_anims.py and Scripts/setup_hud.py if an asset is missing)
-	for (const UGA_SummonBase* Jutsu : { (const UGA_SummonBase*)GetDefault<UGA_SummonToad>(), (const UGA_SummonBase*)GetDefault<UGA_SummonMisha>(), (const UGA_SummonBase*)GetDefault<UGA_SummonPabu>() })
+	for (const UGA_SummonBase* Jutsu : { (const UGA_SummonBase*)GetDefault<UGA_SummonMisha>(), (const UGA_SummonBase*)GetDefault<UGA_SummonPabu>() })
 	{
 		const FString Name = Jutsu->DisplayName.ToString();
 		TestNotNull(Name + TEXT(" seal montage"), Jutsu->SealMontage.LoadSynchronous());
@@ -482,15 +385,15 @@ bool FShinobiSummonCasterGoneTest::RunTest(const FString& Parameters)
 	ShinobiTest::Hover(Downed);
 	ShinobiTest::Hover(Leaver);
 	ShinobiTest::Hover(Steady);
-	Summon(Downed, EShinobiSummonKind::Toad, FVector(300.f, 0.f, 0.f));
-	Summon(Leaver, EShinobiSummonKind::Toad, FVector(300.f, 4000.f, 0.f));
-	Summon(Steady, EShinobiSummonKind::Toad, FVector(300.f, -4000.f, 0.f));
-	TestEqual(TEXT("Three toads"), ShinobiTest::CountActors<AShinobiSummon>(W), 3);
+	Summon(Downed, EShinobiSummonKind::Misha, FVector(300.f, 0.f, 0.f));
+	Summon(Leaver, EShinobiSummonKind::Misha, FVector(300.f, 4000.f, 0.f));
+	Summon(Steady, EShinobiSummonKind::Misha, FVector(300.f, -4000.f, 0.f));
+	TestEqual(TEXT("Three Mishas"), ShinobiTest::CountActors<AShinobiSummon>(W), 3);
 
 	ShinobiTest::Damage(Downed, 600.f); // downed
 	Leaver->Destroy(); // left the game
 	W.Tick(0.2f);
-	TestEqual(TEXT("Only the standing caster's toad remains"), ShinobiTest::CountActors<AShinobiSummon>(W), 1);
+	TestEqual(TEXT("Only the standing caster's Misha remains"), ShinobiTest::CountActors<AShinobiSummon>(W), 1);
 	return true;
 }
 
@@ -534,18 +437,18 @@ bool FShinobiSummonWallTest::RunTest(const FString& Parameters)
 	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(Caster);
 	Caster->ApplyJutsuPage(4);
-	ShinobiTest::Tap(Caster, EShinobiAbilityInputID::Jutsu2);
+	ShinobiTest::Tap(Caster, EShinobiAbilityInputID::Jutsu3);
 	W.Tick(1.2f);
-	AShinobiSummon* Toad = nullptr;
+	AShinobiSummon* Misha = nullptr;
 	for (TActorIterator<AShinobiSummon> It(W.World); It; ++It)
 	{
-		Toad = *It;
+		Misha = *It;
 	}
-	if (!TestNotNull(TEXT("The toad came"), Toad))
+	if (!TestNotNull(TEXT("Misha came"), Misha))
 	{
 		return false;
 	}
-	TestTrue(FString::Printf(TEXT("and stands clear of the wall, its 1.7 m radius short of X = 300 (X %.0f)"), Toad->GetActorLocation().X), Toad->GetActorLocation().X < 300.f - 150.f);
+	TestTrue(FString::Printf(TEXT("and stands clear of the wall, his 1.1 m radius short of X = 300 (X %.0f)"), Misha->GetActorLocation().X), Misha->GetActorLocation().X < 300.f - 110.f);
 	return true;
 }
 
@@ -555,31 +458,31 @@ bool FShinobiSummonFollowTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(Caster);
-	const TArray<AShinobiSummon*> Toad = Summon(Caster, EShinobiSummonKind::Toad, FVector(400.f, 0.f, 0.f));
+	const TArray<AShinobiSummon*> Misha = Summon(Caster, EShinobiSummonKind::Misha, FVector(400.f, 0.f, 0.f));
 	const TArray<AShinobiSummon*> Pabu = Summon(Caster, EShinobiSummonKind::Pabu, FVector(-400.f, 0.f, 0.f));
-	if (Toad.Num() != 1 || Pabu.Num() != 1)
+	if (Misha.Num() != 1 || Pabu.Num() != 1)
 	{
 		return false;
 	}
 
 	Caster->SetActorLocation(FVector(1500.f, 800.f, 0.f), false, nullptr, ETeleportType::TeleportPhysics);
-	float ToadTop = 0.f;
+	float MishaTop = 0.f;
 	for (int32 Step = 0; Step < 20; ++Step)
 	{
 		W.Tick(0.25f);
-		ToadTop = FMath::Max(ToadTop, Toad[0]->GetVelocity().Size2D());
+		MishaTop = FMath::Max(MishaTop, Misha[0]->GetVelocity().Size2D());
 	}
-	TestTrue(FString::Printf(TEXT("The toad hurried, faster than its usual 350 (%.0f)"), ToadTop), ToadTop > 500.f);
-	const float ToadGap = FVector::Dist2D(Toad[0]->GetActorLocation(), Caster->GetActorLocation());
-	TestTrue(FString::Printf(TEXT("The toad caught up (%.0f from the caster)"), ToadGap), ToadGap < AShinobiSummon::FollowDistance + 300.f);
+	TestTrue(FString::Printf(TEXT("Misha hurried, faster than his usual 380 (%.0f)"), MishaTop), MishaTop > 500.f);
+	const float MishaGap = FVector::Dist2D(Misha[0]->GetActorLocation(), Caster->GetActorLocation());
+	TestTrue(FString::Printf(TEXT("Misha caught up (%.0f from the caster)"), MishaGap), MishaGap < AShinobiSummon::FollowDistance + 300.f);
 	const float PabuGap = FVector::Dist2D(Pabu[0]->GetActorLocation(), Caster->GetActorLocation());
 	TestTrue(FString::Printf(TEXT("and so did Pabu (%.0f)"), PabuGap), PabuGap < AShinobiSummon::FollowDistance + 300.f);
-	TestTrue(TEXT("They wait in different spots, not stacked"), FVector::Dist2D(Pabu[0]->GetActorLocation(), Toad[0]->GetActorLocation()) > 150.f);
+	TestTrue(TEXT("They wait in different spots, not stacked"), FVector::Dist2D(Pabu[0]->GetActorLocation(), Misha[0]->GetActorLocation()) > 150.f);
 
 	// Arrived: standing, in the idle clip, not shuffling about.
 	W.Tick(2.f);
-	TestTrue(TEXT("The toad has settled"), Toad[0]->GetVelocity().Size2D() < 30.f);
-	TestTrue(FString::Printf(TEXT("and idles (%s)"), *PlayingClip(Toad[0])), PlayingClip(Toad[0]).Contains(TEXT("Idle")));
+	TestTrue(TEXT("Misha has settled"), Misha[0]->GetVelocity().Size2D() < 30.f);
+	TestTrue(FString::Printf(TEXT("and idles (%s)"), *PlayingClip(Misha[0])), PlayingClip(Misha[0]).Contains(TEXT("Idle")));
 	return true;
 }
 
@@ -698,16 +601,16 @@ bool FShinobiSummonHitReactTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(Caster);
-	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Toad, FVector(400.f, 0.f, 0.f));
-	const AShinobiSummon* Toad = Pack[0];
+	const TArray<AShinobiSummon*> Pack = Summon(Caster, EShinobiSummonKind::Misha, FVector(400.f, 0.f, 0.f));
+	const AShinobiSummon* Misha = Pack[0];
 	W.Tick(4.f);
-	TestTrue(TEXT("Idle first"), PlayingClip(Toad).Contains(TEXT("Idle")));
+	TestTrue(TEXT("Idle first"), PlayingClip(Misha).Contains(TEXT("Idle")));
 
-	ShinobiTest::Damage(const_cast<AShinobiSummon*>(Toad), 40.f);
+	ShinobiTest::Damage(const_cast<AShinobiSummon*>(Misha), 40.f);
 	W.Tick(0.15f);
-	TestEqual(TEXT("A blow makes it flinch"), PlayingClip(Toad), FString(TEXT("ANIM_Toad_Hit")));
+	TestEqual(TEXT("A blow makes it flinch"), PlayingClip(Misha), FString(TEXT("ANIM_Misha_Hit")));
 	W.Tick(1.2f);
-	TestTrue(FString::Printf(TEXT("and then it carries on (%s)"), *PlayingClip(Toad)), PlayingClip(Toad).Contains(TEXT("Idle")));
+	TestTrue(FString::Printf(TEXT("and then it carries on (%s)"), *PlayingClip(Misha)), PlayingClip(Misha).Contains(TEXT("Idle")));
 	return true;
 }
 
@@ -747,15 +650,15 @@ bool FShinobiSummonIdleCatchUpTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(Caster);
-	const TArray<AShinobiSummon*> Toad = Summon(Caster, EShinobiSummonKind::Toad, FVector(400.f, 0.f, 0.f));
-	if (Toad.Num() != 1)
+	const TArray<AShinobiSummon*> Misha = Summon(Caster, EShinobiSummonKind::Misha, FVector(400.f, 0.f, 0.f));
+	if (Misha.Num() != 1)
 	{
 		return false;
 	}
 	Caster->SetActorLocation(FVector(2400.f, 0.f, 0.f), false, nullptr, ETeleportType::TeleportPhysics); // not far enough to jump if it were fighting
 	W.Tick(0.5f);
-	const float Gap = FVector::Dist2D(Toad[0]->GetActorLocation(), Caster->GetActorLocation());
-	TestTrue(FString::Printf(TEXT("Idle and 24 m off, the toad is back beside its caster (%.0f away)"), Gap), Gap < AShinobiSummon::FollowDistance + 400.f);
+	const float Gap = FVector::Dist2D(Misha[0]->GetActorLocation(), Caster->GetActorLocation());
+	TestTrue(FString::Printf(TEXT("Idle and 24 m off, Misha is back beside his caster (%.0f away)"), Gap), Gap < AShinobiSummon::FollowDistance + 400.f);
 	return true;
 }
 

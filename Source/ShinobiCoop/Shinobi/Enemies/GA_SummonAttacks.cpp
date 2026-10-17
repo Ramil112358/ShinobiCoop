@@ -17,29 +17,6 @@ UGA_PabuBite::UGA_PabuBite()
 	ActivationOwnedTags.AddTag(ShinobiTags::State_SummonAttacking);
 }
 
-UGA_ToadSlam::UGA_ToadSlam()
-{
-	ActivationOwnedTags.AddTag(ShinobiTags::State_SummonAttacking);
-	WindUp = 0.7f;
-	Recovery = 0.5f;
-}
-
-void UGA_ToadSlam::Strike()
-{
-	AShinobiEnemyCharacter* Self = GetEnemy();
-	if (Self)
-	{
-		const float Reach = Radius * Self->GetActorScale3D().X;
-		const FVector Feet = Self->GetActorLocation() - FVector(0.f, 0.f, Self->GetSimpleCollisionHalfHeight());
-		for (AShinobiCharacterBase* Target : ShinobiCombat::FindHostilesInRadius(Self, Feet, Reach))
-		{
-			ShinobiCombat::ApplyDamage(Self->GetAbilitySystemComponent(), Target, Self->AttackDamage);
-		}
-		AShinobiBurst::Spawn(Self->GetWorld(), EShinobiBurst::Shockwave, Feet, Reach / 650.f);
-	}
-	Finish();
-}
-
 UGA_MishaBark::UGA_MishaBark()
 {
 	ActivationOwnedTags.AddTag(ShinobiTags::State_SummonAttacking);
