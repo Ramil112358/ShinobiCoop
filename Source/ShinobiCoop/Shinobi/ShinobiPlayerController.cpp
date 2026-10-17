@@ -21,6 +21,7 @@
 #include "Shinobi/ShinobiMarkerKunai.h"
 #include "Shinobi/ShinobiMeteor.h"
 #include "Shinobi/Enemies/ShinobiSummon.h"
+#include "Shinobi/Enemies/ShinobiOwl.h"
 #include "Shinobi/ShinobiDragonMount.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
@@ -387,6 +388,7 @@ void AShinobiPlayerController::RunFollowTest()
 	};
 	At(4.f, [this]() { ShinobiPage(4); });
 	At(4.3f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(4); }); // Pabu
+	At(5.5f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(2); }); // the owl
 	At(6.7f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(3); }); // Misha
 	At(9.f, [Log]() { Log(TEXT("settled")); });
 	// Walk four seconds along the freest direction (the London start is hemmed in by buildings).
@@ -895,8 +897,16 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(50.5f, [FaceCamera]() { FaceCamera(70.f, 70.f, 400.f, 900.f); });
 	At(50.6f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_27_Pabu")); });
 	At(51.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_27b_Pabu")); });
-	auto ClearSummons = [this]() { for (TActorIterator<AShinobiSummon> It(GetWorld()); It; ++It) { It->Dismiss(); } };
+	auto ClearSummons = [this]()
+	{
+		for (TActorIterator<AShinobiSummon> It(GetWorld()); It; ++It) { It->Dismiss(); }
+		for (TActorIterator<AShinobiOwl> It(GetWorld()); It; ++It) { It->Dismiss(); }
+	};
 	At(51.5f, [BackToPlayer, ClearSummons]() { BackToPlayer(); ClearSummons(); });
+	At(52.0f, [CastJutsu]() { CastJutsu(2, 0.8f); }); // the owl: at the shoulder at 52.7
+	At(53.2f, [FaceCamera]() { FaceCamera(70.f, 70.f, 0.f, 400.f); }); // close: she is a plush at the shoulder
+	At(53.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_28_Owl")); });
+	At(54.4f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_28b_Owl")); });
 	At(54.8f, [BackToPlayer, ClearSummons]() { BackToPlayer(); ClearSummons(); });
 	At(55.0f, [CastJutsu]() { CastJutsu(3, 0.8f); }); // Misha: appears at 55.7
 	At(56.2f, [FaceCamera]() { FaceCamera(70.f, 70.f, 500.f, 1200.f); });

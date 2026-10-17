@@ -12,6 +12,12 @@
 #include "Shinobi/VFX/ShinobiSfx.h"
 #include "Shinobi/VFX/ShinobiVfx.h"
 
+namespace
+{
+	constexpr float SkyBoltHeight = 1500.f; // how far above its spot the owl's bolt starts
+	constexpr int32 SkyBoltCards = 4;
+}
+
 AShinobiBurst::AShinobiBurst()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -97,8 +103,8 @@ void AShinobiBurst::BeginPlay()
 	static const EShinobiSfx Sounds[] = { EShinobiSfx::Explosion, EShinobiSfx::Explosion, EShinobiSfx::Zap, EShinobiSfx::Whirr, EShinobiSfx::Poof, EShinobiSfx::Whoosh, EShinobiSfx::Whoosh,
 		EShinobiSfx::Explosion, EShinobiSfx::Whirr, EShinobiSfx::Zap, EShinobiSfx::Thud, EShinobiSfx::Poof,
 		EShinobiSfx::Explosion, EShinobiSfx::Poof, EShinobiSfx::Whoosh,
-		EShinobiSfx::Whirr, EShinobiSfx::Poof };
-	static_assert(UE_ARRAY_COUNT(Sounds) == static_cast<int32>(EShinobiBurst::SummonPoof) + 1, "a sound for every burst kind");
+		EShinobiSfx::Whirr, EShinobiSfx::Poof, EShinobiSfx::Zap };
+	static_assert(UE_ARRAY_COUNT(Sounds) == static_cast<int32>(EShinobiBurst::SkyBolt) + 1, "a sound for every burst kind");
 	ShinobiSfx::Play(this, Sounds[static_cast<uint8>(Kind)], GetActorLocation(), Kind == EShinobiBurst::Fire ? 0.7f : 1.f);
 
 	// Mostly-rim shells (low Core) at modest intensity: a solid bright sphere blows out to a white wall under bloom.
@@ -122,6 +128,7 @@ void AShinobiBurst::BeginPlay()
 	case EShinobiBurst::FrostImpact:  Color = ShinobiVfx::Colors::Ice;       Duration = 0.5f; MaxScale = 2.f;  Intensity = 3.f;   LightIntensity = 12000.f; Core = 0.4f; break;
 	case EShinobiBurst::SusanooRise:  Color = FLinearColor(0.1f, 0.45f, 1.f); Duration = 0.9f; MaxScale = 6.f; Intensity = 2.5f; LightIntensity = 40000.f; Core = 0.3f; break;
 	case EShinobiBurst::SummonPoof:   Color = ShinobiVfx::Colors::Smoke;     Duration = 0.7f; MaxScale = 4.f;  Intensity = 0.8f;  LightIntensity = 0.f;     Core = 0.6f; break;
+	case EShinobiBurst::SkyBolt:      Color = ShinobiVfx::Colors::Lightning; Duration = 0.3f; MaxScale = 1.5f; Intensity = 4.f;   LightIntensity = 40000.f; break;
 	case EShinobiBurst::DragonSplash: Color = ShinobiVfx::Colors::Chakra;    Duration = 0.7f; MaxScale = 5.f;  Intensity = 2.f;   LightIntensity = 10000.f; Core = 0.4f; break;
 	}
 	MaxScale *= Scale;
@@ -206,6 +213,21 @@ bool AShinobiBurst::BuildCards()
 		}
 		AddCard(Plane, ESprite::Burst, FLinearColor(0.5f, 0.6f, 1.f), 1.5f, FVector::ZeroVector, FVector2D(380.f, 380.f) * S);
 		AddCard(Plane, ESprite::Ring, FLinearColor(0.5f, 0.6f, 1.f), 1.5f, FVector::ZeroVector, FVector2D(520.f, 520.f) * S, 0.f, true);
+		break;
+	case EShinobiBurst::SkyBolt:
+		// Chidori-blue bolt cards stacked from SkyBoltHeight down to the ground, each a moment after the one above, so the
+		// bolt falls rather than grows up; a narrower white core down the middle; the Lightning flash where it lands.
+		Duration = 0.45f;
+		for (int32 Index = 0; Index < SkyBoltCards; ++Index)
+		{
+			const float Bottom = SkyBoltHeight * (SkyBoltCards - 1 - Index) / SkyBoltCards;
+			const float Delay = 0.025f * Index;
+			const FVector Jitter = Around(Random.FRandRange(0.f, 25.f), Random.FRandRange(0.f, 2.f * PI));
+			AddCard(Plane, ESprite::Lightning, FLinearColor(0.45f, 0.65f, 1.f), 3.f, Jitter + FVector(0.f, 0.f, Bottom), FVector2D(260.f, SkyBoltHeight / SkyBoltCards + 40.f), 0.f, false, true, Delay);
+			AddCard(Plane, ESprite::Lightning, White, 2.5f, Jitter + FVector(0.f, 0.f, Bottom), FVector2D(110.f, SkyBoltHeight / SkyBoltCards + 40.f), 0.f, false, true, Delay);
+		}
+		AddCard(Plane, ESprite::Burst, FLinearColor(0.5f, 0.6f, 1.f), 1.5f, FVector::ZeroVector, FVector2D(380.f, 380.f) * S, 0.f, false, false, 0.025f * SkyBoltCards);
+		AddCard(Plane, ESprite::Ring, FLinearColor(0.5f, 0.6f, 1.f), 1.5f, FVector::ZeroVector, FVector2D(520.f, 520.f) * S, 0.f, true, false, 0.025f * SkyBoltCards);
 		break;
 	case EShinobiBurst::Spiral:
 		Duration = 0.55f;

@@ -178,7 +178,7 @@ void AShinobiOwl::LandStrike()
 	// Where the foe is now, so the bolt does not miss one that moved during the wind-up.
 	ShinobiCombat::ApplyDamage(Summoner->GetAbilitySystemComponent(), Target, Damage, false);
 	const FVector Feet = Target->GetActorLocation() - FVector(0.f, 0.f, Target->GetSimpleCollisionHalfHeight());
-	AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::Lightning, Feet);
+	AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::SkyBolt, Feet);
 }
 
 void AShinobiOwl::OnRep_Strikes()
