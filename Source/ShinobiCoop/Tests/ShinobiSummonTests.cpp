@@ -806,6 +806,32 @@ bool FShinobiOwlPostTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOwlLeanTest, "ShinobiCoop.Summons.OwlLeansIntoHerFlight", ShinobiTestFlags)
+bool FShinobiOwlLeanTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(Caster);
+	AShinobiOwl* Owl = AShinobiOwl::Summon(Caster);
+	if (!TestNotNull(TEXT("The owl came"), Owl))
+	{
+		return false;
+	}
+	W.Tick(2.f);
+	TestTrue(TEXT("At rest she is level"), Owl->GetBody()->GetRelativeRotation().IsNearlyZero(1.f));
+	Caster->SetActorLocation(FVector(500.f, 0.f, 0.f)); // ahead of her
+	W.Tick(0.2f);
+	const FRotator Chasing = Owl->GetBody()->GetRelativeRotation();
+	TestTrue(FString::Printf(TEXT("Chasing ahead, her nose dips (pitch %.0f)"), Chasing.Pitch), Chasing.Pitch < -10.f);
+	TestTrue(TEXT("She tips about her middle, which stays put"), Owl->GetBody()->GetComponentTransform().TransformPosition(FVector(0.f, 0.f, 50.f)).Equals(Owl->GetActorLocation(), 1.f));
+	Caster->SetActorLocation(FVector(500.f, 500.f, 0.f)); // to her right
+	W.Tick(0.2f);
+	TestTrue(FString::Printf(TEXT("Drifting right, her right wing dips (roll %.0f)"), Owl->GetBody()->GetRelativeRotation().Roll), Owl->GetBody()->GetRelativeRotation().Roll > 10.f);
+	W.Tick(3.f);
+	TestTrue(TEXT("Caught up, she levels out"), Owl->GetBody()->GetRelativeRotation().IsNearlyZero(1.f));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOwlBodyTest, "ShinobiCoop.Summons.OwlHasNoBodyToHit", ShinobiTestFlags)
 bool FShinobiOwlBodyTest::RunTest(const FString& Parameters)
 {

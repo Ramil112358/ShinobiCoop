@@ -122,7 +122,8 @@ void AShinobiOwl::Tick(float DeltaSeconds)
 	}
 	const FVector Post = GetPost(*Summoner);
 	const FVector Here = GetActorLocation();
-	const FVector There = FVector::Dist(Here, Post) > SnapDistance ? Post : FMath::VInterpTo(Here, Post, DeltaSeconds, FollowSpeed);
+	const bool bSnap = FVector::Dist(Here, Post) > SnapDistance;
+	const FVector There = bSnap ? Post : FMath::VInterpTo(Here, Post, DeltaSeconds, FollowSpeed);
 	// She looks where her caster looks, and at her target while she strikes.
 	const bool bStriking = IsValid(Target) && Target->IsAlive() && Body->GetSingleNodeInstance() && StrikeClip && Body->IsPlaying() && Body->GetSingleNodeInstance()->GetAnimationAsset() == StrikeClip;
 	const FRotator Facing = bStriking ? FRotationMatrix::MakeFromXZ(Target->GetActorLocation() - There, Summoner->GetActorUpVector()).Rotator() : Summoner->GetActorRotation();
@@ -131,6 +132,22 @@ void AShinobiOwl::Tick(float DeltaSeconds)
 	{
 		PlayClip(HoverClip, true); // a strike has played out
 	}
+	UpdateFlight(bSnap ? FVector::ZeroVector : (There - Here) / FMath::Max(DeltaSeconds, UE_KINDA_SMALL_NUMBER), DeltaSeconds);
+}
+
+void AShinobiOwl::UpdateFlight(const FVector& Velocity, float DeltaSeconds)
+{
+	// A bird leans into her flight: nose down chasing ahead, nose up braking back, a wing dipped into a sideways drift.
+	const FVector Local = GetActorQuat().UnrotateVector(Velocity);
+	const FRotator Wanted(-FMath::Clamp(Local.X / LeanSpeed, -1.f, 1.f) * MaxPitch, 0.f, FMath::Clamp(Local.Y / LeanSpeed, -1.f, 1.f) * MaxBank);
+	Lean = FMath::RInterpTo(Lean, Wanted, DeltaSeconds, LeanResponse);
+	// About her middle, not her feet, so she tips in place.
+	const FVector Middle(0.f, 0.f, ModelMiddle * Scale);
+	Body->SetRelativeLocationAndRotation(-Lean.RotateVector(Middle), Lean);
+	// and beats harder the faster she goes.
+	const UAnimSingleNodeInstance* Single = Body->GetSingleNodeInstance();
+	const bool bHovering = Single && Single->GetAnimationAsset() == HoverClip;
+	Body->SetPlayRate(bHovering ? 1.f + (MaxFlapRate - 1.f) * FMath::Clamp(Velocity.Size() / LeanSpeed, 0.f, 1.f) : 1.f);
 }
 
 AShinobiCharacterBase* AShinobiOwl::FindTarget() const

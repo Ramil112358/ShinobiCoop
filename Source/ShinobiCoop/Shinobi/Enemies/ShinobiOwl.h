@@ -51,6 +51,11 @@ public:
 	static constexpr float PostHeight = 160.f;
 	static constexpr float FollowSpeed = 8.f;    // VInterpTo speed towards the post
 	static constexpr float SnapDistance = 1500.f; // farther from the post than this (a teleport, a dragon at speed) she is simply there
+	static constexpr float LeanSpeed = 600.f;    // at this speed (about a sprint) she leans and beats her fullest
+	static constexpr float MaxPitch = 30.f;      // degrees nose down flying ahead, nose up braking
+	static constexpr float MaxBank = 35.f;       // degrees a wing dips into a sideways drift
+	static constexpr float LeanResponse = 6.f;   // RInterpTo speed of the lean
+	static constexpr float MaxFlapRate = 1.7f;   // Hover clip play rate at LeanSpeed
 
 protected:
 	virtual void BeginPlay() override;
@@ -61,6 +66,8 @@ private:
 	void StartStrike();
 	void LandStrike();
 	AShinobiCharacterBase* FindTarget() const;
+	/** Every machine: leans her body into Velocity (cm/s, world) and speeds her wingbeats with it. */
+	void UpdateFlight(const FVector& Velocity, float DeltaSeconds);
 
 	UFUNCTION()
 	void OnRep_Strikes();
@@ -83,6 +90,8 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UAnimSequence> StrikeClip;
+
+	FRotator Lean = FRotator::ZeroRotator;
 
 	FTimerHandle LifetimeTimer;
 	FTimerHandle StrikeTimer;
