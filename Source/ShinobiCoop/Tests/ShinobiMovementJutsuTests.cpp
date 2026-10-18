@@ -81,7 +81,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiNewBurstKindsTest, "ShinobiCoop.Burst.N
 bool FShinobiNewBurstKindsTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
-	for (const EShinobiBurst Kind : { EShinobiBurst::Shockwave, EShinobiBurst::Swirl, EShinobiBurst::TeleportFlash, EShinobiBurst::Crumble, EShinobiBurst::Splash })
+	for (const EShinobiBurst Kind : { EShinobiBurst::Shockwave, EShinobiBurst::Swirl, EShinobiBurst::TeleportFlash, EShinobiBurst::Crumble, EShinobiBurst::Splash, EShinobiBurst::AlmightyPush })
 	{
 		const AShinobiBurst* Burst = AShinobiBurst::Spawn(W.World, Kind, FVector::ZeroVector, 1.5f);
 		if (TestNotNull(TEXT("Burst spawns"), Burst))

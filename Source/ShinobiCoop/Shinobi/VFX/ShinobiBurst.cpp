@@ -16,6 +16,13 @@ namespace
 {
 	constexpr float SkyBoltHeight = 1500.f; // how far above its spot the owl's bolt starts
 	constexpr int32 SkyBoltCards = 4;
+	// Almighty Push: the dome's full radius at Scale 1 (UGA_AlmightyPush::Radius), how long it takes to swell to it,
+	// when it starts to fade and when it is gone; the dust lingers to the end of the burst.
+	constexpr float PushRadius = 600.f;
+	constexpr float PushSwell = 0.4f;
+	constexpr float PushFadeStart = 0.8f;
+	constexpr float PushFadeEnd = 1.4f;
+	float PushSwellAt(float Age) { return 1.f - FMath::Cube(1.f - FMath::Min(Age / PushSwell, 1.f)); } // fast out, easing to a stop
 }
 
 AShinobiBurst::AShinobiBurst()
@@ -103,8 +110,8 @@ void AShinobiBurst::BeginPlay()
 	static const EShinobiSfx Sounds[] = { EShinobiSfx::Explosion, EShinobiSfx::Explosion, EShinobiSfx::Zap, EShinobiSfx::Whirr, EShinobiSfx::Poof, EShinobiSfx::Whoosh, EShinobiSfx::Whoosh,
 		EShinobiSfx::Explosion, EShinobiSfx::Whirr, EShinobiSfx::Zap, EShinobiSfx::Thud, EShinobiSfx::Poof,
 		EShinobiSfx::Explosion, EShinobiSfx::Poof, EShinobiSfx::Whoosh,
-		EShinobiSfx::Whirr, EShinobiSfx::Poof, EShinobiSfx::Zap };
-	static_assert(UE_ARRAY_COUNT(Sounds) == static_cast<int32>(EShinobiBurst::SkyBolt) + 1, "a sound for every burst kind");
+		EShinobiSfx::Whirr, EShinobiSfx::Poof, EShinobiSfx::Zap, EShinobiSfx::Explosion };
+	static_assert(UE_ARRAY_COUNT(Sounds) == static_cast<int32>(EShinobiBurst::AlmightyPush) + 1, "a sound for every burst kind");
 	ShinobiSfx::Play(this, Sounds[static_cast<uint8>(Kind)], GetActorLocation(), Kind == EShinobiBurst::Fire ? 0.7f : 1.f);
 
 	// Mostly-rim shells (low Core) at modest intensity: a solid bright sphere blows out to a white wall under bloom.
@@ -130,6 +137,7 @@ void AShinobiBurst::BeginPlay()
 	case EShinobiBurst::SummonPoof:   Color = ShinobiVfx::Colors::Smoke;     Duration = 0.7f; MaxScale = 4.f;  Intensity = 0.8f;  LightIntensity = 0.f;     Core = 0.6f; break;
 	case EShinobiBurst::SkyBolt:      Color = ShinobiVfx::Colors::Lightning; Duration = 0.3f; MaxScale = 1.5f; Intensity = 4.f;   LightIntensity = 40000.f; break;
 	case EShinobiBurst::DragonSplash: Color = ShinobiVfx::Colors::Chakra;    Duration = 0.7f; MaxScale = 5.f;  Intensity = 2.f;   LightIntensity = 10000.f; Core = 0.4f; break;
+	case EShinobiBurst::AlmightyPush: Color = ShinobiVfx::Colors::Smoke;     Duration = 2.f;  MaxScale = 1.f;  Intensity = 1.f;   LightIntensity = 0.f;     break;
 	}
 	MaxScale *= Scale;
 	SphereMaterial = Kind == EShinobiBurst::FireBreath || Kind == EShinobiBurst::BlackFlameIgnite
@@ -179,6 +187,24 @@ void AShinobiBurst::BeginPlay()
 	{
 		ShinobiVfx::SpawnScorch(GetWorld(), GetActorLocation(), 130.f * Scale, DirtTint, 12.f, ShinobiVfx::RasenganCrater);
 		ShinobiVfx::SpawnDebris(GetWorld(), GetActorLocation(), 12, 500.f * FMath::Sqrt(Scale), 0.16f, 5.f);
+	}
+	else if (Kind == EShinobiBurst::AlmightyPush)
+	{
+		// A milky sphere of force swelling out from the caster (its lower part under the floor), a ring of cracks where
+		// its edge meets the ground, and grit thrown out.
+		Dome = NewObject<UStaticMeshComponent>(this);
+		Dome->SetStaticMesh(Sphere->GetStaticMesh());
+		Dome->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Dome->SetCastShadow(false);
+		Dome->SetupAttachment(RootComponent);
+		Dome->SetUsingAbsoluteScale(true);
+		Dome->SetRelativeLocation(FVector(0.f, 0.f, 0.2f * PushRadius * Scale));
+		DomeMaterial = ShinobiVfx::MakePushDome(this);
+		Dome->SetMaterial(0, DomeMaterial);
+		Dome->RegisterComponent();
+		const float Edge = PushRadius * Scale * FMath::Sqrt(1.f - FMath::Square(0.2f)); // where the sphere meets the floor
+		ShinobiVfx::SpawnScorch(GetWorld(), GetActorLocation(), Edge / 0.77f, FLinearColor(0.3f, 0.3f, 0.3f), 10.f, ShinobiVfx::PushCrackRing);
+		ShinobiVfx::SpawnDebris(GetWorld(), GetActorLocation(), 6, 700.f * FMath::Sqrt(Scale), 0.07f, 4.f);
 	}
 }
 
@@ -281,6 +307,31 @@ bool AShinobiBurst::BuildCards()
 			AddCard(Plane, ESprite::Smoke, FLinearColor(0.72f, 0.66f, 0.58f), 1.f, Around(Random.FRandRange(150.f, 320.f) * S, Index * 1.26f + Random.FRandRange(0.f, 0.5f)), FVector2D(300.f, 380.f) * S, 90.f * S);
 		}
 		break;
+	case EShinobiBurst::AlmightyPush:
+	{
+		// Dust churning inside the dome while it holds, a bank of dust rolling out along the floor under its edge, and
+		// clouds left hanging round where it stopped, all low on the ground: the top of the dome stays clear. (The dome
+		// itself is a mesh, built in BeginPlay.)
+		const float R = PushRadius * S;
+		const FLinearColor Dust(0.62f, 0.58f, 0.52f);
+		for (int32 Index = 0; Index < 4; ++Index)
+		{
+			AddCard(Plane, ESprite::Dust, FLinearColor(0.6f, 0.59f, 0.57f), 1.f, Around(Random.FRandRange(0.3f, 0.6f) * R, Index * 1.57f + Random.FRandRange(0.f, 0.5f)), FVector2D(0.6f, 0.25f) * R, 0.f, false, false, 0.05f);
+			Cards.Last().Life = PushFadeEnd;
+			Cards.Last().bRollOut = true;
+		}
+		for (int32 Index = 0; Index < 16; ++Index)
+		{
+			AddCard(Plane, ESprite::Dust, Dust, 1.f, Around(Random.FRandRange(0.85f, 1.f) * R, Index * 2.f * PI / 16.f + Random.FRandRange(-0.15f, 0.15f)), FVector2D(0.65f, 0.3f) * R, 0.05f * R);
+			Cards.Last().Life = 1.2f;
+			Cards.Last().bRollOut = true;
+		}
+		for (int32 Index = 0; Index < 10; ++Index)
+		{
+			AddCard(Plane, ESprite::Dust, Dust * 0.9f, 1.f, Around(Random.FRandRange(0.95f, 1.2f) * R, Index * 2.f * PI / 10.f + Random.FRandRange(0.f, 0.5f)), FVector2D(0.8f, 0.35f) * R, 0.08f * R, false, false, PushSwell);
+		}
+		break;
+	}
 	case EShinobiBurst::TeleportFlash:
 		// Flying Raijin: a bright flash and a few bolts where the caster lands.
 		Duration = 0.45f;
@@ -432,7 +483,8 @@ void AShinobiBurst::Tick(float DeltaSeconds)
 		const FVector CameraAt = Camera ? Camera->GetCameraLocation() : GetActorLocation() + FVector(-1000.f, 0.f, 0.f);
 		for (FCard& Card : Cards)
 		{
-			const float Local = FMath::Clamp((Age - Card.Delay) / FMath::Max(Duration - Card.Delay, 0.05f), 0.f, 1.f);
+			const float Life = Card.Life > 0.f ? Card.Life : Duration - Card.Delay;
+			const float Local = FMath::Clamp((Age - Card.Delay) / FMath::Max(Life, 0.05f), 0.f, 1.f);
 			const bool bShown = Age >= Card.Delay && Local < 1.f;
 			Card.Mesh->SetVisibility(bShown);
 			if (!bShown)
@@ -441,7 +493,8 @@ void AShinobiBurst::Tick(float DeltaSeconds)
 			}
 			const float CardGrow = 1.f - FMath::Square(1.f - Local);
 			const FVector2D Size = Card.Size * FMath::Lerp(0.35f, 1.f, CardGrow);
-			const FVector Origin = GetActorLocation() + Card.Offset;
+			// Rolling out: from near the centre to the offset with the dome, then still drifting out a little.
+			const FVector Origin = GetActorLocation() + Card.Offset * (Card.bRollOut ? FMath::Lerp(0.15f, 1.f, PushSwellAt(Age)) + 0.15f * Local : 1.f);
 			if (Card.bFlat)
 			{
 				Card.Mesh->SetWorldLocation(Origin + FVector(0.f, 0.f, 8.f));
@@ -474,6 +527,16 @@ void AShinobiBurst::Tick(float DeltaSeconds)
 			{
 				Card.Material->SetScalarParameterValue(TEXT("Fade"), FMath::Min(Local * 10.f, 1.f) * FMath::Square(1.f - Local));
 			}
+		}
+	}
+	if (Dome)
+	{
+		const float Radius = PushRadius * Scale * FMath::Lerp(0.08f, 1.f, PushSwellAt(Age));
+		Dome->SetWorldScale3D(FVector(Radius / 50.f)); // the engine sphere is 100 units across
+		Dome->SetVisibility(Age < PushFadeEnd);
+		if (DomeMaterial)
+		{
+			DomeMaterial->SetScalarParameterValue(TEXT("Fade"), 1.f - FMath::SmoothStep(PushFadeStart, PushFadeEnd, Age));
 		}
 	}
 	Light->SetIntensity(LightIntensity * (1.f - T));

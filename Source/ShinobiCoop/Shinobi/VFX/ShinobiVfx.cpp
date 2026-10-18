@@ -86,6 +86,16 @@ namespace ShinobiVfx
 		return Ghost;
 	}
 
+	UMaterialInstanceDynamic* MakePushDome(UObject* Outer)
+	{
+		UMaterialInstanceDynamic* Dome = MakeInstance(Outer, TEXT("/Game/Shinobi/VFX/M_PushDome.M_PushDome"));
+		if (Dome)
+		{
+			Dome->SetScalarParameterValue(TEXT("Fade"), 1.f);
+		}
+		return Dome;
+	}
+
 	UMaterialInstanceDynamic* MakeStreak(UObject* Outer, const FLinearColor& Color)
 	{
 		UMaterialInstanceDynamic* Streak = MakeInstance(Outer, TEXT("/Game/Shinobi/VFX/M_Streak.M_Streak"));
@@ -133,6 +143,7 @@ namespace ShinobiVfx
 				{Add, ChakraFlow, 4, 4},    // ChakraSwirl
 				{Add, TEXT("/Game/Shinobi/VFX/T_ChidoriOrb.T_ChidoriOrb"), 0, 8},   // ChidoriOrb
 				{Add, TEXT("/Game/Shinobi/VFX/T_RasenganOrb.T_RasenganOrb"), 0, 8}, // RasenganOrb
+				{TEXT("/Game/Shinobi/VFX/M_SpriteDust.M_SpriteDust"), TEXT("/Game/Shinobi/VFX/T_PushDust.T_PushDust"), 0, 8}, // Dust
 			};
 			return Table[static_cast<int32>(Kind)];
 		}

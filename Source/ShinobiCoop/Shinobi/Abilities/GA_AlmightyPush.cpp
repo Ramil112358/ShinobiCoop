@@ -42,7 +42,7 @@ void UGA_AlmightyPush::ExecuteJutsu()
 			}
 			Victim->LaunchCharacter(Away * LaunchSpeed * GetVisualScale() + FVector(0.f, 0.f, LaunchUp), true, true);
 		}
-		AShinobiBurst::Spawn(Self->GetWorld(), EShinobiBurst::Shockwave, Self->GetActorLocation() - FVector(0.f, 0.f, Self->GetSimpleCollisionHalfHeight()), GetVisualScale());
+		AShinobiBurst::Spawn(Self->GetWorld(), EShinobiBurst::AlmightyPush, Self->GetActorLocation() - FVector(0.f, 0.f, Self->GetSimpleCollisionHalfHeight()), GetVisualScale());
 	}
 	EndJutsu();
 }

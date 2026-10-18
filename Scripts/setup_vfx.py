@@ -1,4 +1,4 @@
-"""Jutsu VFX materials. Idempotent: rebuilds M_ChakraBodyAura, M_Flame, M_FlameDark, M_Streak, M_Phased, M_WaterWall and M_Susanoo from scratch each run.
+"""Jutsu VFX materials. Idempotent: rebuilds M_ChakraBodyAura, M_Flame, M_FlameDark, M_Streak, M_Phased, M_WaterWall, M_Susanoo and M_PushDome from scratch each run.
 
 Close the GUI editor before running: an editor that has this material loaded would silently
 overwrite the regenerated asset on its next Save All.
@@ -458,6 +458,90 @@ def build_water_wall():
     finish(m, emissive, transmittance)
 
 
+def build_push_dome():
+    """M_PushDome: Almighty Push's sphere of force, as in Storm 4: a see-through shell with a brighter rim, turbulent
+    clouds of dust churning round its foot only (the top stays clear), and the world behind its rim bent in moving waves
+    (screen refraction, 2D offset; only at the rim, since the toon outline is drawn from undistorted depth and would come
+    away from the caster seen through the middle).
+    Two-sided, so it still reads once it has grown past the camera. Params: Color, Opacity, Distort (viewport UV), Fade."""
+    m = fresh_material("M_PushDome", two_sided=True, blend=unreal.BlendMode.BLEND_TRANSLUCENT)
+    mode = next(getattr(unreal.RefractionMode, k) for k in dir(unreal.RefractionMode) if "2D" in k.upper())  # RM_2DOffset
+    m.set_editor_property("refraction_method", mode)
+    color = node(m, unreal.MaterialExpressionVectorParameter, -1400, -400, parameter_name="Color", default_value=unreal.LinearColor(0.5, 0.5, 0.49, 1.0))
+    opacity = node(m, unreal.MaterialExpressionScalarParameter, -1400, -250, parameter_name="Opacity", default_value=1.0)
+    distort = node(m, unreal.MaterialExpressionScalarParameter, -1400, -150, parameter_name="Distort", default_value=0.05)
+    fade = node(m, unreal.MaterialExpressionScalarParameter, -1400, -50, parameter_name="Fade", default_value=1.0)
+
+    def mul(a, b=None, x=0, y=0, **props):
+        out = node(m, unreal.MaterialExpressionMultiply, x, y, **props)
+        link(a, out, "A")
+        if b is not None:
+            link(b, out, "B")
+        return out
+
+    def add(a, b=None, x=0, y=0, **props):
+        out = node(m, unreal.MaterialExpressionAdd, x, y, **props)
+        link(a, out, "A")
+        if b is not None:
+            link(b, out, "B")
+        return out
+
+    # Clouds: turbulent noise in the dome's own space (so it is centred on the caster), squashed so the billows run
+    # round the dome in bands, drifting up and round over time.
+    local = node(m, unreal.MaterialExpressionSubtract, -1200, 300)
+    link(node(m, unreal.MaterialExpressionWorldPosition, -1400, 250), local, "A")
+    link(node(m, unreal.MaterialExpressionObjectPositionWS, -1400, 400), local, "B")
+    squash = node(m, unreal.MaterialExpressionConstant3Vector, -1200, 450, constant=unreal.LinearColor(0.0035, 0.0035, 0.008, 1.0))
+    drift_dir = node(m, unreal.MaterialExpressionConstant3Vector, -1200, 600, constant=unreal.LinearColor(0.35, -0.25, 0.6, 1.0))
+    drift = mul(node(m, unreal.MaterialExpressionTime, -1400, 650), drift_dir, -1050, 600)
+    p = add(mul(local, squash, -1050, 350), drift, -900, 450)
+    noise = node(m, unreal.MaterialExpressionNoise, -750, 450, scale=1.0, levels=4, turbulence=True, output_min=0.0, output_max=1.0)
+    link(p, noise, "World Position")
+    # Contrast: thin haze between the billows, not an even fog. cloud = saturate((noise - 0.35) x 2.2)
+    cloud = node(m, unreal.MaterialExpressionSaturate, -600, 450)
+    link(mul(add(noise, None, -680, 520, const_b=-0.35), None, -640, 520, const_b=2.2), cloud, "")
+    # Two more samples, offset, for the refraction's x and y waves.
+    wave_x = node(m, unreal.MaterialExpressionNoise, -750, 650, scale=1.6, levels=2, output_min=-1.0, output_max=1.0)
+    link(p, wave_x, "World Position")
+    wave_y = node(m, unreal.MaterialExpressionNoise, -750, 850, scale=1.6, levels=2, output_min=-1.0, output_max=1.0)
+    link(add(p, node(m, unreal.MaterialExpressionConstant3Vector, -900, 900, constant=unreal.LinearColor(17.3, 5.1, 9.7, 1.0)), -800, 900), wave_y, "World Position")
+    rim = node(m, unreal.MaterialExpressionFresnel, -750, 150, exponent=2.5, base_reflect_fraction=0.0)
+    # Foot: 1 up to 0.15 of the radius above the ground (the centre sits 0.2 R up), 0 from 0.45 R up.
+    # foot = saturate((0.1 - z / ObjectRadius) / 0.3); the clouds and the haze live only there.
+    up = node(m, unreal.MaterialExpressionComponentMask, -1150, 100, r=False, g=False, b=True, a=False)
+    link(local, up, "")
+    height = node(m, unreal.MaterialExpressionDivide, -1050, 150)
+    link(up, height, "A")
+    link(node(m, unreal.MaterialExpressionObjectRadius, -1150, 200), height, "B")
+    below = node(m, unreal.MaterialExpressionSubtract, -900, 50, const_a=0.1)
+    link(height, below, "B")
+    foot = node(m, unreal.MaterialExpressionSaturate, -750, 50)
+    link(mul(below, None, -820, 50, const_b=3.333), foot, "")
+    cloud = mul(cloud, foot, -600, 350)
+
+    # coverage = saturate(Opacity x Side x (0.03 x foot + 0.4 x cloud + 0.45 x rim)) x Fade. Side is 1 on the near (outer) face
+    # and 0.6 on the inner face, so from inside the dome (the camera usually is, at a 6 m radius) the screen stays clear.
+    raw = add(add(mul(cloud, None, -550, 450, const_b=0.4), mul(rim, None, -550, 250, const_b=0.45), -400, 350), mul(foot, None, -400, 250, const_b=0.03), -250, 350)
+    side = add(mul(node(m, unreal.MaterialExpressionTwoSidedSign, -550, 600), None, -450, 600, const_b=0.2), None, -350, 600, const_b=0.8)
+    sat = node(m, unreal.MaterialExpressionSaturate, -100, 350)
+    link(mul(mul(raw, opacity, -200, 300), side, -150, 450), sat, "")
+    coverage = mul(sat, fade, 50, 350)
+    # colour = Color x (0.55 + 0.35 x cloud + 0.5 x rim), premultiplied by coverage
+    shade = add(add(mul(cloud, None, -550, -50, const_b=0.35), mul(rim, None, -550, 50, const_b=0.5), -400, 0), None, -250, 0, const_b=0.55)
+    emissive = mul(mul(color, shade, -100, -200), coverage, 100, -150)
+    transmittance = node(m, unreal.MaterialExpressionOneMinus, 250, 350)
+    link(coverage, transmittance, "")
+
+    # Refraction: a 2D screen offset of up to Distort x rim^2, so nothing in the middle of the view moves, faded out with the dome.
+    offset = node(m, unreal.MaterialExpressionAppendVector, -550, 750)
+    link(wave_x, offset, "A")
+    link(wave_y, offset, "B")
+    bend = mul(mul(offset, mul(rim, rim, -550, 1000), -400, 800), mul(distort, fade, -400, 950), -250, 850)
+    if not MEL.connect_material_property(bend, "", unreal.MaterialProperty.MP_REFRACTION):
+        raise RuntimeError("failed to connect Refraction on M_PushDome")
+    finish(m, emissive, transmittance)
+
+
 def link_any(src, dst, names, src_output=""):
     """link() to the first of several candidate pin names (5.8 exposes some pins under their display name)."""
     for name in names:
@@ -619,3 +703,4 @@ if __name__ == "__main__":  # Scripts/setup_susanoo.py imports this module for b
     build_phased()
     build_water_wall()
     build_susanoo()
+    build_push_dome()
