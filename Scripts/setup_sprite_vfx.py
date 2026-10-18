@@ -8,6 +8,11 @@ Sources (SourceArt/SpriteCook/VFX/, 1024 px, each a 4 x 2 atlas of 256 x 512 cel
   tairn_fire_sheet.png    -> /Game/Shinobi/VFX/T_TairnFire     8 tall blue-white lightning-fire jets (ESprite::TairnFire)
   crimson_fire_sheet.png  -> /Game/Shinobi/VFX/T_CrimsonFire   8 tall orange dragon-fire jets with embers (ESprite::CrimsonFire)
   chakra_flow_sheet.png   -> /Game/Shinobi/VFX/T_ChakraFlow    top row 4 rising chakra wisps, bottom row 4 swirl arcs (head on the left)
+  chidori_orb_sheet.png   -> /Game/Shinobi/VFX/T_ChidoriOrb    8 crackling lightning balls, centred in their cells (ESprite::ChidoriOrb)
+  rasengan_orb_sheet.png  -> /Game/Shinobi/VFX/T_RasenganOrb   8 swirling chakra spheres, centred in their cells (ESprite::RasenganOrb)
+  chidori_dent_rgba.png   -> /Game/Shinobi/VFX/T_ChidoriDent   cracked, burnt dent where Chidori hits (M_SpriteScorch via SpawnScorch)
+  rasengan_crater_rgba.png -> /Game/Shinobi/VFX/T_RasenganCrater spiral-gouged crater where Rasengan hits (M_SpriteScorch via SpawnScorch)
+  (the last four are made from the 2K SpriteCook sources by Scripts/prep_jutsu_sprites.py)
 
 Materials (params: Atlas, CellU 0-3, CellV 0-1, Tint, Intensity, Fade):
   M_Sprite       additive, unlit: fire, embers, lightning. Black is "nothing", so the sheets need no alpha.
@@ -32,6 +37,10 @@ SHEETS = {
     "tairn_fire_sheet.png": "T_TairnFire",      # 8 tall jets of blue-white lightning fire (Tairn's breath)
     "crimson_fire_sheet.png": "T_CrimsonFire",  # 8 tall jets of orange dragon fire with embers (the crimson dragon's breath)
     "chakra_flow_sheet.png": "T_ChakraFlow",    # chakra charge: 4 rising wisps, 4 swirl arcs (ESprite::ChakraWisp / ChakraSwirl)
+    "chidori_orb_sheet.png": "T_ChidoriOrb",
+    "rasengan_orb_sheet.png": "T_RasenganOrb",
+    "chidori_dent_rgba.png": "T_ChidoriDent",
+    "rasengan_crater_rgba.png": "T_RasenganCrater",
 }
 
 
@@ -200,41 +209,6 @@ def build_smoke(textures):
     emissive = mul(m, tint, coverage, 800, -100)
     transmittance = node(m, unreal.MaterialExpressionOneMinus, 800, 150)
     link(coverage, transmittance, "")
-    finish(m, emissive, transmittance)
-
-
-def build_scorch():
-    m = fresh_material("M_SpriteScorch", unreal.BlendMode.BLEND_TRANSLUCENT)
-    tex = node(m, unreal.MaterialExpressionTextureSampleParameter2D, -300, 0, parameter_name="Atlas", texture=unreal.load_asset(f"{VFX_DIR}/T_Scorch"))
-    tint = node(m, unreal.MaterialExpressionVectorParameter, -300, -250, parameter_name="Tint", default_value=unreal.LinearColor(1, 1, 1, 1))
-    start = node(m, unreal.MaterialExpressionScalarParameter, -900, 300, parameter_name="Start", default_value=0.0)
-    linger = node(m, unreal.MaterialExpressionScalarParameter, -900, 450, parameter_name="Linger", default_value=10.0)
-    time = node(m, unreal.MaterialExpressionTime, -900, 150)
-    age = node(m, unreal.MaterialExpressionSubtract, -700, 200)
-    link(time, age, "A")
-    link(start, age, "B")
-    # fade in over 0.4 s: saturate(age / 0.4)
-    fade_in = node(m, unreal.MaterialExpressionSaturate, -300, 250)
-    scaled_in = node(m, unreal.MaterialExpressionMultiply, -500, 250, const_b=2.5)
-    link(age, scaled_in, "A")
-    link(scaled_in, fade_in, "")
-    # fade out over the last 3 s: saturate((Linger - age) / 3)
-    left = node(m, unreal.MaterialExpressionSubtract, -700, 400)
-    link(linger, left, "A")
-    link(age, left, "B")
-    scaled_out = node(m, unreal.MaterialExpressionMultiply, -500, 400, const_b=0.3333)
-    link(left, scaled_out, "A")
-    fade_out = node(m, unreal.MaterialExpressionSaturate, -300, 400)
-    link(scaled_out, fade_out, "")
-    fades = mul(m, fade_in, fade_out, 0, 300)
-    mark = node(m, unreal.MaterialExpressionMultiply, 0, 150, const_b=0.9)
-    link(tex, mark, "A", "A")
-    opacity = mul(m, mark, fades, 200, 250)
-    emissive = node(m, unreal.MaterialExpressionMultiply, 200, -100)
-    link(tex, emissive, "A", "RGB")
-    link(tint, emissive, "B")
-    transmittance = node(m, unreal.MaterialExpressionOneMinus, 400, 250)
-    link(opacity, transmittance, "")
     finish(m, emissive, transmittance)
 
 

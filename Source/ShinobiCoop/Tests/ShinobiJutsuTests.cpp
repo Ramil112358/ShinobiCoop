@@ -1,4 +1,4 @@
-#include "Tests/ShinobiTestWorld.h"
+﻿#include "Tests/ShinobiTestWorld.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -243,7 +243,7 @@ bool FShinobiChidoriTest::RunTest(const FString& Parameters)
 
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
 	TestEqual(TEXT("Cost 30"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 70.f);
-	W.Tick(1.0f); // 0.5 s seals + ~0.18 s dash (706 units at 4000 u/s)
+	W.Tick(1.0f); // 0.5 s seals + ~0.24 s dash (706 units at 3000 u/s)
 	TestFalse(TEXT("Chidori finished"), ShinobiTest::IsActive(P, UGA_Chidori::StaticClass()));
 	const float Gap = FVector::Dist2D(P->GetActorLocation(), E->GetActorLocation());
 	TestTrue(FString::Printf(TEXT("Dashed up to the target (gap %.0f)"), Gap), Gap < 200.f);
@@ -284,10 +284,30 @@ bool FShinobiChidoriNoTargetTest::RunTest(const FString& Parameters)
 	AShinobiCharacterBase* Side = W.Spawn<AShinobiCharacterBase>(FVector(0.f, 800.f, 0.f)); // 90 degrees off: no snap
 
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
-	W.Tick(1.2f); // 0.5 s seals + 0.3 s dash
+	W.Tick(1.2f); // 0.5 s seals + 0.5 s dash
 	const float X = P->GetActorLocation().X;
-	TestTrue(FString::Printf(TEXT("Dashed ~1200 straight ahead (X = %.0f)"), X), X > 1100.f && X < 1300.f);
+	TestTrue(FString::Printf(TEXT("Dashed ~1500 straight ahead (X = %.0f)"), X), X > 1400.f && X < 1650.f);
 	TestEqual(TEXT("Enemy off to the side untouched"), ShinobiTest::Get(Side, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDashSteerTest, "ShinobiCoop.Jutsu.DashSteersWithMoveInput", ShinobiTestFlags)
+bool FShinobiDashSteerTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P); // no floor here: falling, only air control would steer
+
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
+	W.Tick(0.6f); // the seals (~0.5-0.55) and the dash's start: input before it would turn the aim (no camera here)
+	for (int32 Step = 0; Step < 8; ++Step) // the rest of the dash, holding right
+	{
+		P->AddMovementInput(FVector(0.f, 1.f, 0.f));
+		W.Tick(0.05f);
+	}
+	const FVector At = P->GetActorLocation();
+	TestTrue(FString::Printf(TEXT("Steered right a little (%s)"), *At.ToCompactString()), At.Y > 60.f && At.Y < At.X * 0.35f);
+	TestTrue(FString::Printf(TEXT("Still went mostly forward (X = %.0f)"), At.X), At.X > 1200.f);
 	return true;
 }
 
@@ -344,9 +364,11 @@ bool FShinobiRasenganDashTest::RunTest(const FString& Parameters)
 	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(700.f, 0.f, 0.f));
 
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
-	W.Tick(0.8f); // seals end ~0.45-0.5, then a 600-unit dash at 4000 u/s
+	W.Tick(0.8f); // seals end ~0.45-0.5, then a 600-unit dash at 3000 u/s
 	const float X = P->GetActorLocation().X;
-	TestTrue(FString::Printf(TEXT("Dashed up to the target, stopping 100 short (X = %.0f)"), X), FMath::IsNearlyEqual(X, 600.f, 60.f));
+	// The additive (steerable) force starts a movement tick late, so it can fall up to a tick short: 150 units at the
+	// test's 50 ms steps, ~50 at 60 fps (still inside StrikeRange).
+	TestTrue(FString::Printf(TEXT("Dashed up to the target, stopping 100 short (X = %.0f)"), X), X > 400.f && X < 660.f);
 	TestEqual(TEXT("150 damage"), ShinobiTest::Get(E, UShinobiAttributeSet::GetHealthAttribute()), 350.f);
 	TestTrue(FString::Printf(TEXT("Knocked back (vx %.0f)"), E->GetVelocity().X), E->GetVelocity().X > 1000.f);
 	return true;
@@ -359,10 +381,10 @@ bool FShinobiRasenganNoTargetTest::RunTest(const FString& Parameters)
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
-	W.Tick(0.8f); // seals end ~0.45-0.5, then a 900-unit dash (~0.23 s)
+	W.Tick(1.f); // seals end ~0.45-0.5, then a 1200-unit dash (0.4 s)
 	const float X = P->GetActorLocation().X;
 	// The force runs in 50 ms test steps and hands over 200 u/s at the end, so it overshoots a little (as Chidori's does).
-	TestTrue(FString::Printf(TEXT("Dashed ~900 straight ahead (X = %.0f)"), X), X > 850.f && X < 1100.f);
+	TestTrue(FString::Printf(TEXT("Dashed ~1200 straight ahead (X = %.0f)"), X), X > 1100.f && X < 1400.f);
 	TestFalse(TEXT("Rasengan finished"), ShinobiTest::IsActive(P, UGA_Rasengan::StaticClass()));
 	TestFalse(TEXT("Nothing left in the hand"), ShinobiTest::HasTag(P, ShinobiTags::State_Casting_Rasengan));
 	return true;
@@ -505,6 +527,12 @@ bool FShinobiCastFxChargeTest::RunTest(const FString& Parameters)
 	const FVector Hand = P->GetBodyMesh()->GetSocketLocation(P->GetRightHandBone());
 	const float Lift = Fx->GetOrbLocation().Z - Hand.Z;
 	TestTrue(FString::Printf(TEXT("The Rasengan sits above the palm, clear of the hand (%.1f above)"), Lift), Lift > 12.f);
+
+	ShinobiTest::Release(P, EShinobiAbilityInputID::Jutsu3);
+	W.Tick(0.15f); // into the thrust: the palm turns to the front
+	const FVector Palm = P->GetBodyMesh()->GetSocketLocation(P->GetRightHandBone());
+	const float Ahead = FVector::DotProduct(Fx->GetOrbLocation() - Palm, P->GetActorForwardVector());
+	TestTrue(FString::Printf(TEXT("In the thrust the Rasengan rides in front of the palm (%.1f ahead)"), Ahead), Ahead > 12.f);
 	return true;
 }
 

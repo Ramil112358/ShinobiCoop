@@ -1,4 +1,4 @@
-#include "Shinobi/VFX/ShinobiCastFxComponent.h"
+﻿#include "Shinobi/VFX/ShinobiCastFxComponent.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemInterface.h"
 #include "Components/PointLightComponent.h"
@@ -7,6 +7,10 @@
 #include "Engine/StaticMesh.h"
 #include "GameFramework/Character.h"
 #include "AnimationRuntime.h"
+#include "Camera/PlayerCameraManager.h"
+#include "Kismet/GameplayStatics.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Shinobi/Abilities/ShinobiJutsuAbility.h"
 #include "Shinobi/ShinobiCharacterBase.h"
@@ -31,7 +35,7 @@ namespace
 		static const TArray<FCastLook> Table = {
 			{ ShinobiTags::State_Casting_Fireball, PartBit(EShinobiCastPart::MouthFlame), ShinobiVfx::Colors::Fire, 0.f },
 			{ ShinobiTags::State_Casting_Chidori, PartBit(EShinobiCastPart::HandOrb) | PartBit(EShinobiCastPart::LightningArcs) | PartBit(EShinobiCastPart::ChidoriRing), ShinobiVfx::Colors::Lightning, 0.2f },
-			{ ShinobiTags::State_Casting_Rasengan, PartBit(EShinobiCastPart::HandOrb) | PartBit(EShinobiCastPart::RasenganShells), ShinobiVfx::Colors::Chakra, 0.25f },
+			{ ShinobiTags::State_Casting_Rasengan, PartBit(EShinobiCastPart::HandOrb) | PartBit(EShinobiCastPart::RasenganShells), ShinobiVfx::Colors::Chakra, 0.21f },
 			{ ShinobiTags::State_Casting_Amaterasu, PartBit(EShinobiCastPart::EyeGlow) | PartBit(EShinobiCastPart::BloodStreaks), ShinobiVfx::Colors::BlackFlame, 0.f },
 		};
 		return Table;
@@ -46,6 +50,8 @@ namespace
 	constexpr float StreakGrowTime = 0.4f; // blood runs down over the seals
 	constexpr int32 RingSegmentCount = 28;
 	constexpr float RingRadius = 95.f; // uncharged; grows with the charge
+	constexpr float RasenganCardSphere = 1.4f; // the swirl card's sphere across, in orb diameters (the glow orb is its core)
+	constexpr float RasenganOuterLayer = 1.25f; // the fainter wind card, in swirl spheres
 
 	// Face offsets from the head bone, in the actor's frame (forward, right, up), per body. The eye offset is the
 	// left eye; the right mirrors it.
@@ -91,6 +97,40 @@ FVector UShinobiCastFxComponent::GetOrbLocation() const
 	return Orb ? Orb->GetComponentLocation() : GetComponentLocation();
 }
 
+FVector UShinobiCastFxComponent::GetPalmCentre() const
+{
+	// Halfway from the wrist (the hand bone) to the knuckles (its children, the fingers' roots).
+	const USkinnedMeshComponent* Hand = Cast<USkinnedMeshComponent>(Orb->GetAttachParent());
+	if (!Hand || PalmBones.IsEmpty())
+	{
+		return Hand ? Hand->GetSocketLocation(Orb->GetAttachSocketName()) : Orb->GetComponentLocation();
+	}
+	FVector Knuckles = FVector::ZeroVector;
+	for (const FName Bone : PalmBones)
+	{
+		Knuckles += Hand->GetBoneLocation(Bone) / PalmBones.Num();
+	}
+	return FMath::Lerp(Hand->GetBoneLocation(Orb->GetAttachSocketName()), Knuckles, 0.5f);
+}
+
+float UShinobiCastFxComponent::GetRasenganThrust() const
+{
+	// The gameplay animations run on the (hidden) Manny mesh; the release turns the palm to the front over its first 0.1 s.
+	const ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+	const UAnimInstance* Anim = OwnerCharacter && OwnerCharacter->GetMesh() ? OwnerCharacter->GetMesh()->GetAnimInstance() : nullptr;
+	const UAnimMontage* Montage = Anim ? Anim->GetCurrentActiveMontage() : nullptr;
+	if (!Montage || Montage->GetName() != TEXT("AM_Rasengan_Release"))
+	{
+		return 0.f;
+	}
+	return FMath::Clamp(Anim->Montage_GetPosition(Montage) / 0.1f, 0.f, 1.f);
+}
+
+float UShinobiCastFxComponent::GetRasenganOuterRadius() const
+{
+	return Shells.Num() && Shells[0]->IsVisible() ? 50.f * Orb->GetComponentScale().X * RasenganCardSphere * RasenganOuterLayer : 0.f;
+}
+
 float UShinobiCastFxComponent::GetChargeVisualScale() const
 {
 	return 1.f + 0.8f * FMath::Min(ChargeAge / UShinobiJutsuAbility::MaxChargeTime, 1.f);
@@ -126,6 +166,19 @@ void UShinobiCastFxComponent::BeginPlay()
 	Orb = MakeMesh(TEXT("CastOrb"), SphereMesh, OrbMaterial, Body ? static_cast<USceneComponent*>(Body) : this, Body ? OwnerCharacter->GetRightHandBone() : NAME_None);
 	// World-space size: a hand bone can carry a scale of its own (a Mixamo rig exported from Blender has 100x bones).
 	Orb->SetUsingAbsoluteScale(true);
+	// The hand bone is the wrist; its children are the fingers' roots (GetPalmCentre: between them and the wrist).
+	const int32 HandIndex = Body && Body->GetSkinnedAsset() ? Body->GetBoneIndex(OwnerCharacter->GetRightHandBone()) : INDEX_NONE;
+	if (HandIndex != INDEX_NONE)
+	{
+		const FReferenceSkeleton& Skeleton = Body->GetSkinnedAsset()->GetRefSkeleton();
+		for (int32 Bone = HandIndex + 1; Bone < Skeleton.GetNum(); ++Bone)
+		{
+			if (Skeleton.GetParentIndex(Bone) == HandIndex)
+			{
+				PalmBones.Add(Skeleton.GetBoneName(Bone));
+			}
+		}
+	}
 
 	Light = NewObject<UPointLightComponent>(GetOwner(), MakeUniqueObjectName(GetOwner(), UPointLightComponent::StaticClass(), TEXT("CastLight")));
 	Light->SetupAttachment(Orb);
@@ -135,14 +188,6 @@ void UShinobiCastFxComponent::BeginPlay()
 	Light->SetVisibility(false);
 	Light->RegisterComponent();
 
-	// Rasengan: two rim-lit shells around the orb, spun on different axes in Tick.
-	for (const float ShellScale : { 1.25f, 1.45f })
-	{
-		UStaticMeshComponent* Shell = MakeMesh(TEXT("CastShell"), SphereMesh, ShinobiVfx::MakeGlow(this, ShinobiVfx::Colors::Chakra, 3.f, 0.15f), Orb);
-		Shell->SetRelativeScale3D(FVector(ShellScale));
-		Shells.Add(Shell);
-	}
-
 	// Everything below is placed in world space every tick, so it ignores its parent's (bone) scale and rotation.
 	auto Free = [](UStaticMeshComponent* Mesh)
 	{
@@ -151,6 +196,15 @@ void UShinobiCastFxComponent::BeginPlay()
 		Mesh->SetUsingAbsoluteScale(true);
 		return Mesh;
 	};
+	// SpriteCook cards over the orb, facing the camera (UpdateOrbCards): the Rasengan's swirl twice, turning against
+	// itself; Chidori's crackling ball once, flickering.
+	static const TCHAR* PlaneMesh = TEXT("/Engine/BasicShapes/Plane.Plane");
+	for (const float Glow : { 3.f, 1.4f })
+	{
+		Shells.Add(Free(MakeMesh(TEXT("CastSwirl"), PlaneMesh, ShinobiVfx::MakeSprite(this, ShinobiVfx::ESprite::RasenganOrb, 0, FLinearColor::White, Glow), this)));
+	}
+	ChidoriCard = Free(MakeMesh(TEXT("CastSpark"), PlaneMesh, ShinobiVfx::MakeSprite(this, ShinobiVfx::ESprite::ChidoriOrb, 0, FLinearColor::White, 2.5f), this));
+
 	UMaterialInstanceDynamic* ArcMaterial = ShinobiVfx::MakeGlow(this, ShinobiVfx::Colors::Lightning, 3.f, 1.f); // bright but still blue under bloom
 	for (int32 Index = 0; Index < NumArcs * SegmentsPerArc; ++Index)
 	{
@@ -229,6 +283,7 @@ void UShinobiCastFxComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Destroy(Light);
 	Destroy(MouthLight);
 	Destroy(RingLight);
+	Destroy(ChidoriCard);
 	for (const TArray<TObjectPtr<UStaticMeshComponent>>* Group : { &Shells, &ArcSegments, &RingSegments, &Eyes, &Streaks })
 	{
 		for (UStaticMeshComponent* Piece : *Group)
@@ -239,7 +294,7 @@ void UShinobiCastFxComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Destroy(Orb); // after the shells and the light attached to it
 	Destroy(MouthFlame);
 	Light = MouthLight = RingLight = nullptr;
-	Orb = MouthFlame = nullptr;
+	Orb = MouthFlame = ChidoriCard = nullptr;
 	Shells.Reset();
 	ArcSegments.Reset();
 	RingSegments.Reset();
@@ -304,6 +359,7 @@ void UShinobiCastFxComponent::Refresh()
 	{
 		Segment->SetVisibility(Has(EShinobiCastPart::LightningArcs));
 	}
+	ChidoriCard->SetVisibility(Has(EShinobiCastPart::LightningArcs));
 	const bool bMouth = Has(EShinobiCastPart::MouthFlame) && bCharging; // the breath burst takes over at the release
 	const bool bRing = Has(EShinobiCastPart::ChidoriRing) && bCharging;
 	for (UStaticMeshComponent* Segment : RingSegments)
@@ -363,22 +419,29 @@ void UShinobiCastFxComponent::TickComponent(float DeltaTime, ELevelTick TickType
 		Orb->SetRelativeScale3D(FVector(Look.OrbScale * ChargeScale * Pulse));
 		if (OrbMaterial)
 		{
-			OrbMaterial->SetScalarParameterValue(TEXT("Intensity"), OrbIntensity * (bLightning ? 1.2f : 1.5f) * Pulse);
+			// Dim: only a core under the SpriteCook cards, which carry the look.
+			OrbMaterial->SetScalarParameterValue(TEXT("Intensity"), OrbIntensity * (bLightning ? 0.7f : 0.4f) * Pulse);
 		}
 		Light->SetIntensity(OrbLightIntensity * ChargeScale * (bLightning ? FMath::FRandRange(1.2f, 3.f) : Pulse));
 		if (!bLightning)
 		{
-			// The Rasengan is held above the palm, clear of the hand, rather than around it.
+			// The Rasengan is held above the palm, clear of the hand, rather than around it; in the thrust (the release)
+			// the palm turns to the front and the ball rides in front of it, along the way the caster faces.
 			const USceneComponent* Hand = Orb->GetAttachParent();
-			const FVector Palm = Hand ? Hand->GetSocketLocation(Orb->GetAttachSocketName()) : Orb->GetComponentLocation();
-			const float Radius = 50.f * Orb->GetComponentScale().X;
-			Orb->SetWorldLocation(Palm + FVector(0.f, 0.f, Radius + 6.f));
+			const FVector Wrist = Hand ? Hand->GetSocketLocation(Orb->GetAttachSocketName()) : Orb->GetComponentLocation();
+			const float Radius = 50.f * Orb->GetComponentScale().X * RasenganCardSphere; // the swirl card's sphere, not the core
+			const FVector Above = Wrist + FVector(0.f, 0.f, Radius + 6.f);
+			const FVector Ahead = GetPalmCentre() + GetOwner()->GetActorForwardVector() * (Radius + 4.f);
+			Orb->SetWorldLocation(FMath::Lerp(Above, Ahead, GetRasenganThrust()));
+		}
+		else
+		{
+			Orb->SetWorldLocation(GetPalmCentre()); // Chidori sits in the palm
 		}
 	}
-	if (Shells.Num() == 2 && Shells[0]->IsVisible())
+	if (Shells[0]->IsVisible() || ChidoriCard->IsVisible())
 	{
-		Shells[0]->SetRelativeRotation(FRotator(Age * 720.f, Age * 360.f, 0.f));
-		Shells[1]->SetRelativeRotation(FRotator(-Age * 540.f, 0.f, Age * 720.f));
+		UpdateOrbCards();
 	}
 	if (ArcSegments.Num() && ArcSegments[0]->IsVisible())
 	{
@@ -389,6 +452,35 @@ void UShinobiCastFxComponent::TickComponent(float DeltaTime, ELevelTick TickType
 		UpdateRing(ChargeScale);
 	}
 	UpdateHead(ChargeScale);
+}
+
+void UShinobiCastFxComponent::UpdateOrbCards()
+{
+	const APlayerCameraManager* Camera = UGameplayStatics::GetPlayerCameraManager(this, 0);
+	const FVector Centre = Orb->GetComponentLocation();
+	const FVector ToCamera = Camera ? (Camera->GetCameraLocation() - Centre).GetSafeNormal() : -GetOwner()->GetActorForwardVector();
+	const FVector Up = Camera ? Camera->GetCameraRotation().Quaternion().GetUpVector() : FVector::UpVector;
+	const FQuat Facing = FRotationMatrix::MakeFromZY(ToCamera, Up).ToQuat(); // the plane's +Y is the sprite's up
+	const float Diameter = 100.f * Orb->GetComponentScale().X;
+	// The sheets' cells are twice as tall as wide, with the orb in the middle.
+	auto Place = [&](UStaticMeshComponent* Card, float Width, float SpinDegrees, ShinobiVfx::ESprite Sprite, int32 Variant)
+	{
+		Card->SetWorldLocationAndRotation(Centre + ToCamera * 2.f, FQuat(ToCamera, FMath::DegreesToRadians(SpinDegrees)) * Facing);
+		Card->SetWorldScale3D(FVector(Width / 100.f, 2.f * Width / 100.f, 1.f));
+		ShinobiVfx::SetSpriteVariant(Cast<UMaterialInstanceDynamic>(Card->GetMaterial(0)), Sprite, Variant);
+	};
+	if (ChidoriCard->IsVisible())
+	{
+		// A new bolt pattern every 40 ms, stepping 5 cells at a time so no two in a row look alike.
+		Place(ChidoriCard, Diameter * 4.f, 0.f, ShinobiVfx::ESprite::ChidoriOrb, FMath::FloorToInt(Age / 0.04f) * 5);
+	}
+	if (Shells[0]->IsVisible())
+	{
+		// The sphere fills 86% of a cell's width; the outer card is a fainter, wider wind layer turning the other way.
+		const int32 Frame = FMath::FloorToInt(Age / 0.06f);
+		Place(Shells[0], Diameter * RasenganCardSphere / 0.86f, -Age * 540.f, ShinobiVfx::ESprite::RasenganOrb, Frame);
+		Place(Shells[1], Diameter * RasenganCardSphere / 0.86f * RasenganOuterLayer, Age * 300.f, ShinobiVfx::ESprite::RasenganOrb, Frame + 4);
+	}
 }
 
 void UShinobiCastFxComponent::UpdateArcs(float ChargeScale)
@@ -415,7 +507,7 @@ void UShinobiCastFxComponent::UpdateArcs(float ChargeScale)
 			UStaticMeshComponent* Piece = ArcSegments[Arc * SegmentsPerArc + Segment];
 			// The engine cylinder is 100 units tall along Z, around its centre.
 			Piece->SetWorldLocationAndRotation((Start + End) * 0.5f, FRotationMatrix::MakeFromZ(Direction).Rotator());
-			Piece->SetWorldScale3D(FVector(0.025f, 0.025f, SegmentLength / 100.f));
+			Piece->SetWorldScale3D(FVector(0.01f, 0.01f, SegmentLength / 100.f)); // hair-thin: the card carries the bulk
 			Start = End;
 		}
 	}

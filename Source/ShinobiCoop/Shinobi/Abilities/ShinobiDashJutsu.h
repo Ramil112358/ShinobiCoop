@@ -10,7 +10,8 @@ class AShinobiCharacterBase;
  * A jutsu that charges in the hand, then dashes in and strikes (Chidori, Rasengan). The dash goes up to DashDistance,
  * steering to the nearest enemy within SnapHalfAngle of the aim (straight ahead otherwise) and stopping StopShort of it.
  * It's a root-motion force like the dodge's, started from the release on each side independently (see the M2a plan's
- * dash-sync note). At the end, the server strikes the nearest enemy within StrikeRange.
+ * dash-sync note). Off walls the force is additive, so held move input steers it a little (walk speed against the
+ * dash's DashSpeed). At the end, the server strikes the nearest enemy within StrikeRange, along the way it went.
  */
 UCLASS(Abstract)
 class SHINOBICOOP_API UShinobiDashJutsu : public UShinobiJutsuAbility
@@ -19,10 +20,10 @@ class SHINOBICOOP_API UShinobiDashJutsu : public UShinobiJutsuAbility
 
 public:
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
-	float DashDistance = 1200.f;
+	float DashDistance = 1500.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu", meta = (ClampMin = "1"))
-	float DashSpeed = 4000.f;
+	float DashSpeed = 3000.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
 	float SnapHalfAngle = 15.f;
@@ -45,6 +46,7 @@ private:
 	UFUNCTION()
 	void OnDashFinished();
 
-	/** Facing when the dash started; the strike uses it, since held move input turns the character mid-dash. */
+	/** Facing when the dash started; the strike faces the way the dash actually went from DashStart, if it moved. */
 	FQuat DashRotation = FQuat::Identity; // facing when the dash started (on a wall too)
+	FVector DashStart = FVector::ZeroVector;
 };

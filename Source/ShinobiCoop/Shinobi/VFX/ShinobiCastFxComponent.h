@@ -14,7 +14,7 @@ class UStaticMeshComponent;
 enum class EShinobiCastPart : uint8
 {
 	HandOrb,        // glowing sphere and light in the right hand (Chidori, Rasengan)
-	RasenganShells, // two spinning shells around the orb
+	RasenganShells, // two swirl cards turning against each other over the orb
 	LightningArcs,  // crackling bolts around the orb (Chidori)
 	MouthFlame,     // flame at the mouth while a Fireball charges
 	EyeGlow,        // red eyes (Amaterasu)
@@ -25,9 +25,11 @@ enum class EShinobiCastPart : uint8
 /**
  * What a jutsu looks like on the caster while it's active (seals, charge and, for the dashes, the run-in):
  * - Fireball: a flame at the mouth while charging, growing with the charge.
- * - Chidori: a crackling blue orb in the right hand with lightning arcs that lengthen with the charge (some reach
- *   the ground), and a ring of lightning on the ground around the caster while charging.
- * - Rasengan: a blue orb with two spinning shells, held above the palm and growing with the charge.
+ * - Chidori: a crackling ball of lightning in the right hand (a flickering SpriteCook card over a glow orb) with
+ *   lightning arcs that lengthen with the charge (some reach the ground), and a ring of lightning on the ground around
+ *   the caster while charging.
+ * - Rasengan: a swirling chakra sphere (two SpriteCook cards turning against each other over a glow core), held above
+ *   the palm and growing with the charge.
  * - Amaterasu: glowing red eyes, with blood running down from them during the seals.
  * Cosmetic only. It follows the State.Casting.* tags each jutsu grants while active (plus State.Casting.Charging),
  * which GAS replicates to every machine; the charge size runs on this machine's clock from when the Charging tag
@@ -51,6 +53,9 @@ public:
 	/** Centre of the hand orb (world space). */
 	FVector GetOrbLocation() const;
 
+	/** The Rasengan's outer wind layer, world radius round GetOrbLocation(); 0 unless the Rasengan is shown. */
+	float GetRasenganOuterRadius() const;
+
 	/** 1 + 0.8 x the charge so far (by this machine's clock since State.Casting.Charging appeared), frozen at the
 	 * release; 1 when not charging. */
 	float GetChargeVisualScale() const;
@@ -66,6 +71,13 @@ private:
 	void UpdateHead(float ChargeScale);
 	void UpdateArcs(float ChargeScale);
 	void UpdateRing(float ChargeScale);
+	void UpdateOrbCards();
+
+	/** The middle of the right palm, between the wrist and the knuckles (the wrist if the rig has no finger bones). */
+	FVector GetPalmCentre() const;
+
+	/** 0 while the Rasengan forms, rising to 1 as its release (the thrust, palm to the front) begins. */
+	float GetRasenganThrust() const;
 	UStaticMeshComponent* MakeMesh(const TCHAR* Name, const TCHAR* MeshPath, UMaterialInstanceDynamic* Material, USceneComponent* Parent, FName Socket = NAME_None);
 
 	UPROPERTY()
@@ -79,6 +91,10 @@ private:
 
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMeshComponent>> Shells;
+
+	/** Chidori's crackling ball (a SpriteCook card), over the orb with the arcs. */
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> ChidoriCard;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMeshComponent>> ArcSegments;
@@ -100,6 +116,9 @@ private:
 
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMeshComponent>> Streaks;
+
+	/** The right hand bone's children (the fingers' roots): Chidori is held between them and the wrist. */
+	TArray<FName> PalmBones;
 
 	TWeakObjectPtr<UAbilitySystemComponent> AbilitySystem;
 	TArray<FDelegateHandle> TagEventHandles;
