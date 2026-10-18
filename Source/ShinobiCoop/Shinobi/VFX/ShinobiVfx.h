@@ -51,6 +51,8 @@ namespace ShinobiVfx
 		CrimsonFire, // tall jets of orange dragon fire with embers, additive (8): the crimson dragon's breath
 		ChakraWisp, // soft rising wisp of blue chakra, additive (4): the chakra charge
 		ChakraSwirl, // curved blue chakra stream, head on the left, additive (4): the chakra charge
+		ChidoriOrb,  // crackling ball of lightning centred in a tall cell, additive (8): Chidori in the hand
+		RasenganOrb, // swirling chakra sphere centred in a tall cell, additive (8): Rasengan in the hand
 	};
 
 	/** How many variants the sprite has (the Variant argument below wraps around this). */
@@ -69,9 +71,21 @@ namespace ShinobiVfx
 	/**
 	 * A charred mark lying on the ground (the SpriteCook scorch texture), radius in world units: it fades in, stays for
 	 * Linger seconds, fades out, and removes itself. Local and cosmetic (not replicated), so call it on every machine.
-	 * Does nothing without a world or on a dedicated server.
+	 * Does nothing without a world or on a dedicated server. Mark swaps the charred texture for another (ChidoriDent,
+	 * RasenganCrater); the material is unlit, so a mark lighter than the char needs a dark Tint or it glows.
 	 */
-	SHINOBICOOP_API void SpawnScorch(UWorld* World, const FVector& Location, float Radius, const FLinearColor& Tint, float Linger);
+	SHINOBICOOP_API void SpawnScorch(UWorld* World, const FVector& Location, float Radius, const FLinearColor& Tint, float Linger, const TCHAR* Mark = nullptr);
+
+	/** Marks for SpawnScorch: the cracked dent Chidori leaves, the spiral crater Rasengan leaves. */
+	inline const TCHAR* ChidoriDent = TEXT("/Game/Shinobi/VFX/T_ChidoriDent.T_ChidoriDent");
+	inline const TCHAR* RasenganCrater = TEXT("/Game/Shinobi/VFX/T_RasenganCrater.T_RasenganCrater");
+
+	/**
+	 * Count chunks of rock thrown up from the ground under Location, outward at about Speed, each about Size metres
+	 * across: engine physics bounces and rolls them, and after Linger seconds they drop through the floor and go.
+	 * Local and cosmetic like SpawnScorch: call it on every machine. Does nothing without a world or on a dedicated server.
+	 */
+	SHINOBICOOP_API void SpawnDebris(UWorld* World, const FVector& Location, int32 Count, float Speed, float Size, float Linger);
 
 	/** The Water Wall's flowing-water material (M_WaterWall, built by Scripts/setup_vfx.py) tinted Color: the Water Dragon's body.
 	 * Null, with an ensure, if the asset is missing. */

@@ -167,6 +167,19 @@ void AShinobiBurst::BeginPlay()
 		}
 		Log->SetVisibility(true);
 	}
+	// The ground takes the hit: a cracked dent (Chidori) or a spiral crater (Rasengan) and chunks of rock thrown up.
+	// ponytail: the marks are unlit; the tint darkens their dirt to sit on daylit ground. A lit decal if night maps need it.
+	const FLinearColor DirtTint(0.12f, 0.12f, 0.12f);
+	if (Kind == EShinobiBurst::Lightning)
+	{
+		ShinobiVfx::SpawnScorch(GetWorld(), GetActorLocation(), 70.f * Scale, DirtTint, 10.f, ShinobiVfx::ChidoriDent);
+		ShinobiVfx::SpawnDebris(GetWorld(), GetActorLocation(), 6, 320.f, 0.12f, 4.f);
+	}
+	else if (Kind == EShinobiBurst::Spiral)
+	{
+		ShinobiVfx::SpawnScorch(GetWorld(), GetActorLocation(), 130.f * Scale, DirtTint, 12.f, ShinobiVfx::RasenganCrater);
+		ShinobiVfx::SpawnDebris(GetWorld(), GetActorLocation(), 12, 500.f * FMath::Sqrt(Scale), 0.16f, 5.f);
+	}
 }
 
 bool AShinobiBurst::BuildCards()
@@ -237,6 +250,11 @@ bool AShinobiBurst::BuildCards()
 		for (int32 Index = 0; Index < 4; ++Index)
 		{
 			AddCard(Plane, ESprite::Lightning, FLinearColor(0.5f, 0.85f, 1.f), 2.f, Around(Random.FRandRange(20.f, 90.f) * S, Random.FRandRange(0.f, 2.f * PI)), FVector2D(110.f, 260.f) * S, 0.f, false, true);
+		}
+		// Dust kicked up round the crater; the burst sits at the victim's middle, so drop it to the feet.
+		for (int32 Index = 0; Index < 4; ++Index)
+		{
+			AddCard(Plane, ESprite::Smoke, FLinearColor(0.62f, 0.55f, 0.46f), 1.f, Around(Random.FRandRange(80.f, 200.f) * S, Index * 1.57f + Random.FRandRange(0.f, 0.5f)) - FVector(0.f, 0.f, 80.f), FVector2D(260.f, 300.f) * S, 90.f * S);
 		}
 		break;
 	case EShinobiBurst::BlackFlameIgnite:

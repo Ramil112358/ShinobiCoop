@@ -14,7 +14,7 @@ UGA_Rasengan::UGA_Rasengan()
 	ChakraCost = 35.f;
 	Cooldown = 10.f;
 	WindUp = 0.4f;
-	DashDistance = 900.f;
+	DashDistance = 1200.f;
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_Rasengan);
 	ActivationOwnedTags.AddTag(ShinobiTags::State_Casting_Rasengan); // hand orb (UShinobiCastFxComponent)
 	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Rasengan_Seal.AM_Rasengan_Seal")));

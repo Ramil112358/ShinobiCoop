@@ -43,6 +43,14 @@ private:
 	 */
 	void KeepHandContact(FPoseContext& Output) const;
 
+	/** While the Rasengan forms (its seal and charge montages), the left wrist rests on the orb's outer layer: moved
+	 * along the line from the orb's centre to its animated place (two-bone IK, the hand keeps its rotation), so the
+	 * animation's stirring still shows, round the surface, and it holds as the orb grows. */
+	void KeepPalmOnOrb(FPoseContext& Output) const;
+
+	/** Fills Index and Arm ([left, right][upper arm, forearm, hand], component space); false if the rig lacks them. */
+	bool GetArms(const FPoseContext& Output, FCSPose<FCompactPose>& Pose, FCompactPoseBoneIndex (&Index)[2][3], FTransform (&Arm)[2][3]) const;
+
 	FAnimNode_RetargetPoseFromMesh* RetargetNode = nullptr;
 
 	// Read on the game thread in PreUpdate, used on the anim thread in Evaluate (same frame).
@@ -50,6 +58,9 @@ private:
 	FVector SourceHandOffset = FVector::ZeroVector; // the source's left wrist from its right one, world
 	float SourceForeArmLength = 0.f; // world
 	FTransform ComponentToWorld;
+	float OrbWeight = 0.f;
+	FVector OrbCentre = FVector::ZeroVector; // world
+	float OrbRadius = 0.f; // world
 
 	/** The hero's arms, [left, right][upper arm, forearm, hand], from the retargeter's LeftArm and RightArm chains. */
 	FBoneReference ArmBones[2][3];

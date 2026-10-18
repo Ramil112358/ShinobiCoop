@@ -175,15 +175,17 @@ INHALE_DEEP = merge(INHALE, {"spine": (-10, 9), "head": (-13, 3)})
 BLOW = seal("Tiger", BRACE, {"hips": (8, -16, 8), "spine": (7, 9), "neck": (10, 2), "head": (-24, 3)})  # neck thrust, face level (spine pitch is per bone, x3)
 BLOW_RECOIL = seal("Tiger", BRACE, {"hips": (7, -16, 3), "spine": (4, 9), "neck": (5, 2), "head": (-12, 3)})
 
-# Chidori: squatting low, right hand down, forward and out in a claw; the left hand grips the right forearm just
-# behind the wrist ("grip": placed after the right arm is solved, so it holds whatever the body does).
+# Chidori: a wide, low stance leaning forward, the right hand charging between the knees, clawed and pointing down,
+# the left hand gripping the right wrist ("grip": placed after the right arm is solved, so it holds whatever the body
+# does).
 GRIP = {"grip": True, "curl": (45, 70, 75, 80, 85)}
-CHIDORI_HOLD = merge(NEUTRAL, CROUCH, {
-    "spine": (11, 14), "neck": (-9, 4), "head": (-9, 6),
-    "R": arm((-30, 76, 36), (-0.6, 0, -1), (-0.2, -0.3, 1), DOWN, CLAW),
+WIDE = {"hips": (32, -6, 8), "feet": {"R": (-33, -4, -30), "L": (33, 6, 28)}}
+CHIDORI_HOLD = merge(NEUTRAL, WIDE, {
+    "spine": (12, 3), "neck": (-18, 1), "head": (-16, 2),
+    "R": arm((-4, 52, 30), (-0.8, 0, -0.6), (0, -1, 0.35), (0, 0.35, 1), CLAW),
     "L": {**ARMS_DOWN["L"], **GRIP},
 })
-CHIDORI_DEEP = merge(CHIDORI_HOLD, {"hips": (23, -22, 14), "spine": (14, 14)})
+CHIDORI_DEEP = merge(CHIDORI_HOLD, {"hips": (36, -6, 10), "spine": (15, 3), "R": {"wrist": V((-4, 47, 32))}})
 # Rasengan: right arm held out forward and to the side, palm up, so the ball above it stays clear of the body; the
 # left hand frames the ball from the side.
 RASENGAN_HOLD = merge(NEUTRAL, READY, {
@@ -203,7 +205,8 @@ STARE = merge(NEUTRAL, READY_BODY, {"spine": (-2, 9), "neck": (-3, 2), "head": (
 # The dashes: wind up, run in (two strides), then strike on a lunge.
 BACK_ARM = {"L": arm((27, 95, -26), (0.3, 0, 1), (0.2, -1, -0.4), RIGHT, (30, 40, 40, 40, 40))}
 STRIKE_ARMS = merge(BACK_ARM, {"R": arm((-8, 130, 62), (-1, -0.5, 0), FWD, DOWN, (20, 15, 15, 15, 15))})
-PALM_ARMS = merge(BACK_ARM, {"R": arm((-6, 126, 62), (-1, -0.5, 0), (0, 0.4, 1), FWD, (15, 10, 10, 10, 10))})
+# The Rasengan thrust: hand upright, palm to the front, so the ball rides in front of it (UShinobiCastFxComponent).
+PALM_ARMS = merge(BACK_ARM, {"R": arm((-6, 122, 58), (-1, -0.5, 0), (0, 1, 0.2), FWD, (15, 10, 10, 10, 10))})
 RUN_TORSO = {"spine": (14, -6), "neck": (-10, 4), "head": (-10, 4)}
 LUNGE_TORSO = {"spine": (14, -14), "neck": (-8, 8), "head": (-8, 8)}
 
@@ -298,7 +301,7 @@ def rasengan():
                                      "hips": (8, -12 + math.sin(angle) * 5, 0)})
         return (round(i * 2.2 / 12, 3), pose, "smooth")
 
-    windup = {"R": arm((-22, 106, 6), (-1, -0.4, -0.3), (0.2, 0, 1), UP, (20, 30, 30, 30, 30))}
+    windup = {"R": arm((-22, 110, 8), (-1, -0.4, -0.3), (0, 1, 0.2), FWD, (20, 30, 30, 30, 30))}
     return {
         "Seal": [(0.0, NEUTRAL, "smooth"), (0.16, RASENGAN_GATHER, "smooth"), (0.26, shift(RASENGAN_GATHER, "L", (3, 0, 2)), "smooth"),
                  (0.42, RASENGAN_HOLD, "smooth")],
@@ -609,7 +612,7 @@ def grip_spec(arm_obj, spec):
     elbow = arm_obj.pose.bones[P + "RightForeArm"].head
     wrist = arm_obj.pose.bones[P + "RightHand"].head
     along = (wrist - elbow).normalized()
-    grip = elbow.lerp(wrist, 0.78)
+    grip = elbow.lerp(wrist, 0.9)
     # Fingers wrap across the forearm towards the character's right and down; the palm faces the forearm.
     across = along.cross(UP).normalized()
     if across.x > 0:

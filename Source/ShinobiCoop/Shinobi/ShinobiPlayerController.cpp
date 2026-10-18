@@ -676,6 +676,8 @@ void AShinobiPlayerController::RunFireShotTest()
 			}
 		});
 		At(When + 0.12f, [Index]() { FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Bursts[Index].Name), false, false); });
+		// What the hit leaves behind (Chidori's dent, Rasengan's crater and rocks) once the flash is gone.
+		At(When + 1.f, [Index]() { FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / (FString(Bursts[Index].Name) + TEXT("_After"))), false, false); });
 	}
 	At(4.5f + UE_ARRAY_COUNT(Bursts) * 1.2f + 0.5f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
@@ -810,11 +812,23 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(7.2f, BackToPlayer);
 	At(8.8f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_06_BlackFlame")); });
 	At(9.5f, [CastJutsu]() { CastJutsu(2, 2.f); }); // Chidori: 0.5 s seals, released at 11.5
+	At(10.9f, [FaceCamera]() { FaceCamera(80.f, 20.f, 0.f, 420.f); }); // the stance and the orb, from the front, whole body
+	At(11.f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_07b_ChidoriOrb")); });
+	At(11.1f, BackToPlayer);
 	At(11.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_07_ChidoriCharge")); });
 	At(11.75f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_08_ChidoriHit")); });
+	At(12.1f, [FaceCamera]() { FaceCamera(60.f, 90.f, 120.f, 520.f); }); // the dent and the rocks, from the side
+	At(12.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_08b_ChidoriDent")); });
+	At(12.3f, BackToPlayer);
 	At(13.5f, [CastJutsu]() { CastJutsu(3, 1.9f); }); // Rasengan, released at 15.4; the black flame still burns: Firestorm
+	At(14.8f, [FaceCamera]() { FaceCamera(45.f, -35.f); });
+	At(14.9f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_09b_RasenganOrb")); });
+	At(15.f, BackToPlayer);
 	At(15.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_09_RasenganCharge")); });
 	At(15.65f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_10_RasenganHit")); });
+	At(16.1f, [FaceCamera]() { FaceCamera(60.f, 90.f, 120.f, 600.f); });
+	At(16.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_10b_RasenganCrater")); });
+	At(16.3f, BackToPlayer);
 	At(16.5f, [this]()
 	{
 		if (const APawn* Shinobi = GetPawn())
