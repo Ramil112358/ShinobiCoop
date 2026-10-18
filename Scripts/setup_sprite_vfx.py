@@ -12,12 +12,15 @@ Sources (SourceArt/SpriteCook/VFX/, 1024 px, each a 4 x 2 atlas of 256 x 512 cel
   rasengan_orb_sheet.png  -> /Game/Shinobi/VFX/T_RasenganOrb   8 swirling chakra spheres, centred in their cells (ESprite::RasenganOrb)
   chidori_dent_rgba.png   -> /Game/Shinobi/VFX/T_ChidoriDent   cracked, burnt dent where Chidori hits (M_SpriteScorch via SpawnScorch)
   rasengan_crater_rgba.png -> /Game/Shinobi/VFX/T_RasenganCrater spiral-gouged crater where Rasengan hits (M_SpriteScorch via SpawnScorch)
-  (the last four are made from the 2K SpriteCook sources by Scripts/prep_jutsu_sprites.py)
+  push_dust_sheet.png     -> /Game/Shinobi/VFX/T_PushDust      8 billowing pale dust clouds, 2048 x 1024, each standing on its cell's bottom (ESprite::Dust)
+  push_crack_ring_rgba.png -> /Game/Shinobi/VFX/T_PushCrackRing a ring of cracks Almighty Push leaves round the caster (M_SpriteScorch via SpawnScorch)
+  (the last six are made from the 2K SpriteCook sources by Scripts/prep_jutsu_sprites.py)
 
 Materials (params: Atlas, CellU 0-3, CellV 0-1, Tint, Intensity, Fade):
   M_Sprite       additive, unlit: fire, embers, lightning. Black is "nothing", so the sheets need no alpha.
   M_SpriteDark   translucent: Amaterasu's black flame. The flame's luminance is coverage; only its dim outer edge glows in Tint.
   M_SpriteSmoke  translucent, Tint is the smoke colour; the sheet's luminance is coverage.
+  M_SpriteDust   translucent like M_SpriteSmoke, but keeps the sheet's shading (the dust clouds' billows) under the Tint.
   M_SpriteScorch translucent ground mark that fades itself in and out from the world clock (Start, Linger, FadeIn, FadeOut),
                  so it can outlive the actor that spawned it. Params: Tint, Start, Linger.
 """
@@ -41,6 +44,8 @@ SHEETS = {
     "rasengan_orb_sheet.png": "T_RasenganOrb",
     "chidori_dent_rgba.png": "T_ChidoriDent",
     "rasengan_crater_rgba.png": "T_RasenganCrater",
+    "push_dust_sheet.png": "T_PushDust",
+    "push_crack_ring_rgba.png": "T_PushCrackRing",
 }
 
 
@@ -212,8 +217,62 @@ def build_smoke(textures):
     finish(m, emissive, transmittance)
 
 
+def build_dust(textures):
+    # colour = Tint x (0.45 + 0.75 x luminance), coverage = saturate(luminance x Gain) x Fade; premultiplied.
+    m = fresh_material("M_SpriteDust", unreal.BlendMode.BLEND_TRANSLUCENT)
+    atlas, fade = atlas_sample(m, textures["T_PushDust"])
+    tint = node(m, unreal.MaterialExpressionVectorParameter, 0, -250, parameter_name="Tint", default_value=unreal.LinearColor(0.7, 0.66, 0.6, 1))
+    gain_param = node(m, unreal.MaterialExpressionScalarParameter, 0, -100, parameter_name="Gain", default_value=2.0)
+    lum = luminance(m, atlas, 100, 250)
+    shade = node(m, unreal.MaterialExpressionAdd, 350, 0, const_b=0.45)
+    link(mul(m, lum, node(m, unreal.MaterialExpressionConstant, 200, 50, r=0.75), 250, 50), shade, "A")
+    sat = node(m, unreal.MaterialExpressionSaturate, 500, 250)
+    link(mul(m, lum, gain_param, 350, 250), sat, "")
+    coverage = mul(m, sat, fade, 650, 250)
+    emissive = mul(m, mul(m, tint, shade, 550, -100), coverage, 800, -100)
+    transmittance = node(m, unreal.MaterialExpressionOneMinus, 800, 150)
+    link(coverage, transmittance, "")
+    finish(m, emissive, transmittance)
+
+
+def build_scorch():
+    m = fresh_material("M_SpriteScorch", unreal.BlendMode.BLEND_TRANSLUCENT)
+    tex = node(m, unreal.MaterialExpressionTextureSampleParameter2D, -300, 0, parameter_name="Atlas", texture=unreal.load_asset(f"{VFX_DIR}/T_Scorch"))
+    tint = node(m, unreal.MaterialExpressionVectorParameter, -300, -250, parameter_name="Tint", default_value=unreal.LinearColor(1, 1, 1, 1))
+    start = node(m, unreal.MaterialExpressionScalarParameter, -900, 300, parameter_name="Start", default_value=0.0)
+    linger = node(m, unreal.MaterialExpressionScalarParameter, -900, 450, parameter_name="Linger", default_value=10.0)
+    time = node(m, unreal.MaterialExpressionTime, -900, 150)
+    age = node(m, unreal.MaterialExpressionSubtract, -700, 200)
+    link(time, age, "A")
+    link(start, age, "B")
+    # fade in over 0.4 s: saturate(age / 0.4)
+    fade_in = node(m, unreal.MaterialExpressionSaturate, -300, 250)
+    scaled_in = node(m, unreal.MaterialExpressionMultiply, -500, 250, const_b=2.5)
+    link(age, scaled_in, "A")
+    link(scaled_in, fade_in, "")
+    # fade out over the last 3 s: saturate((Linger - age) / 3)
+    left = node(m, unreal.MaterialExpressionSubtract, -700, 400)
+    link(linger, left, "A")
+    link(age, left, "B")
+    scaled_out = node(m, unreal.MaterialExpressionMultiply, -500, 400, const_b=0.3333)
+    link(left, scaled_out, "A")
+    fade_out = node(m, unreal.MaterialExpressionSaturate, -300, 400)
+    link(scaled_out, fade_out, "")
+    fades = mul(m, fade_in, fade_out, 0, 300)
+    mark = node(m, unreal.MaterialExpressionMultiply, 0, 150, const_b=0.9)
+    link(tex, mark, "A", "A")
+    opacity = mul(m, mark, fades, 200, 250)
+    emissive = node(m, unreal.MaterialExpressionMultiply, 200, -100)
+    link(tex, emissive, "A", "RGB")
+    link(tint, emissive, "B")
+    transmittance = node(m, unreal.MaterialExpressionOneMinus, 400, 250)
+    link(opacity, transmittance, "")
+    finish(m, emissive, transmittance)
+
+
 textures = {name: import_sheet(png, name) for png, name in SHEETS.items()}
 build_additive(textures)
 build_dark(textures)
 build_smoke(textures)
+build_dust(textures)
 build_scorch()

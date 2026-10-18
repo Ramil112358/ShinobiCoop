@@ -849,7 +849,10 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(17.6f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_12_HudPage2")); }); // after the icons have streamed in
 	At(17.8f, [CastJutsu]() { CastJutsu(3, 1.2f); }); // Almighty Push: 0.5 s seals, released at 19.0, the wave 0.15 s later
 	At(19.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_13_Push")); });
-	At(19.6f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_13b_Push")); });
+	At(19.4f, [FaceCamera]() { FaceCamera(60.f, 90.f, 0.f, 1600.f); }); // the whole dome, from outside and to the side
+	At(19.5f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_13c_PushDome")); });
+	At(19.55f, BackToPlayer);
+	At(19.7f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_13b_Push")); });
 	At(20.4f, RestoreAim);
 	At(20.6f, [CastJutsu]() { CastJutsu(4, 0.8f); }); // Earth Wall: 0.5 s seals, the wall rises at 21.4
 	At(22.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_14_EarthWall")); });

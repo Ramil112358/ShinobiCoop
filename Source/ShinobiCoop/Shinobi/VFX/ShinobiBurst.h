@@ -21,7 +21,7 @@ enum class EShinobiBurst : uint8
 	Substitution, // a log left where the player stood, in a puff of smoke
 	FireBreath,       // Fireball: a flame cone from the caster's mouth along the burst's rotation
 	BlackFlameIgnite, // Amaterasu: the black flames catching on the target
-	Shockwave,        // Almighty Push: a ring of force and dust on the ground
+	Shockwave,        // a ring of force and dust on the ground (a summon's stomp)
 	Swirl,            // Kamui: a camera-facing spiral out of the caster's eye as they slip in or out
 	TeleportFlash,    // Teleport: the flash where the caster arrives
 	Crumble,          // Earth Wall breaking
@@ -32,6 +32,7 @@ enum class EShinobiBurst : uint8
 	SusanooRise,      // Susanoo rising around the caster
 	SummonPoof,       // a summon arriving or leaving: a big puff of smoke
 	SkyBolt,          // the owl's lightning: a bolt from the sky down onto the burst's spot (the target's feet)
+	AlmightyPush,     // Almighty Push: a see-through dome of force swelling from the caster's feet, dust rolling out under it
 };
 
 /**
@@ -84,6 +85,13 @@ private:
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> SphereMaterial;
 
+	/** AlmightyPush's dome: a sphere centred a little above the burst (the caster's feet), sized and faded in Tick. */
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> Dome;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> DomeMaterial;
+
 	/** One SpriteCook sprite on a quad (flames, lightning, a ring, a flash). The components belong to the actor. */
 	struct FCard
 	{
@@ -97,6 +105,8 @@ private:
 		bool bFlat = false;      // lies on the ground (rings, vortexes) instead of facing the camera
 		bool bFlicker = false;   // switches variant every few frames (lightning, flame)
 		float Spin = 0.f;        // degrees per second; on a standing card it also turns the card to face the camera fully
+		float Life = 0.f;        // seconds it shows after its delay; 0 lasts to the end of the effect
+		bool bRollOut = false;   // starts near the centre and rides out to its offset with the Almighty Push dome
 		float NextSwap = 0.f;
 		int32 Variant = 0;
 	};

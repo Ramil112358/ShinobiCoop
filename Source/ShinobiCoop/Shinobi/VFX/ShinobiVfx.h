@@ -53,6 +53,7 @@ namespace ShinobiVfx
 		ChakraSwirl, // curved blue chakra stream, head on the left, additive (4): the chakra charge
 		ChidoriOrb,  // crackling ball of lightning centred in a tall cell, additive (8): Chidori in the hand
 		RasenganOrb, // swirling chakra sphere centred in a tall cell, additive (8): Rasengan in the hand
+		Dust,        // billowing pale dust cloud standing on the cell's bottom, translucent and shaded (8): Almighty Push
 	};
 
 	/** How many variants the sprite has (the Variant argument below wraps around this). */
@@ -79,6 +80,8 @@ namespace ShinobiVfx
 	/** Marks for SpawnScorch: the cracked dent Chidori leaves, the spiral crater Rasengan leaves. */
 	inline const TCHAR* ChidoriDent = TEXT("/Game/Shinobi/VFX/T_ChidoriDent.T_ChidoriDent");
 	inline const TCHAR* RasenganCrater = TEXT("/Game/Shinobi/VFX/T_RasenganCrater.T_RasenganCrater");
+	/** A ring of cracks (Almighty Push); the ring sits at about 0.77 of the mark's radius. */
+	inline const TCHAR* PushCrackRing = TEXT("/Game/Shinobi/VFX/T_PushCrackRing.T_PushCrackRing");
 
 	/**
 	 * Count chunks of rock thrown up from the ground under Location, outward at about Speed, each about Size metres
@@ -96,6 +99,10 @@ namespace ShinobiVfx
 
 	/** Kamui's see-through chakra-blue ghost (M_Phased, built by Scripts/setup_vfx.py) at Opacity 0-1. Null, with an ensure, if the asset is missing. */
 	SHINOBICOOP_API UMaterialInstanceDynamic* MakePhased(UObject* Outer, float Opacity);
+
+	/** Almighty Push's milky, see-through sphere of force that bends the world behind it (M_PushDome, built by
+	 * Scripts/setup_vfx.py). Fade 0-1 is a parameter. Null, with an ensure, if the asset is missing. */
+	SHINOBICOOP_API UMaterialInstanceDynamic* MakePushDome(UObject* Outer);
 
 	/** Flat unlit colour (M_Streak): the blood under Amaterasu's eyes. Null, with an ensure, if the asset is missing. */
 	SHINOBICOOP_API UMaterialInstanceDynamic* MakeStreak(UObject* Outer, const FLinearColor& Color);

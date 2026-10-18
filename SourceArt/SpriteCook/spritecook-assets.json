@@ -30,7 +30,9 @@
     {"asset_id": "3bdc2bc8-e421-4e53-b739-88eb08f4f4bb", "file": "VFX/chakra_flow_sheet.png", "label": "Chakra flow sheet: top row 4 rising blue chakra wisps, bottom row 4 swirl arcs (head left), 4x2 atlas on black, gpt-image-2 medium 1K (9 credits)"},
     {"asset_id": "3e1bf521-aea6-49b2-a749-7b759b8cf8ba", "file": "VFX/chidori_orb_2k.png", "label": "Chidori hand orb: 8 crackling lightning balls, 4x2 on black, gpt-image-2 medium 2K (7 credits); re-centred to chidori_orb_sheet.png by Scripts/prep_jutsu_sprites.py"},
     {"asset_id": "53531e26-39be-47c2-b0c2-fa26b387dfec", "file": "VFX/rasengan_orb_2k.png", "label": "Rasengan hand orb: 8 swirling chakra spheres, 4x2 on black, gpt-image-2 medium 2K (7 credits); re-centred to rasengan_orb_sheet.png"},
-    {"asset_id": "7a9e0a6f-522f-4c49-837b-7639a12325fb", "file": "VFX/impact_marks_2k.png", "label": "Chidori dent (left) + Rasengan spiral crater (right), top-down on white, gpt-image-2 medium 2K (7 credits); cut to chidori_dent_rgba.png / rasengan_crater_rgba.png"}
+    {"asset_id": "7a9e0a6f-522f-4c49-837b-7639a12325fb", "file": "VFX/impact_marks_2k.png", "label": "Chidori dent (left) + Rasengan spiral crater (right), top-down on white, gpt-image-2 medium 2K (7 credits); cut to chidori_dent_rgba.png / rasengan_crater_rgba.png"},
+    {"asset_id": "f180fea6-0a63-4ee7-9d59-9968e2ce064f", "file": "VFX/push_dust_2k.png", "sha12": "66bea3063778", "label": "Almighty Push dust: 8 billowing pale dust clouds, 4x2 on black, gpt-image-2 medium 2K (7 credits); packed to push_dust_sheet.png by Scripts/prep_jutsu_sprites.py"},
+    {"asset_id": "fc2b3cbd-17c8-4453-9ddb-06840b4ebf51", "file": "VFX/push_crack_ring_2k.png", "sha12": "8def4b32f627", "label": "Almighty Push ring of floor cracks, top-down on white, gpt-image-2 medium 2K (7 credits); cut to push_crack_ring_rgba.png"}
   ],
   "ui_kits": [
     {"ui_kit_id": "9b4146da-7bb2-489d-a6ca-65bcee0ef703", "name": "Shinobi HUD"}
