@@ -387,13 +387,240 @@ def place_landmarks(world, keep=None, tag="LondonDress", markers=None, mesh=None
         lm_mesh = mesh(lm["id"])
         if lm_mesh is None:
             continue
-        actor = EAS.spawn_actor_from_class(unreal.StaticMeshActor, unreal.Vector(uu(lm["x"]), uu(lm["y"]), uu(lm.get("z", 0.15))),
-                                           unreal.Rotator(0, 0, lm.get("yaw", 0)))
+        x, y, z, yaw = uu(lm["x"]), uu(lm["y"]), uu(lm.get("z", 0.15)), lm.get("yaw", 0)
+        extra = []
+        if lm["id"] == "piccadilly_lights":  # the marker is out in the Circus: wrap the screen round a building there
+            extra = [f"ScreenFrom:{x:.0f},{y:.0f}"]  # for fix_piccadilly_screen.py
+            wrap = screen_wrap(world, x, y, lm_mesh)
+            if wrap:
+                lm_mesh, (x, y, z), yaw = wrap[0], wrap[1], 0
+            else:
+                unreal.log_warning("[build_london] piccadilly_lights: no building face near its marker, left free-standing")
+        actor = EAS.spawn_actor_from_class(unreal.StaticMeshActor, unreal.Vector(x, y, z), unreal.Rotator(0, 0, yaw))
         actor.static_mesh_component.set_static_mesh(lm_mesh)
         actor.set_actor_label(f"Landmark_{lm['id']}")
-        tagged(actor, tag, "Landmark", always_loaded=True)
+        tagged(actor, tag, "Landmark", *extra, always_loaded=True)
         landmarks += 1
     return landmarks
+
+
+SCREEN_WRAP = f"{ROOT}/Pieces/piccadilly_lights/SM_PiccadillyLights_Wrap"
+SCREEN_LENGTH_M, SCREEN_BOTTOM_M, SCREEN_TOP_M = 38.0, 6.0, 17.5  # along the facade; above the shopfronts
+SCREEN_RIGHT_M = 16.0  # carried on past the most-turning SCREEN_LENGTH_M, round the corner to the right
+SCREEN_OUT_M, BEZEL_M = 0.6, 0.35  # clear of sills and string courses; dark border top and bottom
+
+
+def ray_caster(world, x, y, r):
+    """hit(a, b) -> (point, unit normal facing a) where the segment a -> b (cm tuples) first meets a City:B chunk
+    triangle within r cm of (x, y), else None. Rays against the meshes' triangles (Moller-Trumbore), not traces: a map
+    loaded in the commandlet has no mesh collision."""
+    tris = []  # (bbox min, bbox max, p0, e1, e2); chunk vertices are in map space, the actors at the origin
+    for chunk in unreal.GameplayStatics.get_all_actors_with_tag(world, "City:B"):
+        origin, extent = chunk.get_actor_bounds(False)
+        if abs(origin.x - x) > extent.x + r or abs(origin.y - y) > extent.y + r:
+            continue
+        # The source mesh: the render data of these Nanite meshes is a coarse fallback with whole walls missing.
+        desc = chunk.static_mesh_component.get_editor_property("static_mesh").get_static_mesh_description(0)
+        p = []
+        for v in range(desc.get_vertex_count()):
+            q = desc.get_vertex_position(unreal.VertexID(v))
+            p.append((q.x, q.y, q.z))
+        for t in range(desc.get_triangle_count()):
+            # ponytail: UE 5.8's binding returns three junk IDs before the triangle's three vertices
+            a, b, c = (p[i.id_value] for i in desc.get_triangle_vertices(unreal.TriangleID(t))[-3:])
+            lo, hi = tuple(map(min, a, b, c)), tuple(map(max, a, b, c))
+            if lo[0] > x + r or hi[0] < x - r or lo[1] > y + r or hi[1] < y - r:
+                continue
+            tris.append((lo, hi, a, (b[0] - a[0], b[1] - a[1], b[2] - a[2]), (c[0] - a[0], c[1] - a[1], c[2] - a[2])))
+
+    def cross(u, v):
+        return u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]
+
+    def dot(u, v):
+        return u[0] * v[0] + u[1] * v[1] + u[2] * v[2]
+
+    def hit(a, b):
+        d =(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+        lo, hi = tuple(map(min, a, b)), tuple(map(max, a, b))
+        best = None
+        for tlo, thi, p0, e1, e2 in tris:
+            if tlo[0] > hi[0] or thi[0] < lo[0] or tlo[1] > hi[1] or thi[1] < lo[1] or tlo[2] > hi[2] or thi[2] < lo[2]:
+                continue
+            h = cross(d, e2)
+            det = dot(e1, h)
+            if abs(det) < 1e-9:
+                continue
+            s = (a[0] - p0[0], a[1] - p0[1], a[2] - p0[2])
+            u = dot(s, h) / det
+            if not 0 <= u <= 1:
+                continue
+            q = cross(s, e1)
+            v = dot(d, q) / det
+            if v < 0 or u + v > 1:
+                continue
+            t = dot(e2, q) / det
+            if 0 < t <= 1 and (best is None or t < best[0]):
+                best = (t, e1, e2)
+        if best is None:
+            return None
+        t, e1, e2 = best
+        n = cross(e1, e2)
+        length = math.sqrt(dot(n, n)) * (1 if dot(n, d) < 0 else -1)
+        return (a[0] + d[0] * t, a[1] + d[1] * t, a[2] + d[2] * t), (n[0] / length, n[1] / length, n[2] / length)
+
+    return hit
+
+
+def facade_walk(hit, p, n, step, steps):
+    """Points (x, y, nx, ny) along a building face from p (on it, outward normal n), steps of step cm (+ = to the right
+    of someone facing the wall); stops where the face breaks (a corner, a recess, something jutting out). Each point is
+    the median depth of rays at five heights, so window recesses and sills do not throw it."""
+    out = []
+    for _ in range(steps):
+        t = (n[1], -n[0])
+        qx, qy = p[0] + t[0] * step + n[0] * 300, p[1] + t[1] * step + n[1] * 300
+        depths = []
+        for z in (900, 1100, 1300, 1500, 1700):
+            h = hit((qx, qy, z), (qx - n[0] * 700, qy - n[1] * 700, z))
+            if h:
+                depths.append(math.hypot(h[0][0] - qx, h[0][1] - qy))
+        if len(depths) < 4:
+            break
+        d = sorted(depths)[len(depths) // 2]
+        if not 150 < d < 450:  # the face jumps forward or falls back by 1.5 m
+            break
+        q = (qx - n[0] * d, qy - n[1] * d)
+        tx, ty = q[0] - p[0], q[1] - p[1]
+        length = math.hypot(tx, ty) * (1 if step > 0 else -1)
+        nx, ny = n[0] - ty / length, n[1] + tx / length  # half the old normal, half the new run's: damps the noise
+        length = math.hypot(nx, ny)
+        p, n = q, (nx / length, ny / length)
+        out.append((p[0], p[1], n[0], n[1]))
+    return out
+
+
+def screen_wrap(world, x, y, piece, reach_m=60.0):
+    """Piccadilly Lights as in London: a screen that follows the face of a building near (x, y) cm round its corner,
+    SCREEN_OUT_M proud of it (more where something sticks out), with a dark bezel and caps back into the wall so its
+    back never shows. Of the faces within reach_m, the SCREEN_LENGTH_M stretch that turns the most wins (the curved
+    corner), carried on SCREEN_RIGHT_M further to the right. Builds SCREEN_WRAP (with the piece's
+    material slots), pivot on the ground under the middle, and returns (mesh, (x, y, z) cm for an unrotated actor), or
+    None."""
+    hit = ray_caster(world, x, y, uu(reach_m + SCREEN_LENGTH_M + 10))
+    starts = []
+    for i in range(72):
+        a = math.radians(i * 5)
+        h = hit((x, y, 1250), (x + uu(reach_m) * math.cos(a), y + uu(reach_m) * math.sin(a), 1250))
+        flat = h and math.hypot(h[1][0], h[1][1])
+        if flat and flat > 0.9 and all(math.dist(h[0][:2], s[0][:2]) > 500 for s in starts):
+            starts.append((h[0], (h[1][0] / flat, h[1][1] / flat)))
+    best = None
+    for p, n in sorted(starts, key=lambda s: math.dist(s[0][:2], (x, y))):
+        path = facade_walk(hit, p, n, -100, 60)[::-1] + [(p[0], p[1], n[0], n[1])] + facade_walk(hit, p, n, 100, 60)
+        cum = [0.0]
+        for a, b in zip(path, path[1:]):
+            cum.append(cum[-1] + math.dist(a[:2], b[:2]))
+        heading = [math.atan2(q[3], q[2]) for q in path]
+        for i in range(1, len(heading)):  # unwrapped
+            heading[i] += round((heading[i - 1] - heading[i]) / (2 * math.pi)) * 2 * math.pi
+        j = 0
+        for i in range(len(path)):
+            while j < len(path) - 1 and cum[j] - cum[i] < uu(SCREEN_LENGTH_M):
+                j += 1
+            if cum[j] - cum[i] < uu(SCREEN_LENGTH_M) - 50:
+                break
+            turn = abs(heading[j] - heading[i])
+            if best is None or turn > best[0] + 0.05:  # ties go to the face nearer the marker
+                k = j  # then on round the corner to the right, as far as the face goes
+                while k < len(path) - 1 and cum[k + 1] - cum[j] <= uu(SCREEN_RIGHT_M):
+                    k += 1
+                best = (turn, path[i:k + 1])
+    if best is None:
+        log(f"screen_wrap: no {SCREEN_LENGTH_M:.0f} m face among {len(starts)} near ({x / 100:.0f}, {y / 100:.0f}) m")
+        return None
+    turn, path = best
+    # 5-point average, then normals from the smoothed run.
+    pts = []
+    for i in range(len(path)):
+        near = path[max(0, i - 2):i + 3]
+        pts.append((sum(q[0] for q in near) / len(near), sum(q[1] for q in near) / len(near)))
+    norms = []
+    for i in range(len(pts)):
+        a, b = pts[max(0, i - 1)], pts[min(len(pts) - 1, i + 1)]
+        length = math.dist(a, b)
+        norms.append(((a[1] - b[1]) / length, (b[0] - a[0]) / length))
+    mid = pts[len(pts) // 2]
+    top = uu(SCREEN_TOP_M)
+    for i in range(0, len(pts), 4):  # under the lowest roof along it
+        rx, ry = pts[i][0] - norms[i][0] * 100, pts[i][1] - norms[i][1] * 100
+        roof = hit((rx, ry, uu(80)), (rx, ry, 0))
+        if roof:
+            top = min(top, roof[0][2] - 100)
+    bottom = uu(SCREEN_BOTTOM_M)
+    # How far out the face must stand at each point: SCREEN_OUT_M, or 20 cm clear of anything (a corner the smoothing
+    # cut, a pilaster) found by rays in from 3 m out at quarter steps and every 1.5 m up; then spread over +-2 points.
+    clear = [uu(SCREEN_OUT_M)] * len(pts)
+    for i in range(len(pts) - 1):
+        for f in (0.0, 0.25, 0.5, 0.75):
+            px, py = pts[i][0] + (pts[i + 1][0] - pts[i][0]) * f, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * f
+            nx, ny = norms[i][0] + (norms[i + 1][0] - norms[i][0]) * f, norms[i][1] + (norms[i + 1][1] - norms[i][1]) * f
+            z = bottom + 50
+            while z < top:
+                h = hit((px + nx * 300, py + ny * 300, z), (px, py, z))
+                if h:
+                    need = 300 - math.dist(h[0][:2], (px + nx * 300, py + ny * 300)) + 20
+                    clear[i] = max(clear[i], need)
+                    clear[i + 1] = max(clear[i + 1], need)
+                z += 150
+    outs = [max(clear[max(0, i - 2):i + 3]) for i in range(len(pts))]
+    outs = [sum(outs[max(0, i - 2):i + 3]) / len(outs[max(0, i - 2):i + 3]) for i in range(len(pts))]
+    log(f"screen_wrap: {len(pts)} points, {math.degrees(turn):.0f} deg of turn, {bottom / 100:.1f}-{top / 100:.1f} m up, "
+        f"{min(outs) / 100:.2f}-{max(outs) / 100:.2f} m out, middle ({mid[0] / 100:.1f}, {mid[1] / 100:.1f}) m")
+
+    def at(i, out, z):  # out cm along the normal at point i (None: the screen face), z cm up; relative to the pivot
+        out = outs[i] if out is None else out
+        return pts[i][0] + norms[i][0] * out - mid[0], pts[i][1] + norms[i][1] * out - mid[1], z
+    cum = [0.0]
+    for a, b in zip(pts, pts[1:]):
+        cum.append(cum[-1] + math.dist(a, b))
+    front, back = None, -30.0
+    s0, s1 = bottom + uu(BEZEL_M), top - uu(BEZEL_M)
+    quads = []  # (corners, material slot, uvs); u runs left to right for someone facing the screen, v top to bottom
+    for i in range(len(pts) - 1):
+        u0, u1 = cum[i] / cum[-1], cum[i + 1] / cum[-1]
+        quads.append(([at(i, front, s0), at(i + 1, front, s0), at(i + 1, front, s1), at(i, front, s1)], "Screen",
+                      [(u0, 1), (u1, 1), (u1, 0), (u0, 0)]))
+        for z0, z1 in ((bottom, s0), (s1, top)):
+            quads.append(([at(i, front, z0), at(i + 1, front, z0), at(i + 1, front, z1), at(i, front, z1)], "Frame_Dark", None))
+        for z in (bottom, top):
+            quads.append(([at(i, back, z), at(i + 1, back, z), at(i + 1, front, z), at(i, front, z)], "Frame_Dark", None))
+    for i in (0, len(pts) - 1):
+        quads.append(([at(i, back, bottom), at(i, front, bottom), at(i, front, top), at(i, back, top)], "Frame_Dark", None))
+
+    if unreal.EditorAssetLibrary.does_asset_exist(SCREEN_WRAP):
+        mesh = unreal.load_asset(SCREEN_WRAP)
+    else:  # the piece's material slots and settings
+        mesh = unreal.EditorAssetLibrary.duplicate_asset(piece.get_path_name().split(".")[0], SCREEN_WRAP)
+    desc = mesh.create_static_mesh_description(mesh)
+    groups = {}
+    for slot in ("Screen", "Frame_Dark"):
+        groups[slot] = desc.create_polygon_group()
+        desc.set_polygon_group_material_slot_name(groups[slot], slot)
+    for corners, slot, uvs in quads:
+        uvs = uvs or [(0, 0), (1, 0), (1, 1), (0, 1)]
+        for order in ((0, 1, 2, 3), (3, 2, 1, 0)):  # ponytail: both windings, as the materials are one-sided
+            ids = []
+            for k in order:
+                v = desc.create_vertex()
+                desc.set_vertex_position(v, unreal.Vector(*corners[k]))
+                vi = desc.create_vertex_instance(v)
+                desc.set_vertex_instance_uv(vi, unreal.Vector2D(*uvs[k]), 0)
+                ids.append(vi)
+            desc.create_triangle(groups[slot], [ids[0], ids[1], ids[2]])
+            desc.create_triangle(groups[slot], [ids[0], ids[2], ids[3]])
+    mesh.build_from_static_mesh_descriptions([desc])
+    unreal.EditorAssetLibrary.save_loaded_asset(mesh)
+    return mesh, (mid[0], mid[1], 0.0)
 
 
 BRIDGES = {"tower_bridge": "Tower Bridge", "westminster_bridge": "Westminster Bridge"}
