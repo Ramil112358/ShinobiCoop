@@ -69,22 +69,12 @@ def in_jaw(p):
 
 
 # Tripo's mouth is one closed surface: opening the jaw would stretch the lips into a sheet. Cut it along the mouth line (each lip gets
-# its own vertices) and bridge the cut with faces on the texture's darkest patch: flat while the mouth is shut, a dark gap when it opens.
+# its own vertices) and leave the cut open: the material is one-sided, so the open mouth shows through the head, no dark sheet.
 basecolor = next(i for i in bpy.data.images if i.name.lower().endswith("basecolor"))
-width, height = basecolor.size
-texels = np.array(basecolor.pixels[:], dtype=np.float32).reshape(height, width, 4)[:, :, :3]
-block = 16
-blocks = texels[:height // block * block, :width // block * block].reshape(height // block, block, width // block, block, 3).mean(axis=(1, 3))
-lum = blocks.mean(axis=2)
-skin = lum > 0.005  # not the atlas's black padding, and away from its edges
-skin[:2, :] = skin[-2:, :] = skin[:, :2] = skin[:, -2:] = False
-dark_row, dark_col = np.unravel_index(np.argmin(np.where(skin, lum, np.inf)), lum.shape)
-DARK_UV = ((dark_col + 0.5) * block / width, (dark_row + 0.5) * block / height)
 
 world = body.matrix_world
 bm = bmesh.new()
 bm.from_mesh(body.data)
-uv_layer = bm.loops.layers.uv.active
 jaw_faces = {f for f in bm.faces if in_jaw(world @ f.calc_center_median())}
 lips = []  # (s, t): the lip edge as the upper lip's face runs it
 for e in bm.edges:
@@ -101,10 +91,6 @@ for f in [f for f in jaw_faces if any(v in lower for v in f.verts)]:
     jaw_faces.discard(f)
     jaw_faces.add(rebuilt)
     bm.faces.remove(f)
-for s, t in lips:
-    inside = bm.faces.new((t, s, lower[s], lower[t]))
-    for loop in inside.loops:
-        loop[uv_layer].uv = DARK_UV
 bm.verts.index_update()
 upper_lip = {v.index for v in lower}
 jaw_verts = {v.index: v.co.copy() for f in jaw_faces for v in f.verts if v.index not in upper_lip}
@@ -115,7 +101,7 @@ for index, co in jaw_verts.items():
     w = smooth((CORNER_Y - (world @ co).y) / 0.015)  # the whole lower jaw, easing in from the mouth's corner
     if w > 0:
         jaw_weights[index] = w
-print("[build_dragon] mouth cut along", len(lips), "edges; inside on the texel at", tuple(round(c, 3) for c in DARK_UV))
+print("[build_dragon] mouth cut along", len(lips), "edges")
 JAW = (Vector((MID_X, -0.318, 0.41)), Vector((MID_X, -0.37, 0.392)))
 
 # --- fit: face +X, scale, centre the spine on Y = 0 ---------------------------------------------------------------------------

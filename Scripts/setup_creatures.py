@@ -21,6 +21,7 @@ CREATURES = {
     "Pusho": (None, ["Idle", "Walk", "Run", "Pounce", "Hit", "Death"], "Pusho.png"),  # Scripts/character/build_pusho.py
 }
 # The toad (Scripts/character/build_toad.py) was retired when the owl took its slot: still in /Game/Shinobi/Creatures/Toad, unused.
+ONE_SIDED = {"Tairn"}  # on M_Character but needs one-sided faces (see textured_material)
 LEGACY = ["/Game/Shinobi/Creatures/Dragon"]  # the one dragon before there were two: now Tairn and CrimsonDragon
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 MEL = unreal.MaterialEditingLibrary
@@ -121,6 +122,11 @@ def textured_material(name, png, dest):
     MEL.set_material_instance_parent(mi, parent)
     for param, texture in maps.items():
         MEL.set_material_instance_texture_parameter_value(mi, param, texture)
+    # M_Character is two-sided; a dragon's open mouth is a hole in the head, which must show through, not the head's inside.
+    overrides = mi.get_editor_property("base_property_overrides")
+    overrides.set_editor_property("override_two_sided", name in ONE_SIDED)
+    overrides.set_editor_property("two_sided", False)
+    mi.set_editor_property("base_property_overrides", overrides)
     unreal.EditorAssetLibrary.save_loaded_asset(mi)
     return mi
 

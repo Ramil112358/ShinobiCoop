@@ -20,7 +20,7 @@ import sys
 
 import bmesh
 import bpy
-import numpy as np
+
 from mathutils import Matrix, Vector
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -51,38 +51,25 @@ def select(*objects):
 
 
 # --- the lower jaw (in Tripo's space: facing -Y, the head turned towards +X) --------------------------------------------------
-# The mouth line runs at z 0.44 from the snout (y -0.49) back to the corner (y -0.37); everything of the head below it is the jaw.
+# The mouth line runs at z 0.432 from the snout (y -0.49) back to the corner (y -0.415); everything of the head below it is the jaw.
 def smooth(x):
     x = max(0.0, min(1.0, x))
     return x * x * (3 - 2 * x)
 
 
-MOUTH_Z, CORNER_Y, CHIN_Z = 0.445, -0.355, 0.38
+MOUTH_Z, CORNER_Y, CHIN_Z = 0.432, -0.415, 0.38  # MOUTH_Z: just under the upper teeth tips
 
 
 def in_jaw(p):
     return p.y < CORNER_Y and CHIN_Z < p.z < MOUTH_Z and -0.02 < p.x < 0.24
 
 
-# Tripo's mouth is one closed surface: opening the jaw stretched the lips into a sheet. Cut it along the mouth line (each lip gets its
-# own vertices) and bridge the cut with faces on the texture's darkest patch, the inside of the mouth: flat while the mouth is shut, a
-# dark gap between the lips when it opens.
-basecolor = next(i for i in bpy.data.images if i.name.lower().endswith("basecolor"))
-width, height = basecolor.size
-texels = np.array(basecolor.pixels[:], dtype=np.float32).reshape(height, width, 4)[:, :, :3]
-block = 16
-blocks = texels[:height // block * block, :width // block * block].reshape(height // block, block, width // block, block, 3).mean(axis=(1, 3))
-lum = blocks.mean(axis=2)
-# The darkest patch that is skin (deep red, not the atlas's black padding), away from the atlas's edges.
-skin = (lum > 0.03) & (blocks[:, :, 0] > 1.4 * blocks[:, :, 1])
-skin[:2, :] = skin[-2:, :] = skin[:, :2] = skin[:, -2:] = False
-dark_row, dark_col = np.unravel_index(np.argmin(np.where(skin, lum, np.inf)), lum.shape)
-DARK_UV = ((dark_col + 0.5) * block / width, (dark_row + 0.5) * block / height)
+# Tripo's mouth is one closed surface: opening the jaw would stretch the lips into a sheet. Cut it along the mouth line (each lip gets
+# its own vertices) and leave the cut open: the material is one-sided, so the open mouth shows through the head, no dark sheet.
 
 world = body.matrix_world
 bm = bmesh.new()
 bm.from_mesh(body.data)
-uv_layer = bm.loops.layers.uv.active
 jaw_faces = {f for f in bm.faces if in_jaw(world @ f.calc_center_median())}
 lips = []  # (s, t): the lip edge as the upper lip's face runs it
 for e in bm.edges:
@@ -99,10 +86,6 @@ for f in [f for f in jaw_faces if any(v in lower for v in f.verts)]:
     jaw_faces.discard(f)
     jaw_faces.add(rebuilt)
     bm.faces.remove(f)
-for s, t in lips:
-    inside = bm.faces.new((t, s, lower[s], lower[t]))
-    for loop in inside.loops:
-        loop[uv_layer].uv = DARK_UV
 bm.verts.index_update()
 upper_lip = {v.index for v in lower}
 jaw_verts = {v.index: v.co.copy() for f in jaw_faces for v in f.verts if v.index not in upper_lip}
@@ -113,8 +96,8 @@ for index, co in jaw_verts.items():
     w = smooth((CORNER_Y - (world @ co).y) / 0.03)  # the whole lower jaw, easing in from the mouth's corner
     if w > 0:
         jaw_weights[index] = w
-print("[build_dragon] mouth cut along", len(lips), "edges; inside on the texel at", tuple(round(c, 3) for c in DARK_UV))
-JAW = (Vector((0.105, -0.365, 0.445)), Vector((0.12, -0.48, 0.432)))
+print("[build_dragon] mouth cut along", len(lips), "edges")
+JAW = (Vector((0.11, -0.42, 0.432)), Vector((0.12, -0.48, 0.422)))
 
 # --- fit: face +X, scale, centre the spine on Y = 0 ---------------------------------------------------------------------------
 FIT = Matrix.Diagonal((SCALE, SCALE, SCALE, 1)) @ Matrix.Rotation(math.radians(90), 4, "Z")
