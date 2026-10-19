@@ -6,6 +6,7 @@
 UGA_WaterWall::UGA_WaterWall()
 {
 	DisplayName = INVTEXT("Water Wall");
+	Description = INVTEXT("A quicker, cheaper wall of water that blocks for a few seconds.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_WaterWall.T_Jutsu_WaterWall")));
 	ChakraCost = 25.f;
 	Cooldown = 9.f;

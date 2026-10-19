@@ -24,6 +24,7 @@ UGA_SummonDragonBase::UGA_SummonDragonBase()
 UGA_SummonDragon::UGA_SummonDragon()
 {
 	DisplayName = INVTEXT("Summon Tairn");
+	Description = INVTEXT("Ride Tairn into the sky and breathe blue-white lightning fire.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonDragon.T_Jutsu_SummonDragon")));
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_SummonDragon);
 	DragonKind = EShinobiDragonKind::Tairn;
@@ -32,6 +33,7 @@ UGA_SummonDragon::UGA_SummonDragon()
 UGA_SummonCrimsonDragon::UGA_SummonCrimsonDragon()
 {
 	DisplayName = INVTEXT("Crimson Dragon");
+	Description = INVTEXT("Ride the Crimson Dragon and breathe orange fire.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonCrimson.T_Jutsu_SummonCrimson")));
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_SummonCrimsonDragon);
 	DragonKind = EShinobiDragonKind::Crimson;

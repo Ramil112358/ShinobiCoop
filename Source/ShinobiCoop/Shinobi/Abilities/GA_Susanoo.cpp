@@ -8,6 +8,7 @@
 UGA_Susanoo::UGA_Susanoo()
 {
 	DisplayName = INVTEXT("Susanoo");
+	Description = INVTEXT("A spectral armour: half damage taken, harder hits, faster chakra.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_Susanoo.T_Jutsu_Susanoo")));
 	ChakraCost = 40.f;
 	Cooldown = 60.f;

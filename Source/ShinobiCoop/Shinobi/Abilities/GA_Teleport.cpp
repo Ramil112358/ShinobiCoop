@@ -13,6 +13,7 @@
 UGA_Teleport::UGA_Teleport()
 {
 	DisplayName = INVTEXT("Teleport");
+	Description = INVTEXT("Throws three marker kunai; press again within 6 s to flash to one of them.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_Teleport.T_Jutsu_Teleport")));
 	ChakraCost = 25.f;
 	Cooldown = 10.f;

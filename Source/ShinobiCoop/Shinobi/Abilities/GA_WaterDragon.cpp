@@ -6,6 +6,7 @@
 UGA_WaterDragon::UGA_WaterDragon()
 {
 	DisplayName = INVTEXT("Water Dragon");
+	Description = INVTEXT("A dragon of water surges along your aim, hitting everything in its path.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_WaterDragon.T_Jutsu_WaterDragon")));
 	ChakraCost = 40.f;
 	Cooldown = 12.f;

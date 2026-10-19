@@ -6,6 +6,7 @@
 UGA_EarthWall::UGA_EarthWall()
 {
 	DisplayName = INVTEXT("Earth Wall");
+	Description = INVTEXT("A rock wall rises ahead, blocking projectiles and forcing enemies around.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_EarthWall.T_Jutsu_EarthWall")));
 	ChakraCost = 35.f;
 	Cooldown = 14.f;

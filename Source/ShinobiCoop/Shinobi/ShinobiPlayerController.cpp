@@ -1,6 +1,7 @@
 #include "Shinobi/ShinobiPlayerController.h"
 #include "Shinobi/Abilities/ShinobiLoadout.h"
 #include "Shinobi/Abilities/ShinobiJutsuAbility.h"
+#include "Shinobi/UI/ShinobiSkillsWidget.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "RHI.h"
@@ -144,6 +145,33 @@ bool AShinobiPlayerController::InputKey(const FInputKeyEventArgs& Params)
 
 void AShinobiPlayerController::ToggleSkillsScreen()
 {
+	if (SkillsWidget)
+	{
+		SkillsWidget->RemoveFromParent();
+		SkillsWidget = nullptr;
+		SetInputMode(FInputModeGameOnly());
+		SetShowMouseCursor(false);
+		return;
+	}
+	if (!GetPawn<AShinobiPlayerCharacter>())
+	{
+		return;
+	}
+	if (PauseMenu)
+	{
+		TogglePauseMenu(); // the pause menu's Jutsu entry, or K over the menu
+	}
+	SkillsWidget = CreateWidget<UShinobiSkillsWidget>(this, UShinobiSkillsWidget::StaticClass());
+	if (!SkillsWidget)
+	{
+		return;
+	}
+	SkillsWidget->AddToViewport(20);
+	// UI only: gameplay keys are blocked while picking; the screen itself closes on K, Esc or B. The world keeps running.
+	FInputModeUIOnly Mode;
+	Mode.SetWidgetToFocus(SkillsWidget->TakeWidget());
+	SetInputMode(Mode);
+	SetShowMouseCursor(true);
 }
 
 void AShinobiPlayerController::TogglePauseMenu()
@@ -494,7 +522,11 @@ void AShinobiPlayerController::RunShotTest()
 	At(9.f, [Input]() { Input(EShinobiAbilityInputID::Jutsu1, true); Input(EShinobiAbilityInputID::Jutsu1, false); });
 	At(9.6f, [Input]() { Input(EShinobiAbilityInputID::Jutsu1, true); Input(EShinobiAbilityInputID::Jutsu1, false); });
 	At(9.7f, [Shot]() { Shot(TEXT("ShinobiShot_5_Hud"), true); });
-	At(10.5f, [this]() { ConsoleCommand(TEXT("quit")); });
+	// The Skills screen (K) over the game, with slot 1 still cooling down.
+	At(10.f, [this]() { ToggleSkillsScreen(); });
+	At(10.6f, [Shot]() { Shot(TEXT("ShinobiShot_6_Skills"), true); });
+	At(10.8f, [this]() { ToggleSkillsScreen(); });
+	At(11.3f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
 
 void AShinobiPlayerController::RunLookShotTest()

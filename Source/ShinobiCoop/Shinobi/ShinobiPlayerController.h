@@ -7,6 +7,7 @@
 class UGameplayEffect;
 class UShinobiHUDWidget;
 class UShinobiPauseMenuWidget;
+class UShinobiSkillsWidget;
 struct FGameplayTag;
 struct FInputActionValue;
 
@@ -135,4 +136,7 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UShinobiPauseMenuWidget> PauseMenu;
+
+	UPROPERTY()
+	TObjectPtr<UShinobiSkillsWidget> SkillsWidget;
 };

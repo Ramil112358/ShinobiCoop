@@ -9,6 +9,7 @@
 UGA_Chidori::UGA_Chidori()
 {
 	DisplayName = INVTEXT("Chidori");
+	Description = INVTEXT("Lightning in the hand, then a dash that strikes, stuns and shocks the nearest foe.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_Chidori.T_Jutsu_Chidori")));
 	ChakraCost = 30.f;
 	Cooldown = 8.f;

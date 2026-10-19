@@ -9,6 +9,7 @@
 UGA_IceMeteor::UGA_IceMeteor()
 {
 	DisplayName = INVTEXT("Ice Meteors");
+	Description = INVTEXT("Mark a spot, then rain ice shards that hurt and chill whoever stands there.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_IceMeteor.T_Jutsu_IceMeteor")));
 	ChakraCost = 45.f;
 	Cooldown = 16.f;

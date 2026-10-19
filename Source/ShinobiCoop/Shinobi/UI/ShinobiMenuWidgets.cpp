@@ -262,12 +262,18 @@ void UShinobiPauseMenuWidget::OnEntry(int32 Index)
 		}
 		break;
 	case 1:
+		if (AShinobiPlayerController* PC = Cast<AShinobiPlayerController>(GetOwningPlayer()))
+		{
+			PC->ToggleSkillsScreen(); // closes this menu first; the gamepad's way to the Skills screen
+		}
+		break;
+	case 2:
 		if (UShinobiSessionSubsystem* Sessions = GetSessions())
 		{
 			Sessions->ShowInviteUI();
 		}
 		break;
-	case 2:
+	case 3:
 		OpenSettings();
 		break;
 	default:
@@ -283,7 +289,7 @@ void UShinobiPauseMenuWidget::Refresh()
 {
 	Super::Refresh();
 	const UShinobiSessionSubsystem* Sessions = GetSessions();
-	EntryButtons[1]->SetIsEnabled(Sessions && !Sessions->IsLanMode()); // the Steam overlay does the inviting
+	EntryButtons[2]->SetIsEnabled(Sessions && !Sessions->IsLanMode()); // the Steam overlay does the inviting
 }
 
 TArray<FString> UShinobiSettingsWidget::GetEntries() const

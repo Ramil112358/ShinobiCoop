@@ -44,6 +44,7 @@ void UGA_SummonBase::ExecuteJutsu()
 UGA_SummonOwl::UGA_SummonOwl()
 {
 	DisplayName = INVTEXT("Summon Owl");
+	Description = INVTEXT("A snowy owl perches on your shoulder and calls lightning down on enemies.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonOwl.T_Jutsu_SummonOwl")));
 	ChakraCost = 60.f;
 	Cooldown = 45.f;
@@ -63,6 +64,7 @@ void UGA_SummonOwl::ExecuteJutsu()
 UGA_SummonMisha::UGA_SummonMisha()
 {
 	DisplayName = INVTEXT("Summon Misha");
+	Description = INVTEXT("Misha, a giant plush puppy, barks a shockwave from a distance.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonMisha.T_Jutsu_SummonMisha")));
 	ChakraCost = 50.f;
 	Cooldown = 40.f;
@@ -75,6 +77,7 @@ UGA_SummonMisha::UGA_SummonMisha()
 UGA_SummonPabu::UGA_SummonPabu()
 {
 	DisplayName = INVTEXT("Summon Pabu");
+	Description = INVTEXT("Pabu the corgi ninken fights at your side.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonPabu.T_Jutsu_SummonPabu")));
 	ChakraCost = 45.f;
 	Cooldown = 30.f;
@@ -87,6 +90,7 @@ UGA_SummonPabu::UGA_SummonPabu()
 UGA_SummonPusho::UGA_SummonPusho()
 {
 	DisplayName = INVTEXT("Summon Pusho");
+	Description = INVTEXT("Pusho the long-haired cat pounces and claws at your foes.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonPusho.T_Jutsu_SummonPusho")));
 	ChakraCost = 45.f;
 	Cooldown = 35.f;

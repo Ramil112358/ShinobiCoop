@@ -23,6 +23,7 @@ namespace
 UGA_Kamui::UGA_Kamui()
 {
 	DisplayName = INVTEXT("Kamui");
+	Description = INVTEXT("Phase out of this world: attacks pass through you. Press again to step back.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_Kamui.T_Jutsu_Kamui")));
 	ChakraCost = 30.f;
 	Cooldown = 12.f;
