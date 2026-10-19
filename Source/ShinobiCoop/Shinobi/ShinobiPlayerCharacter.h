@@ -299,7 +299,10 @@ private:
 	float ServerNow() const;
 
 	UFUNCTION()
-	void OnRep_Loadout() { StampLoadoutInputIDs(); }
+	void OnRep_Loadout();
+
+	/** "ShinobiLoadout <name> (server|client): slot1=GA_Fireball(ok) ..." -- read by Scripts/smoke_m4.ps1. */
+	void LogLoadout() const;
 
 	/** The visible hero body, pose-driven from GetMesh(). */
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")

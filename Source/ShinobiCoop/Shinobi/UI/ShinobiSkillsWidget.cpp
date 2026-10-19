@@ -24,16 +24,16 @@
 
 namespace
 {
-	constexpr float CellSize = 56.f;
-	constexpr int32 PoolColumns = 7;
-	const FLinearColor BackdropColor(0.02f, 0.02f, 0.04f, 0.85f);
-	const FLinearColor GoldColor(0.91f, 0.79f, 0.48f);
-	const FLinearColor SlottedColor(0.55f, 0.25f, 1.f);
-	const FLinearColor IdleColor(0.12f, 0.12f, 0.14f);
-	const FLinearColor LockedColor(0.75f, 0.25f, 0.2f);
-	const FLinearColor TextColor(0.85f, 0.85f, 0.88f);
+	constexpr float SkillsCellSize = 56.f;
+	constexpr int32 SkillsPoolColumns = 7;
+	const FLinearColor SkillsBackdropColor(0.02f, 0.02f, 0.04f, 0.85f);
+	const FLinearColor SkillsGoldColor(0.91f, 0.79f, 0.48f);
+	const FLinearColor SkillsSlottedColor(0.55f, 0.25f, 1.f);
+	const FLinearColor SkillsIdleColor(0.12f, 0.12f, 0.14f);
+	const FLinearColor SkillsLockedColor(0.75f, 0.25f, 0.2f);
+	const FLinearColor SkillsTextColor(0.85f, 0.85f, 0.88f);
 
-	UTextBlock* MakeLabel(UWidgetTree& Tree, int32 Size, const FLinearColor& Color)
+	UTextBlock* SkillsMakeLabel(UWidgetTree& Tree, int32 Size, const FLinearColor& Color)
 	{
 		UTextBlock* Text = Tree.ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
 		FSlateFontInfo Font = Text->GetFont();
@@ -45,7 +45,7 @@ namespace
 		return Text;
 	}
 
-	FText TooltipFor(const UShinobiJutsuAbility& Jutsu)
+	FText SkillsTooltipFor(const UShinobiJutsuAbility& Jutsu)
 	{
 		return FText::FromString(FString::Printf(TEXT("%s\nChakra %d  ·  Cooldown %ds\n%s"), *Jutsu.DisplayName.ToString(),
 			FMath::RoundToInt(Jutsu.ChakraCost), FMath::RoundToInt(Jutsu.Cooldown), *Jutsu.Description.ToString()));
@@ -60,12 +60,12 @@ TSharedRef<SWidget> UShinobiSkillCell::RebuildWidget()
 	{
 		SetIsFocusable(true); // gamepad: the D-pad walks the cells, A clicks
 		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("Box"));
-		Box->SetWidthOverride(CellSize);
-		Box->SetHeightOverride(CellSize);
+		Box->SetWidthOverride(SkillsCellSize);
+		Box->SetHeightOverride(SkillsCellSize);
 		WidgetTree->RootWidget = Box;
 		FrameBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
 		FrameBorder->SetPadding(FMargin(3.f));
-		FrameBorder->SetBrushColor(IdleColor);
+		FrameBorder->SetBrushColor(SkillsIdleColor);
 		Box->AddChild(FrameBorder);
 		UOverlay* Layers = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass());
 		FrameBorder->SetContent(Layers);
@@ -74,11 +74,11 @@ TSharedRef<SWidget> UShinobiSkillCell::RebuildWidget()
 		UOverlaySlot* IconSlot = Layers->AddChildToOverlay(Icon);
 		IconSlot->SetHorizontalAlignment(HAlign_Fill);
 		IconSlot->SetVerticalAlignment(VAlign_Fill);
-		OverlayText = MakeLabel(*WidgetTree, 13, FLinearColor::White);
+		OverlayText = SkillsMakeLabel(*WidgetTree, 13, FLinearColor::White);
 		UOverlaySlot* OverlaySlot = Layers->AddChildToOverlay(OverlayText);
 		OverlaySlot->SetHorizontalAlignment(HAlign_Center);
 		OverlaySlot->SetVerticalAlignment(VAlign_Center);
-		KeyText = MakeLabel(*WidgetTree, 8, TextColor);
+		KeyText = SkillsMakeLabel(*WidgetTree, 8, SkillsTextColor);
 		UOverlaySlot* KeySlot = Layers->AddChildToOverlay(KeyText);
 		KeySlot->SetHorizontalAlignment(HAlign_Center);
 		KeySlot->SetVerticalAlignment(VAlign_Bottom);
@@ -99,7 +99,7 @@ void UShinobiSkillCell::Show(TSubclassOf<UShinobiJutsuAbility> Jutsu, const FLin
 		UTexture2D* Texture = Ability && !Ability->Icon.IsNull() ? Ability->Icon.LoadSynchronous() : nullptr;
 		Icon->SetBrushFromTexture(Texture);
 		Icon->SetColorAndOpacity(Texture ? FLinearColor::White : FLinearColor(0.08f, 0.08f, 0.1f)); // an empty slot is a dark square
-		SetToolTipText(Ability ? TooltipFor(*Ability) : FText::GetEmpty());
+		SetToolTipText(Ability ? SkillsTooltipFor(*Ability) : FText::GetEmpty());
 	}
 	FrameColor = Frame;
 	FrameBorder->SetBrushColor(bFocused ? FLinearColor::White : FrameColor);
@@ -150,7 +150,7 @@ void UShinobiSkillCell::NativeOnDragDetected(const FGeometry& Geometry, const FP
 	Operation->Payload = this;
 	UImage* Visual = NewObject<UImage>(this);
 	Visual->SetBrush(Icon->GetBrush());
-	Visual->SetDesiredSizeOverride(FVector2D(CellSize, CellSize));
+	Visual->SetDesiredSizeOverride(FVector2D(SkillsCellSize, SkillsCellSize));
 	Visual->SetRenderOpacity(0.8f);
 	Operation->DefaultDragVisual = Visual;
 	Operation->Pivot = EDragPivot::CenterCenter;
@@ -221,7 +221,7 @@ TSharedRef<SWidget> UShinobiSkillsWidget::RebuildWidget()
 		UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Root"));
 		WidgetTree->RootWidget = Root;
 		UBorder* Backdrop = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Backdrop"));
-		Backdrop->SetBrushColor(BackdropColor);
+		Backdrop->SetBrushColor(SkillsBackdropColor);
 		Backdrop->SetHorizontalAlignment(HAlign_Center);
 		Backdrop->SetVerticalAlignment(VAlign_Center);
 		UCanvasPanelSlot* BackdropSlot = Root->AddChildToCanvas(Backdrop);
@@ -236,10 +236,10 @@ TSharedRef<SWidget> UShinobiSkillsWidget::RebuildWidget()
 			RowSlot->SetHorizontalAlignment(HAlign_Center);
 			RowSlot->SetPadding(FMargin(0.f, Top, 0.f, 0.f));
 		};
-		UTextBlock* Title = MakeLabel(*WidgetTree, 26, GoldColor);
+		UTextBlock* Title = SkillsMakeLabel(*WidgetTree, 26, SkillsGoldColor);
 		Title->SetText(INVTEXT("J U T S U"));
 		AddRow(Title, 0.f);
-		UTextBlock* Hint = MakeLabel(*WidgetTree, 11, TextColor);
+		UTextBlock* Hint = SkillsMakeLabel(*WidgetTree, 11, SkillsTextColor);
 		Hint->SetText(INVTEXT("Hover a jutsu for details  ·  K or Esc closes"));
 		AddRow(Hint, 4.f);
 
@@ -253,18 +253,18 @@ TSharedRef<SWidget> UShinobiSkillsWidget::RebuildWidget()
 			UShinobiSkillCell* Cell = WidgetTree->ConstructWidget<UShinobiSkillCell>(UShinobiSkillCell::StaticClass());
 			Cell->Owner = this;
 			Cell->Index = Index;
-			Pool->AddChildToUniformGrid(Cell, Index / PoolColumns, Index % PoolColumns);
+			Pool->AddChildToUniformGrid(Cell, Index / SkillsPoolColumns, Index % SkillsPoolColumns);
 			PoolCells.Add(Cell);
 		}
 
 		USizeBox* Rule = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		Rule->SetWidthOverride(PoolColumns * (CellSize + 8.f));
+		Rule->SetWidthOverride(SkillsPoolColumns * (SkillsCellSize + 8.f));
 		Rule->SetHeightOverride(1.f);
 		UBorder* RuleLine = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
-		RuleLine->SetBrushColor(GoldColor * FLinearColor(1.f, 1.f, 1.f, 0.6f));
+		RuleLine->SetBrushColor(SkillsGoldColor * FLinearColor(1.f, 1.f, 1.f, 0.6f));
 		Rule->AddChild(RuleLine);
 		AddRow(Rule, 18.f);
-		UTextBlock* SlotsLabel = MakeLabel(*WidgetTree, 11, TextColor);
+		UTextBlock* SlotsLabel = SkillsMakeLabel(*WidgetTree, 11, SkillsTextColor);
 		SlotsLabel->SetText(INVTEXT("Your 8 slots   (gamepad: RB page 1 | page 2)"));
 		AddRow(SlotsLabel, 10.f);
 
@@ -279,7 +279,7 @@ TSharedRef<SWidget> UShinobiSkillsWidget::RebuildWidget()
 			Slots->AddChildToHorizontalBox(Cell)->SetPadding(FMargin(Index == 4 ? 18.f : 4.f, 0.f, 4.f, 0.f));
 			SlotCells.Add(Cell);
 		}
-		Banner = MakeLabel(*WidgetTree, 13, GoldColor);
+		Banner = SkillsMakeLabel(*WidgetTree, 13, SkillsGoldColor);
 		AddRow(Banner, 16.f);
 	}
 	return Super::RebuildWidget();
@@ -330,7 +330,7 @@ void UShinobiSkillsWidget::NativeTick(const FGeometry& Geometry, float DeltaTime
 	for (int32 Index = 0; Index < PoolCells.Num(); ++Index)
 	{
 		const bool bSlotted = Loadout.Contains(Known[Index]);
-		PoolCells[Index]->Show(Known[Index], Index == PickedPool ? GoldColor : (bSlotted ? SlottedColor : IdleColor), FText::GetEmpty(), FText::GetEmpty(), 1.f);
+		PoolCells[Index]->Show(Known[Index], Index == PickedPool ? SkillsGoldColor : (bSlotted ? SkillsSlottedColor : SkillsIdleColor), FText::GetEmpty(), FText::GetEmpty(), 1.f);
 	}
 	const AShinobiPlayerController* PC = Cast<AShinobiPlayerController>(GetOwningPlayer());
 	const bool bPad = PC && PC->IsUsingGamepad();
@@ -347,7 +347,7 @@ void UShinobiSkillsWidget::NativeTick(const FGeometry& Geometry, float DeltaTime
 		}
 		const FText Key = bPad ? FText::FromString(FString::Printf(TEXT("%s%s"), Index < 4 ? TEXT("") : TEXT("2·"), FaceLabels[Index % 4]))
 			: ShinobiKeyBindings::KeyLabel(ShinobiKeyBindings::Get(static_cast<ShinobiKeyBindings::EBindable>(Index)), true);
-		SlotCells[Index]->Show(Jutsu, Index == PickedSlot ? GoldColor : (bLocked ? LockedColor : IdleColor), Overlay, Key, bLocked ? 0.45f : 1.f);
+		SlotCells[Index]->Show(Jutsu, Index == PickedSlot ? SkillsGoldColor : (bLocked ? SkillsLockedColor : SkillsIdleColor), Overlay, Key, bLocked ? 0.45f : 1.f);
 	}
 }
 

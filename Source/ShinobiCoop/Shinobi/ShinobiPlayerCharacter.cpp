@@ -289,6 +289,27 @@ void AShinobiPlayerCharacter::ApplyLoadout(const ShinobiLoadout::FSlots& Slots)
 	}
 	Loadout = Slots;
 	StampLoadoutInputIDs();
+	LogLoadout();
+}
+
+void AShinobiPlayerCharacter::OnRep_Loadout()
+{
+	StampLoadoutInputIDs();
+	LogLoadout();
+}
+
+void AShinobiPlayerCharacter::LogLoadout() const
+{
+	FString Line;
+	for (int32 Slot = 0; Slot < Loadout.Num(); ++Slot)
+	{
+		const UClass* Jutsu = Loadout[Slot].Get();
+		const FGameplayAbilitySpec* Spec = Jutsu ? AbilitySystem->FindAbilitySpecFromClass(const_cast<UClass*>(Jutsu)) : nullptr;
+		// ok: this machine's spec answers the slot's key (a client's specs may not have arrived yet: "nospec")
+		const TCHAR* State = !Jutsu ? TEXT("") : !Spec ? TEXT("(nospec)") : Spec->InputID == static_cast<int32>(ShinobiLoadout::SlotInputID(Slot)) ? TEXT("(ok)") : TEXT("(BAD)");
+		Line += FString::Printf(TEXT(" slot%d=%s%s"), Slot + 1, Jutsu ? *Jutsu->GetName() : TEXT("-"), State);
+	}
+	UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiLoadout %s (%s):%s"), *GetName(), HasAuthority() ? TEXT("server") : TEXT("client"), *Line);
 }
 
 void AShinobiPlayerCharacter::StampLoadoutInputIDs()
@@ -360,8 +381,10 @@ bool AShinobiPlayerCharacter::TryChangeLoadout(const ShinobiLoadout::FSlots& Slo
 	{
 		return true;
 	}
-	if (!GetLoadoutLockReason().IsEmpty() || !ShinobiLoadout::CanChange(Loadout, Slots, [this](int32 Slot) { return IsSlotLocked(Slot); }))
+	const FText Reason = GetLoadoutLockReason();
+	if (!Reason.IsEmpty() || !ShinobiLoadout::CanChange(Loadout, Slots, [this](int32 Slot) { return IsSlotLocked(Slot); }))
 	{
+		UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiLoadout %s refused: %s"), *GetName(), Reason.IsEmpty() ? TEXT("a locked slot") : *Reason.ToString());
 		return false;
 	}
 	ApplyLoadout(Slots);
@@ -768,7 +791,12 @@ void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 
 	if (IsLocallyControlled())
 	{
-		RequestLoadout(ShinobiLoadout::LoadSaved(GetKnownJutsu())); // this machine's saved bar
+		ShinobiLoadout::FSlots Saved = ShinobiLoadout::LoadSaved(GetKnownJutsu()); // this machine's saved bar
+		if (FParse::Param(FCommandLine::Get(), TEXT("ShinobiLoadoutSmoke")))
+		{
+			Saved = ShinobiLoadout::WithLegacyPage(ShinobiLoadout::Default(), 3); // smoke_m4: a bar the host must take from this client
+		}
+		RequestLoadout(Saved);
 	}
 }
 

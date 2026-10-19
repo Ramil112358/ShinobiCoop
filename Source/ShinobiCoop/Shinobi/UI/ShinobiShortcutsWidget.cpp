@@ -19,14 +19,14 @@ using ShinobiKeyBindings::EBindable;
 
 namespace
 {
-	const FLinearColor PanelColor(0.f, 0.f, 0.f, 0.8f);
-	const FLinearColor HeadingColor(0.91f, 0.79f, 0.48f);
-	const FLinearColor RowColor(0.88f, 0.88f, 0.9f);
-	const FLinearColor GreyColor(0.5f, 0.5f, 0.55f);
-	const FLinearColor GoodColor(0.91f, 0.79f, 0.48f);
-	const FLinearColor BadColor(1.f, 0.35f, 0.3f);
+	const FLinearColor ShortcutsPanelColor(0.f, 0.f, 0.f, 0.8f);
+	const FLinearColor ShortcutsHeadingColor(0.91f, 0.79f, 0.48f);
+	const FLinearColor ShortcutsRowColor(0.88f, 0.88f, 0.9f);
+	const FLinearColor ShortcutsGreyColor(0.5f, 0.5f, 0.55f);
+	const FLinearColor ShortcutsGoodColor(0.91f, 0.79f, 0.48f);
+	const FLinearColor ShortcutsBadColor(1.f, 0.35f, 0.3f);
 
-	UTextBlock* MakeText(UWidgetTree& Tree, const FString& Text, int32 Size, const FLinearColor& Color)
+	UTextBlock* ShortcutsMakeText(UWidgetTree& Tree, const FString& Text, int32 Size, const FLinearColor& Color)
 	{
 		UTextBlock* Block = Tree.ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
 		FSlateFontInfo Font = Block->GetFont();
@@ -37,18 +37,18 @@ namespace
 		return Block;
 	}
 
-	UShinobiIndexButton* MakeButton(UWidgetTree& Tree, const FString& Label, int32 Index, FShinobiIndexClicked Handler)
+	UShinobiIndexButton* ShortcutsMakeButton(UWidgetTree& Tree, const FString& Label, int32 Index, FShinobiIndexClicked Handler)
 	{
 		UShinobiIndexButton* Button = Tree.ConstructWidget<UShinobiIndexButton>(UShinobiIndexButton::StaticClass());
 		Button->Index = Index;
 		Button->OnIndexClicked = MoveTemp(Handler);
 		Button->Arm();
-		Button->AddChild(MakeText(Tree, Label, 13, FLinearColor::Black));
+		Button->AddChild(ShortcutsMakeText(Tree, Label, 13, FLinearColor::Black));
 		return Button;
 	}
 
 	/** The jutsu in each slot, for the grey hint: the live loadout in game, the saved one in the main menu. */
-	ShinobiLoadout::FSlots CurrentSlots(const UUserWidget& Widget)
+	ShinobiLoadout::FSlots ShortcutsCurrentSlots(const UUserWidget& Widget)
 	{
 		if (const AShinobiPlayerCharacter* Player = Cast<AShinobiPlayerCharacter>(Widget.GetOwningPlayerPawn()))
 		{
@@ -66,7 +66,7 @@ TSharedRef<SWidget> UShinobiShortcutsWidget::RebuildWidget()
 		UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Root"));
 		WidgetTree->RootWidget = Root;
 		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Panel"));
-		Panel->SetBrushColor(PanelColor);
+		Panel->SetBrushColor(ShortcutsPanelColor);
 		Panel->SetPadding(FMargin(36.f, 24.f));
 		UCanvasPanelSlot* PanelSlot = Root->AddChildToCanvas(Panel);
 		PanelSlot->SetAnchors(FAnchors(0.5f, 0.5f));
@@ -75,9 +75,9 @@ TSharedRef<SWidget> UShinobiShortcutsWidget::RebuildWidget()
 
 		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
 		Panel->SetContent(Column);
-		UTextBlock* Title = MakeText(*WidgetTree, TEXT("SHORTCUTS"), 30, FLinearColor::White);
+		UTextBlock* Title = ShortcutsMakeText(*WidgetTree, TEXT("SHORTCUTS"), 30, FLinearColor::White);
 		Column->AddChildToVerticalBox(Title)->SetHorizontalAlignment(HAlign_Center);
-		UTextBlock* Hint = MakeText(*WidgetTree, TEXT("Click a key, then press the new one  ·  Alt + key allowed  ·  Esc cancels  ·  keyboard & mouse only"), 11, GreyColor);
+		UTextBlock* Hint = ShortcutsMakeText(*WidgetTree, TEXT("Click a key, then press the new one  ·  Alt + key allowed  ·  Esc cancels  ·  keyboard & mouse only"), 11, ShortcutsGreyColor);
 		Column->AddChildToVerticalBox(Hint)->SetHorizontalAlignment(HAlign_Center);
 
 		UHorizontalBox* Columns = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
@@ -87,7 +87,7 @@ TSharedRef<SWidget> UShinobiShortcutsWidget::RebuildWidget()
 		{
 			UVerticalBox* Rows = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
 			Columns->AddChildToHorizontalBox(Rows)->SetPadding(FMargin(14.f, 0.f));
-			Rows->AddChildToVerticalBox(MakeText(*WidgetTree, Heading, 12, HeadingColor))->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+			Rows->AddChildToVerticalBox(ShortcutsMakeText(*WidgetTree, Heading, 12, ShortcutsHeadingColor))->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 			for (int32 Bindable = First; Bindable <= Last; ++Bindable)
 			{
 				AddRow(Rows, Bindable);
@@ -96,14 +96,14 @@ TSharedRef<SWidget> UShinobiShortcutsWidget::RebuildWidget()
 		MakeColumn(TEXT("JUTSU SLOTS"), static_cast<int32>(EBindable::Slot1), static_cast<int32>(EBindable::SkillsScreen));
 		MakeColumn(TEXT("ACTIONS"), static_cast<int32>(EBindable::Melee), static_cast<int32>(EBindable::Map));
 
-		MessageText = MakeText(*WidgetTree, FString(), 12, GoodColor);
+		MessageText = ShortcutsMakeText(*WidgetTree, FString(), 12, ShortcutsGoodColor);
 		Column->AddChildToVerticalBox(MessageText)->SetHorizontalAlignment(HAlign_Center);
 		UHorizontalBox* Footer = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 		UVerticalBoxSlot* FooterSlot = Column->AddChildToVerticalBox(Footer);
 		FooterSlot->SetHorizontalAlignment(HAlign_Center);
 		FooterSlot->SetPadding(FMargin(0.f, 12.f, 0.f, 0.f));
-		Footer->AddChildToHorizontalBox(MakeButton(*WidgetTree, TEXT("  Reset to defaults  "), 0, FShinobiIndexClicked::CreateUObject(this, &UShinobiShortcutsWidget::OnFooter)))->SetPadding(FMargin(6.f, 0.f));
-		Footer->AddChildToHorizontalBox(MakeButton(*WidgetTree, TEXT("  Back  "), 1, FShinobiIndexClicked::CreateUObject(this, &UShinobiShortcutsWidget::OnFooter)))->SetPadding(FMargin(6.f, 0.f));
+		Footer->AddChildToHorizontalBox(ShortcutsMakeButton(*WidgetTree, TEXT("  Reset to defaults  "), 0, FShinobiIndexClicked::CreateUObject(this, &UShinobiShortcutsWidget::OnFooter)))->SetPadding(FMargin(6.f, 0.f));
+		Footer->AddChildToHorizontalBox(ShortcutsMakeButton(*WidgetTree, TEXT("  Back  "), 1, FShinobiIndexClicked::CreateUObject(this, &UShinobiShortcutsWidget::OnFooter)))->SetPadding(FMargin(6.f, 0.f));
 		RefreshChips();
 	}
 	return Super::RebuildWidget();
@@ -117,20 +117,20 @@ void UShinobiShortcutsWidget::AddRow(UVerticalBox* Column, int32 Bindable)
 	LabelBox->SetWidthOverride(210.f);
 	UHorizontalBox* Label = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 	LabelBox->AddChild(Label);
-	Label->AddChildToHorizontalBox(MakeText(*WidgetTree, ShinobiKeyBindings::Label(static_cast<EBindable>(Bindable)).ToString(), 13, RowColor))->SetVerticalAlignment(VAlign_Center);
+	Label->AddChildToHorizontalBox(ShortcutsMakeText(*WidgetTree, ShinobiKeyBindings::Label(static_cast<EBindable>(Bindable)).ToString(), 13, ShortcutsRowColor))->SetVerticalAlignment(VAlign_Center);
 	if (Bindable <= static_cast<int32>(EBindable::Slot8))
 	{
-		const ShinobiLoadout::FSlots Slots = CurrentSlots(*this);
+		const ShinobiLoadout::FSlots Slots = ShortcutsCurrentSlots(*this);
 		const UClass* Jutsu = Slots.IsValidIndex(Bindable) ? Slots[Bindable].Get() : nullptr;
 		const FString Name = Jutsu ? GetDefault<UShinobiJutsuAbility>(const_cast<UClass*>(Jutsu))->DisplayName.ToString() : TEXT("empty");
-		UHorizontalBoxSlot* NameSlot = Label->AddChildToHorizontalBox(MakeText(*WidgetTree, Name, 11, GreyColor)); // for reference: the key stays with the slot
+		UHorizontalBoxSlot* NameSlot = Label->AddChildToHorizontalBox(ShortcutsMakeText(*WidgetTree, Name, 11, ShortcutsGreyColor)); // for reference: the key stays with the slot
 		NameSlot->SetVerticalAlignment(VAlign_Center);
 		NameSlot->SetPadding(FMargin(8.f, 0.f, 0.f, 0.f));
 	}
 	Row->AddChildToHorizontalBox(LabelBox)->SetVerticalAlignment(VAlign_Center);
 	USizeBox* ChipBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 	ChipBox->SetWidthOverride(120.f);
-	UShinobiIndexButton* Chip = MakeButton(*WidgetTree, FString(), Bindable, FShinobiIndexClicked::CreateUObject(this, &UShinobiShortcutsWidget::OnKeyChip));
+	UShinobiIndexButton* Chip = ShortcutsMakeButton(*WidgetTree, FString(), Bindable, FShinobiIndexClicked::CreateUObject(this, &UShinobiShortcutsWidget::OnKeyChip));
 	ChipBox->AddChild(Chip);
 	Row->AddChildToHorizontalBox(ChipBox);
 	Chips[Bindable] = Chip;
@@ -165,7 +165,7 @@ void UShinobiShortcutsWidget::SetMessage(const FString& Text, const FLinearColor
 void UShinobiShortcutsWidget::OnKeyChip(int32 Bindable)
 {
 	Listening = Bindable;
-	SetMessage(FString(), GoodColor);
+	SetMessage(FString(), ShortcutsGoodColor);
 	RefreshChips();
 	SetKeyboardFocus(); // off the button, so Space / Enter can be bound instead of clicking it again
 }
@@ -177,7 +177,7 @@ void UShinobiShortcutsWidget::OnFooter(int32 Index)
 	{
 		ShinobiKeyBindings::ResetToDefaults();
 		RefreshChips();
-		SetMessage(TEXT("All shortcuts are back to their defaults."), GoodColor);
+		SetMessage(TEXT("All shortcuts are back to their defaults."), ShortcutsGoodColor);
 		return;
 	}
 	if (UUserWidget* Menu = Opener.Get())
@@ -196,7 +196,7 @@ void UShinobiShortcutsWidget::Bind(const FKey& Key, bool bAlt)
 	const ShinobiKeyBindings::ERebind Result = ShinobiKeyBindings::Rebind(Which, New, &SwappedWith);
 	if (Result == ShinobiKeyBindings::ERebind::Blocked)
 	{
-		SetMessage(FString::Printf(TEXT("%s can't be used."), *ShinobiKeyBindings::KeyLabel(New).ToString()), BadColor);
+		SetMessage(FString::Printf(TEXT("%s can't be used."), *ShinobiKeyBindings::KeyLabel(New).ToString()), ShortcutsBadColor);
 		return; // still listening: try another key
 	}
 	Listening = INDEX_NONE;
@@ -204,11 +204,11 @@ void UShinobiShortcutsWidget::Bind(const FKey& Key, bool bAlt)
 	{
 		SetMessage(FString::Printf(TEXT("%s was on %s: %s moved to %s."), *ShinobiKeyBindings::KeyLabel(New).ToString(),
 			*ShinobiKeyBindings::Label(SwappedWith).ToString(), *ShinobiKeyBindings::Label(SwappedWith).ToString(),
-			*ShinobiKeyBindings::KeyLabel(Old).ToString()), GoodColor);
+			*ShinobiKeyBindings::KeyLabel(Old).ToString()), ShortcutsGoodColor);
 	}
 	else
 	{
-		SetMessage(FString(), GoodColor);
+		SetMessage(FString(), ShortcutsGoodColor);
 	}
 	RefreshChips();
 	if (Chips.IsValidIndex(static_cast<int32>(Which)) && Chips[static_cast<int32>(Which)])
@@ -227,7 +227,7 @@ FReply UShinobiShortcutsWidget::NativeOnKeyDown(const FGeometry& Geometry, const
 	if (Key == EKeys::Escape)
 	{
 		Listening = INDEX_NONE;
-		SetMessage(FString(), GoodColor);
+		SetMessage(FString(), ShortcutsGoodColor);
 		RefreshChips();
 		return FReply::Handled();
 	}

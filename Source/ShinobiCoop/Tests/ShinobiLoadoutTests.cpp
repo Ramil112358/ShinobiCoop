@@ -4,6 +4,7 @@
 
 #include "Misc/ConfigCacheIni.h"
 #include "Shinobi/ShinobiCombat.h"
+#include "Shinobi/ShinobiGameState.h"
 #include "Shinobi/Enemies/ShinobiSummon.h"
 #include "Shinobi/Abilities/ShinobiLoadout.h"
 #include "Shinobi/Abilities/GA_AlmightyPush.h"
@@ -319,6 +320,23 @@ bool FShinobiCombatLocksTest::RunTest(const FString& Parameters)
 	ShinobiCombat::ApplyDamage(Enemy->GetAbilitySystemComponent(), P, 10.f);
 	TestFalse(TEXT("No swap in combat"), P->TryChangeLoadout(ShinobiLoadout::Swap(P->GetLoadout(), 2, 3)));
 	TestTrue(TEXT("The banner has seconds to show"), P->GetCombatSecondsLeft() > 4.f && P->GetCombatSecondsLeft() <= 5.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiLoadoutPvpLockTest, "ShinobiCoop.Loadout.PvpRoundLocks", ShinobiTestFlags)
+bool FShinobiLoadoutPvpLockTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiGameState* State = W.Spawn<AShinobiGameState>();
+	W.World->SetGameState(State);
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	State->PvpPhase = EShinobiPvpPhase::Countdown;
+	TestTrue(TEXT("Swaps allowed in the countdown"), P->TryChangeLoadout(ShinobiLoadout::Swap(P->GetLoadout(), 2, 3)));
+	State->PvpPhase = EShinobiPvpPhase::Fighting;
+	TestFalse(TEXT("Locked during a live round"), P->GetLoadoutLockReason().IsEmpty());
+	TestFalse(TEXT("No swap during a live round"), P->TryChangeLoadout(ShinobiLoadout::Swap(P->GetLoadout(), 2, 3)));
+	State->PvpPhase = EShinobiPvpPhase::RoundEnd;
+	TestTrue(TEXT("Allowed again between rounds"), P->TryChangeLoadout(ShinobiLoadout::Swap(P->GetLoadout(), 2, 3)));
 	return true;
 }
 
