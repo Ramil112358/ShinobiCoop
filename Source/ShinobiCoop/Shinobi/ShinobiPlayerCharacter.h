@@ -139,8 +139,9 @@ public:
 	/** Points every jutsu spec (and each follow-up, FollowsSlotOf) at its slot's input, INDEX_NONE when unslotted. Every machine runs it. */
 	void StampLoadoutInputIDs();
 
-	/** Owner: asks for Slots (the Skills screen) and saves it on this machine. The server may refuse; the replicated loadout then stays. */
-	void RequestLoadout(const ShinobiLoadout::FSlots& Slots);
+	/** Owner: asks for Slots (the Skills screen). The server may refuse; the replicated loadout then stays. With bSave, an
+	 * accepted change becomes this machine's saved bar (a refused one never does). */
+	void RequestLoadout(const ShinobiLoadout::FSlots& Slots, bool bSave = true);
 
 	/** Authority: applies Slots if the swap rules allow it (GetLoadoutLockReason, IsSlotLocked). */
 	bool TryChangeLoadout(const ShinobiLoadout::FSlots& Slots);
@@ -290,6 +291,9 @@ private:
 	/** Owner and server: the jutsu in each bar slot. Each machine stamps its own spec input slots from it (StampLoadoutInputIDs). */
 	UPROPERTY(ReplicatedUsing = OnRep_Loadout)
 	TArray<TSubclassOf<UShinobiJutsuAbility>> Loadout;
+
+	/** Owner client: the requested loadout to save once the server's answer matches it. */
+	ShinobiLoadout::FSlots PendingSave;
 
 	/** Server world time of the last hit dealt or taken (owner and server). */
 	UPROPERTY(Replicated)

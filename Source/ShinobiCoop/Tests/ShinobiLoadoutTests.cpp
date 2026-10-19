@@ -138,6 +138,7 @@ bool FShinobiLoadoutSaveLoadTest::RunTest(const FString& Parameters)
 	{
 		GConfig->RemoveKey(Section, TEXT("Slots"), GGameUserSettingsIni);
 	}
+	GConfig->Flush(false, GGameUserSettingsIni); // Save() flushed the test's bar to disk: put the player's back there too
 	return true;
 }
 
@@ -337,6 +338,45 @@ bool FShinobiLoadoutPvpLockTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("No swap during a live round"), P->TryChangeLoadout(ShinobiLoadout::Swap(P->GetLoadout(), 2, 3)));
 	State->PvpPhase = EShinobiPvpPhase::RoundEnd;
 	TestTrue(TEXT("Allowed again between rounds"), P->TryChangeLoadout(ShinobiLoadout::Swap(P->GetLoadout(), 2, 3)));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiLoadoutSaveOnAcceptTest, "ShinobiCoop.Loadout.OnlyAcceptedRequestsAreSaved", ShinobiTestFlags)
+bool FShinobiLoadoutSaveOnAcceptTest::RunTest(const FString& Parameters)
+{
+	const TCHAR* Section = TEXT("/Script/ShinobiCoop.ShinobiLoadout");
+	TArray<FString> OldSlots;
+	const bool bHadOld = GConfig->GetArray(Section, TEXT("Slots"), OldSlots, GGameUserSettingsIni) > 0;
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* Enemy = W.Spawn<AShinobiCharacterBase>(FVector(300.f, 0.f, 0.f));
+	const TArray<TSubclassOf<UShinobiJutsuAbility>> Known = P->GetKnownJutsu();
+	ShinobiLoadout::Save(ShinobiLoadout::Default());
+
+	ShinobiCombat::ApplyDamage(Enemy->GetAbilitySystemComponent(), P, 10.f);
+	const ShinobiLoadout::FSlots Swapped = ShinobiLoadout::Swap(P->GetLoadout(), 2, 3);
+	P->RequestLoadout(Swapped);
+	TestTrue(TEXT("Refused in combat: the live bar is unchanged"), P->GetLoadout() == ShinobiLoadout::Default());
+	TestTrue(TEXT("and so is the saved one"), ShinobiLoadout::LoadSaved(Known) == ShinobiLoadout::Default());
+
+	W.Tick(5.2f);
+	P->RequestLoadout(Swapped);
+	TestTrue(TEXT("Accepted out of combat"), P->GetLoadout() == Swapped);
+	TestTrue(TEXT("and saved"), ShinobiLoadout::LoadSaved(Known) == Swapped);
+
+	P->RequestLoadout(ShinobiLoadout::Default(), false);
+	TestTrue(TEXT("A cheat/smoke request applies"), P->GetLoadout() == ShinobiLoadout::Default());
+	TestTrue(TEXT("without touching the saved bar"), ShinobiLoadout::LoadSaved(Known) == Swapped);
+
+	if (bHadOld)
+	{
+		GConfig->SetArray(Section, TEXT("Slots"), OldSlots, GGameUserSettingsIni);
+	}
+	else
+	{
+		GConfig->RemoveKey(Section, TEXT("Slots"), GGameUserSettingsIni);
+	}
+	GConfig->Flush(false, GGameUserSettingsIni);
 	return true;
 }
 

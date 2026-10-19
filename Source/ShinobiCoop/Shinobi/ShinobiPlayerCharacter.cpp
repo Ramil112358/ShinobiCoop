@@ -296,6 +296,11 @@ void AShinobiPlayerCharacter::OnRep_Loadout()
 {
 	StampLoadoutInputIDs();
 	LogLoadout();
+	if (PendingSave.Num() > 0 && Loadout == PendingSave)
+	{
+		ShinobiLoadout::Save(Loadout);
+		PendingSave.Reset();
+	}
 }
 
 void AShinobiPlayerCharacter::LogLoadout() const
@@ -350,17 +355,19 @@ void AShinobiPlayerCharacter::StampLoadoutInputIDs()
 	}
 }
 
-void AShinobiPlayerCharacter::RequestLoadout(const ShinobiLoadout::FSlots& Slots)
+void AShinobiPlayerCharacter::RequestLoadout(const ShinobiLoadout::FSlots& Slots, bool bSave)
 {
-	ShinobiLoadout::Save(Slots);
 	if (HasAuthority())
 	{
-		TryChangeLoadout(Slots);
+		if (TryChangeLoadout(Slots) && bSave)
+		{
+			ShinobiLoadout::Save(Loadout);
+		}
+		return;
 	}
-	else
-	{
-		ServerRequestLoadout(Slots);
-	}
+	// Saved once the server's answer comes back as this loadout (OnRep_Loadout); a refusal changes nothing, saved bar included.
+	PendingSave = bSave ? Slots : ShinobiLoadout::FSlots();
+	ServerRequestLoadout(Slots);
 }
 
 void AShinobiPlayerCharacter::ServerRequestLoadout_Implementation(const TArray<TSubclassOf<UShinobiJutsuAbility>>& Slots)
@@ -796,7 +803,7 @@ void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 		{
 			Saved = ShinobiLoadout::WithLegacyPage(ShinobiLoadout::Default(), 3); // smoke_m4: a bar the host must take from this client
 		}
-		RequestLoadout(Saved);
+		RequestLoadout(Saved, false); // already this machine's save (or the smoke test's bar, which must not become it)
 	}
 }
 

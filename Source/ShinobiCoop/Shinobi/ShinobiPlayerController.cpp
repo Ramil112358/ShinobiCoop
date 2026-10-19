@@ -304,7 +304,7 @@ void AShinobiPlayerController::ShinobiEquipPage(int32 Page)
 	}
 	else
 	{
-		Shinobi->RequestLoadout(Slots);
+		Shinobi->RequestLoadout(Slots, false); // a cheat: never the player's saved bar
 	}
 }
 
