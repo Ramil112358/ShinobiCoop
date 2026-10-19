@@ -247,6 +247,7 @@ void AShinobiPlayerCharacter::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 	DOREPLIFETIME(AShinobiPlayerCharacter, CharacterIndex);
 	DOREPLIFETIME(AShinobiPlayerCharacter, OutfitIndex);
 	DOREPLIFETIME_CONDITION(AShinobiPlayerCharacter, Loadout, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(AShinobiPlayerCharacter, LastCombatTime, COND_OwnerOnly);
 }
 
 void AShinobiPlayerCharacter::ApplyHero()
@@ -381,12 +382,36 @@ FText AShinobiPlayerCharacter::GetLoadoutLockReason() const
 	{
 		return INVTEXT("Downed");
 	}
+	if (IsInCombat())
+	{
+		return INVTEXT("In combat");
+	}
 	const AShinobiGameState* State = GetWorld() ? GetWorld()->GetGameState<AShinobiGameState>() : nullptr;
 	if (State && State->PvpPhase == EShinobiPvpPhase::Fighting)
 	{
 		return INVTEXT("Round in progress");
 	}
 	return FText::GetEmpty();
+}
+
+float AShinobiPlayerCharacter::ServerNow() const
+{
+	const UWorld* World = GetWorld();
+	const AGameStateBase* State = World ? World->GetGameState() : nullptr;
+	return State ? static_cast<float>(State->GetServerWorldTimeSeconds()) : (World ? World->GetTimeSeconds() : 0.f);
+}
+
+void AShinobiPlayerCharacter::NoteCombat()
+{
+	if (HasAuthority())
+	{
+		LastCombatTime = ServerNow();
+	}
+}
+
+float AShinobiPlayerCharacter::GetCombatSecondsLeft() const
+{
+	return FMath::Max(0.f, LastCombatTime + CombatSeconds - ServerNow());
 }
 
 bool AShinobiPlayerCharacter::IsSlotLocked(int32 SlotIndex) const

@@ -16,6 +16,10 @@ namespace ShinobiCombat
 	 * effect so the damage exec can negate it and request Substitution; it just doesn't count as a hit (no
 	 * chakra, knockback or status for the attacker). With bStagger false the hit neither staggers nor shoves the target.
 	 */
+	/** Damage landed (UShinobiAttributeSet): when Instigator (an ability system's owner, or a summon for its summoner)
+	 * and Victim are hostile, whichever of them is a player is in combat for AShinobiPlayerCharacter::CombatSeconds. */
+	SHINOBICOOP_API void NoteCombat(const AActor* Instigator, AShinobiCharacterBase* Victim);
+
 	SHINOBICOOP_API bool ApplyDamage(UAbilitySystemComponent* Source, const AShinobiCharacterBase* Target, float Amount, bool bStagger = true);
 
 	/**

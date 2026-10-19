@@ -3,6 +3,8 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/ConfigCacheIni.h"
+#include "Shinobi/ShinobiCombat.h"
+#include "Shinobi/Enemies/ShinobiSummon.h"
 #include "Shinobi/Abilities/ShinobiLoadout.h"
 #include "Shinobi/Abilities/GA_AlmightyPush.h"
 #include "Shinobi/Abilities/GA_Amaterasu.h"
@@ -248,6 +250,75 @@ bool FShinobiLoadoutDragonSlotTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Tairn's slot does nothing while on the Crimson Dragon"), ShinobiTest::HasTag(P, ShinobiTags::State_Mounted));
 	ShinobiTest::Tap(P, Crimson);
 	TestFalse(TEXT("The Crimson Dragon's slot climbs down"), ShinobiTest::HasTag(P, ShinobiTags::State_Mounted));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCombatDealtTest, "ShinobiCoop.Loadout.DamageStartsCombat", ShinobiTestFlags)
+bool FShinobiCombatDealtTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* Enemy = W.Spawn<AShinobiCharacterBase>(FVector(300.f, 0.f, 0.f));
+	TestFalse(TEXT("Not in combat at the start"), P->IsInCombat());
+	ShinobiCombat::ApplyDamage(P->GetAbilitySystemComponent(), Enemy, 10.f);
+	TestTrue(TEXT("Hitting an enemy puts the player in combat"), P->IsInCombat());
+	TestFalse(TEXT("which locks the loadout"), P->GetLoadoutLockReason().IsEmpty());
+	W.Tick(4.5f);
+	TestTrue(TEXT("Still in combat 4.5 s later"), P->IsInCombat());
+	W.Tick(0.7f);
+	TestFalse(TEXT("Out of combat 5 s after the last hit"), P->IsInCombat());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCombatTakenTest, "ShinobiCoop.Loadout.TakingDamageStartsCombat", ShinobiTestFlags)
+bool FShinobiCombatTakenTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* Enemy = W.Spawn<AShinobiCharacterBase>(FVector(300.f, 0.f, 0.f));
+	ShinobiCombat::ApplyDamage(Enemy->GetAbilitySystemComponent(), P, 10.f);
+	TestTrue(TEXT("Being hit puts the player in combat"), P->IsInCombat());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCombatSummonTest, "ShinobiCoop.Loadout.SummonHitsCount", ShinobiTestFlags)
+bool FShinobiCombatSummonTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* Enemy = W.Spawn<AShinobiCharacterBase>(FVector(800.f, 0.f, 0.f));
+	const TArray<AShinobiSummon*> Summons = AShinobiSummon::Summon(P, EShinobiSummonKind::Pusho, FVector(200.f, 0.f, 0.f));
+	if (!TestTrue(TEXT("Pusho came"), Summons.Num() > 0 && Summons[0] != nullptr))
+	{
+		return false;
+	}
+	ShinobiCombat::ApplyDamage(Summons[0]->GetAbilitySystemComponent(), Enemy, 10.f);
+	TestTrue(TEXT("The summon's hit puts its summoner in combat"), P->IsInCombat());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCombatTeammateTest, "ShinobiCoop.Loadout.TeammateDamageDoesNot", ShinobiTestFlags)
+bool FShinobiCombatTeammateTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* A = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiPlayerCharacter* B = W.Spawn<AShinobiPlayerCharacter>(FVector(300.f, 0.f, 0.f));
+	ShinobiCombat::ApplyDamage(A->GetAbilitySystemComponent(), B, 10.f);
+	ShinobiCombat::ApplyDamage(A->GetAbilitySystemComponent(), A, 10.f);
+	TestFalse(TEXT("A teammate's or your own damage is not combat (A)"), A->IsInCombat());
+	TestFalse(TEXT("A teammate's or your own damage is not combat (B)"), B->IsInCombat());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCombatLocksTest, "ShinobiCoop.Loadout.CombatLocksAll", ShinobiTestFlags)
+bool FShinobiCombatLocksTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* Enemy = W.Spawn<AShinobiCharacterBase>(FVector(300.f, 0.f, 0.f));
+	ShinobiCombat::ApplyDamage(Enemy->GetAbilitySystemComponent(), P, 10.f);
+	TestFalse(TEXT("No swap in combat"), P->TryChangeLoadout(ShinobiLoadout::Swap(P->GetLoadout(), 2, 3)));
+	TestTrue(TEXT("The banner has seconds to show"), P->GetCombatSecondsLeft() > 4.f && P->GetCombatSecondsLeft() <= 5.f);
 	return true;
 }
 

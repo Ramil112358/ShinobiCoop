@@ -151,6 +151,15 @@ public:
 	/** The jutsu in SlotIndex can't leave it right now (cooling down, Kamui phased, a summon out...). Empty slots never are. */
 	bool IsSlotLocked(int32 SlotIndex) const;
 
+	/** Seconds after the last hit dealt to, or taken from, a hostile that the player counts as in combat (no jutsu swaps). */
+	static constexpr float CombatSeconds = 5.f;
+
+	/** Authority: a hit was dealt or taken (ShinobiCombat::NoteCombat). */
+	void NoteCombat();
+	bool IsInCombat() const { return GetCombatSecondsLeft() > 0.f; }
+	/** Until swaps unlock again; 0 out of combat. */
+	float GetCombatSecondsLeft() const;
+
 	/** Every jutsu this player has been granted, in grant order: the Skills screen's pool. */
 	TArray<TSubclassOf<UShinobiJutsuAbility>> GetKnownJutsu() const;
 
@@ -270,6 +279,13 @@ private:
 	/** Owner and server: the jutsu in each bar slot. Each machine stamps its own spec input slots from it (StampLoadoutInputIDs). */
 	UPROPERTY(ReplicatedUsing = OnRep_Loadout)
 	TArray<TSubclassOf<UShinobiJutsuAbility>> Loadout;
+
+	/** Server world time of the last hit dealt or taken (owner and server). */
+	UPROPERTY(Replicated)
+	float LastCombatTime = -1000.f;
+
+	/** The server's clock where there is a game state (the owner's copy of it), else this world's (tests). */
+	float ServerNow() const;
 
 	UFUNCTION()
 	void OnRep_Loadout() { StampLoadoutInputIDs(); }
