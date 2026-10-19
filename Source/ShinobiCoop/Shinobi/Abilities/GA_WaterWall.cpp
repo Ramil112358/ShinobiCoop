@@ -5,8 +5,6 @@
 
 UGA_WaterWall::UGA_WaterWall()
 {
-	InputID = EShinobiAbilityInputID::Jutsu1;
-	Page = 3;
 	DisplayName = INVTEXT("Water Wall");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_WaterWall.T_Jutsu_WaterWall")));
 	ChakraCost = 25.f;

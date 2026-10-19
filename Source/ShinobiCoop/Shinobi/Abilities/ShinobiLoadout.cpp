@@ -3,6 +3,13 @@
 #include "Shinobi/Abilities/GA_AlmightyPush.h"
 #include "Shinobi/Abilities/GA_Amaterasu.h"
 #include "Shinobi/Abilities/GA_Chidori.h"
+#include "Shinobi/Abilities/GA_Dragon.h"
+#include "Shinobi/Abilities/GA_EarthWall.h"
+#include "Shinobi/Abilities/GA_FireMeteor.h"
+#include "Shinobi/Abilities/GA_IceMeteor.h"
+#include "Shinobi/Abilities/GA_Summons.h"
+#include "Shinobi/Abilities/GA_WaterDragon.h"
+#include "Shinobi/Abilities/GA_WaterWall.h"
 #include "Shinobi/Abilities/GA_Fireball.h"
 #include "Shinobi/Abilities/GA_Kamui.h"
 #include "Shinobi/Abilities/GA_Rasengan.h"
@@ -121,6 +128,28 @@ namespace ShinobiLoadout
 			Result[SlotIndex] = nullptr;
 		}
 		return Result;
+	}
+
+	FSlots WithLegacyPage(const FSlots& Current, int32 Page)
+	{
+		const TSubclassOf<UShinobiJutsuAbility> Pages[5][4] = {
+			{ UGA_Fireball::StaticClass(), UGA_Chidori::StaticClass(), UGA_Rasengan::StaticClass(), UGA_Amaterasu::StaticClass() },
+			{ UGA_Teleport::StaticClass(), UGA_Kamui::StaticClass(), UGA_AlmightyPush::StaticClass(), UGA_EarthWall::StaticClass() },
+			{ UGA_WaterWall::StaticClass(), UGA_WaterDragon::StaticClass(), UGA_FireMeteor::StaticClass(), UGA_IceMeteor::StaticClass() },
+			{ UGA_SummonPusho::StaticClass(), UGA_SummonOwl::StaticClass(), UGA_SummonMisha::StaticClass(), UGA_SummonPabu::StaticClass() },
+			{ UGA_SummonDragon::StaticClass(), UGA_SummonCrimsonDragon::StaticClass(), UGA_Susanoo::StaticClass(), nullptr },
+		};
+		FSlots Slots = Current;
+		if (Page < 1 || Page > UE_ARRAY_COUNT(Pages))
+		{
+			return Slots;
+		}
+		for (int32 Index = 0; Index < 4; ++Index)
+		{
+			const TSubclassOf<UShinobiJutsuAbility> Jutsu = Pages[Page - 1][Index];
+			Slots = Jutsu ? Place(Slots, Jutsu, Index) : Clear(Slots, Index);
+		}
+		return Slots;
 	}
 
 	FSlots LoadSaved(const TArray<TSubclassOf<UShinobiJutsuAbility>>& Known)

@@ -15,6 +15,8 @@ class SHINOBICOOP_API UGA_SummonBase : public UShinobiJutsuAbility
 public:
 	UGA_SummonBase();
 
+	virtual bool IsSlotLocked(const UAbilitySystemComponent& ASC, const FGameplayAbilitySpec& Spec) const override;
+
 protected:
 	virtual void ExecuteJutsu() override;
 
@@ -46,6 +48,7 @@ class SHINOBICOOP_API UGA_SummonOwl : public UGA_SummonBase
 
 public:
 	UGA_SummonOwl();
+	virtual bool IsSlotLocked(const UAbilitySystemComponent& ASC, const FGameplayAbilitySpec& Spec) const override;
 
 protected:
 	virtual void ExecuteJutsu() override;

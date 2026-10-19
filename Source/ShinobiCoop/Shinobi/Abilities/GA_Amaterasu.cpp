@@ -9,7 +9,6 @@
 
 UGA_Amaterasu::UGA_Amaterasu()
 {
-	InputID = EShinobiAbilityInputID::Jutsu4;
 	DisplayName = INVTEXT("Amaterasu");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_Amaterasu.T_Jutsu_Amaterasu")));
 	ChakraCost = 50.f;

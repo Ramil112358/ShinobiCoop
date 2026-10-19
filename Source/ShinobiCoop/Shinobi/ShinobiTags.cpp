@@ -40,17 +40,6 @@ namespace ShinobiTags
 	UE_DEFINE_GAMEPLAY_TAG(State_SpeedBoost, "State.SpeedBoost");
 	UE_DEFINE_GAMEPLAY_TAG(State_Shield, "State.Shield");
 	UE_DEFINE_GAMEPLAY_TAG(State_Blocking, "State.Blocking");
-	UE_DEFINE_GAMEPLAY_TAG(State_JutsuPage_1, "State.JutsuPage.1");
-	UE_DEFINE_GAMEPLAY_TAG(State_JutsuPage_2, "State.JutsuPage.2");
-	UE_DEFINE_GAMEPLAY_TAG(State_JutsuPage_3, "State.JutsuPage.3");
-	UE_DEFINE_GAMEPLAY_TAG(State_JutsuPage_4, "State.JutsuPage.4");
-	UE_DEFINE_GAMEPLAY_TAG(State_JutsuPage_5, "State.JutsuPage.5");
-
-	FGameplayTag JutsuPage(int32 Page)
-	{
-		const FNativeGameplayTag* Pages[NumJutsuPages] = { &State_JutsuPage_1, &State_JutsuPage_2, &State_JutsuPage_3, &State_JutsuPage_4, &State_JutsuPage_5 };
-		return Pages[FMath::Clamp(Page, 1, NumJutsuPages) - 1]->GetTag();
-	}
 
 	UE_DEFINE_GAMEPLAY_TAG(Ability_Melee, "Ability.Melee");
 	UE_DEFINE_GAMEPLAY_TAG(Ability_Dodge, "Ability.Dodge");

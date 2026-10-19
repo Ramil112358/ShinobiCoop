@@ -37,6 +37,10 @@ namespace ShinobiLoadout
 	SHINOBICOOP_API FSlots Swap(const FSlots& Current, int32 A, int32 B);
 	SHINOBICOOP_API FSlots Clear(const FSlots& Current, int32 SlotIndex);
 
+	/** Debug and tests: one of the five fixed jutsu pages the game had before the loadout (1 basics, 2 movement, 3 elements,
+	 * 4 summons, 5 dragons + Susanoo) put into slots 1-4 of Current, so old "page N, key K" scripts mean the same jutsu. */
+	SHINOBICOOP_API FSlots WithLegacyPage(const FSlots& Current, int32 Page);
+
 	/** The saved loadout, or Default() when there is none or it isn't valid against Known (a renamed jutsu, an old save). */
 	SHINOBICOOP_API FSlots LoadSaved(const TArray<TSubclassOf<UShinobiJutsuAbility>>& Known);
 	SHINOBICOOP_API void Save(const FSlots& Slots);

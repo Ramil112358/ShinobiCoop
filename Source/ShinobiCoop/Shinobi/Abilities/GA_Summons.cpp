@@ -1,12 +1,13 @@
 #include "Shinobi/Abilities/GA_Summons.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "AbilitySystemComponent.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Enemies/ShinobiOwl.h"
 
 UGA_SummonBase::UGA_SummonBase()
 {
-	Page = 4;
 	WindUp = 0.7f;
 	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Summon_Seal.AM_Summon_Seal")));
 	ReleaseMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Summon_Release.AM_Summon_Release")));
@@ -42,7 +43,6 @@ void UGA_SummonBase::ExecuteJutsu()
 
 UGA_SummonOwl::UGA_SummonOwl()
 {
-	InputID = EShinobiAbilityInputID::Jutsu2;
 	DisplayName = INVTEXT("Summon Owl");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonOwl.T_Jutsu_SummonOwl")));
 	ChakraCost = 60.f;
@@ -62,7 +62,6 @@ void UGA_SummonOwl::ExecuteJutsu()
 
 UGA_SummonMisha::UGA_SummonMisha()
 {
-	InputID = EShinobiAbilityInputID::Jutsu3;
 	DisplayName = INVTEXT("Summon Misha");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonMisha.T_Jutsu_SummonMisha")));
 	ChakraCost = 50.f;
@@ -75,7 +74,6 @@ UGA_SummonMisha::UGA_SummonMisha()
 
 UGA_SummonPabu::UGA_SummonPabu()
 {
-	InputID = EShinobiAbilityInputID::Jutsu4;
 	DisplayName = INVTEXT("Summon Pabu");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonPabu.T_Jutsu_SummonPabu")));
 	ChakraCost = 45.f;
@@ -88,7 +86,6 @@ UGA_SummonPabu::UGA_SummonPabu()
 
 UGA_SummonPusho::UGA_SummonPusho()
 {
-	InputID = EShinobiAbilityInputID::Jutsu1;
 	DisplayName = INVTEXT("Summon Pusho");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonPusho.T_Jutsu_SummonPusho")));
 	ChakraCost = 45.f;
@@ -97,4 +94,44 @@ UGA_SummonPusho::UGA_SummonPusho()
 	SummonKind = EShinobiSummonKind::Pusho;
 	Distance = 350.f;
 	Clearance = 250.f;
+}
+
+bool UGA_SummonBase::IsSlotLocked(const UAbilitySystemComponent& ASC, const FGameplayAbilitySpec& Spec) const
+{
+	if (Super::IsSlotLocked(ASC, Spec))
+	{
+		return true;
+	}
+	const AActor* Caster = ASC.GetAvatarActor();
+	const UWorld* World = Caster ? Caster->GetWorld() : nullptr;
+	if (!World)
+	{
+		return false;
+	}
+	for (TActorIterator<AShinobiSummon> It(World); It; ++It)
+	{
+		if (It->GetSummoner() == Caster && It->GetKind() == SummonKind && It->IsAlive())
+		{
+			return true; // the summon is still out
+		}
+	}
+	return false;
+}
+
+bool UGA_SummonOwl::IsSlotLocked(const UAbilitySystemComponent& ASC, const FGameplayAbilitySpec& Spec) const
+{
+	if (UGA_SummonBase::IsSlotLocked(ASC, Spec))
+	{
+		return true;
+	}
+	const AActor* Caster = ASC.GetAvatarActor();
+	const UWorld* World = Caster ? Caster->GetWorld() : nullptr;
+	for (TActorIterator<AShinobiOwl> It(World); World && It; ++It)
+	{
+		if (It->GetSummoner() == Caster && !It->IsActorBeingDestroyed())
+		{
+			return true;
+		}
+	}
+	return false;
 }

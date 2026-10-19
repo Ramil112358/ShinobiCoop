@@ -39,7 +39,7 @@ bool FShinobiNoStaggerHitTest::RunTest(const FString& Parameters)
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
 	ShinobiTest::FEventCounter Staggers(P, ShinobiTags::Event_Hit_Stagger);
-	P->ApplyJutsuPage(4);
+	ShinobiTest::EquipPage(P, 4);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	TestTrue(TEXT("A no-stagger hit lands"), ShinobiCombat::ApplyDamage(Source, P, 55.f, false));
 	TestEqual(TEXT("and deals its 55"), ShinobiTest::Get(P, Health), 445.f);
@@ -49,7 +49,7 @@ bool FShinobiNoStaggerHitTest::RunTest(const FString& Parameters)
 	// An ordinary hit of the same size interrupts it.
 	AShinobiPlayerCharacter* Q = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, 3000.f, 0.f));
 	ShinobiTest::Hover(Q);
-	Q->ApplyJutsuPage(4);
+	ShinobiTest::EquipPage(Q, 4);
 	ShinobiTest::Tap(Q, EShinobiAbilityInputID::Jutsu3);
 	ShinobiCombat::ApplyDamage(Source, Q, 55.f);
 	TestFalse(TEXT("An ordinary hit interrupts the jutsu"), ShinobiTest::IsActive(Q, UGA_SummonMisha::StaticClass()));

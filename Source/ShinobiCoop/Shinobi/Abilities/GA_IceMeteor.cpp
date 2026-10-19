@@ -8,8 +8,6 @@
 
 UGA_IceMeteor::UGA_IceMeteor()
 {
-	InputID = EShinobiAbilityInputID::Jutsu4;
-	Page = 3;
 	DisplayName = INVTEXT("Ice Meteors");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_IceMeteor.T_Jutsu_IceMeteor")));
 	ChakraCost = 45.f;

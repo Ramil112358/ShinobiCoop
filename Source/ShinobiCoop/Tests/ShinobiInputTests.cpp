@@ -90,11 +90,8 @@ bool FShinobiInputMappingsTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("LT guards"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Block], EKeys::Gamepad_LeftTrigger));
 	TestNotNull(TEXT("Y (without RB) revives"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Revive], EKeys::Gamepad_FaceButton_Top));
 
-	TestNotNull(TEXT("Q pages forward"), FindMapping(Mappings, Config->JutsuPageNext, EKeys::Q));
 	TestNotNull(TEXT("Mouse wheel controls camera zoom"), FindMapping(Mappings, Config->CameraZoom, EKeys::MouseWheelAxis));
 	TestNotNull(TEXT("Right mouse holds camera free-look"), FindMapping(Mappings, Config->CameraFreeLook, EKeys::RightMouseButton));
-	TestNull(TEXT("Wheel up does not page jutsu"), FindMapping(Mappings, Config->JutsuPageNext, EKeys::MouseScrollUp));
-	TestNull(TEXT("Wheel down does not page jutsu"), FindMapping(Mappings, Config->JutsuPagePrev, EKeys::MouseScrollDown));
 	TestNotNull(TEXT("RB + D-pad right pages forward"), FindMapping(JutsuMappings, Config->JutsuPageNext, EKeys::Gamepad_DPad_Right));
 	TestNotNull(TEXT("RB + D-pad left pages back"), FindMapping(JutsuMappings, Config->JutsuPagePrev, EKeys::Gamepad_DPad_Left));
 

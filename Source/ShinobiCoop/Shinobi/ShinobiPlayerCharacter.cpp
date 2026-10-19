@@ -77,7 +77,7 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 		UGA_Teleport::StaticClass(), UGA_TeleportJump::StaticClass(),
 		UGA_EarthWall::StaticClass(), UGA_WaterWall::StaticClass(), UGA_FireMeteor::StaticClass(), UGA_IceMeteor::StaticClass(), UGA_WaterDragon::StaticClass(), UGA_Susanoo::StaticClass(),
 		UGA_SummonPusho::StaticClass(), UGA_SummonOwl::StaticClass(), UGA_SummonMisha::StaticClass(), UGA_SummonPabu::StaticClass(),
-		UGA_SummonDragon::StaticClass(), UGA_SummonCrimsonDragon::StaticClass(), UGA_DragonDismount::StaticClass(), UGA_DragonDismountKey::StaticClass(), UGA_DragonBreath::StaticClass(),
+		UGA_SummonDragon::StaticClass(), UGA_SummonCrimsonDragon::StaticClass(), UGA_DragonDismount::StaticClass(), UGA_CrimsonDragonDismount::StaticClass(), UGA_DragonDismountKey::StaticClass(), UGA_DragonBreath::StaticClass(),
 	};
 	StartupEffects.Add(UGE_SubstitutionRegen::StaticClass());
 
@@ -246,6 +246,7 @@ void AShinobiPlayerCharacter::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AShinobiPlayerCharacter, CharacterIndex);
 	DOREPLIFETIME(AShinobiPlayerCharacter, OutfitIndex);
+	DOREPLIFETIME_CONDITION(AShinobiPlayerCharacter, Loadout, COND_OwnerOnly);
 }
 
 void AShinobiPlayerCharacter::ApplyHero()
@@ -279,65 +280,134 @@ bool AShinobiPlayerCharacter::CanMove() const
 	return !AbilitySystem->HasAnyMatchingGameplayTags(Blockers);
 }
 
-int32 AShinobiPlayerCharacter::GetJutsuPage() const
+void AShinobiPlayerCharacter::ApplyLoadout(const ShinobiLoadout::FSlots& Slots)
 {
-	for (int32 Page = 1; Page <= ShinobiTags::NumJutsuPages; ++Page)
-	{
-		if (AbilitySystem->HasMatchingGameplayTag(ShinobiTags::JutsuPage(Page)))
-		{
-			return Page;
-		}
-	}
-	return 1;
-}
-
-void AShinobiPlayerCharacter::ApplyJutsuPage(int32 Page)
-{
-	if (Page < 1 || Page > ShinobiTags::NumJutsuPages || AbilitySystem->HasMatchingGameplayTag(ShinobiTags::JutsuPage(Page)))
+	if (!HasAuthority() || Slots.Num() != ShinobiLoadout::NumSlots)
 	{
 		return;
 	}
-	for (int32 Old = 1; Old <= ShinobiTags::NumJutsuPages; ++Old)
+	Loadout = Slots;
+	StampLoadoutInputIDs();
+}
+
+void AShinobiPlayerCharacter::StampLoadoutInputIDs()
+{
+	const auto SlotOf = [this](const UClass* Jutsu) -> int32
 	{
-		if (AbilitySystem->HasMatchingGameplayTag(ShinobiTags::JutsuPage(Old)))
+		const int32 Slot = Jutsu ? Loadout.IndexOfByPredicate([Jutsu](const TSubclassOf<UShinobiJutsuAbility>& InSlot) { return InSlot.Get() == Jutsu; }) : INDEX_NONE;
+		return Slot == INDEX_NONE ? INDEX_NONE : static_cast<int32>(ShinobiLoadout::SlotInputID(Slot));
+	};
+	for (FGameplayAbilitySpec& Spec : AbilitySystem->GetActivatableAbilities())
+	{
+		const UShinobiGameplayAbility* Ability = Cast<UShinobiGameplayAbility>(Spec.Ability);
+		if (!Ability)
 		{
-			AbilitySystem->RemoveLooseGameplayTag(ShinobiTags::JutsuPage(Old));
+			continue;
+		}
+		int32 InputID;
+		if (Cast<UShinobiJutsuAbility>(Ability))
+		{
+			InputID = SlotOf(Ability->GetClass());
+		}
+		else if (Ability->FollowsSlotOf)
+		{
+			InputID = SlotOf(Ability->FollowsSlotOf.Get());
+		}
+		else
+		{
+			continue; // melee, dodge, the dismount key...: fixed inputs
+		}
+		if (Spec.InputID != InputID)
+		{
+			Spec.InputID = InputID;
+			if (HasAuthority())
+			{
+				AbilitySystem->MarkAbilitySpecDirty(Spec);
+			}
 		}
 	}
-	AbilitySystem->AddLooseGameplayTag(ShinobiTags::JutsuPage(Page));
 }
 
-void AShinobiPlayerCharacter::SetJutsuPage(int32 Page)
+void AShinobiPlayerCharacter::RequestLoadout(const ShinobiLoadout::FSlots& Slots)
 {
-	if (Page < 1 || Page > ShinobiTags::NumJutsuPages || IsCastingJutsu())
+	ShinobiLoadout::Save(Slots);
+	if (HasAuthority())
 	{
-		return;
+		TryChangeLoadout(Slots);
 	}
-	ApplyJutsuPage(Page);
-	if (!HasAuthority())
+	else
 	{
-		ServerSetJutsuPage(static_cast<uint8>(Page));
+		ServerRequestLoadout(Slots);
 	}
 }
 
-bool AShinobiPlayerCharacter::TryCycleJutsuPage(int32 Direction)
+void AShinobiPlayerCharacter::ServerRequestLoadout_Implementation(const TArray<TSubclassOf<UShinobiJutsuAbility>>& Slots)
 {
-	if (IsCastingJutsu())
+	if (ShinobiLoadout::IsValid(Slots, GetKnownJutsu())) // a client's value: check it
+	{
+		TryChangeLoadout(Slots);
+	}
+}
+
+bool AShinobiPlayerCharacter::TryChangeLoadout(const ShinobiLoadout::FSlots& Slots)
+{
+	if (!HasAuthority() || Slots.Num() != ShinobiLoadout::NumSlots)
 	{
 		return false;
 	}
-	const int32 Current = GetJutsuPage();
-	const int32 Count = ShinobiTags::NumJutsuPages;
-	for (int32 Step = 1; Step < Count; ++Step)
+	if (Slots == Loadout)
 	{
-		const int32 Candidate = ((Current - 1 + Direction * Step) % Count + Count) % Count + 1;
-		if (PageHasJutsu(Candidate))
+		return true;
+	}
+	if (!GetLoadoutLockReason().IsEmpty() || !ShinobiLoadout::CanChange(Loadout, Slots, [this](int32 Slot) { return IsSlotLocked(Slot); }))
+	{
+		return false;
+	}
+	ApplyLoadout(Slots);
+	return true;
+}
+
+FText AShinobiPlayerCharacter::GetLoadoutLockReason() const
+{
+	if (IsCastingJutsu())
+	{
+		return INVTEXT("Casting");
+	}
+	if (AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Mounted))
+	{
+		return INVTEXT("Mounted");
+	}
+	if (AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Downed))
+	{
+		return INVTEXT("Downed");
+	}
+	const AShinobiGameState* State = GetWorld() ? GetWorld()->GetGameState<AShinobiGameState>() : nullptr;
+	if (State && State->PvpPhase == EShinobiPvpPhase::Fighting)
+	{
+		return INVTEXT("Round in progress");
+	}
+	return FText::GetEmpty();
+}
+
+bool AShinobiPlayerCharacter::IsSlotLocked(int32 SlotIndex) const
+{
+	const UClass* Jutsu = Loadout.IsValidIndex(SlotIndex) ? Loadout[SlotIndex].Get() : nullptr;
+	const FGameplayAbilitySpec* Spec = Jutsu ? AbilitySystem->FindAbilitySpecFromClass(const_cast<UClass*>(Jutsu)) : nullptr;
+	const UShinobiJutsuAbility* Ability = Spec ? Cast<UShinobiJutsuAbility>(Spec->Ability) : nullptr;
+	return Ability && Ability->IsSlotLocked(*AbilitySystem, *Spec);
+}
+
+TArray<TSubclassOf<UShinobiJutsuAbility>> AShinobiPlayerCharacter::GetKnownJutsu() const
+{
+	TArray<TSubclassOf<UShinobiJutsuAbility>> Known;
+	for (const TSubclassOf<UShinobiGameplayAbility>& AbilityClass : StartupAbilities)
+	{
+		if (AbilityClass && AbilityClass->IsChildOf(UShinobiJutsuAbility::StaticClass()))
 		{
-			SetJutsuPage(Candidate);
-			return true;
+			Known.Add(TSubclassOf<UShinobiJutsuAbility>(AbilityClass.Get()));
 		}
 	}
-	return false;
+	return Known;
 }
 
 bool AShinobiPlayerCharacter::IsCastingJutsu() const
@@ -368,43 +438,14 @@ bool AShinobiPlayerCharacter::CancelJutsuTargetPlacement()
 	return false;
 }
 
-bool AShinobiPlayerCharacter::PageHasJutsu(int32 Page) const
-{
-	for (const TSubclassOf<UShinobiGameplayAbility>& AbilityClass : StartupAbilities)
-	{
-		const UShinobiJutsuAbility* Jutsu = AbilityClass ? Cast<UShinobiJutsuAbility>(AbilityClass->GetDefaultObject()) : nullptr;
-		if (Jutsu && Jutsu->Page == Page)
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
-void AShinobiPlayerCharacter::ServerSetJutsuPage_Implementation(uint8 Page)
-{
-	if (Page < 1 || Page > ShinobiTags::NumJutsuPages)
-	{
-		return; // a client's value: ignore it
-	}
-	if (IsCastingJutsu())
-	{
-		ClientSetJutsuPage(static_cast<uint8>(GetJutsuPage())); // the client switched mid-cast: put it back
-		return;
-	}
-	ApplyJutsuPage(Page);
-}
-
-void AShinobiPlayerCharacter::ClientSetJutsuPage_Implementation(uint8 Page)
-{
-	ApplyJutsuPage(Page);
-}
-
 void AShinobiPlayerCharacter::BeginPlay()
 {
 	ApplyHero();
 	Super::BeginPlay();
-	AbilitySystem->AddLooseGameplayTag(ShinobiTags::JutsuPage(1)); // every machine tracks its own copy
+	if (HasAuthority())
+	{
+		ApplyLoadout(ShinobiLoadout::Default()); // the owner sends its saved one once its input is set up
+	}
 	AbilitySystem->RegisterGameplayTagEvent(ShinobiTags::State_Downed).AddUObject(this, &AShinobiPlayerCharacter::OnDownedTagChanged);
 }
 
@@ -662,11 +703,14 @@ void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 		Input->BindAction(Pair.Value, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::AbilityInputPressed, Pair.Key);
 		Input->BindAction(Pair.Value, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::AbilityInputReleased, Pair.Key);
 	}
-	Input->BindAction(InputConfig.JutsuPageNext, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::CycleJutsuPage, 1);
-	Input->BindAction(InputConfig.JutsuPagePrev, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::CycleJutsuPage, -1);
 	Input->BindAction(InputConfig.LockOn, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::ToggleLockOn);
 	Input->BindAction(InputConfig.JutsuModifier, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::SetJutsuModifier, true);
 	Input->BindAction(InputConfig.JutsuModifier, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::SetJutsuModifier, false);
+
+	if (IsLocallyControlled())
+	{
+		RequestLoadout(ShinobiLoadout::LoadSaved(GetKnownJutsu())); // this machine's saved bar
+	}
 }
 
 void AShinobiPlayerCharacter::Move(const FInputActionValue& Value)
@@ -918,7 +962,7 @@ void AShinobiPlayerCharacter::AbilityInputPressed(EShinobiAbilityInputID InputID
 		return;
 	}
 	bFlightDive |= InputID == EShinobiAbilityInputID::Dodge && AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Mounted); // Control dives
-	if (bJutsuTargetPlacementActive && InputID >= EShinobiAbilityInputID::Jutsu1 && InputID <= EShinobiAbilityInputID::Jutsu4 && !HasAuthority())
+	if (bJutsuTargetPlacementActive && ShinobiLoadout::SlotIndexOf(InputID) != INDEX_NONE && !HasAuthority())
 	{
 		ServerSetJutsuTargetAimDirection(GetJutsuTargetAimDirection());
 	}
@@ -964,9 +1008,7 @@ bool AShinobiPlayerCharacter::RouteTargetPlacementInput(EShinobiAbilityInputID I
 		FScopedAbilityListLock AbilityListLock(*AbilitySystem);
 		for (const FGameplayAbilitySpec& Spec : AbilitySystem->GetActivatableAbilities())
 		{
-			if (Spec.IsActive()
-				&& Spec.InputID >= static_cast<int32>(EShinobiAbilityInputID::Jutsu1)
-				&& Spec.InputID <= static_cast<int32>(EShinobiAbilityInputID::Jutsu4))
+			if (Spec.IsActive() && ShinobiLoadout::SlotIndexOf(static_cast<EShinobiAbilityInputID>(Spec.InputID)) != INDEX_NONE)
 			{
 				PlacementInputID = Spec.InputID;
 				break;

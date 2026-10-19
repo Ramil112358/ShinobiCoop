@@ -22,8 +22,6 @@ namespace
 
 UGA_Kamui::UGA_Kamui()
 {
-	InputID = EShinobiAbilityInputID::Jutsu2;
-	Page = 2;
 	DisplayName = INVTEXT("Kamui");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_Kamui.T_Jutsu_Kamui")));
 	ChakraCost = 30.f;
@@ -50,10 +48,9 @@ void UGA_Kamui::ExecuteJutsu()
 
 UGA_KamuiExit::UGA_KamuiExit()
 {
-	InputID = EShinobiAbilityInputID::Jutsu2;
+	FollowsSlotOf = UGA_Kamui::StaticClass();
 	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerOnly;
 	ActivationRequiredTags.AddTag(ShinobiTags::State_Phased);
-	ActivationRequiredTags.AddTag(ShinobiTags::JutsuPage(2));
 }
 
 void UGA_KamuiExit::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
@@ -67,4 +64,9 @@ void UGA_KamuiExit::ActivateAbility(const FGameplayAbilitySpecHandle Handle, con
 		}
 	}
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+}
+
+bool UGA_Kamui::IsSlotLocked(const UAbilitySystemComponent& ASC, const FGameplayAbilitySpec& Spec) const
+{
+	return Super::IsSlotLocked(ASC, Spec) || ASC.HasMatchingGameplayTag(ShinobiTags::State_Phased); // Kamui exit rides this slot
 }

@@ -33,9 +33,9 @@ public:
 	UFUNCTION(Exec)
 	void ShinobiCastHold(int32 JutsuSlot, float Seconds);
 
-	/** Console: ShinobiPage 1..5 -- switches the jutsu page keys 1-4 fire (same as Q / the wheel; used by the screenshot scripts). */
+	/** Console: ShinobiEquipPage 1..5 -- puts one of the old five jutsu pages into slots 1-4 (used by the screenshot scripts). */
 	UFUNCTION(Exec)
-	void ShinobiPage(int32 Page);
+	void ShinobiEquipPage(int32 Page);
 
 	/** Console: ShinobiDumpStats -- logs every character's attributes (and whether it's burning) as this machine sees them. */
 	UFUNCTION(Exec)

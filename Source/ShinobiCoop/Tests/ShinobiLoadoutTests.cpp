@@ -7,6 +7,7 @@
 #include "Shinobi/Abilities/GA_AlmightyPush.h"
 #include "Shinobi/Abilities/GA_Amaterasu.h"
 #include "Shinobi/Abilities/GA_Chidori.h"
+#include "Shinobi/Abilities/GA_Dragon.h"
 #include "Shinobi/Abilities/GA_Fireball.h"
 #include "Shinobi/Abilities/GA_Kamui.h"
 #include "Shinobi/Abilities/GA_Rasengan.h"
@@ -18,6 +19,14 @@
 namespace
 {
 	using ShinobiLoadout::FSlots;
+
+	int32 InputOf(AShinobiPlayerCharacter* P, TSubclassOf<UGameplayAbility> Ability)
+	{
+		const FGameplayAbilitySpec* Spec = P->GetAbilitySystemComponent()->FindAbilitySpecFromClass(Ability);
+		return Spec ? Spec->InputID : -999;
+	}
+
+	int32 SlotInput(int32 SlotIndex) { return static_cast<int32>(ShinobiLoadout::SlotInputID(SlotIndex)); }
 
 	TArray<TSubclassOf<UShinobiJutsuAbility>> KnownForTests()
 	{
@@ -126,6 +135,119 @@ bool FShinobiLoadoutSaveLoadTest::RunTest(const FString& Parameters)
 	{
 		GConfig->RemoveKey(Section, TEXT("Slots"), GGameUserSettingsIni);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiLoadoutDefaultSlotsFireTest, "ShinobiCoop.Loadout.DefaultSlotsFire", ShinobiTestFlags)
+bool FShinobiLoadoutDefaultSlotsFireTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	TestTrue(TEXT("A new player has the default loadout"), P->GetLoadout() == ShinobiLoadout::Default());
+	TestEqual(TEXT("Fireball fires from slot 1"), InputOf(P, UGA_Fireball::StaticClass()), SlotInput(0));
+	TestEqual(TEXT("Susanoo fires from slot 8"), InputOf(P, UGA_Susanoo::StaticClass()), SlotInput(7));
+	TestEqual(TEXT("Water Dragon is in no slot"), InputOf(P, UGA_WaterDragon::StaticClass()), static_cast<int32>(INDEX_NONE));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiLoadoutUnslottedTest, "ShinobiCoop.Loadout.UnslottedJutsuCannotActivate", ShinobiTestFlags)
+bool FShinobiLoadoutUnslottedTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	UAbilitySystemComponent* ASC = P->GetAbilitySystemComponent();
+	const FGameplayAbilitySpec* Spec = ASC->FindAbilitySpecFromClass(UGA_WaterDragon::StaticClass());
+	if (!TestNotNull(TEXT("Water Dragon is granted"), Spec))
+	{
+		return false;
+	}
+	TestFalse(TEXT("An unslotted jutsu can't be activated, even by handle"), ASC->TryActivateAbility(Spec->Handle));
+	ShinobiTest::Tap(P, ShinobiTest::Equip(P, UGA_WaterDragon::StaticClass(), 2));
+	TestTrue(TEXT("Slotted into 3, key 3 casts it"), ShinobiTest::IsActive(P, UGA_WaterDragon::StaticClass()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiLoadoutFollowUpsTest, "ShinobiCoop.Loadout.FollowUpsTrackTheirParentSlot", ShinobiTestFlags)
+bool FShinobiLoadoutFollowUpsTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	TestEqual(TEXT("Kamui exit starts on Kamui's slot 6"), InputOf(P, UGA_KamuiExit::StaticClass()), SlotInput(5));
+	TestEqual(TEXT("The Teleport jump on Teleport's slot 5"), InputOf(P, UGA_TeleportJump::StaticClass()), SlotInput(4));
+	P->ApplyLoadout(ShinobiLoadout::Swap(P->GetLoadout(), 5, 1));
+	TestEqual(TEXT("Kamui moved to slot 2: so does its exit"), InputOf(P, UGA_KamuiExit::StaticClass()), SlotInput(1));
+	P->ApplyLoadout(ShinobiLoadout::Clear(P->GetLoadout(), 1));
+	TestEqual(TEXT("Kamui unslotted: no key for its exit"), InputOf(P, UGA_KamuiExit::StaticClass()), static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("The dismount key keeps X"), InputOf(P, UGA_DragonDismountKey::StaticClass()), static_cast<int32>(EShinobiAbilityInputID::Dismount));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiLoadoutRestampTest, "ShinobiCoop.Loadout.OnRepRestampsInputIDs", ShinobiTestFlags)
+bool FShinobiLoadoutRestampTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	for (FGameplayAbilitySpec& Spec : P->GetAbilitySystemComponent()->GetActivatableAbilities())
+	{
+		if (Cast<UShinobiJutsuAbility>(Spec.Ability))
+		{
+			Spec.InputID = 42; // stale, as a client's specs can be before the loadout arrives
+		}
+	}
+	P->StampLoadoutInputIDs(); // what OnRep_Loadout runs
+	TestEqual(TEXT("Fireball back on slot 1"), InputOf(P, UGA_Fireball::StaticClass()), SlotInput(0));
+	TestEqual(TEXT("Water Wall back to no slot"), InputOf(P, UGA_WaterWall::StaticClass()), static_cast<int32>(INDEX_NONE));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiLoadoutCooldownLockTest, "ShinobiCoop.Loadout.CooldownLocksSlot", ShinobiTestFlags)
+bool FShinobiLoadoutCooldownLockTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(1.f); // the seals end, the ball flies, the cooldown runs
+	TestTrue(TEXT("Fireball cooling down"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_Fireball));
+	TestTrue(TEXT("Slot 1 locked"), P->IsSlotLocked(0));
+	TestFalse(TEXT("Can't replace a jutsu on cooldown"), P->TryChangeLoadout(ShinobiLoadout::Place(P->GetLoadout(), UGA_WaterWall::StaticClass(), 0)));
+	TestTrue(TEXT("Still Fireball"), P->GetLoadout()[0] == UGA_Fireball::StaticClass());
+	TestTrue(TEXT("Another slot can change"), P->TryChangeLoadout(ShinobiLoadout::Place(P->GetLoadout(), UGA_WaterWall::StaticClass(), 1)));
+	TestTrue(TEXT("Water Wall in slot 2"), P->GetLoadout()[1] == UGA_WaterWall::StaticClass());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiLoadoutMountedLockTest, "ShinobiCoop.Loadout.MountedLocksAll", ShinobiTestFlags)
+bool FShinobiLoadoutMountedLockTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	TestTrue(TEXT("Unlocked on foot"), P->GetLoadoutLockReason().IsEmpty());
+	ShinobiTest::ApplyEffect(P, UGE_Mounted::StaticClass());
+	TestFalse(TEXT("Locked while mounted"), P->GetLoadoutLockReason().IsEmpty());
+	TestFalse(TEXT("No swap while mounted"), P->TryChangeLoadout(ShinobiLoadout::Swap(P->GetLoadout(), 2, 3)));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiLoadoutDragonSlotTest, "ShinobiCoop.Loadout.DragonSlotDismounts", ShinobiTestFlags)
+bool FShinobiLoadoutDragonSlotTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	ShinobiTest::Equip(P, UGA_SummonDragon::StaticClass(), 5);
+	const EShinobiAbilityInputID Crimson = ShinobiTest::Equip(P, UGA_SummonCrimsonDragon::StaticClass(), 6);
+	ShinobiTest::Tap(P, Crimson);
+	W.Tick(1.3f);
+	if (!TestTrue(TEXT("Riding the Crimson Dragon"), ShinobiTest::HasTag(P, ShinobiTags::State_Mounted)))
+	{
+		return false;
+	}
+	ShinobiTest::Tap(P, ShinobiLoadout::SlotInputID(5));
+	TestTrue(TEXT("Tairn's slot does nothing while on the Crimson Dragon"), ShinobiTest::HasTag(P, ShinobiTags::State_Mounted));
+	ShinobiTest::Tap(P, Crimson);
+	TestFalse(TEXT("The Crimson Dragon's slot climbs down"), ShinobiTest::HasTag(P, ShinobiTags::State_Mounted));
 	return true;
 }
 

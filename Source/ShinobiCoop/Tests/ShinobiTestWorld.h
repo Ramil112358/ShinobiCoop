@@ -15,6 +15,8 @@
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
+#include "Shinobi/Abilities/ShinobiLoadout.h"
+#include "Shinobi/ShinobiPlayerCharacter.h"
 
 constexpr EAutomationTestFlags ShinobiTestFlags = EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter;
 
@@ -114,6 +116,19 @@ namespace ShinobiTest
 	inline void Release(AShinobiCharacterBase* Character, EShinobiAbilityInputID InputID)
 	{
 		Character->GetAbilitySystemComponent()->AbilityLocalInputReleased(static_cast<int32>(InputID));
+	}
+
+	/** Puts Jutsu into SlotIndex (no swap rules) and returns that slot's input, for Tap/Press. */
+	inline EShinobiAbilityInputID Equip(AShinobiPlayerCharacter* Player, TSubclassOf<UShinobiJutsuAbility> Jutsu, int32 SlotIndex = 0)
+	{
+		Player->ApplyLoadout(ShinobiLoadout::Place(Player->GetLoadout(), Jutsu, SlotIndex));
+		return ShinobiLoadout::SlotInputID(SlotIndex);
+	}
+
+	/** The pre-loadout page Page into slots 1-4, so "page N, key K" tests keep firing the same jutsu. */
+	inline void EquipPage(AShinobiPlayerCharacter* Player, int32 Page)
+	{
+		Player->ApplyLoadout(ShinobiLoadout::WithLegacyPage(Player->GetLoadout(), Page));
 	}
 
 	/** Press and release (jutsu fire on press). Not named Cast: that would hide UE's Cast<T> inside this namespace. */

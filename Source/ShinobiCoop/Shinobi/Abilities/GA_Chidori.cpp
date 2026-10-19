@@ -8,7 +8,6 @@
 
 UGA_Chidori::UGA_Chidori()
 {
-	InputID = EShinobiAbilityInputID::Jutsu2;
 	DisplayName = INVTEXT("Chidori");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_Chidori.T_Jutsu_Chidori")));
 	ChakraCost = 30.f;

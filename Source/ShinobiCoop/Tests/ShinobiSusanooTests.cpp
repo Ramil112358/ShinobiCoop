@@ -90,7 +90,7 @@ bool FShinobiSusanooCastTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(5);
+	ShinobiTest::EquipPage(P, 5);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	TestEqual(TEXT("Cost 40 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 60.f);
 	TestFalse(TEXT("Not armoured during the seals"), ShinobiTest::HasTag(P, ShinobiTags::State_Susanoo));
@@ -110,7 +110,7 @@ bool FShinobiSusanooPageTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(4); // its old page: key 1 is Summon Pusho now, key 3 Misha
+	ShinobiTest::EquipPage(P, 4); // its old page: key 1 is Summon Pusho now, key 3 Misha
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	TestFalse(TEXT("Not on page 4"), ShinobiTest::IsActive(P, UGA_Susanoo::StaticClass()));

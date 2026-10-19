@@ -40,10 +40,10 @@ bool UShinobiJutsuAbility::CanActivateAbility(const FGameplayAbilitySpecHandle H
 	{
 		return false;
 	}
-	// A player's key fires the current page's jutsu. Enemy specs have no input slot and no page.
+	// A player fires only the jutsu in their loadout slots (the server stamps each slot's InputID). Enemies have no slots.
 	const UAbilitySystemComponent* ASC = ActorInfo ? ActorInfo->AbilitySystemComponent.Get() : nullptr;
 	const FGameplayAbilitySpec* Spec = ASC ? ASC->FindAbilitySpecFromHandle(Handle) : nullptr;
-	return !Spec || Spec->InputID == INDEX_NONE || ASC->HasMatchingGameplayTag(ShinobiTags::JutsuPage(Page));
+	return !Spec || Spec->InputID != INDEX_NONE || !Cast<AShinobiPlayerCharacter>(ActorInfo->AvatarActor.Get());
 }
 
 void UShinobiJutsuAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
@@ -417,6 +417,11 @@ void UShinobiJutsuAbility::ApplyCooldown(const FGameplayAbilitySpecHandle Handle
 	Spec.Data->DynamicGrantedTags.AppendTags(CooldownTags);
 	Spec.Data->SetSetByCallerMagnitude(ShinobiTags::Data_Cooldown, Cooldown);
 	ApplyGameplayEffectSpecToOwner(Handle, ActorInfo, ActivationInfo, Spec);
+}
+
+bool UShinobiJutsuAbility::IsSlotLocked(const UAbilitySystemComponent& ASC, const FGameplayAbilitySpec& Spec) const
+{
+	return Spec.IsActive() || ASC.HasAnyMatchingGameplayTags(CooldownTags);
 }
 
 FShinobiJutsuSlotState UShinobiJutsuAbility::GetSlotState(const UAbilitySystemComponent& ASC) const

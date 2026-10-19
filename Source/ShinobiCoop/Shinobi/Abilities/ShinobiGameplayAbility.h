@@ -41,6 +41,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	EShinobiAbilityInputID InputID = EShinobiAbilityInputID::None;
 
+	/** A second press of another jutsu (Kamui exit, Teleport jump back): this fires from whichever loadout slot holds that jutsu. */
+	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
+	TSubclassOf<UGameplayAbility> FollowsSlotOf;
+
 protected:
 	AShinobiCharacterBase* GetShinobiCharacter() const;
 	UShinobiMovementComponent* GetShinobiMovement() const;

@@ -165,7 +165,7 @@ bool FShinobiSummonCastMishaAndPabuTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(4);
+	ShinobiTest::EquipPage(P, 4);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	TestEqual(TEXT("Misha cost 50"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 50.f);
 	W.Tick(1.2f);
@@ -187,7 +187,7 @@ bool FShinobiSummonCastPushoTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(4);
+	ShinobiTest::EquipPage(P, 4);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
 	TestEqual(TEXT("Pusho costs 45"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 55.f);
 	W.Tick(1.2f);
@@ -207,7 +207,7 @@ bool FShinobiSummonPageTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(2);
+	ShinobiTest::EquipPage(P, 2);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1); // other jutsu live on these keys here: they may run, the summons must not
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
@@ -464,7 +464,7 @@ bool FShinobiSummonWallTest::RunTest(const FString& Parameters)
 
 	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(Caster);
-	Caster->ApplyJutsuPage(4);
+	ShinobiTest::EquipPage(Caster, 4);
 	ShinobiTest::Tap(Caster, EShinobiAbilityInputID::Jutsu3);
 	W.Tick(1.2f);
 	AShinobiSummon* Misha = nullptr;
@@ -741,7 +741,7 @@ bool FShinobiOwlCastTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(4);
+	ShinobiTest::EquipPage(P, 4);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
 	TestEqual(TEXT("Cost 60 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 40.f);
 	TestEqual(TEXT("No owl during the seals"), ShinobiTest::CountActors<AShinobiOwl>(W), 0);

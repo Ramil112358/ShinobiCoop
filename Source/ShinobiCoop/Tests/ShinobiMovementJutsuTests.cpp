@@ -29,51 +29,14 @@
 #include "Shinobi/VFX/ShinobiBurst.h"
 #include "Shinobi/VFX/ShinobiPhaseFxComponent.h"
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOffPageJutsuTest, "ShinobiCoop.JutsuPages.OffPageJutsuDoesNotFire", ShinobiTestFlags)
-bool FShinobiOffPageJutsuTest::RunTest(const FString& Parameters)
-{
-	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
-	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
-
-	TestTrue(TEXT("Starts on page 1"), ShinobiTest::HasTag(P, ShinobiTags::JutsuPage(1)));
-	P->ApplyJutsuPage(5); // key 4 is empty there (the two dragons live on keys 1 and 2, Susanoo on 3)
-	TestFalse(TEXT("Page 1 tag removed"), ShinobiTest::HasTag(P, ShinobiTags::JutsuPage(1)));
-	TestEqual(TEXT("On page 5"), P->GetJutsuPage(), 5);
-
-	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
-	TestFalse(TEXT("Amaterasu is on page 1: key 4 does nothing on page 5"), ShinobiTest::IsActive(P, UGA_Amaterasu::StaticClass()));
-	TestEqual(TEXT("Nothing spent"), ShinobiTest::Get(P, Chakra), 100.f);
-
-	P->ApplyJutsuPage(1);
-	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
-	TestTrue(TEXT("Back on page 1 the Rasengan fires"), ShinobiTest::IsActive(P, UGA_Rasengan::StaticClass()));
-	TestEqual(TEXT("Cost paid"), ShinobiTest::Get(P, Chakra), 65.f);
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiEnemyJutsuIgnoresPagesTest, "ShinobiCoop.JutsuPages.EnemyJutsuIgnoresPages", ShinobiTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiEnemyJutsuIgnoresPagesTest, "ShinobiCoop.Loadout.EnemyJutsuNeedsNoSlot", ShinobiTestFlags)
 bool FShinobiEnemyJutsuIgnoresPagesTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
 	AShinobiCharacterBase* Enemy = W.Spawn<AShinobiCharacterBase>();
 	UAbilitySystemComponent* ASC = Enemy->GetAbilitySystemComponent();
 	ASC->GiveAbility(FGameplayAbilitySpec(UGA_EnemyFireball::StaticClass(), 1, INDEX_NONE));
-	TestTrue(TEXT("An enemy has no page tag and still casts"), ASC->TryActivateAbilityByClass(UGA_EnemyFireball::StaticClass()));
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiServerRejectsPageTest, "ShinobiCoop.JutsuPages.ServerRejectsOutOfRangePage", ShinobiTestFlags)
-bool FShinobiServerRejectsPageTest::RunTest(const FString& Parameters)
-{
-	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
-	P->ServerSetJutsuPage_Implementation(9);
-	TestEqual(TEXT("A client's out-of-range page is ignored"), P->GetJutsuPage(), 1);
-	P->ServerSetJutsuPage_Implementation(0);
-	TestEqual(TEXT("Page 0 is ignored too"), P->GetJutsuPage(), 1);
-	P->ServerSetJutsuPage_Implementation(3);
-	TestEqual(TEXT("A valid page is taken"), P->GetJutsuPage(), 3);
+	TestTrue(TEXT("An enemy has no loadout slot and still casts"), ASC->TryActivateAbilityByClass(UGA_EnemyFireball::StaticClass()));
 	return true;
 }
 
@@ -242,7 +205,7 @@ bool FShinobiEarthWallCastTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(2);
+	ShinobiTest::EquipPage(P, 2);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
 	TestEqual(TEXT("Cost 35 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 65.f);
 	W.Tick(0.9f);
@@ -264,7 +227,7 @@ bool FShinobiWaterWallCastTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(3);
+	ShinobiTest::EquipPage(P, 3);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
 	TestEqual(TEXT("Cost 25 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 75.f);
 	W.Tick(0.8f);
@@ -276,31 +239,6 @@ bool FShinobiWaterWallCastTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("250 HP"), Wall->GetHealth(), 250.f);
 	}
 	TestTrue(TEXT("Cooldown running"), ShinobiTest::HasTag(P, ShinobiTags::Cooldown_Jutsu_WaterWall));
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPageCycleTest, "ShinobiCoop.JutsuPages.CycleSkipsEmptyAndBlocksWhileCasting", ShinobiTestFlags)
-bool FShinobiPageCycleTest::RunTest(const FString& Parameters)
-{
-	FShinobiTestWorld W;
-	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
-	TestTrue(TEXT("Forward from 1"), P->TryCycleJutsuPage(1));
-	TestEqual(TEXT("to 2"), P->GetJutsuPage(), 2);
-	TestTrue(TEXT("Forward from 2"), P->TryCycleJutsuPage(1));
-	TestEqual(TEXT("to 3"), P->GetJutsuPage(), 3);
-	TestTrue(TEXT("Forward from 3"), P->TryCycleJutsuPage(1));
-	TestEqual(TEXT("to 4 (the summons)"), P->GetJutsuPage(), 4);
-	TestTrue(TEXT("Forward from 4"), P->TryCycleJutsuPage(1));
-	TestEqual(TEXT("to 5 (the dragons and Susanoo)"), P->GetJutsuPage(), 5);
-	TestTrue(TEXT("Forward from 5"), P->TryCycleJutsuPage(1));
-	TestEqual(TEXT("wraps to 1"), P->GetJutsuPage(), 1);
-	TestTrue(TEXT("Back from 1"), P->TryCycleJutsuPage(-1));
-	TestEqual(TEXT("wraps to 5"), P->GetJutsuPage(), 5);
-
-	P->ApplyJutsuPage(2);
-	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
-	TestFalse(TEXT("No page switch mid-cast"), P->TryCycleJutsuPage(1));
-	TestEqual(TEXT("still page 2"), P->GetJutsuPage(), 2);
 	return true;
 }
 
@@ -318,7 +256,7 @@ bool FShinobiPushTest::RunTest(const FString& Parameters)
 	}
 	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
 
-	P->ApplyJutsuPage(2);
+	ShinobiTest::EquipPage(P, 2);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	TestEqual(TEXT("Cost 30 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 70.f);
 	W.Tick(0.9f);
@@ -391,7 +329,7 @@ bool FShinobiKamuiCastTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(2);
+	ShinobiTest::EquipPage(P, 2);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
 	TestEqual(TEXT("Cost 30 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 70.f);
 	W.Tick(0.6f);
@@ -458,7 +396,7 @@ bool FShinobiTeleportThrowTest::RunTest(const FString& Parameters)
 	SpawnWallBlock(W, FVector(1600.f, 0.f, 0.f), FVector(1.f, 30.f, 30.f));
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(2);
+	ShinobiTest::EquipPage(P, 2);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
 	TestEqual(TEXT("Cost 25 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 75.f);
 	W.Tick(1.2f);
@@ -474,7 +412,7 @@ bool FShinobiTeleportThrowTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiNewJutsuAssetsTest, "ShinobiCoop.JutsuPages.NewJutsuHaveAnimationsAndIcons", ShinobiTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiNewJutsuAssetsTest, "ShinobiCoop.Jutsu.NewJutsuHaveAnimationsAndIcons", ShinobiTestFlags)
 bool FShinobiNewJutsuAssetsTest::RunTest(const FString& Parameters)
 {
 	// (run Scripts/setup_jutsu_anims.py and Scripts/setup_hud.py if an asset is missing)
@@ -522,7 +460,7 @@ bool FShinobiTeleportJumpTest::RunTest(const FString& Parameters)
 	SpawnWallBlock(W, FVector(1600.f, 0.f, 0.f), FVector(1.f, 30.f, 30.f));
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(2);
+	ShinobiTest::EquipPage(P, 2);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
 	W.Tick(1.5f);
 
@@ -553,7 +491,7 @@ bool FShinobiTeleportStrikeTest::RunTest(const FString& Parameters)
 	AShinobiCharacterBase* E = W.Spawn<AShinobiCharacterBase>(FVector(1400.f, 0.f, 0.f));
 	ShinobiTest::Hover(P);
 	ShinobiTest::Hover(E);
-	P->ApplyJutsuPage(2);
+	ShinobiTest::EquipPage(P, 2);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
 	W.Tick(1.5f);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1); // aimed along +X: the middle kunai, 100 from the enemy
@@ -570,7 +508,7 @@ bool FShinobiTeleportBlockedTest::RunTest(const FString& Parameters)
 	SpawnWallBlock(W, FVector(1600.f, 0.f, 0.f), FVector(1.f, 30.f, 30.f));
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(2);
+	ShinobiTest::EquipPage(P, 2);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
 	W.Tick(1.5f);
 	// Something solid fills the spot beside the wall where the middle kunai (the one under the crosshair) would put them.
@@ -590,7 +528,7 @@ bool FShinobiTeleportExpiryTest::RunTest(const FString& Parameters)
 	SpawnWallBlock(W, FVector(1600.f, 0.f, 0.f), FVector(1.f, 30.f, 30.f));
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(2);
+	ShinobiTest::EquipPage(P, 2);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
 	W.Tick(1.5f);
 	W.Tick(5.2f); // 6.7 s after the cast, the window is long shut
@@ -610,7 +548,7 @@ bool FShinobiTeleportSkyTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W; // no wall: the kunai never stick
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(2);
+	ShinobiTest::EquipPage(P, 2);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
 	W.Tick(1.5f);
 	TestEqual(TEXT("The unstuck kunai are gone"), ShinobiTest::CountActors<AShinobiMarkerKunai>(W), 0);
@@ -632,8 +570,8 @@ bool FShinobiTeleportForeignTest::RunTest(const FString& Parameters)
 	AShinobiPlayerCharacter* P2 = W.Spawn<AShinobiPlayerCharacter>(FVector(0.f, 2000.f, 0.f));
 	ShinobiTest::Hover(P1);
 	ShinobiTest::Hover(P2);
-	P1->ApplyJutsuPage(2);
-	P2->ApplyJutsuPage(2);
+	ShinobiTest::EquipPage(P1, 2);
+	ShinobiTest::EquipPage(P2, 2);
 	ShinobiTest::Tap(P2, EShinobiAbilityInputID::Jutsu1);
 	W.Tick(1.5f);
 	TestEqual(TEXT("P2's three kunai stand"), ShinobiTest::CountActors<AShinobiMarkerKunai>(W), 3);

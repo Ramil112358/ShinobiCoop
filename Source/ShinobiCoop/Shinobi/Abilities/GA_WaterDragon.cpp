@@ -5,8 +5,6 @@
 
 UGA_WaterDragon::UGA_WaterDragon()
 {
-	InputID = EShinobiAbilityInputID::Jutsu2;
-	Page = 3;
 	DisplayName = INVTEXT("Water Dragon");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_WaterDragon.T_Jutsu_WaterDragon")));
 	ChakraCost = 40.f;

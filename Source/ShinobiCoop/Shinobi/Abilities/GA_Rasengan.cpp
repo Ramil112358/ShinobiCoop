@@ -8,7 +8,6 @@
 
 UGA_Rasengan::UGA_Rasengan()
 {
-	InputID = EShinobiAbilityInputID::Jutsu3;
 	DisplayName = INVTEXT("Rasengan");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_Rasengan.T_Jutsu_Rasengan")));
 	ChakraCost = 35.f;

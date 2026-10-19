@@ -51,16 +51,6 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Shield);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Blocking); // holding a guard (UGA_Block): hits cost stamina instead of most of their damage
 
-	// Jutsu pages: exactly one is on a player's ability system (loose tag, set per machine); keys 1-4 fire that page's jutsu.
-	constexpr int32 NumJutsuPages = 5;
-	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_JutsuPage_1);
-	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_JutsuPage_2);
-	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_JutsuPage_3);
-	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_JutsuPage_4);
-	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_JutsuPage_5);
-	/** The tag for Page (1..NumJutsuPages; clamped). */
-	SHINOBICOOP_API FGameplayTag JutsuPage(int32 Page);
-
 	// Ability identity (asset tags)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Melee);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Ability_Dodge);

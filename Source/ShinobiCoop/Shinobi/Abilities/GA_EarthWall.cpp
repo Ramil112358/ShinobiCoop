@@ -5,8 +5,6 @@
 
 UGA_EarthWall::UGA_EarthWall()
 {
-	InputID = EShinobiAbilityInputID::Jutsu4;
-	Page = 2;
 	DisplayName = INVTEXT("Earth Wall");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_EarthWall.T_Jutsu_EarthWall")));
 	ChakraCost = 35.f;
