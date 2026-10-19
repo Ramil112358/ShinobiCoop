@@ -133,6 +133,15 @@ void AShinobiPlayerController::OnMapZoom(const FInputActionValue& Value)
 	}
 }
 
+bool AShinobiPlayerController::InputKey(const FInputKeyEventArgs& Params)
+{
+	if (Params.Event == IE_Pressed)
+	{
+		bUsingGamepad = Params.Key.IsGamepadKey();
+	}
+	return Super::InputKey(Params);
+}
+
 void AShinobiPlayerController::ToggleSkillsScreen()
 {
 }

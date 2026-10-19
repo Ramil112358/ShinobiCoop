@@ -57,6 +57,9 @@ public:
 	/** Local: open or close the big map (M / View). */
 	void ToggleMap();
 
+	/** Local: the last button pressed was a gamepad's (the HUD shows A/B/X/Y labels and the pad page). */
+	bool IsUsingGamepad() const { return bUsingGamepad; }
+
 	/** Local: open or close the Skills screen (K, or the pause menu's Jutsu entry). */
 	void ToggleSkillsScreen();
 
@@ -69,6 +72,8 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
+	/** Notes whether the last button came from a gamepad (IsUsingGamepad). */
+	virtual bool InputKey(const FInputKeyEventArgs& Params) override;
 	void OnMapZoom(const FInputActionValue& Value);
 	/** Server: the new pawn plays the character this player picked (so the pick survives respawns). */
 	virtual void OnPossess(APawn* InPawn) override;
@@ -76,6 +81,8 @@ protected:
 	virtual void AcknowledgePossession(APawn* P) override;
 
 private:
+	bool bUsingGamepad = false;
+
 	UFUNCTION(Server, Reliable)
 	void ServerDamageSelf(float Amount);
 
