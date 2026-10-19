@@ -57,6 +57,9 @@ public:
 	/** Local: open or close the big map (M / View). */
 	void ToggleMap();
 
+	/** Local: open or close the Skills screen (K, or the pause menu's Jutsu entry). */
+	void ToggleSkillsScreen();
+
 	bool IsBigMapOpen() const;
 
 	/** Local: zoom the big map while it is open, else the minimap. Steps > 0 zooms in; with bWrap, past the closest

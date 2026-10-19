@@ -58,7 +58,7 @@ public:
 	UPROPERTY()
 	TObjectPtr<UInputAction> Pause;
 
-	/** Q (RB + D-pad right): next jutsu page. */
+	/** RB + D-pad right / left: the pad's jutsu page (slots 1-4 or 5-8). */
 	UPROPERTY()
 	TObjectPtr<UInputAction> JutsuPageNext;
 
@@ -77,9 +77,21 @@ public:
 	UPROPERTY()
 	TObjectPtr<UInputAction> MapZoom;
 
-	/** Gamepad A/B/X/Y -> Jutsu 1-4. Only active while RB is held. */
+	/** Gamepad A/B/X/Y -> PadJutsuActions. Only active while RB is held. */
 	UPROPERTY()
 	TObjectPtr<UInputMappingContext> JutsuContext;
+
+	/** RB + A/B/X/Y: the current pad page's four slots (AShinobiPlayerCharacter::PadJutsuPressed). */
+	UPROPERTY()
+	TArray<TObjectPtr<UInputAction>> PadJutsuActions;
+
+	/** Left/Right Alt: the chord for Alt + key bindings. */
+	UPROPERTY()
+	TObjectPtr<UInputAction> AltModifier;
+
+	/** K: the Skills screen (bound by AShinobiPlayerController). */
+	UPROPERTY()
+	TObjectPtr<UInputAction> SkillsScreen;
 
 	UPROPERTY()
 	TMap<EShinobiAbilityInputID, TObjectPtr<UInputAction>> AbilityActions;

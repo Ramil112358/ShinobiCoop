@@ -435,6 +435,33 @@ TArray<TSubclassOf<UShinobiJutsuAbility>> AShinobiPlayerCharacter::GetKnownJutsu
 	return Known;
 }
 
+void AShinobiPlayerCharacter::FlipPadJutsuPage(int32 Direction)
+{
+	constexpr int32 PadPages = ShinobiLoadout::NumSlots / 4;
+	PadJutsuPage = ((PadJutsuPage - 1 + Direction) % PadPages + PadPages) % PadPages + 1;
+}
+
+void AShinobiPlayerCharacter::PadJutsuPressed(int32 Face)
+{
+	if (Face < 0 || Face >= 4)
+	{
+		return;
+	}
+	PadPressedSlot[Face] = (PadJutsuPage - 1) * 4 + Face;
+	AbilityInputPressed(ShinobiLoadout::SlotInputID(PadPressedSlot[Face]));
+}
+
+void AShinobiPlayerCharacter::PadJutsuReleased(int32 Face)
+{
+	if (Face < 0 || Face >= 4 || PadPressedSlot[Face] == INDEX_NONE)
+	{
+		return;
+	}
+	const int32 Slot = PadPressedSlot[Face]; // a page flip mid-hold must not release another slot (charged jutsu)
+	PadPressedSlot[Face] = INDEX_NONE;
+	AbilityInputReleased(ShinobiLoadout::SlotInputID(Slot));
+}
+
 bool AShinobiPlayerCharacter::IsCastingJutsu() const
 {
 	for (const FGameplayAbilitySpec& Spec : AbilitySystem->GetActivatableAbilities())
@@ -728,6 +755,13 @@ void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 		Input->BindAction(Pair.Value, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::AbilityInputPressed, Pair.Key);
 		Input->BindAction(Pair.Value, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::AbilityInputReleased, Pair.Key);
 	}
+	for (int32 Face = 0; Face < InputConfig.PadJutsuActions.Num(); ++Face)
+	{
+		Input->BindAction(InputConfig.PadJutsuActions[Face], ETriggerEvent::Started, this, &AShinobiPlayerCharacter::PadJutsuPressed, Face);
+		Input->BindAction(InputConfig.PadJutsuActions[Face], ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::PadJutsuReleased, Face);
+	}
+	Input->BindAction(InputConfig.JutsuPageNext, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::FlipPadJutsuPage, 1);
+	Input->BindAction(InputConfig.JutsuPagePrev, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::FlipPadJutsuPage, -1);
 	Input->BindAction(InputConfig.LockOn, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::ToggleLockOn);
 	Input->BindAction(InputConfig.JutsuModifier, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::SetJutsuModifier, true);
 	Input->BindAction(InputConfig.JutsuModifier, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::SetJutsuModifier, false);

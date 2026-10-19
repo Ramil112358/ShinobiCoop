@@ -2,6 +2,7 @@
 #include "InputAction.h"
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
+#include "Shinobi/Abilities/ShinobiLoadout.h"
 
 namespace
 {
@@ -96,26 +97,37 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 	Ctx->MapKey(Config->Pause, EKeys::Escape);
 	Ctx->MapKey(Config->Pause, EKeys::Gamepad_Special_Right);
 
-	// Jutsu 1-4: number keys here; the gamepad face buttons live in JutsuContext, which the player adds while RB is held.
+	// Jutsu slots 1-8: one keyboard key each here. The pad reaches the current pad page's four through PadJutsuActions,
+	// face buttons in JutsuContext, which the player adds while RB is held.
 	Config->JutsuModifier = MakeAction(Config, TEXT("IA_JutsuModifier"), EInputActionValueType::Boolean);
 	Ctx->MapKey(Config->JutsuModifier, EKeys::Gamepad_RightShoulder);
 	UInputMappingContext* JutsuCtx = NewObject<UInputMappingContext>(Config, TEXT("IMC_ShinobiJutsu"));
 	Config->JutsuContext = JutsuCtx;
-	const auto AddJutsu = [Config, Ctx, JutsuCtx](EShinobiAbilityInputID ID, FName Name, const FKey& Key, const FKey& PadKey)
+	const FKey SlotKeys[ShinobiLoadout::NumSlots] = { EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::R, EKeys::T, EKeys::G, EKeys::CapsLock };
+	for (int32 Slot = 0; Slot < ShinobiLoadout::NumSlots; ++Slot)
 	{
-		UInputAction* Action = MakeAction(Config, Name, EInputActionValueType::Boolean);
-		Ctx->MapKey(Action, Key);
-		JutsuCtx->MapKey(Action, PadKey);
-		Config->AbilityActions.Add(ID, Action);
-	};
-	AddJutsu(EShinobiAbilityInputID::Jutsu1, TEXT("IA_Jutsu1"), EKeys::One, EKeys::Gamepad_FaceButton_Bottom);
-	AddJutsu(EShinobiAbilityInputID::Jutsu2, TEXT("IA_Jutsu2"), EKeys::Two, EKeys::Gamepad_FaceButton_Right);
-	AddJutsu(EShinobiAbilityInputID::Jutsu3, TEXT("IA_Jutsu3"), EKeys::Three, EKeys::Gamepad_FaceButton_Left);
-	AddJutsu(EShinobiAbilityInputID::Jutsu4, TEXT("IA_Jutsu4"), EKeys::Four, EKeys::Gamepad_FaceButton_Top);
+		UInputAction* Action = MakeAction(Config, *FString::Printf(TEXT("IA_Jutsu%d"), Slot + 1), EInputActionValueType::Boolean);
+		Ctx->MapKey(Action, SlotKeys[Slot]);
+		Config->AbilityActions.Add(ShinobiLoadout::SlotInputID(Slot), Action);
+	}
+	const FKey FaceKeys[] = { EKeys::Gamepad_FaceButton_Bottom, EKeys::Gamepad_FaceButton_Right, EKeys::Gamepad_FaceButton_Left, EKeys::Gamepad_FaceButton_Top };
+	for (int32 Face = 0; Face < UE_ARRAY_COUNT(FaceKeys); ++Face)
+	{
+		UInputAction* Action = MakeAction(Config, *FString::Printf(TEXT("IA_PadJutsu%d"), Face + 1), EInputActionValueType::Boolean);
+		JutsuCtx->MapKey(Action, FaceKeys[Face]);
+		Config->PadJutsuActions.Add(Action);
+	}
 
-	// Jutsu pages: Q on the keyboard, the D-pad while RB is held.
+	// Alt + key bindings chord on this (ShinobiKeyBindings).
+	Config->AltModifier = MakeAction(Config, TEXT("IA_AltModifier"), EInputActionValueType::Boolean);
+	Ctx->MapKey(Config->AltModifier, EKeys::LeftAlt);
+	Ctx->MapKey(Config->AltModifier, EKeys::RightAlt);
+
+	Config->SkillsScreen = MakeAction(Config, TEXT("IA_SkillsScreen"), EInputActionValueType::Boolean);
+	Ctx->MapKey(Config->SkillsScreen, EKeys::K);
+
+	// Pad jutsu pages (slots 1-4 / 5-8): the D-pad while RB is held. The keyboard has a key per slot.
 	Config->JutsuPageNext = MakeAction(Config, TEXT("IA_JutsuPageNext"), EInputActionValueType::Boolean);
-	Ctx->MapKey(Config->JutsuPageNext, EKeys::Q);
 	JutsuCtx->MapKey(Config->JutsuPageNext, EKeys::Gamepad_DPad_Right);
 	Config->JutsuPagePrev = MakeAction(Config, TEXT("IA_JutsuPagePrev"), EInputActionValueType::Boolean);
 	JutsuCtx->MapKey(Config->JutsuPagePrev, EKeys::Gamepad_DPad_Left);

@@ -98,6 +98,7 @@ void AShinobiPlayerController::SetupInputComponent()
 	{
 		Input->BindAction(UShinobiInputConfig::Get().Pause, ETriggerEvent::Started, this, &AShinobiPlayerController::TogglePauseMenu);
 		Input->BindAction(UShinobiInputConfig::Get().MapToggle, ETriggerEvent::Started, this, &AShinobiPlayerController::ToggleMap);
+		Input->BindAction(UShinobiInputConfig::Get().SkillsScreen, ETriggerEvent::Started, this, &AShinobiPlayerController::ToggleSkillsScreen);
 		Input->BindAction(UShinobiInputConfig::Get().MapZoom, ETriggerEvent::Started, this, &AShinobiPlayerController::OnMapZoom);
 	}
 }
@@ -130,6 +131,10 @@ void AShinobiPlayerController::OnMapZoom(const FInputActionValue& Value)
 	{
 		ZoomMap(Axis > 0.f ? 1 : -1, true);
 	}
+}
+
+void AShinobiPlayerController::ToggleSkillsScreen()
+{
 }
 
 void AShinobiPlayerController::TogglePauseMenu()

@@ -163,6 +163,15 @@ public:
 	/** Every jutsu this player has been granted, in grant order: the Skills screen's pool. */
 	TArray<TSubclassOf<UShinobiJutsuAbility>> GetKnownJutsu() const;
 
+	/** The pad's jutsu page: 1 = slots 1-4 on RB + A/B/X/Y, 2 = slots 5-8. Local presentation only; nothing to replicate. */
+	int32 GetPadJutsuPage() const { return PadJutsuPage; }
+	void FlipPadJutsuPage(int32 Direction);
+	/** RB + face Face (0 A, 1 B, 2 X, 3 Y): the slot on the current pad page. The release goes to the slot the press used. */
+	void PadJutsuPressed(int32 Face);
+	void PadJutsuReleased(int32 Face);
+	/** The slot Face is holding down, or INDEX_NONE. */
+	int32 GetPadPressedSlot(int32 Face) const { return Face >= 0 && Face < 4 ? PadPressedSlot[Face] : INDEX_NONE; }
+
 	bool IsCastingJutsu() const;
 	/** Cancels a local jutsu ground-target preview; false when no target placement is active. */
 	bool CancelJutsuTargetPlacement();
@@ -218,6 +227,8 @@ private:
 	bool bCameraFreeLookActive = false;
 	bool bHasServerJutsuAimDirection = false;
 	int32 TargetPlacementInputID = INDEX_NONE;
+	int32 PadJutsuPage = 1;
+	int32 PadPressedSlot[4] = { INDEX_NONE, INDEX_NONE, INDEX_NONE, INDEX_NONE };
 	FVector2D JutsuTargetScreenPosition = FVector2D(0.5f, 0.5f);
 	FVector ServerJutsuAimDirection = FVector::ForwardVector;
 	FRotator CameraFreeLookRotation = FRotator::ZeroRotator;

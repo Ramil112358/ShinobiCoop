@@ -2,6 +2,8 @@
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
 #include "Shinobi/ShinobiInputConfig.h"
+#include "Shinobi/Abilities/GA_Fireball.h"
+#include "Shinobi/Abilities/GA_Susanoo.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -71,20 +73,34 @@ bool FShinobiInputMappingsTest::RunTest(const FString& Parameters)
 	int32 JutsuActions = 0;
 	for (const TPair<EShinobiAbilityInputID, TObjectPtr<UInputAction>>& Pair : Config->AbilityActions)
 	{
-		// Jutsu: a number key in IMC_Shinobi, a face button in IMC_ShinobiJutsu (active only while RB is held).
+		// Jutsu slots: one keyboard key in IMC_Shinobi; the pad reaches them through PadJutsuActions instead.
 		// Everything else: keyboard + gamepad in IMC_Shinobi.
-		const bool bJutsu = Pair.Key >= EShinobiAbilityInputID::Jutsu1 && Pair.Key <= EShinobiAbilityInputID::Jutsu4;
+		const bool bJutsu = ShinobiLoadout::SlotIndexOf(Pair.Key) != INDEX_NONE;
 		JutsuActions += bJutsu ? 1 : 0;
 		const int32 ID = static_cast<int32>(Pair.Key);
 		TestEqual(*FString::Printf(TEXT("Ability input %d: keys in IMC_Shinobi"), ID), CountFor(Mappings, Pair.Value), bJutsu ? 1 : 2);
-		TestEqual(*FString::Printf(TEXT("Ability input %d: keys in IMC_ShinobiJutsu"), ID), CountFor(JutsuMappings, Pair.Value), bJutsu ? 1 : 0);
+		TestEqual(*FString::Printf(TEXT("Ability input %d: keys in IMC_ShinobiJutsu"), ID), CountFor(JutsuMappings, Pair.Value), 0);
 	}
-	TestEqual(TEXT("Four jutsu actions"), JutsuActions, 4);
+	TestEqual(TEXT("Eight jutsu slot actions"), JutsuActions, 8);
 	TestNotNull(TEXT("RB holds the jutsu modifier"), FindMapping(Mappings, Config->JutsuModifier, EKeys::Gamepad_RightShoulder));
-	TestNotNull(TEXT("Key 1 casts jutsu 1"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Jutsu1], EKeys::One));
-	TestNotNull(TEXT("Key 4 casts jutsu 4"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Jutsu4], EKeys::Four));
-	TestNotNull(TEXT("RB + A casts jutsu 1"), FindMapping(JutsuMappings, Config->AbilityActions[EShinobiAbilityInputID::Jutsu1], EKeys::Gamepad_FaceButton_Bottom));
-	TestNotNull(TEXT("RB + Y casts jutsu 4"), FindMapping(JutsuMappings, Config->AbilityActions[EShinobiAbilityInputID::Jutsu4], EKeys::Gamepad_FaceButton_Top));
+	const FKey SlotKeys[] = { EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::R, EKeys::T, EKeys::G, EKeys::CapsLock };
+	for (int32 Slot = 0; Slot < ShinobiLoadout::NumSlots; ++Slot)
+	{
+		TestNotNull(*FString::Printf(TEXT("Slot %d on %s"), Slot + 1, *SlotKeys[Slot].ToString()),
+			FindMapping(Mappings, Config->AbilityActions[ShinobiLoadout::SlotInputID(Slot)], SlotKeys[Slot]));
+	}
+	const FKey FaceKeys[] = { EKeys::Gamepad_FaceButton_Bottom, EKeys::Gamepad_FaceButton_Right, EKeys::Gamepad_FaceButton_Left, EKeys::Gamepad_FaceButton_Top };
+	if (TestEqual(TEXT("Four pad jutsu actions"), Config->PadJutsuActions.Num(), 4))
+	{
+		for (int32 Face = 0; Face < 4; ++Face)
+		{
+			TestNotNull(*FString::Printf(TEXT("RB + face %d"), Face), FindMapping(JutsuMappings, Config->PadJutsuActions[Face], FaceKeys[Face]));
+		}
+	}
+	TestNull(TEXT("Q no longer pages"), FindMapping(Mappings, Config->JutsuPageNext, EKeys::Q));
+	TestNotNull(TEXT("K opens the Skills screen"), FindMapping(Mappings, Config->SkillsScreen, EKeys::K));
+	TestNotNull(TEXT("Left Alt is the modifier"), FindMapping(Mappings, Config->AltModifier, EKeys::LeftAlt));
+	TestNotNull(TEXT("Right Alt is the modifier"), FindMapping(Mappings, Config->AltModifier, EKeys::RightAlt));
 	TestNotNull(TEXT("E revives"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Revive], EKeys::E));
 	TestNotNull(TEXT("F guards"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Block], EKeys::F));
 	TestNotNull(TEXT("LT guards"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Block], EKeys::Gamepad_LeftTrigger));
@@ -109,6 +125,43 @@ bool FShinobiInputMappingsTest::RunTest(const FString& Parameters)
 			RightStick->Modifiers.Num() > 0 && RightStick->Modifiers[0]->IsA<UInputModifierDeadZone>());
 	}
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPadPagesTest, "ShinobiCoop.Input.PadPagesReachAllSlots", ShinobiTestFlags)
+bool FShinobiPadPagesTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	ShinobiTest::Hover(P);
+	TestEqual(TEXT("Pad page 1 to start"), P->GetPadJutsuPage(), 1);
+	P->PadJutsuPressed(0);
+	P->PadJutsuReleased(0);
+	TestTrue(TEXT("Page 1, A: slot 1 (Fireball)"), ShinobiTest::IsActive(P, UGA_Fireball::StaticClass()));
+	W.Tick(1.f);
+	P->FlipPadJutsuPage(1);
+	TestEqual(TEXT("Flipped to page 2"), P->GetPadJutsuPage(), 2);
+	P->PadJutsuPressed(3);
+	P->PadJutsuReleased(3);
+	TestTrue(TEXT("Page 2, Y: slot 8 (Susanoo)"), ShinobiTest::IsActive(P, UGA_Susanoo::StaticClass()));
+	P->FlipPadJutsuPage(1);
+	TestEqual(TEXT("Wraps back to page 1"), P->GetPadJutsuPage(), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPadReleaseTest, "ShinobiCoop.Input.PadReleaseUsesPressedSlot", ShinobiTestFlags)
+bool FShinobiPadReleaseTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	TestEqual(TEXT("Nothing held"), P->GetPadPressedSlot(0), static_cast<int32>(INDEX_NONE));
+	P->PadJutsuPressed(0);
+	P->FlipPadJutsuPage(1);
+	TestEqual(TEXT("A still holds slot 1 after the flip"), P->GetPadPressedSlot(0), 0);
+	P->PadJutsuReleased(0);
+	TestEqual(TEXT("Released"), P->GetPadPressedSlot(0), static_cast<int32>(INDEX_NONE));
+	P->PadJutsuPressed(0);
+	TestEqual(TEXT("On page 2, A holds slot 5"), P->GetPadPressedSlot(0), 4);
 	return true;
 }
 
