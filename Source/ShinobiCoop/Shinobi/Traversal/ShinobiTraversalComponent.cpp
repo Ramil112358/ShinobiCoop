@@ -9,6 +9,7 @@
 #include "GameFramework/Character.h"
 #include "MotionWarpingComponent.h"
 #include "Shinobi/Hero/ShinobiBlueprintStruct.h"
+#include "Shinobi/Hero/ShinobiLocomotionAnimInstance.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "StructUtils/InstancedStruct.h"
 #include "TimerManager.h"
@@ -52,6 +53,26 @@ namespace
 		TArray<FMotionWarpingWindowData> Windows;
 		UMotionWarpingUtilities::GetMotionWarpingWindowsForWarpTargetFromAnimation(Montage, Target, Windows);
 		return Windows.Num() > 0;
+	}
+
+	/** Without the sample's AnimBP (Shinobi.MotionMatching 0) its chooser has no pose history to match: the chooser's
+	 * height/depth bands pick the action, speed the stand/walk/run take. ponytail: no pose matching, always from the start. */
+	UAnimMontage* PickByRules(float Height, float Depth, float BackLedgeHeight, bool bHasBackLedge, bool bHasBackFloor, float Speed, FString& OutAction)
+	{
+		if (Height < 50.f || Height > 275.f)
+		{
+			return nullptr;
+		}
+		const bool bOver = bHasBackLedge && Depth < 59.f && Height <= 125.f;
+		OutAction = !bOver ? TEXT("Mantle") : bHasBackFloor && BackLedgeHeight <= 125.f ? TEXT("Hurdle") : TEXT("Vault");
+		const int32 Gait = Speed < 50.f ? 0 : Speed < 350.f ? 1 : 2;
+		static const TMap<FString, TArray<const TCHAR*>> Takes = {
+			{ TEXT("Mantle"), { TEXT("stand_F_Lfoot"), TEXT("walk_F_Lfoot"), TEXT("run_F_Lfoot") } },
+			{ TEXT("Hurdle"), { TEXT("stand_F_V2_Lfoot"), TEXT("walk_F_Lfoot"), TEXT("run_F_Lfoot") } },
+			{ TEXT("Vault"), { TEXT("stand_F_Lfoot"), TEXT("walk_F_Rfoot"), TEXT("run_F_Lfoot") } },
+		};
+		const FString Name = FString::Printf(TEXT("AM_M_Neutral_Traversal_%s_1_0_%s"), *OutAction, Takes[OutAction][Gait]);
+		return LoadObject<UAnimMontage>(nullptr, *FString::Printf(TEXT("/Game/Characters/UEFN_Mannequin/Animations/Traversal/%s/%s.%s"), *OutAction, *Name, *Name));
 	}
 }
 
@@ -203,6 +224,21 @@ bool UShinobiTraversalComponent::ChooseMontage(FShinobiTraversalAction& Action, 
 {
 	const ACharacter* Character = CastChecked<ACharacter>(GetOwner());
 	UAnimInstance* AnimInstance = Character->GetMesh()->GetAnimInstance();
+	if (AnimInstance && !Cast<UShinobiLocomotionAnimInstance>(AnimInstance))
+	{
+		FString ActionName;
+		Action.Montage = PickByRules(ObstacleHeight, ObstacleDepth, BackLedgeHeight, bHasBackLedge, bHasBackFloor,
+			Character->GetCharacterMovement()->Velocity.Size2D(), ActionName);
+		if (!Action.Montage)
+		{
+			return TRAVERSAL_REJECT("no traversal for an obstacle this high");
+		}
+		Action.StartTime = 0.f;
+		Action.PlayRate = 1.f;
+		Action.bWarpBackLedge = ActionName == TEXT("Hurdle") || ActionName == TEXT("Vault");
+		Action.bWarpBackFloor = ActionName == TEXT("Hurdle");
+		return true;
+	}
 	const UScriptStruct* InputType = LoadObject<UScriptStruct>(nullptr, ChooserInputPath);
 	const UScriptStruct* OutputType = LoadObject<UScriptStruct>(nullptr, ChooserOutputPath);
 	if (!Chooser || !AnimInstance || !InputType || !OutputType)

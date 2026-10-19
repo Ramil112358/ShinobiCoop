@@ -207,6 +207,25 @@ bool FShinobiWallVaultTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiWallHopTest, "ShinobiCoop.Movement.SurfaceTraversal.ClimbingPastATopWithNoRoofHopsOverIt", ShinobiTestFlags)
+bool FShinobiWallHopTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	Block(W, FVector(0.f, 0.f, -50.f), FVector(40000.f, 40000.f, 100.f));
+	Block(W, FVector(WallX + 10.f, 0.f, 300.f), FVector(20.f, 2000.f, 600.f)); // a free-standing 6 m wall, 20 cm thick
+	AShinobiPlayerCharacter* P = PlayerAt(W, FVector(WallX - 300.f, 0.f, 100.f));
+	if (!RunOntoWall(*this, W, P))
+	{
+		return false;
+	}
+	DriveUntilOff(W, P, FVector::ForwardVector, 3.f);
+	const UShinobiMovementComponent* M = Moves(P);
+	TestFalse(TEXT("off the wall"), M->IsWallTraversing());
+	TestTrue(FString::Printf(TEXT("a small hop, not a launch (%.0f)"), M->Velocity.Z), M->Velocity.Z <= UShinobiMovementComponent::LedgeHopUp + 1.f);
+	TestTrue(FString::Printf(TEXT("over the top (%.0f)"), M->Velocity.X), M->Velocity.X > 100.f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiWallWalkDownTest, "ShinobiCoop.Movement.SurfaceTraversal.WalkingDownStandsUpOnTheGround", ShinobiTestFlags)
 bool FShinobiWallWalkDownTest::RunTest(const FString& Parameters)
 {

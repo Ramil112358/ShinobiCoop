@@ -3,9 +3,12 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "AIController.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
+#include "PhysicsControlComponent.h"
 #include "Shinobi/Hero/ShinobiPhysicalReactionComponent.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 
@@ -48,6 +51,29 @@ bool FShinobiReactionsHitTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiReactionsCastAfterHitTest, "ShinobiCoop.Reactions.CastDuringHitRecoveryRestoresStrength", ShinobiTestFlags)
+bool FShinobiReactionsCastAfterHitTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = ReactionTestPlayer(W);
+	UPhysicsControlComponent* Physics = P->FindComponentByClass<UPhysicsControlComponent>();
+	UAnimMontage* Seal = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Shinobi/Anims/AM_Fireball_Seal.AM_Fireball_Seal"));
+	if (!TestNotNull(TEXT("Physics control"), Physics) || !TestNotNull(TEXT("Seal montage"), Seal))
+	{
+		return false;
+	}
+	P->GetPhysicalReactions()->Hit(FVector(1.f, 0.f, 0.f), 30.f);
+	W.Tick(0.05f);
+	P->GetMesh()->GetAnimInstance()->Montage_Play(Seal); // casting: animation only, mid-recovery
+	W.Tick(0.6f);
+	P->GetMesh()->GetAnimInstance()->Montage_Stop(0.f);
+	W.Tick(0.1f);
+	FPhysicsControlMultiplier Multiplier;
+	Physics->GetControlMultiplier(Physics->GetControlNamesInSet(TEXT("ParentSpace"))[0], Multiplier);
+	TestEqual(TEXT("Full strength once the cast ends"), Multiplier.AngularStrengthMultiplier, 1.f, 0.01f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiReactionsKnockdownTest, "ShinobiCoop.Reactions.HardLaunchKnocksDownThenRecovers", ShinobiTestFlags)
 bool FShinobiReactionsKnockdownTest::RunTest(const FString& Parameters)
 {
@@ -66,6 +92,8 @@ bool FShinobiReactionsKnockdownTest::RunTest(const FString& Parameters)
 
 	W.Tick(Reactions->KnockdownHoldSeconds + 0.15f);
 	TestFalse(TEXT("Back up"), Reactions->IsKnockedDown());
+	const UAnimMontage* GetUp = P->GetMesh()->GetAnimInstance()->GetCurrentActiveMontage();
+	TestTrue(TEXT("Getting up with a getup animation"), GetUp && GetUp->GetName().Contains(TEXT("getup")));
 	TestFalse(TEXT("Free to act again"), ShinobiTest::HasTag(P, ShinobiTags::State_Staggered));
 	return true;
 }

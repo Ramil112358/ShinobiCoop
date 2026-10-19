@@ -2,6 +2,7 @@
 #include "AbilitySystemComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
+#include "AnimationRuntime.h"
 #include "Chooser.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -12,6 +13,7 @@
 #include "PoseSearch/PoseSearchLibrary.h"
 #include "Shinobi/Hero/ShinobiAnimSample.h"
 #include "Shinobi/Hero/ShinobiBlueprintStruct.h"
+#include "Shinobi/Hero/ShinobiLocomotionAnimInstance.h"
 #include "Shinobi/Hero/ShinobiRetargetAnimInstance.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiMovementComponent.h"
@@ -39,6 +41,21 @@ namespace
 	constexpr float MaxTumbleSeconds = 1.2f;
 	constexpr float SettledSpeed = 150.f;      // the sample's threshold between rolling and standing getups
 	constexpr float DeathSagSeconds = 1.2f;    // strength on death fades from TumbleStrength to nothing over this
+
+	/** Without the sample's AnimBP (Shinobi.MotionMatching 0) its chooser has no pose history: pick by how the body lies. */
+	UAnimMontage* GetUpByFacing(const USkeletalMeshComponent* Mesh)
+	{
+		const FReferenceSkeleton& Skeleton = Mesh->GetSkinnedAsset()->GetRefSkeleton();
+		const int32 Pelvis = Skeleton.FindBoneIndex(PelvisBone);
+		if (Pelvis == INDEX_NONE)
+		{
+			return nullptr;
+		}
+		const FQuat Rest = FAnimationRuntime::GetComponentSpaceTransformRefPose(Skeleton, Pelvis).GetRotation();
+		const FVector Chest = (Mesh->GetBoneQuaternion(PelvisBone) * Rest.Inverse()).RotateVector(FVector::RightVector); // the mannequin faces +Y
+		const FString Name = Chest.Z > 0.f ? TEXT("AM_M_ragdoll_getup_stand_B") : TEXT("AM_M_ragdoll_getup_stand_F"); // on its back, on its front
+		return LoadObject<UAnimMontage>(nullptr, *FString::Printf(TEXT("/Game/Characters/UEFN_Mannequin/Animations/Ragdoll/%s.%s"), *Name, *Name));
+	}
 
 	TAutoConsoleVariable<bool> CVarPhysicalReactions(
 		TEXT("Shinobi.PhysicalReactions"),
@@ -217,8 +234,10 @@ void UShinobiPhysicalReactionComponent::TickComponent(float DeltaTime, ELevelTic
 	const bool bAnimationOnly = Character->IsPlayingRootMotion() || (Movement && Movement->IsWallTraversing()) ||
 		(AnimInstance && ShinobiIsJutsuCast(AnimInstance->GetCurrentActiveMontage()));
 	SetProfile(bAnimationOnly ? KinematicProfile : PhysicalAnimationProfile);
+	// Every tick, not only inside the recovery window: a cast or dash that starts mid-recovery switches to Kinematic, and
+	// the body came back at HitStrength for good (legs buckled, torso slumped).
 	const float SinceHit = static_cast<float>(Now - HitTime);
-	if (Profile == PhysicalAnimationProfile && SinceHit < HitRecoverySeconds + DeltaTime)
+	if (Profile == PhysicalAnimationProfile)
 	{
 		SetStrength(FMath::Lerp(HitStrength, 1.f, FMath::Clamp(SinceHit / HitRecoverySeconds, 0.f, 1.f)));
 	}
@@ -233,7 +252,11 @@ void UShinobiPhysicalReactionComponent::GetUp()
 	const UScriptStruct* OutputType = LoadObject<UScriptStruct>(nullptr, GetUpOutputPath);
 	UAnimMontage* Montage = nullptr;
 	float StartTime = 0.f;
-	if (AnimInstance && GetUpChooser && InputType && OutputType)
+	if (!Cast<UShinobiLocomotionAnimInstance>(AnimInstance))
+	{
+		Montage = GetUpByFacing(Mesh);
+	}
+	else if (GetUpChooser && InputType && OutputType)
 	{
 		// As the sample does on leaving its ragdoll mode: the pose history takes the ragdoll's pose, so the chooser picks
 		// the getup that starts closest to how the body landed (face up, face down, still rolling).

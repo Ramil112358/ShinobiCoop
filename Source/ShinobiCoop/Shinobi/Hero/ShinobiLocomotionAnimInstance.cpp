@@ -8,7 +8,7 @@ namespace
 {
 	TAutoConsoleVariable<bool> CVarMotionMatching(
 		TEXT("Shinobi.MotionMatching"),
-		true,
+		false, // off since playtest 2026-10-19: smoother without, and its OffsetRootBone kept a wall's tilt after leaving one
 		TEXT("Characters animate with the Game Animation Sample's motion-matching AnimBP; 0 = the template's ABP_Manny_Combat / ABP_Unarmed. Read when a character spawns."));
 
 	const FName CharacterPropertiesName(TEXT("CharacterProperties"));

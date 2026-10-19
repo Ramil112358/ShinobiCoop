@@ -83,6 +83,8 @@ public:
 	static constexpr float WallReach = 30.f;         // how far ahead of the capsule a face is noticed
 	static constexpr float KickOffSpeed = 700.f;
 	static constexpr float KickOffUp = 450.f;
+	static constexpr float LedgeHopIn = 300.f;  // running off a wall's top with no roof to land on: over it, ~60 cm up
+	static constexpr float LedgeHopUp = 350.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	float SprintSpeed = 900.f;
