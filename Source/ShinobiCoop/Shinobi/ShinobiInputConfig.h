@@ -30,6 +30,13 @@ public:
 	 * Build() per possession would let a stale, unbound context win priority ties after a re-possess. */
 	static const UShinobiInputConfig& Get();
 
+	/** Puts ShinobiKeyBindings' keyboard/mouse keys on the rebindable actions in Context (their gamepad keys stay), Alt
+	 * bindings chorded on AltModifier, and has every local player rebuild its mappings. Build() and every rebind call it. */
+	void ApplyKeyBindings() const;
+
+	/** The action a ShinobiKeyBindings::EBindable drives (cast from uint8 so this header needn't include it). */
+	UInputAction* ActionForBindable(uint8 Bindable) const;
+
 	UPROPERTY()
 	TObjectPtr<UInputMappingContext> Context;
 

@@ -2,6 +2,12 @@
 #include "InputAction.h"
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
+#include "InputTriggers.h"
+#include "EnhancedInputSubsystems.h"
+#include "Engine/Engine.h"
+#include "Engine/GameInstance.h"
+#include "Engine/LocalPlayer.h"
+#include "Shinobi/UI/ShinobiKeyBindings.h"
 #include "Shinobi/Abilities/ShinobiLoadout.h"
 
 namespace
@@ -147,7 +153,87 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 	AddModifier<UInputModifierNegate>(Ctx->MapKey(Config->MapZoom, EKeys::Hyphen), Ctx);
 	AddModifier<UInputModifierNegate>(Ctx->MapKey(Config->MapZoom, EKeys::Subtract), Ctx);
 
+	Config->ApplyKeyBindings(); // the defaults above, replaced by this machine's saved shortcuts
 	return Config;
+}
+
+UInputAction* UShinobiInputConfig::ActionForBindable(uint8 Bindable) const
+{
+	using ShinobiKeyBindings::EBindable;
+	const auto Ability = [this](EShinobiAbilityInputID ID) -> UInputAction*
+	{
+		const TObjectPtr<UInputAction>* Found = AbilityActions.Find(ID);
+		return Found ? Found->Get() : nullptr;
+	};
+	const EBindable Which = static_cast<EBindable>(Bindable);
+	if (Which <= EBindable::Slot8)
+	{
+		return Ability(ShinobiLoadout::SlotInputID(Bindable));
+	}
+	switch (Which)
+	{
+	case EBindable::SkillsScreen: return SkillsScreen;
+	case EBindable::Melee: return Ability(EShinobiAbilityInputID::Melee);
+	case EBindable::Dodge: return Ability(EShinobiAbilityInputID::Dodge);
+	case EBindable::Sprint: return Ability(EShinobiAbilityInputID::Sprint);
+	case EBindable::Block: return Ability(EShinobiAbilityInputID::Block);
+	case EBindable::ChakraCharge: return Ability(EShinobiAbilityInputID::ChakraCharge);
+	case EBindable::Revive: return Ability(EShinobiAbilityInputID::Revive);
+	case EBindable::LockOn: return LockOn;
+	case EBindable::Jump: return Jump;
+	case EBindable::Dismount: return Ability(EShinobiAbilityInputID::Dismount);
+	case EBindable::Map: return MapToggle;
+	default: return nullptr;
+	}
+}
+
+void UShinobiInputConfig::ApplyKeyBindings() const
+{
+	UInputMappingContext* Ctx = Context;
+	for (int32 Index = 0; Index < static_cast<int32>(ShinobiKeyBindings::EBindable::Num); ++Index)
+	{
+		UInputAction* Action = ActionForBindable(static_cast<uint8>(Index));
+		if (!Ctx || !Action)
+		{
+			continue;
+		}
+		TArray<FKey> OldKeys;
+		for (const FEnhancedActionKeyMapping& Mapping : Ctx->GetMappings())
+		{
+			if (Mapping.Action == Action && !Mapping.Key.IsGamepadKey())
+			{
+				OldKeys.Add(Mapping.Key);
+			}
+		}
+		for (const FKey& Key : OldKeys)
+		{
+			Ctx->UnmapKey(Action, Key);
+		}
+		const ShinobiKeyBindings::FBinding Binding = ShinobiKeyBindings::Get(static_cast<ShinobiKeyBindings::EBindable>(Index));
+		FEnhancedActionKeyMapping& Mapping = Ctx->MapKey(Action, Binding.Key);
+		if (Binding.bAlt)
+		{
+			// Only while Alt is held; Enhanced Input itself blocks the same key's plain mapping meanwhile.
+			UInputTriggerChordAction* Chord = NewObject<UInputTriggerChordAction>(Ctx);
+			Chord->ChordAction = AltModifier;
+			Mapping.Triggers.Add(Chord);
+		}
+	}
+	if (!GEngine)
+	{
+		return;
+	}
+	for (const FWorldContext& WorldContext : GEngine->GetWorldContexts())
+	{
+		const UGameInstance* GameInstance = WorldContext.OwningGameInstance;
+		for (ULocalPlayer* Player : GameInstance ? GameInstance->GetLocalPlayers() : TArray<ULocalPlayer*>())
+		{
+			if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(Player))
+			{
+				Subsystem->RequestRebuildControlMappings();
+			}
+		}
+	}
 }
 
 // Cached for the process: after Live Coding changes to Build() or to this class's layout, restart the editor.
