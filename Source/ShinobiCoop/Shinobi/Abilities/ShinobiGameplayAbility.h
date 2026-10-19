@@ -22,7 +22,11 @@ enum class EShinobiAbilityInputID : uint8
 	Jutsu4,
 	Revive,
 	Dismount,
-	Block // appended last: the ASC input ids are the enum values
+	Block, // appended last: the ASC input ids are the enum values
+	Jutsu5, // jutsu slots 5-8 (ShinobiLoadout); 1-4 are Jutsu1-4 above
+	Jutsu6,
+	Jutsu7,
+	Jutsu8
 };
 
 /** Base for all Shinobi abilities: instanced per actor, predicted on the owning client. */
