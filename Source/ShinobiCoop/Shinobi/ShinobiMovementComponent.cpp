@@ -446,9 +446,17 @@ bool UShinobiMovementComponent::CheckFall(const FFindFloorResult& OldFloor, cons
 		return true; // the owner's machine decides; the replicated state follows
 	}
 	const FVector Move = Delta.GetSafeNormal();
-	if (!((Move | FVector::UpVector) > 0.5f && TryVault()) && !TryWrapCorner(Move))
+	const bool bUp = (Move | FVector::UpVector) > 0.5f;
+	if (!(bUp && TryVault()) && !TryWrapCorner(Move))
 	{
+		const FVector Inward = GetGravityDirection().GetSafeNormal2D();
 		DetachFromWall();
+		if (bUp)
+		{
+			// Over a top with no roof to stand on (a ridge, a parapet): hop over it. Kept, the run up the wall flung the
+			// character metres straight up, and the held input then caught the wall again on the way down.
+			Velocity = Inward * LedgeHopIn + FVector::UpVector * FMath::Min(Velocity.Z, LedgeHopUp);
+		}
 	}
 	return true; // handled: PhysWalking must not start a fall with the wall's gravity
 }

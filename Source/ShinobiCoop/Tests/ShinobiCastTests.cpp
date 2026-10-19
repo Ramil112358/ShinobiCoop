@@ -68,7 +68,9 @@ bool FShinobiVillagersWearTheirCharacterTest::RunTest(const FString& Parameters)
 		Villager->Variant = Variant;
 		Villager->FinishSpawning(Where);
 		const FString Name = AShinobiVillager::Bodies[Variant];
-		TestTrue(Name + TEXT(" walks with the motion-matching AnimBP"), Cast<UShinobiLocomotionAnimInstance>(Villager->GetMesh()->GetAnimInstance()) != nullptr);
+		TestEqual(Name + TEXT(" walks with the motion-matching AnimBP only when Shinobi.MotionMatching is on"),
+			Cast<UShinobiLocomotionAnimInstance>(Villager->GetMesh()->GetAnimInstance()) != nullptr,
+			IConsoleManager::Get().FindConsoleVariable(TEXT("Shinobi.MotionMatching"))->GetBool());
 		if (Villager->GetBodyMesh() == Villager->GetMesh())
 		{
 			TestTrue(Name + TEXT(" not imported: the tinted Quinn shows"), Villager->GetMesh()->IsVisible());
