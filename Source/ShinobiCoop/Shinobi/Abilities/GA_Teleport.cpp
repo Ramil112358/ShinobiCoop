@@ -12,9 +12,8 @@
 
 UGA_Teleport::UGA_Teleport()
 {
-	InputID = EShinobiAbilityInputID::Jutsu1;
-	Page = 2;
 	DisplayName = INVTEXT("Teleport");
+	Description = INVTEXT("Throws three marker kunai; press again within 6 s to flash to one of them.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_Teleport.T_Jutsu_Teleport")));
 	ChakraCost = 25.f;
 	Cooldown = 10.f;
@@ -49,10 +48,9 @@ void UGA_Teleport::ExecuteJutsu()
 
 UGA_TeleportJump::UGA_TeleportJump()
 {
-	InputID = EShinobiAbilityInputID::Jutsu1;
+	FollowsSlotOf = UGA_Teleport::StaticClass();
 	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerOnly;
 	ActivationRequiredTags.AddTag(ShinobiTags::State_TeleportMarked);
-	ActivationRequiredTags.AddTag(ShinobiTags::JutsuPage(2));
 }
 
 void UGA_TeleportJump::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
@@ -137,4 +135,9 @@ void UGA_TeleportJump::ActivateAbility(const FGameplayAbilitySpecHandle Handle, 
 		}
 	}
 	EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+}
+
+bool UGA_Teleport::IsSlotLocked(const UAbilitySystemComponent& ASC, const FGameplayAbilitySpec& Spec) const
+{
+	return Super::IsSlotLocked(ASC, Spec) || ASC.HasMatchingGameplayTag(ShinobiTags::State_TeleportMarked); // the jump back rides this slot
 }

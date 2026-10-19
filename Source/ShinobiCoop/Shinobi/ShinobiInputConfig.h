@@ -30,6 +30,13 @@ public:
 	 * Build() per possession would let a stale, unbound context win priority ties after a re-possess. */
 	static const UShinobiInputConfig& Get();
 
+	/** Puts ShinobiKeyBindings' keyboard/mouse keys on the rebindable actions in Context (their gamepad keys stay), Alt
+	 * bindings chorded on AltModifier, and has every local player rebuild its mappings. Build() and every rebind call it. */
+	void ApplyKeyBindings() const;
+
+	/** The action a ShinobiKeyBindings::EBindable drives (cast from uint8 so this header needn't include it). */
+	UInputAction* ActionForBindable(uint8 Bindable) const;
+
 	UPROPERTY()
 	TObjectPtr<UInputMappingContext> Context;
 
@@ -58,7 +65,7 @@ public:
 	UPROPERTY()
 	TObjectPtr<UInputAction> Pause;
 
-	/** Q (RB + D-pad right): next jutsu page. */
+	/** RB + D-pad right / left: the pad's jutsu page (slots 1-4 or 5-8). */
 	UPROPERTY()
 	TObjectPtr<UInputAction> JutsuPageNext;
 
@@ -77,9 +84,21 @@ public:
 	UPROPERTY()
 	TObjectPtr<UInputAction> MapZoom;
 
-	/** Gamepad A/B/X/Y -> Jutsu 1-4. Only active while RB is held. */
+	/** Gamepad A/B/X/Y -> PadJutsuActions. Only active while RB is held. */
 	UPROPERTY()
 	TObjectPtr<UInputMappingContext> JutsuContext;
+
+	/** RB + A/B/X/Y: the current pad page's four slots (AShinobiPlayerCharacter::PadJutsuPressed). */
+	UPROPERTY()
+	TArray<TObjectPtr<UInputAction>> PadJutsuActions;
+
+	/** Left/Right Alt: the chord for Alt + key bindings. */
+	UPROPERTY()
+	TObjectPtr<UInputAction> AltModifier;
+
+	/** K: the Skills screen (bound by AShinobiPlayerController). */
+	UPROPERTY()
+	TObjectPtr<UInputAction> SkillsScreen;
 
 	UPROPERTY()
 	TMap<EShinobiAbilityInputID, TObjectPtr<UInputAction>> AbilityActions;

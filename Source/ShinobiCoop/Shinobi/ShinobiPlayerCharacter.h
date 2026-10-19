@@ -3,10 +3,12 @@
 #include "CoreMinimal.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
+#include "Shinobi/Abilities/ShinobiLoadout.h"
 #include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "ShinobiPlayerCharacter.generated.h"
 
 class UCameraComponent;
+class UShinobiJutsuAbility;
 class UShinobiOverheadTextComponent;
 class UShinobiSusanooComponent;
 class UShinobiSurfaceFxComponent;
@@ -128,21 +130,50 @@ public:
 	/** The ribcage that stands round the player while they guard (UGA_Block). */
 	UShinobiSusanooComponent* GetGuard() const { return Guard; }
 
-	/** The jutsu page keys 1-4 fire (1..ShinobiTags::NumJutsuPages). It is a loose tag on each machine's ability system:
-	 * the owning client applies a switch at once so activation predicts, and tells the server. */
-	int32 GetJutsuPage() const;
+	/** The jutsu in each of the 8 bar slots (ShinobiLoadout; null = empty). Slot i fires on ShinobiLoadout::SlotInputID(i). */
+	const ShinobiLoadout::FSlots& GetLoadout() const { return Loadout; }
 
-	/** Owner: switch to Page (ignored while a jutsu is active or for an invalid page) and tell the server. */
-	void SetJutsuPage(int32 Page);
+	/** Authority, no swap rules: sets the loadout and stamps every jutsu spec's input slot. Tests and cheats use it directly. */
+	void ApplyLoadout(const ShinobiLoadout::FSlots& Slots);
 
-	/** Owner: the next (Direction +1) or previous (-1) page that has a jutsu, wrapping. False if casting or no other page has one. */
-	bool TryCycleJutsuPage(int32 Direction);
+	/** Points every jutsu spec (and each follow-up, FollowsSlotOf) at its slot's input, INDEX_NONE when unslotted. Every machine runs it. */
+	void StampLoadoutInputIDs();
 
-	/** Local tags only: makes Page the current page. SetJutsuPage and the RPCs call it. */
-	void ApplyJutsuPage(int32 Page);
+	/** Owner: asks for Slots (the Skills screen). The server may refuse; the replicated loadout then stays. With bSave, an
+	 * accepted change becomes this machine's saved bar (a refused one never does). */
+	void RequestLoadout(const ShinobiLoadout::FSlots& Slots, bool bSave = true);
+
+	/** Authority: applies Slots if the swap rules allow it (GetLoadoutLockReason, IsSlotLocked). */
+	bool TryChangeLoadout(const ShinobiLoadout::FSlots& Slots);
+
+	/** Why the whole loadout can't change right now (casting, mounted, downed, in combat, a PvP round); empty when it can. */
+	FText GetLoadoutLockReason() const;
+
+	/** The jutsu in SlotIndex can't leave it right now (cooling down, Kamui phased, a summon out...). Empty slots never are. */
+	bool IsSlotLocked(int32 SlotIndex) const;
+
+	/** Seconds after the last hit dealt to, or taken from, a hostile that the player counts as in combat (no jutsu swaps). */
+	static constexpr float CombatSeconds = 5.f;
+
+	/** Authority: a hit was dealt or taken (ShinobiCombat::NoteCombat). */
+	void NoteCombat();
+	bool IsInCombat() const { return GetCombatSecondsLeft() > 0.f; }
+	/** Until swaps unlock again; 0 out of combat. */
+	float GetCombatSecondsLeft() const;
+
+	/** Every jutsu this player has been granted, in grant order: the Skills screen's pool. */
+	TArray<TSubclassOf<UShinobiJutsuAbility>> GetKnownJutsu() const;
+
+	/** The pad's jutsu page: 1 = slots 1-4 on RB + A/B/X/Y, 2 = slots 5-8. Local presentation only; nothing to replicate. */
+	int32 GetPadJutsuPage() const { return PadJutsuPage; }
+	void FlipPadJutsuPage(int32 Direction);
+	/** RB + face Face (0 A, 1 B, 2 X, 3 Y): the slot on the current pad page. The release goes to the slot the press used. */
+	void PadJutsuPressed(int32 Face);
+	void PadJutsuReleased(int32 Face);
+	/** The slot Face is holding down, or INDEX_NONE. */
+	int32 GetPadPressedSlot(int32 Face) const { return Face >= 0 && Face < 4 ? PadPressedSlot[Face] : INDEX_NONE; }
 
 	bool IsCastingJutsu() const;
-	bool PageHasJutsu(int32 Page) const;
 	/** Cancels a local jutsu ground-target preview; false when no target placement is active. */
 	bool CancelJutsuTargetPlacement();
 	bool IsJutsuTargetPlacementActive() const { return bJutsuTargetPlacementActive; }
@@ -157,12 +188,9 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerSetJutsuTargetAimDirection(FVector Direction);
 
-	/** Server: a client's page switch. Out-of-range values are ignored; during a cast the client is sent back the real page. */
+	/** Server: a client's loadout request. Invalid or locked changes are ignored (Loadout replicates the truth back). */
 	UFUNCTION(Server, Reliable)
-	void ServerSetJutsuPage(uint8 Page);
-
-	UFUNCTION(Client, Reliable)
-	void ClientSetJutsuPage(uint8 Page);
+	void ServerRequestLoadout(const TArray<TSubclassOf<UShinobiJutsuAbility>>& Slots);
 
 protected:
 	virtual void BeginPlay() override;
@@ -200,6 +228,8 @@ private:
 	bool bCameraFreeLookActive = false;
 	bool bHasServerJutsuAimDirection = false;
 	int32 TargetPlacementInputID = INDEX_NONE;
+	int32 PadJutsuPage = 1;
+	int32 PadPressedSlot[4] = { INDEX_NONE, INDEX_NONE, INDEX_NONE, INDEX_NONE };
 	FVector2D JutsuTargetScreenPosition = FVector2D(0.5f, 0.5f);
 	FVector ServerJutsuAimDirection = FVector::ForwardVector;
 	FRotator CameraFreeLookRotation = FRotator::ZeroRotator;
@@ -226,7 +256,6 @@ private:
 	void JumpReleased();
 	void AbilityInputPressed(EShinobiAbilityInputID InputID);
 	void AbilityInputReleased(EShinobiAbilityInputID InputID);
-	void CycleJutsuPage(int32 Direction) { TryCycleJutsuPage(Direction); }
 	/** RB held: adds IMC_ShinobiJutsu (A/B/X/Y cast jutsu); released: removes it. */
 	void SetJutsuModifier(bool bHeld);
 	TWeakObjectPtr<AShinobiCharacterBase> LockTarget;
@@ -258,6 +287,26 @@ private:
 	/** Outfits index worn over the body; set from the owning controller's pick like CharacterIndex. */
 	UPROPERTY(ReplicatedUsing = OnRep_OutfitIndex)
 	uint8 OutfitIndex = 0;
+
+	/** Owner and server: the jutsu in each bar slot. Each machine stamps its own spec input slots from it (StampLoadoutInputIDs). */
+	UPROPERTY(ReplicatedUsing = OnRep_Loadout)
+	TArray<TSubclassOf<UShinobiJutsuAbility>> Loadout;
+
+	/** Owner client: the requested loadout to save once the server's answer matches it. */
+	ShinobiLoadout::FSlots PendingSave;
+
+	/** Server world time of the last hit dealt or taken (owner and server). */
+	UPROPERTY(Replicated)
+	float LastCombatTime = -1000.f;
+
+	/** The server's clock where there is a game state (the owner's copy of it), else this world's (tests). */
+	float ServerNow() const;
+
+	UFUNCTION()
+	void OnRep_Loadout();
+
+	/** "ShinobiLoadout <name> (server|client): slot1=GA_Fireball(ok) ..." -- read by Scripts/smoke_m4.ps1. */
+	void LogLoadout() const;
 
 	/** The visible hero body, pose-driven from GetMesh(). */
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")

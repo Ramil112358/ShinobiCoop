@@ -172,7 +172,7 @@ bool FShinobiDragonCastTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(5);
+	ShinobiTest::EquipPage(P, 5);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
 	TestEqual(TEXT("Cost 70 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 30.f);
 	TestFalse(TEXT("Not mounted during the seals"), ShinobiTest::HasTag(P, ShinobiTags::State_Mounted));
@@ -198,7 +198,7 @@ bool FShinobiDragonDismountTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(5);
+	ShinobiTest::EquipPage(P, 5);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
 	W.Tick(1.3f);
 	const float Chakra = ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute());
@@ -412,12 +412,12 @@ bool FShinobiBreathGatesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDismountAnywhereTest, "ShinobiCoop.Mount.TheDismountKeyWorksOnAnyPage", ShinobiTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDismountAnywhereTest, "ShinobiCoop.Mount.TheDismountKeyWorksWhateverTheSlots", ShinobiTestFlags)
 bool FShinobiDismountAnywhereTest::RunTest(const FString& Parameters)
 {
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = Rider(W);
-	P->ApplyJutsuPage(3); // key 1 is Fire Meteor here, so the page-5 dismount is out of reach
+	ShinobiTest::EquipPage(P, 3); // neither dragon is in a slot now, so only the dedicated key can dismount
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Dismount);
 	TestFalse(TEXT("The dedicated key still gets the rider down"), ShinobiTest::HasTag(P, ShinobiTags::State_Mounted));
 	return true;
@@ -524,7 +524,7 @@ bool FShinobiTwoDragonsTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(5);
+	ShinobiTest::EquipPage(P, 5);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2); // slot 2: the crimson dragon
 	TestEqual(TEXT("Cost 70 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 30.f);
 	W.Tick(1.3f);
@@ -588,8 +588,6 @@ bool FShinobiCrimsonAssetsTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("seal montage"), Jutsu->SealMontage.LoadSynchronous());
 	TestNotNull(TEXT("release montage"), Jutsu->ReleaseMontage.LoadSynchronous());
 	TestNotNull(TEXT("icon (run Scripts/setup_hud.py)"), Jutsu->Icon.LoadSynchronous());
-	TestEqual(TEXT("slot 2 of page 5"), static_cast<int32>(Jutsu->InputID), static_cast<int32>(EShinobiAbilityInputID::Jutsu2));
-	TestEqual(TEXT("page 5"), Jutsu->Page, 5);
 	return true;
 }
 

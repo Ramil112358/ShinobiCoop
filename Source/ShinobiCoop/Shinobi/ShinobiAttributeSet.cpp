@@ -1,6 +1,8 @@
 #include "Shinobi/ShinobiAttributeSet.h"
 #include "GameplayEffectExtension.h"
 #include "Net/UnrealNetwork.h"
+#include "Shinobi/ShinobiCharacterBase.h"
+#include "Shinobi/ShinobiCombat.h"
 
 UShinobiAttributeSet::UShinobiAttributeSet()
 {
@@ -107,6 +109,9 @@ void UShinobiAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCal
 		if (Damage > 0.f)
 		{
 			SetHealth(GetHealth() - Damage); // clamped to [0, MaxHealth] in PreAttributeBaseChange
+			const FGameplayEffectContextHandle& Context = Data.EffectSpec.GetEffectContext();
+			const AActor* Instigator = Context.GetOriginalInstigator() ? Context.GetOriginalInstigator() : Context.GetInstigator();
+			ShinobiCombat::NoteCombat(Instigator, Cast<AShinobiCharacterBase>(GetOwningActor())); // swaps lock in combat
 		}
 	}
 }

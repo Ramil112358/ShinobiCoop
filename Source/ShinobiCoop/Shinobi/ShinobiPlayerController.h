@@ -7,6 +7,7 @@
 class UGameplayEffect;
 class UShinobiHUDWidget;
 class UShinobiPauseMenuWidget;
+class UShinobiSkillsWidget;
 struct FGameplayTag;
 struct FInputActionValue;
 
@@ -33,9 +34,9 @@ public:
 	UFUNCTION(Exec)
 	void ShinobiCastHold(int32 JutsuSlot, float Seconds);
 
-	/** Console: ShinobiPage 1..5 -- switches the jutsu page keys 1-4 fire (same as Q / the wheel; used by the screenshot scripts). */
+	/** Console: ShinobiEquipPage 1..5 -- puts one of the old five jutsu pages into slots 1-4 (used by the screenshot scripts). */
 	UFUNCTION(Exec)
-	void ShinobiPage(int32 Page);
+	void ShinobiEquipPage(int32 Page);
 
 	/** Console: ShinobiDumpStats -- logs every character's attributes (and whether it's burning) as this machine sees them. */
 	UFUNCTION(Exec)
@@ -57,6 +58,12 @@ public:
 	/** Local: open or close the big map (M / View). */
 	void ToggleMap();
 
+	/** Local: the last button pressed was a gamepad's (the HUD shows A/B/X/Y labels and the pad page). */
+	bool IsUsingGamepad() const { return bUsingGamepad; }
+
+	/** Local: open or close the Skills screen (K, or the pause menu's Jutsu entry). */
+	void ToggleSkillsScreen();
+
 	bool IsBigMapOpen() const;
 
 	/** Local: zoom the big map while it is open, else the minimap. Steps > 0 zooms in; with bWrap, past the closest
@@ -66,6 +73,8 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
+	/** Notes whether the last button came from a gamepad (IsUsingGamepad). */
+	virtual bool InputKey(const FInputKeyEventArgs& Params) override;
 	void OnMapZoom(const FInputActionValue& Value);
 	/** Server: the new pawn plays the character this player picked (so the pick survives respawns). */
 	virtual void OnPossess(APawn* InPawn) override;
@@ -73,6 +82,8 @@ protected:
 	virtual void AcknowledgePossession(APawn* P) override;
 
 private:
+	bool bUsingGamepad = false;
+
 	UFUNCTION(Server, Reliable)
 	void ServerDamageSelf(float Amount);
 
@@ -125,4 +136,7 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UShinobiPauseMenuWidget> PauseMenu;
+
+	UPROPERTY()
+	TObjectPtr<UShinobiSkillsWidget> SkillsWidget;
 };

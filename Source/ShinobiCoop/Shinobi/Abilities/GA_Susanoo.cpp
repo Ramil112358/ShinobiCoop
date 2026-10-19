@@ -1,4 +1,5 @@
 #include "Shinobi/Abilities/GA_Susanoo.h"
+#include "AbilitySystemComponent.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
@@ -6,9 +7,8 @@
 
 UGA_Susanoo::UGA_Susanoo()
 {
-	InputID = EShinobiAbilityInputID::Jutsu3;
-	Page = 5; // beside the dragons: page 4 is all summons
 	DisplayName = INVTEXT("Susanoo");
+	Description = INVTEXT("A spectral armour: half damage taken, harder hits, faster chakra.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_Susanoo.T_Jutsu_Susanoo")));
 	ChakraCost = 40.f;
 	Cooldown = 60.f;
@@ -30,4 +30,9 @@ void UGA_Susanoo::ExecuteJutsu()
 		}
 	}
 	EndJutsu();
+}
+
+bool UGA_Susanoo::IsSlotLocked(const UAbilitySystemComponent& ASC, const FGameplayAbilitySpec& Spec) const
+{
+	return Super::IsSlotLocked(ASC, Spec) || ASC.HasMatchingGameplayTag(ShinobiTags::State_Susanoo);
 }

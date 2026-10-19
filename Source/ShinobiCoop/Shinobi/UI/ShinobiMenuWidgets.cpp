@@ -11,6 +11,7 @@
 #include "Shinobi/ShinobiPlayerController.h"
 #include "Shinobi/Online/ShinobiSessionSubsystem.h"
 #include "Shinobi/UI/ShinobiSettings.h"
+#include "Shinobi/UI/ShinobiShortcutsWidget.h"
 
 namespace
 {
@@ -262,12 +263,18 @@ void UShinobiPauseMenuWidget::OnEntry(int32 Index)
 		}
 		break;
 	case 1:
+		if (AShinobiPlayerController* PC = Cast<AShinobiPlayerController>(GetOwningPlayer()))
+		{
+			PC->ToggleSkillsScreen(); // closes this menu first; the gamepad's way to the Skills screen
+		}
+		break;
+	case 2:
 		if (UShinobiSessionSubsystem* Sessions = GetSessions())
 		{
 			Sessions->ShowInviteUI();
 		}
 		break;
-	case 2:
+	case 3:
 		OpenSettings();
 		break;
 	default:
@@ -283,7 +290,7 @@ void UShinobiPauseMenuWidget::Refresh()
 {
 	Super::Refresh();
 	const UShinobiSessionSubsystem* Sessions = GetSessions();
-	EntryButtons[1]->SetIsEnabled(Sessions && !Sessions->IsLanMode()); // the Steam overlay does the inviting
+	EntryButtons[2]->SetIsEnabled(Sessions && !Sessions->IsLanMode()); // the Steam overlay does the inviting
 }
 
 TArray<FString> UShinobiSettingsWidget::GetEntries() const
@@ -293,6 +300,7 @@ TArray<FString> UShinobiSettingsWidget::GetEntries() const
 	{
 		Entries.Add(ShinobiSettings::Label(ShinobiSettings::ERow(Row)));
 	}
+	Entries.Add(TEXT("Shortcuts"));
 	Entries.Add(TEXT("Back"));
 	return Entries;
 }
@@ -304,6 +312,14 @@ void UShinobiSettingsWidget::OnEntry(int32 Index)
 		const ShinobiSettings::ERow Row = ShinobiSettings::ERow(Index);
 		ShinobiSettings::Cycle(Row, GetWorld());
 		SetEntryLabel(Index, ShinobiSettings::Label(Row));
+		return;
+	}
+	if (Index == int32(ShinobiSettings::ERow::Num)) // Shortcuts
+	{
+		UShinobiShortcutsWidget* Panel = CreateWidget<UShinobiShortcutsWidget>(GetOwningPlayer(), UShinobiShortcutsWidget::StaticClass());
+		Panel->Opener = this;
+		SetVisibility(ESlateVisibility::Collapsed);
+		Panel->AddToViewport(60);
 		return;
 	}
 	if (UUserWidget* Menu = Opener.Get())

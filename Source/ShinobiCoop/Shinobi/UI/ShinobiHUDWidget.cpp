@@ -1,4 +1,6 @@
 #include "Shinobi/UI/ShinobiHUDWidget.h"
+#include "Shinobi/ShinobiPlayerController.h"
+#include "Shinobi/UI/ShinobiKeyBindings.h"
 #include "AbilitySystemComponent.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
@@ -62,8 +64,9 @@ namespace
 	const FLinearColor KeyColor(0.9f, 0.9f, 0.9f);
 	const FLinearColor CostColor(0.45f, 0.7f, 1.f);
 	const FLinearColor NoChakraColor(1.f, 0.3f, 0.25f);
-	constexpr float SlotSize = 88.f;
-	constexpr float SlotBorder = 10.f; // the ornate frame art
+	constexpr float SlotSize = 56.f; // 8 on the bar now (was 4 at 88)
+	constexpr float SlotBorder = 6.f; // the ornate frame art, scaled with the slot
+	constexpr float PadPageGap = 14.f; // after slot 4: the gamepad's two pages
 	constexpr float PortraitSize = 124.f;
 	constexpr float PipSize = 22.f;
 	constexpr float StatusSize = 30.f;
@@ -110,9 +113,10 @@ namespace
 		return Brush;
 	}
 
-	int32 JutsuSlotIndex(EShinobiAbilityInputID InputID)
+	bool IsJutsuActive(const UAbilitySystemComponent& ASC, const UShinobiJutsuAbility* Jutsu)
 	{
-		return static_cast<int32>(InputID) - static_cast<int32>(EShinobiAbilityInputID::Jutsu1);
+		const FGameplayAbilitySpec* Spec = ASC.FindAbilitySpecFromClass(Jutsu->GetClass());
+		return Spec && Spec->IsActive();
 	}
 
 	/** A rounded box (Radius < 0: fully round ends, a circle when square), optionally outlined and textured. */
@@ -142,7 +146,6 @@ TSharedRef<SWidget> UShinobiHUDWidget::RebuildWidget()
 
 		BuildUnitFrame(Root);
 		BuildJutsuSlots(Root);
-		BuildPagePips(Root);
 		BuildAimCrosshair(Root);
 		BuildDragonCrosshair(Root);
 		BuildMiniMap(Root);
@@ -345,11 +348,10 @@ void UShinobiHUDWidget::BuildJutsuSlots(UCanvasPanel* Root)
 	RowSlot->SetPosition(FVector2D(0.f, -32.f));
 	RowSlot->SetAutoSize(true);
 
-	static const TCHAR* KeyLabels[NumJutsuSlots] = { TEXT("1"), TEXT("2"), TEXT("3"), TEXT("4") };
 	for (int32 Index = 0; Index < NumJutsuSlots; ++Index)
 	{
 		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-		Row->AddChildToHorizontalBox(Column)->SetPadding(FMargin(6.f, 0.f));
+		Row->AddChildToHorizontalBox(Column)->SetPadding(FMargin(Index == 4 ? 3.f + PadPageGap : 3.f, 0.f, 3.f, 0.f));
 		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 		Box->SetWidthOverride(SlotSize);
 		Box->SetHeightOverride(SlotSize);
@@ -380,50 +382,43 @@ void UShinobiHUDWidget::BuildJutsuSlots(UCanvasPanel* Root)
 		ShadeSlot->SetVerticalAlignment(VAlign_Bottom);
 		UTextBlock* CooldownText = AddLabel(Layers, 24, HAlign_Center, VAlign_Center, FLinearColor::White);
 
-		USizeBox* KeyBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		KeyBox->SetWidthOverride(24.f);
-		KeyBox->SetHeightOverride(24.f);
-		UBorder* KeyBadge = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
-		UTexture2D* BadgeArt = HudTexture(TEXT("KeyBadge"));
-		KeyBadge->SetBrush(BadgeArt ? ArtBrush(BadgeArt, FVector2D(24.f, 24.f)) : RoundedBrush(InkColor, -1.f, TrimColor, 1.f));
-		KeyBadge->SetPadding(FMargin(0.f));
-		KeyBadge->SetHorizontalAlignment(HAlign_Center);
-		KeyBadge->SetVerticalAlignment(VAlign_Center);
-		UTextBlock* Key = MakeText(10, KeyColor, true);
-		Key->SetText(FText::FromString(KeyLabels[Index]));
-		KeyBadge->SetContent(Key);
-		KeyBox->AddChild(KeyBadge);
-		UOverlaySlot* KeySlot = Layers->AddChildToOverlay(KeyBox);
-		KeySlot->SetHorizontalAlignment(HAlign_Left);
-		KeySlot->SetVerticalAlignment(VAlign_Top);
-		KeySlot->SetPadding(FMargin(bFrameArt ? 0.f : 2.f)); // the art frame has its own margin
 		UTextBlock* CostText = AddLabel(Layers, 12, HAlign_Right, VAlign_Bottom, CostColor);
 
-		// The name sits in a box a little wider than the slot and shrinks to fit it, so a long one ("Summon Crimson Dragon") cannot stretch
-		// its column and make that slot wider than the others.
-		UTextBlock* Name = MakeText(12, NameColor, true);
-		USizeBox* NameBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		NameBox->SetWidthOverride(SlotSize + 12.f);
-		UScaleBox* NameScale = WidgetTree->ConstructWidget<UScaleBox>(UScaleBox::StaticClass());
-		NameScale->SetStretch(EStretch::ScaleToFit);
-		NameScale->SetStretchDirection(EStretchDirection::DownOnly);
-		NameScale->AddChild(Name);
-		NameBox->AddChild(NameScale);
-		UVerticalBoxSlot* NameSlot = Column->AddChildToVerticalBox(NameBox);
-		NameSlot->SetHorizontalAlignment(HAlign_Center);
-		NameSlot->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
+		// The key under the slot (ShinobiKeyBindings, or A/B/X/Y on a gamepad), set each tick.
+		USizeBox* KeyBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		KeyBox->SetMinDesiredWidth(22.f);
+		KeyBox->SetHeightOverride(18.f);
+		UBorder* KeyBadge = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+		KeyBadge->SetBrush(RoundedBrush(InkColor, 3.f, TrimColor, 1.f));
+		KeyBadge->SetPadding(FMargin(4.f, 0.f));
+		KeyBadge->SetHorizontalAlignment(HAlign_Center);
+		KeyBadge->SetVerticalAlignment(VAlign_Center);
+		UTextBlock* Key = MakeText(9, KeyColor, true);
+		KeyBadge->SetContent(Key);
+		KeyBox->AddChild(KeyBadge);
+		UVerticalBoxSlot* KeySlot = Column->AddChildToVerticalBox(KeyBox);
+		KeySlot->SetHorizontalAlignment(HAlign_Center);
+		KeySlot->SetPadding(FMargin(0.f, -7.f, 0.f, 0.f)); // overlapping the frame's lower edge
 
 		SlotColumns.Add(Column);
 		SlotFrames.Add(Frame);
 		SlotIcons.Add(Icon);
 		SlotFallbacks.Add(Fallback);
-		SlotNames.Add(Name);
+		SlotKeyTexts.Add(Key);
 		SlotShades.Add(Shade);
 		SlotCooldownTexts.Add(CooldownText);
 		SlotCosts.Add(CostText);
 	}
 	SlotFlashUntil.Init(0.0, NumJutsuSlots);
 	SlotJutsu.Init(nullptr, NumJutsuSlots);
+
+	CastNameText = MakeText(14, NameColor, true);
+	CastNameText->SetShadowOffset(FVector2D(1.f, 1.f));
+	UCanvasPanelSlot* NameSlot = Root->AddChildToCanvas(CastNameText);
+	NameSlot->SetAnchors(FAnchors(0.5f, 1.f));
+	NameSlot->SetAlignment(FVector2D(0.5f, 1.f));
+	NameSlot->SetPosition(FVector2D(0.f, -32.f - SlotSize - 30.f));
+	NameSlot->SetAutoSize(true);
 }
 
 float UShinobiHUDWidget::GetJutsuSlotWidth(int32 Index) const
@@ -539,28 +534,6 @@ void UShinobiHUDWidget::UpdateAimCrosshair(const AShinobiPlayerCharacter* Player
 	}
 }
 
-void UShinobiHUDWidget::BuildPagePips(UCanvasPanel* Root)
-{
-	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("PagePips"));
-	UCanvasPanelSlot* RowSlot = Root->AddChildToCanvas(Row);
-	RowSlot->SetAnchors(FAnchors(0.5f, 1.f));
-	RowSlot->SetAlignment(FVector2D(0.5f, 1.f));
-	RowSlot->SetPosition(FVector2D(0.f, -10.f));
-	RowSlot->SetAutoSize(true);
-	for (int32 Page = 1; Page <= ShinobiTags::NumJutsuPages; ++Page)
-	{
-		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		Box->SetWidthOverride(9.f);
-		Box->SetHeightOverride(9.f);
-		Box->SetRenderTransformAngle(45.f); // a diamond, like the Substitution pips without art
-		UBorder* Pip = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
-		Pip->SetBrush(RoundedBrush(PipOffColor, 2.f, TrimColor, 1.f));
-		Box->AddChild(Pip);
-		Row->AddChildToHorizontalBox(Box)->SetPadding(FMargin(6.f, 0.f));
-		PagePips.Add(Pip);
-	}
-}
-
 UTextBlock* UShinobiHUDWidget::MakeText(int32 FontSize, const FLinearColor& Tint, bool bBold)
 {
 	UTextBlock* Text = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
@@ -661,7 +634,7 @@ void UShinobiHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 		const bool bOn = ASC->HasMatchingGameplayTag(StatusTags[Index]);
 		StatusIcons[Index]->SetVisibility(bOn && StatusIcons[Index]->GetBrush().GetResourceObject() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
-	UpdateJutsuSlots(*ASC, Player ? Player->GetJutsuPage() : 1, Player);
+	UpdateJutsuSlots(*ASC, Player);
 	UpdateArena(Player);
 	UpdateCompass();
 	UpdateMiniMap(Pawn, MyGeometry.GetLocalSize());
@@ -1090,33 +1063,49 @@ FString UShinobiHUDWidget::BoostList(const AShinobiPlayerCharacter* Player) cons
 	return Boosts;
 }
 
-void UShinobiHUDWidget::UpdateJutsuSlots(const UAbilitySystemComponent& ASC, int32 Page, const AShinobiPlayerCharacter* Player)
+void UShinobiHUDWidget::UpdateJutsuSlots(const UAbilitySystemComponent& ASC, const AShinobiPlayerCharacter* Player)
 {
 	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
-	for (int32 Index = 0; Index < PagePips.Num(); ++Index)
-	{
-		PagePips[Index]->SetBrush(RoundedBrush(Index + 1 == Page ? TrimColor : PipOffColor, 2.f, TrimColor, 1.f));
-		PagePips[Index]->GetParent()->SetVisibility(!Player || Player->PageHasJutsu(Index + 1) ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
-	}
 	TArray<const UShinobiJutsuAbility*, TInlineAllocator<NumJutsuSlots>> OnPage;
 	OnPage.Init(nullptr, NumJutsuSlots);
-	for (const FGameplayAbilitySpec& Spec : ASC.GetActivatableAbilities())
+	for (int32 Index = 0; Player && Index < NumJutsuSlots && Index < Player->GetLoadout().Num(); ++Index)
 	{
-		const UShinobiJutsuAbility* Jutsu = Cast<UShinobiJutsuAbility>(Spec.Ability);
-		const int32 Index = Jutsu && Jutsu->Page == Page ? JutsuSlotIndex(Jutsu->InputID) : INDEX_NONE;
-		if (OnPage.IsValidIndex(Index))
-		{
-			OnPage[Index] = Jutsu;
-		}
+		const UClass* Jutsu = Player->GetLoadout()[Index].Get();
+		OnPage[Index] = Jutsu ? GetDefault<UShinobiJutsuAbility>(const_cast<UClass*>(Jutsu)) : nullptr;
 	}
+	const AShinobiPlayerController* PC = Player ? Cast<AShinobiPlayerController>(Player->GetController()) : nullptr;
+	const bool bPad = PC && PC->IsUsingGamepad();
+	const int32 PadPage = Player ? Player->GetPadJutsuPage() : 1;
+	static const TCHAR* FaceLabels[] = { TEXT("A"), TEXT("B"), TEXT("X"), TEXT("Y") };
+	FText CastName;
 	for (int32 Index = 0; Index < NumJutsuSlots; ++Index)
 	{
 		const UShinobiJutsuAbility* Jutsu = OnPage[Index];
-		SlotColumns[Index]->SetVisibility(Jutsu ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Hidden);
+		const bool bOnPadPage = Index / 4 == PadPage - 1;
+		SlotColumns[Index]->SetRenderOpacity(bPad && !bOnPadPage ? 0.5f : 1.f);
+		const FText KeyLabel = bPad ? (bOnPadPage ? FText::FromString(FaceLabels[Index % 4]) : FText::GetEmpty())
+			: ShinobiKeyBindings::KeyLabel(ShinobiKeyBindings::Get(static_cast<ShinobiKeyBindings::EBindable>(Index)), true);
+		if (!SlotKeyTexts[Index]->GetText().EqualTo(KeyLabel))
+		{
+			SlotKeyTexts[Index]->SetText(KeyLabel);
+		}
+		SlotKeyTexts[Index]->GetParent()->SetVisibility(KeyLabel.IsEmpty() ? ESlateVisibility::Hidden : ESlateVisibility::HitTestInvisible);
 		if (!Jutsu)
 		{
+			if (SlotJutsu[Index].IsValid()) // emptied: a bare frame with its key
+			{
+				SlotIcons[Index]->SetVisibility(ESlateVisibility::Collapsed);
+				SlotFallbacks[Index]->SetText(FText::GetEmpty());
+				SlotCosts[Index]->SetText(FText::GetEmpty());
+				SlotCooldownTexts[Index]->SetText(FText::GetEmpty());
+				SlotShades[Index]->SetHeightOverride(0.f);
+			}
 			SlotJutsu[Index] = nullptr; // refill the icon when a jutsu comes back to this slot
 			continue;
+		}
+		if (CastName.IsEmpty() && Player && IsJutsuActive(ASC, Jutsu))
+		{
+			CastName = Jutsu->DisplayName;
 		}
 		if (SlotJutsu[Index] != Jutsu)
 		{
@@ -1126,7 +1115,6 @@ void UShinobiHUDWidget::UpdateJutsuSlots(const UAbilitySystemComponent& ASC, int
 			SlotIcons[Index]->SetBrush(RoundedBrush(FLinearColor::White, 6.f, FLinearColor::Transparent, 0.f, IconTexture));
 			SlotIcons[Index]->SetVisibility(IconTexture ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 			SlotFallbacks[Index]->SetText(IconTexture ? FText::GetEmpty() : Jutsu->DisplayName);
-			SlotNames[Index]->SetText(Jutsu->DisplayName);
 			SlotCosts[Index]->SetText(FText::AsNumber(FMath::RoundToInt(Jutsu->ChakraCost)));
 		}
 		const FShinobiJutsuSlotState State = Jutsu->GetSlotState(ASC);
@@ -1144,6 +1132,10 @@ void UShinobiHUDWidget::UpdateJutsuSlots(const UAbilitySystemComponent& ASC, int
 		{
 			SlotFrames[Index]->SetBrush(RoundedBrush(SlotColor, 9.f, Now < SlotFlashUntil[Index] ? SlotFlashColor : TrimColor, 2.f));
 		}
+	}
+	if (!CastNameText->GetText().EqualTo(CastName))
+	{
+		CastNameText->SetText(CastName);
 	}
 }
 
@@ -1164,16 +1156,16 @@ void UShinobiHUDWidget::BindFailureFlash(UAbilitySystemComponent* ASC)
 void UShinobiHUDWidget::OnAbilityFailed(const UGameplayAbility* Ability, const FGameplayTagContainer& Reasons)
 {
 	const UShinobiJutsuAbility* Jutsu = Cast<UShinobiJutsuAbility>(Ability);
-	// Off-page jutsu share this key and fail by design; during Kamui and the Teleport window the same key is
+	// During Kamui and the Teleport window the same key is
 	// answered by another ability, so the jutsu's own failure is expected too.
 	const AShinobiPlayerCharacter* Player = Cast<AShinobiPlayerCharacter>(GetOwningPlayerPawn());
 	const UAbilitySystemComponent* ASC = BoundASC.Get();
-	if (!Jutsu || !Player || !ASC || Jutsu->Page != Player->GetJutsuPage()
+	if (!Jutsu || !Player || !ASC
 		|| ASC->HasMatchingGameplayTag(ShinobiTags::State_Phased) || ASC->HasMatchingGameplayTag(ShinobiTags::State_TeleportMarked))
 	{
 		return;
 	}
-	const int32 Index = JutsuSlotIndex(Jutsu->InputID);
+	const int32 Index = Player->GetLoadout().IndexOfByKey(Jutsu->GetClass());
 	if (SlotFlashUntil.IsValidIndex(Index) && GetWorld())
 	{
 		SlotFlashUntil[Index] = GetWorld()->GetTimeSeconds() + FlashSeconds;

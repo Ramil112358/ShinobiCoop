@@ -59,3 +59,4 @@ SourceArt/Creatures/*/*.fbm/
 !/SourceArt/Susanoo/Models/tripo_rig/*.fbm/*basecolor*
 /SourceArt/Susanoo/Build/*.fbm/
 /SourceArt/Susanoo/Anims/*.zip
+.superpowers/

@@ -93,7 +93,7 @@ bool FShinobiMeteorTargetingTest::RunTest(const FString& Parameters)
 	SpawnMeteorWall(W, FVector(1500.f, 600.f, 0.f), FVector(1.f, 10.f, 10.f));
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(3);
+	ShinobiTest::EquipPage(P, 3);
 	const FGameplayAttribute Chakra = UShinobiAttributeSet::GetChakraAttribute();
 
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
@@ -131,7 +131,7 @@ bool FShinobiMeteorLeftClickConfirmTest::RunTest(const FString& Parameters)
 	SpawnMeteorWall(W, FVector(1500.f, 0.f, 0.f), FVector(1.f, 10.f, 10.f));
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(3);
+	ShinobiTest::EquipPage(P, 3);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 
 	TestTrue(TEXT("The left-click press is consumed by placement"), P->RouteTargetPlacementInput(EShinobiAbilityInputID::Melee, true));
@@ -189,7 +189,7 @@ bool FShinobiMeteorTargetCancelTest::RunTest(const FString& Parameters)
 	SpawnMeteorWall(W, FVector(1500.f, 0.f, 0.f), FVector(1.f, 10.f, 10.f));
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(3);
+	ShinobiTest::EquipPage(P, 3);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 
 	AShinobiPlayerController* PC = W.Spawn<AShinobiPlayerController>();
@@ -209,7 +209,7 @@ bool FShinobiMeteorTargetsGroundAlongAim::RunTest(const FString& Parameters)
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
 	P->SetActorRotation(FRotator(-30.f, 0.f, 0.f));
-	P->ApplyJutsuPage(3);
+	ShinobiTest::EquipPage(P, 3);
 
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	TestTrue(TEXT("Ground within the downward aim is a valid placement"), ShinobiTest::IsActive(P, UGA_FireMeteor::StaticClass()));
@@ -223,7 +223,7 @@ bool FShinobiMeteorLookMovesTargetNotCamera::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	SpawnMeteorWall(W, FVector(1500.f, 0.f, 0.f), FVector(1.f, 10.f, 10.f));
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
-	P->ApplyJutsuPage(3);
+	ShinobiTest::EquipPage(P, 3);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	TestTrue(TEXT("Meteor is waiting for target placement"), P->IsJutsuTargetPlacementActive());
 
@@ -268,7 +268,7 @@ bool FShinobiFireMeteorTest::RunTest(const FString& Parameters)
 	}
 	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
 
-	P->ApplyJutsuPage(3);
+	ShinobiTest::EquipPage(P, 3);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	TestEqual(TEXT("First press only opens target placement"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 100.f);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
@@ -295,7 +295,7 @@ bool FShinobiFireMeteorSkyTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W; // nothing to aim at: no wall, no ground
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(3);
+	ShinobiTest::EquipPage(P, 3);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	TestFalse(TEXT("The cast fails"), ShinobiTest::IsActive(P, UGA_FireMeteor::StaticClass()));
 	TestEqual(TEXT("for free"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 100.f);
@@ -343,7 +343,7 @@ bool FShinobiIceShowerTest::RunTest(const FString& Parameters)
 		ShinobiTest::Hover(Each);
 	}
 
-	P->ApplyJutsuPage(3);
+	ShinobiTest::EquipPage(P, 3);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu4);
 	TestEqual(TEXT("Cost 45 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 55.f);
@@ -388,7 +388,7 @@ bool FShinobiWaterDragonTest::RunTest(const FString& Parameters)
 	}
 	const FGameplayAttribute Health = UShinobiAttributeSet::GetHealthAttribute();
 
-	P->ApplyJutsuPage(3);
+	ShinobiTest::EquipPage(P, 3);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
 	TestEqual(TEXT("Cost 40 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 60.f);
 	W.Tick(0.9f);
@@ -418,7 +418,7 @@ bool FShinobiWaterDragonWallTest::RunTest(const FString& Parameters)
 	{
 		ShinobiTest::Hover(Each);
 	}
-	P->ApplyJutsuPage(3);
+	ShinobiTest::EquipPage(P, 3);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
 	W.Tick(2.4f);
 	TestEqual(TEXT("The enemy before the wall is hit"), ShinobiTest::Get(Before, UShinobiAttributeSet::GetHealthAttribute()), 445.f);
@@ -449,7 +449,7 @@ bool FShinobiMeteorFloorTest::RunTest(const FString& Parameters)
 	SpawnMeteorWall(W, FVector(1500.f, 0.f, 0.f), FVector(1.f, 10.f, 10.f));     // the wall the crosshair is on, at about eye height
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	ShinobiTest::Hover(P);
-	P->ApplyJutsuPage(3);
+	ShinobiTest::EquipPage(P, 3);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu3);
 	W.Tick(0.9f);
@@ -476,7 +476,7 @@ bool FShinobiWaterDragonCloseTest::RunTest(const FString& Parameters)
 	{
 		ShinobiTest::Hover(Each);
 	}
-	P->ApplyJutsuPage(3);
+	ShinobiTest::EquipPage(P, 3);
 	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu2);
 	W.Tick(2.4f);
 	TestEqual(TEXT("The dragon went forward and caught the enemy behind the adjacent one"), ShinobiTest::Get(Further, UShinobiAttributeSet::GetHealthAttribute()), 445.f);

@@ -50,9 +50,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
 	TSoftObjectPtr<UTexture2D> Icon;
 
-	/** Which page of the player's jutsu this sits on (keys 1-4 fire the current page's). Enemies have no input, so they ignore it. */
-	UPROPERTY(EditDefaultsOnly, Category = "Jutsu", meta = (ClampMin = "1", ClampMax = "5"))
-	int32 Page = 1;
+	/** One line for the Skills screen tooltip. */
+	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
+	FText Description;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
 	float ChakraCost = 0.f;
@@ -85,6 +85,9 @@ public:
 
 	/** For the HUD; safe to call on the class default object. */
 	FShinobiJutsuSlotState GetSlotState(const UAbilitySystemComponent& ASC) const;
+
+	/** True while this jutsu can't leave its loadout slot: active or cooling down (subclasses add their lingering states). */
+	virtual bool IsSlotLocked(const UAbilitySystemComponent& ASC, const FGameplayAbilitySpec& Spec) const;
 
 	virtual const FGameplayTagContainer* GetCooldownTags() const override { return &CooldownTags; }
 	virtual bool CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags = nullptr, const FGameplayTagContainer* TargetTags = nullptr, FGameplayTagContainer* OptionalRelevantTags = nullptr) const override;

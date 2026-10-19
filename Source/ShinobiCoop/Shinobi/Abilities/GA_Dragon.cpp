@@ -13,7 +13,6 @@
 
 UGA_SummonDragonBase::UGA_SummonDragonBase()
 {
-	Page = 5;
 	ChakraCost = 70.f;
 	Cooldown = 60.f;
 	WindUp = 0.8f;
@@ -24,8 +23,8 @@ UGA_SummonDragonBase::UGA_SummonDragonBase()
 
 UGA_SummonDragon::UGA_SummonDragon()
 {
-	InputID = EShinobiAbilityInputID::Jutsu1;
 	DisplayName = INVTEXT("Summon Tairn");
+	Description = INVTEXT("Ride Tairn into the sky and breathe blue-white lightning fire.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonDragon.T_Jutsu_SummonDragon")));
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_SummonDragon);
 	DragonKind = EShinobiDragonKind::Tairn;
@@ -33,8 +32,8 @@ UGA_SummonDragon::UGA_SummonDragon()
 
 UGA_SummonCrimsonDragon::UGA_SummonCrimsonDragon()
 {
-	InputID = EShinobiAbilityInputID::Jutsu2;
 	DisplayName = INVTEXT("Crimson Dragon");
+	Description = INVTEXT("Ride the Crimson Dragon and breathe orange fire.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonCrimson.T_Jutsu_SummonCrimson")));
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_SummonCrimsonDragon);
 	DragonKind = EShinobiDragonKind::Crimson;
@@ -54,10 +53,26 @@ void UGA_SummonDragonBase::ExecuteJutsu()
 
 UGA_DragonDismount::UGA_DragonDismount()
 {
-	InputID = EShinobiAbilityInputID::Jutsu1;
+	FollowsSlotOf = UGA_SummonDragon::StaticClass();
 	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerOnly;
 	ActivationRequiredTags.AddTag(ShinobiTags::State_Mounted);
-	ActivationRequiredTags.AddTag(ShinobiTags::JutsuPage(5));
+}
+
+bool UGA_DragonDismount::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, FGameplayTagContainer* OptionalRelevantTags) const
+{
+	if (!Super::CanActivateAbility(Handle, ActorInfo, SourceTags, TargetTags, OptionalRelevantTags))
+	{
+		return false;
+	}
+	const AShinobiCharacterBase* Rider = ActorInfo ? Cast<AShinobiCharacterBase>(ActorInfo->AvatarActor.Get()) : nullptr;
+	const AShinobiDragonMount* Mount = Rider ? AShinobiDragonMount::Find(*Rider) : nullptr;
+	return bAnyKind || !Mount || Mount->GetKind() == RequiredKind; // the other dragon's slot does nothing while mounted
+}
+
+UGA_CrimsonDragonDismount::UGA_CrimsonDragonDismount()
+{
+	FollowsSlotOf = UGA_SummonCrimsonDragon::StaticClass();
+	RequiredKind = EShinobiDragonKind::Crimson;
 }
 
 void UGA_DragonDismount::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
@@ -75,8 +90,9 @@ void UGA_DragonDismount::ActivateAbility(const FGameplayAbilitySpecHandle Handle
 
 UGA_DragonDismountKey::UGA_DragonDismountKey()
 {
+	FollowsSlotOf = nullptr;
+	bAnyKind = true;
 	InputID = EShinobiAbilityInputID::Dismount;
-	ActivationRequiredTags.RemoveTag(ShinobiTags::JutsuPage(5));
 }
 
 UGA_DragonBreath::UGA_DragonBreath()

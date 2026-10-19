@@ -42,7 +42,8 @@ public:
 	UGA_SummonCrimsonDragon();
 };
 
-/** The same key while mounted: climbs down (page 5 only, like Kamui's exit; UGA_DragonDismountKey works on any page). Not a jutsu (no seals, cost or cooldown of its own). */
+/** The summoning key again while mounted: climbs down. Fires from Summon Tairn's loadout slot, only while riding Tairn
+ * (UGA_CrimsonDragonDismount is the Crimson Dragon's; UGA_DragonDismountKey works whatever the slots). Not a jutsu. */
 UCLASS()
 class SHINOBICOOP_API UGA_DragonDismount : public UShinobiGameplayAbility
 {
@@ -51,10 +52,25 @@ class SHINOBICOOP_API UGA_DragonDismount : public UShinobiGameplayAbility
 public:
 	UGA_DragonDismount();
 
+	/** Only while riding this kind, unless bAnyKind. */
+	EShinobiDragonKind RequiredKind = EShinobiDragonKind::Tairn;
+	bool bAnyKind = false;
+
+	virtual bool CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags = nullptr, const FGameplayTagContainer* TargetTags = nullptr, FGameplayTagContainer* OptionalRelevantTags = nullptr) const override;
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
 };
 
-/** The dedicated dismount key (X / D-pad down): off the dragon whatever page is showing. */
+/** Summon Crimson Dragon's slot pressed again while riding the Crimson Dragon: climbs down. */
+UCLASS()
+class SHINOBICOOP_API UGA_CrimsonDragonDismount : public UGA_DragonDismount
+{
+	GENERATED_BODY()
+
+public:
+	UGA_CrimsonDragonDismount();
+};
+
+/** The dedicated dismount key (X / D-pad down): off the dragon whatever is in the slots. */
 UCLASS()
 class SHINOBICOOP_API UGA_DragonDismountKey : public UGA_DragonDismount
 {

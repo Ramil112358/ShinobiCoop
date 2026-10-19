@@ -1,4 +1,8 @@
 #include "Shinobi/ShinobiPlayerController.h"
+#include "Shinobi/Abilities/ShinobiLoadout.h"
+#include "Shinobi/Abilities/ShinobiJutsuAbility.h"
+#include "Shinobi/UI/ShinobiSkillsWidget.h"
+#include "Shinobi/UI/ShinobiShortcutsWidget.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "RHI.h"
@@ -96,6 +100,7 @@ void AShinobiPlayerController::SetupInputComponent()
 	{
 		Input->BindAction(UShinobiInputConfig::Get().Pause, ETriggerEvent::Started, this, &AShinobiPlayerController::TogglePauseMenu);
 		Input->BindAction(UShinobiInputConfig::Get().MapToggle, ETriggerEvent::Started, this, &AShinobiPlayerController::ToggleMap);
+		Input->BindAction(UShinobiInputConfig::Get().SkillsScreen, ETriggerEvent::Started, this, &AShinobiPlayerController::ToggleSkillsScreen);
 		Input->BindAction(UShinobiInputConfig::Get().MapZoom, ETriggerEvent::Started, this, &AShinobiPlayerController::OnMapZoom);
 	}
 }
@@ -128,6 +133,46 @@ void AShinobiPlayerController::OnMapZoom(const FInputActionValue& Value)
 	{
 		ZoomMap(Axis > 0.f ? 1 : -1, true);
 	}
+}
+
+bool AShinobiPlayerController::InputKey(const FInputKeyEventArgs& Params)
+{
+	if (Params.Event == IE_Pressed)
+	{
+		bUsingGamepad = Params.Key.IsGamepadKey();
+	}
+	return Super::InputKey(Params);
+}
+
+void AShinobiPlayerController::ToggleSkillsScreen()
+{
+	if (SkillsWidget)
+	{
+		SkillsWidget->RemoveFromParent();
+		SkillsWidget = nullptr;
+		SetInputMode(FInputModeGameOnly());
+		SetShowMouseCursor(false);
+		return;
+	}
+	if (!GetPawn<AShinobiPlayerCharacter>())
+	{
+		return;
+	}
+	if (PauseMenu)
+	{
+		TogglePauseMenu(); // the pause menu's Jutsu entry, or K over the menu
+	}
+	SkillsWidget = CreateWidget<UShinobiSkillsWidget>(this, UShinobiSkillsWidget::StaticClass());
+	if (!SkillsWidget)
+	{
+		return;
+	}
+	SkillsWidget->AddToViewport(20);
+	// UI only: gameplay keys are blocked while picking; the screen itself closes on K, Esc or B. The world keeps running.
+	FInputModeUIOnly Mode;
+	Mode.SetWidgetToFocus(SkillsWidget->TakeWidget());
+	SetInputMode(Mode);
+	SetShowMouseCursor(true);
 }
 
 void AShinobiPlayerController::TogglePauseMenu()
@@ -236,31 +281,41 @@ void AShinobiPlayerController::ServerDrainChakra_Implementation(float Amount)
 void AShinobiPlayerController::ShinobiCast(int32 JutsuSlot)
 {
 	AShinobiCharacterBase* Shinobi = GetPawn<AShinobiCharacterBase>();
-	if (!Shinobi || JutsuSlot < 1 || JutsuSlot > 4)
+	if (!Shinobi || JutsuSlot < 1 || JutsuSlot > ShinobiLoadout::NumSlots)
 	{
 		return;
 	}
-	const int32 Input = static_cast<int32>(EShinobiAbilityInputID::Jutsu1) + JutsuSlot - 1;
+	const int32 Input = static_cast<int32>(ShinobiLoadout::SlotInputID(JutsuSlot - 1));
 	Shinobi->GetAbilitySystemComponent()->AbilityLocalInputPressed(Input);
 	Shinobi->GetAbilitySystemComponent()->AbilityLocalInputReleased(Input);
 }
 
-void AShinobiPlayerController::ShinobiPage(int32 Page)
+void AShinobiPlayerController::ShinobiEquipPage(int32 Page)
 {
-	if (AShinobiPlayerCharacter* Shinobi = GetPawn<AShinobiPlayerCharacter>())
+	AShinobiPlayerCharacter* Shinobi = GetPawn<AShinobiPlayerCharacter>();
+	if (!Shinobi)
 	{
-		Shinobi->SetJutsuPage(Page);
+		return;
+	}
+	const ShinobiLoadout::FSlots Slots = ShinobiLoadout::WithLegacyPage(Shinobi->GetLoadout(), Page); // the screenshot timelines' old pages
+	if (Shinobi->HasAuthority())
+	{
+		Shinobi->ApplyLoadout(Slots); // a cheat: no swap rules
+	}
+	else
+	{
+		Shinobi->RequestLoadout(Slots, false); // a cheat: never the player's saved bar
 	}
 }
 
 void AShinobiPlayerController::ShinobiCastHold(int32 JutsuSlot, float Seconds)
 {
 	AShinobiCharacterBase* Shinobi = GetPawn<AShinobiCharacterBase>();
-	if (!Shinobi || JutsuSlot < 1 || JutsuSlot > 4)
+	if (!Shinobi || JutsuSlot < 1 || JutsuSlot > ShinobiLoadout::NumSlots)
 	{
 		return;
 	}
-	const int32 Input = static_cast<int32>(EShinobiAbilityInputID::Jutsu1) + JutsuSlot - 1;
+	const int32 Input = static_cast<int32>(ShinobiLoadout::SlotInputID(JutsuSlot - 1));
 	Shinobi->GetAbilitySystemComponent()->AbilityLocalInputPressed(Input);
 	FTimerHandle Handle;
 	GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, [this, Input]()
@@ -320,7 +375,7 @@ void AShinobiPlayerController::ShinobiDumpStats()
 		++Dragons;
 	}
 	const AShinobiPlayerCharacter* Me = GetPawn<AShinobiPlayerCharacter>();
-	UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiJutsuWorld Page=%d Barriers=%d Kunai=%d Meteors=%d Summons=%d Dragons=%d"), Me ? Me->GetJutsuPage() : 0, Barriers, Kunai, Meteors, Summons, Dragons);
+	UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiJutsuWorld Slot1=%s Barriers=%d Kunai=%d Meteors=%d Summons=%d Dragons=%d"), Me && Me->GetLoadout().Num() > 0 && Me->GetLoadout()[0] ? *Me->GetLoadout()[0]->GetName() : TEXT("none"), Barriers, Kunai, Meteors, Summons, Dragons);
 }
 
 void AShinobiPlayerController::RunSmokeTest()
@@ -349,13 +404,13 @@ void AShinobiPlayerController::RunSmokeTest()
 		FTimerHandle Handle;
 		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
 	};
-	At(6.3f, [this]() { ShinobiPage(4); });
+	At(6.3f, [this]() { ShinobiEquipPage(4); });
 	At(6.5f, [this]() { ShinobiCast(4); }); // Pabu: appears from about 7.2 s
 	At(7.4f, [this]() { ShinobiDrainChakra(-100.f); });
 	At(7.6f, [this]() { ShinobiCast(1); }); // Susanoo: the armour is up from about 8.3 s for 20 s
-	At(8.4f, [this]() { ShinobiDrainChakra(-100.f); ShinobiPage(3); });
+	At(8.4f, [this]() { ShinobiDrainChakra(-100.f); ShinobiEquipPage(3); });
 	At(8.6f, [this]() { ShinobiCast(4); }); // Ice Meteors: the shards are queued from about 9.15 s and land over the next 4.5 s
-	At(9.2f, [this]() { ShinobiDrainChakra(-100.f); ShinobiPage(2); });
+	At(9.2f, [this]() { ShinobiDrainChakra(-100.f); ShinobiEquipPage(2); });
 	At(9.5f, [this]() { ShinobiCast(4); }); // Earth Wall
 	At(10.3f, [this]() { ShinobiCast(2); }); // Kamui
 	FTimerHandle DumpTimer;
@@ -364,7 +419,7 @@ void AShinobiPlayerController::RunSmokeTest()
 		ShinobiDumpStats();
 	}), 11.3f, false);
 	// Kamui blocks casting while it lasts (until about 13.9 s); then the dragon: page 5, mounted from about 15.2 s.
-	At(14.2f, [this]() { ShinobiDrainChakra(-100.f); ShinobiPage(5); });
+	At(14.2f, [this]() { ShinobiDrainChakra(-100.f); ShinobiEquipPage(5); });
 	At(14.4f, [this]() { ShinobiCast(1); });
 	At(15.8f, [this]() { ShinobiDumpStats(); ConsoleCommand(TEXT("quit")); });
 }
@@ -386,7 +441,7 @@ void AShinobiPlayerController::RunFollowTest()
 		}
 		UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiFollow %s player=(%.0f,%.0f)%s"), When, Me ? Me->GetActorLocation().X : 0.f, Me ? Me->GetActorLocation().Y : 0.f, *Line);
 	};
-	At(4.f, [this]() { ShinobiPage(4); });
+	At(4.f, [this]() { ShinobiEquipPage(4); });
 	At(4.3f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(4); }); // Pabu
 	At(5.5f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(2); }); // the owl
 	At(6.7f, [this]() { ShinobiDrainChakra(-100.f); ShinobiCast(3); }); // Misha
@@ -468,7 +523,14 @@ void AShinobiPlayerController::RunShotTest()
 	At(9.f, [Input]() { Input(EShinobiAbilityInputID::Jutsu1, true); Input(EShinobiAbilityInputID::Jutsu1, false); });
 	At(9.6f, [Input]() { Input(EShinobiAbilityInputID::Jutsu1, true); Input(EShinobiAbilityInputID::Jutsu1, false); });
 	At(9.7f, [Shot]() { Shot(TEXT("ShinobiShot_5_Hud"), true); });
-	At(10.5f, [this]() { ConsoleCommand(TEXT("quit")); });
+	// The Skills screen (K) over the game, with slot 1 still cooling down.
+	At(10.f, [this]() { ToggleSkillsScreen(); });
+	At(10.6f, [Shot]() { Shot(TEXT("ShinobiShot_6_Skills"), true); });
+	At(10.8f, [this]() { ToggleSkillsScreen(); });
+	// Settings > Shortcuts.
+	At(11.f, [this]() { if (UUserWidget* Panel = CreateWidget<UShinobiShortcutsWidget>(this, UShinobiShortcutsWidget::StaticClass())) { Panel->AddToViewport(60); } });
+	At(11.5f, [Shot]() { Shot(TEXT("ShinobiShot_7_Shortcuts"), true); });
+	At(12.f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
 
 void AShinobiPlayerController::RunLookShotTest()
@@ -709,7 +771,7 @@ void AShinobiPlayerController::RunSusanooShotTest()
 		Camera->SetLifeSpan(1.f);
 		SetViewTarget(Camera);
 	};
-	At(1.0f, [this]() { ShinobiPage(5); ShinobiDrainChakra(-100.f); });
+	At(1.0f, [this]() { ShinobiEquipPage(5); ShinobiDrainChakra(-100.f); });
 	At(1.2f, [this]() { ShinobiCast(3); }); // 0.6 s seals: the armour rises at about 1.9
 	const float Yaws[] = { 0.f, 0.f, 40.f, 90.f, 160.f }; // the front twice: the first frame after a camera cut can lag
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Yaws); ++Index)
@@ -845,7 +907,7 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	{
 		FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Name), true, false);
 	};
-	At(17.2f, [this, RestoreAim]() { ShinobiPage(2); RestoreAim(); });
+	At(17.2f, [this, RestoreAim]() { ShinobiEquipPage(2); RestoreAim(); });
 	At(17.6f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_12_HudPage2")); }); // after the icons have streamed in
 	At(17.8f, [CastJutsu]() { CastJutsu(3, 1.2f); }); // Almighty Push: 0.5 s seals, released at 19.0, the wave 0.15 s later
 	At(19.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_13_Push")); });
@@ -856,17 +918,17 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(20.4f, RestoreAim);
 	At(20.6f, [CastJutsu]() { CastJutsu(4, 0.8f); }); // Earth Wall: 0.5 s seals, the wall rises at 21.4
 	At(22.3f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_14_EarthWall")); });
-	At(23.0f, [this, RestoreAim]() { ShinobiPage(3); RestoreAim(); });
+	At(23.0f, [this, RestoreAim]() { ShinobiEquipPage(3); RestoreAim(); });
 	At(23.2f, [CastJutsu]() { CastJutsu(1, 0.7f); }); // Water Wall: 0.4 s seals, the wall rises at 23.9 (replaces the earth wall: one per caster)
 	At(24.8f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_15_WaterWall")); });
 	At(25.0f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_16_HudPage3")); });
-	At(25.8f, [this, RestoreAim]() { ShinobiPage(2); RestoreAim(); });
+	At(25.8f, [this, RestoreAim]() { ShinobiEquipPage(2); RestoreAim(); });
 	At(26.0f, [CastJutsu]() { CastJutsu(2, 0.5f); }); // Kamui: 0.3 s seals, phased from 26.5
 	At(26.8f, [FaceCamera]() { FaceCamera(55.f, 90.f, 0.f, 320.f); }); // from the side: the water wall stands 350 ahead
 	At(26.95f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_17_Kamui")); });
 	At(27.1f, BackToPlayer);
 	// Page 3's elemental jutsu once Kamui has worn off (it blocks casting): Fire Meteor, Ice Meteors, Water Dragon.
-	At(29.7f, [this, RestoreAim]() { ShinobiPage(3); RestoreAim(); });
+	At(29.7f, [this, RestoreAim]() { ShinobiEquipPage(3); RestoreAim(); });
 	At(29.9f, [CastJutsu]() { CastJutsu(3, 0.8f); }); // Fire Meteor: 0.6 s seals, the ring and the meteor appear at 30.7
 	At(31.1f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_20_FireMeteorRing")); });
 	At(32.25f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_21_FireMeteorImpact")); }); // lands about 32.1
@@ -883,7 +945,7 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(42.6f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_24_HudPage3Full")); });
 
 	// Back to page 2 for Teleport.
-	At(43.2f, [this, RestoreAim]() { ShinobiPage(2); RestoreAim(); });
+	At(43.2f, [this, RestoreAim]() { ShinobiEquipPage(2); RestoreAim(); });
 	At(43.4f, [CastJutsu]() { CastJutsu(1, 0.6f); }); // Teleport: 0.4 s seals, the kunai fly at 43.9
 	At(44.05f, [FaceCamera]() { FaceCamera(70.f, 90.f, 250.f, 520.f); });
 	At(44.15f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_18_TeleportKunai")); });
@@ -892,7 +954,7 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(45.5f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_19_TeleportArrival")); });
 
 	// Page 5, slot 3: Susanoo. A tall figure, so the camera stands back and watches from the side.
-	At(46.0f, [this, RestoreAim]() { ShinobiPage(5); RestoreAim(); });
+	At(46.0f, [this, RestoreAim]() { ShinobiEquipPage(5); RestoreAim(); });
 	At(46.2f, [CastJutsu]() { CastJutsu(3, 0.7f); }); // Susanoo: 0.6 s seals, the armour rises at 46.9
 	At(47.4f, [FaceCamera]() { FaceCamera(80.f, -60.f, 0.f, 1000.f); });
 	At(47.55f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_25_Susanoo")); });
@@ -904,7 +966,7 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	// The summons (page 4 slots 4, 2, 3, 1), each watched from the side as it arrives and goes for the dummies.
 	At(49.1f, [this, Start, RestoreAim]() // the teleport and the dashes left the caster somewhere else: back to where it started
 	{
-		ShinobiPage(4);
+		ShinobiEquipPage(4);
 		if (APawn* Shinobi = GetPawn())
 		{
 			Shinobi->SetActorTransform(*Start, false, nullptr, ETeleportType::TeleportPhysics);
@@ -940,7 +1002,7 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	// The dragon (page 5): mount, ride in the default (pulled-back) view, breathe fire at the dummies, climb, dismount.
 	auto Rider = [this]() { return GetPawn<AShinobiPlayerCharacter>(); };
 	At(61.0f, [Rider]() { if (AShinobiPlayerCharacter* P = Rider()) { P->GetAbilitySystemComponent()->RemoveActiveEffectsWithGrantedTags(FGameplayTagContainer(ShinobiTags::State_Susanoo)); } }); // the armour hides the rider
-	At(61.2f, [this, RestoreAim]() { ShinobiPage(5); RestoreAim(); });
+	At(61.2f, [this, RestoreAim]() { ShinobiEquipPage(5); RestoreAim(); });
 	At(61.4f, [CastJutsu]() { CastJutsu(1, 0.9f); }); // Summon Dragon: 0.8 s seals, mounted from about 62.2
 	At(64.2f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_31_DragonRide")); });
 	At(64.4f, [FaceCamera]() { FaceCamera(75.f, 60.f, 0.f, 2300.f); });

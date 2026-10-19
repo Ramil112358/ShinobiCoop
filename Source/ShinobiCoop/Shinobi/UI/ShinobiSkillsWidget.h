@@ -1,0 +1,95 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Blueprint/UserWidget.h"
+#include "Shinobi/Abilities/ShinobiLoadout.h"
+#include "ShinobiSkillsWidget.generated.h"
+
+class UBorder;
+class UImage;
+class UTextBlock;
+class UShinobiSkillsWidget;
+class AShinobiPlayerCharacter;
+
+/** One square on the Skills screen: a jutsu in the pool or one of the 8 slots. Click (or A), right-click, drag and drop. */
+UCLASS()
+class SHINOBICOOP_API UShinobiSkillCell : public UUserWidget
+{
+	GENERATED_BODY()
+
+public:
+	TWeakObjectPtr<UShinobiSkillsWidget> Owner;
+	bool bSlot = false;
+	/** Pool: index into the known jutsu. Slot: 0-7. */
+	int32 Index = 0;
+
+	void Show(TSubclassOf<class UShinobiJutsuAbility> Jutsu, const FLinearColor& Frame, const FText& Overlay, const FText& Key, float Dim);
+
+protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override;
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event) override;
+	virtual FReply NativeOnMouseButtonUp(const FGeometry& Geometry, const FPointerEvent& Event) override;
+	virtual void NativeOnDragDetected(const FGeometry& Geometry, const FPointerEvent& Event, UDragDropOperation*& OutOperation) override;
+	virtual bool NativeOnDrop(const FGeometry& Geometry, const FDragDropEvent& Event, UDragDropOperation* Operation) override;
+	virtual FReply NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event) override;
+	virtual void NativeOnAddedToFocusPath(const FFocusEvent& Event) override;
+	virtual void NativeOnRemovedFromFocusPath(const FFocusEvent& Event) override;
+
+private:
+	UPROPERTY()
+	TObjectPtr<UBorder> FrameBorder;
+	UPROPERTY()
+	TObjectPtr<UImage> Icon;
+	UPROPERTY()
+	TObjectPtr<UTextBlock> OverlayText;
+	UPROPERTY()
+	TObjectPtr<UTextBlock> KeyText;
+
+	TWeakObjectPtr<UClass> ShownJutsu;
+	FLinearColor FrameColor = FLinearColor::Gray;
+	bool bFocused = false;
+};
+
+/**
+ * The Skills screen (K, or the pause menu's Jutsu): every jutsu the player knows above, their 8 bar slots below. Click a
+ * jutsu then a slot (or drag it there) to equip; drag slot to slot to reorder; right-click a slot (or drag it to the
+ * pool) to empty it. Swaps only out of combat and never for a jutsu on cooldown: the server decides (RequestLoadout).
+ * The game keeps running; gameplay input is blocked while it is open.
+ */
+UCLASS()
+class SHINOBICOOP_API UShinobiSkillsWidget : public UUserWidget
+{
+	GENERATED_BODY()
+
+public:
+	void OnCellClicked(const UShinobiSkillCell& Cell);
+	void OnCellRightClicked(const UShinobiSkillCell& Cell);
+	void OnCellDropped(const UShinobiSkillCell& From, const UShinobiSkillCell& To);
+	/** B (no pick), K or Esc. */
+	void Close();
+
+protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override;
+	virtual void NativeConstruct() override;
+	virtual void NativeTick(const FGeometry& Geometry, float DeltaTime) override;
+	virtual FReply NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event) override;
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event) override;
+
+private:
+	AShinobiPlayerCharacter* GetPlayer() const;
+	/** Sends Slots to the server if nothing obvious forbids it; otherwise says why. */
+	void Request(const ShinobiLoadout::FSlots& Slots);
+
+	UPROPERTY()
+	TArray<TObjectPtr<UShinobiSkillCell>> PoolCells;
+	UPROPERTY()
+	TArray<TObjectPtr<UShinobiSkillCell>> SlotCells;
+	UPROPERTY()
+	TObjectPtr<UTextBlock> Banner;
+
+	TArray<TSubclassOf<class UShinobiJutsuAbility>> Known;
+	int32 PickedPool = INDEX_NONE;
+	int32 PickedSlot = INDEX_NONE;
+	FText Notice;
+	double NoticeUntil = 0.0;
+};

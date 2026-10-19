@@ -30,7 +30,7 @@ class SHINOBICOOP_API UShinobiHUDWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	static constexpr int32 NumJutsuSlots = 4;
+	static constexpr int32 NumJutsuSlots = 8; // ShinobiLoadout::NumSlots
 
 	/** The width the jutsu slot Index takes up (its icon and its name); every slot is the same, whatever the name. For tests. */
 	float GetJutsuSlotWidth(int32 Index) const;
@@ -61,10 +61,8 @@ private:
 	void BuildJutsuSlots(UCanvasPanel* Root);
 	UTextBlock* MakeText(int32 FontSize, const FLinearColor& Tint, bool bBold = false);
 	UTextBlock* AddLabel(UOverlay* Layers, int32 FontSize, EHorizontalAlignment HorizontalAlign, EVerticalAlignment VerticalAlign, const FLinearColor& Tint);
-	/** The slots show the jutsu on Page (the player's current jutsu page); slots with none on it are hidden. */
-	void UpdateJutsuSlots(const UAbilitySystemComponent& ASC, int32 Page, const class AShinobiPlayerCharacter* Player);
-	/** One small diamond per jutsu page under the slots; the current page is lit. */
-	void BuildPagePips(UCanvasPanel* Root);
+	/** The slots show the player's loadout (empty ones as a bare frame), their keys, and on a gamepad which four RB reaches. */
+	void UpdateJutsuSlots(const UAbilitySystemComponent& ASC, const class AShinobiPlayerCharacter* Player);
 
 	/** While riding a dragon: a ring at the point where its fire will end (straight ahead of the dragon, or the first thing in the way). */
 	void BuildDragonCrosshair(UCanvasPanel* Root);
@@ -221,7 +219,11 @@ private:
 
 	/** Under each slot. */
 	UPROPERTY()
-	TArray<TObjectPtr<UTextBlock>> SlotNames;
+	TArray<TObjectPtr<UTextBlock>> SlotKeyTexts;
+
+	/** The jutsu being cast, above the bar (the slots carry no names). */
+	UPROPERTY()
+	TObjectPtr<UTextBlock> CastNameText;
 
 	/** Each slot's column (frame + name): hidden when the current page has no jutsu there. */
 	UPROPERTY()
@@ -234,9 +236,6 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<class USizeBox> AimCrosshair;
-
-	UPROPERTY()
-	TArray<TObjectPtr<UBorder>> PagePips;
 
 	/** The jutsu each slot shows; its icon, name and cost are set when it changes. */
 	TArray<TWeakObjectPtr<const UShinobiJutsuAbility>> SlotJutsu;

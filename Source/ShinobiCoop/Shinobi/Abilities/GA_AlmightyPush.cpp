@@ -8,9 +8,8 @@
 
 UGA_AlmightyPush::UGA_AlmightyPush()
 {
-	InputID = EShinobiAbilityInputID::Jutsu3;
-	Page = 2;
 	DisplayName = INVTEXT("Almighty Push");
+	Description = INVTEXT("A dome of force that hurls every nearby enemy away.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_AlmightyPush.T_Jutsu_AlmightyPush")));
 	ChakraCost = 30.f;
 	Cooldown = 8.f;

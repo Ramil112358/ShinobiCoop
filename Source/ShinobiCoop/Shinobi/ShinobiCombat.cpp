@@ -2,6 +2,9 @@
 #include "AbilitySystemComponent.h"
 #include "EngineUtils.h"
 #include "Shinobi/ShinobiCharacterBase.h"
+#include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/Enemies/ShinobiOwl.h"
+#include "Shinobi/Enemies/ShinobiSummon.h"
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiTags.h"
 
@@ -20,6 +23,31 @@ namespace ShinobiCombat
 			const FGameplayEffectSpecHandle Spec = Source->MakeOutgoingSpec(Effect, 1.f, Source->MakeEffectContext());
 			Spec.Data->SetSetByCallerMagnitude(ShinobiTags::Data_Damage, Damage);
 			Source->ApplyGameplayEffectSpecToTarget(*Spec.Data.Get(), Target->GetAbilitySystemComponent());
+		}
+	}
+
+	void NoteCombat(const AActor* Instigator, AShinobiCharacterBase* Victim)
+	{
+		const AShinobiCharacterBase* Source = Cast<AShinobiCharacterBase>(Instigator);
+		if (const AShinobiSummon* Summon = Cast<AShinobiSummon>(Instigator))
+		{
+			Source = Summon->GetSummoner(); // the summoner fights through their summon
+		}
+		else if (const AShinobiOwl* Owl = Cast<AShinobiOwl>(Instigator))
+		{
+			Source = Owl->GetSummoner();
+		}
+		if (!Source || !Victim || !Victim->IsHostileTo(Source))
+		{
+			return; // self-damage, a teammate, the world
+		}
+		if (AShinobiPlayerCharacter* Player = Cast<AShinobiPlayerCharacter>(Victim))
+		{
+			Player->NoteCombat();
+		}
+		if (AShinobiPlayerCharacter* Player = Cast<AShinobiPlayerCharacter>(const_cast<AShinobiCharacterBase*>(Source)))
+		{
+			Player->NoteCombat();
 		}
 	}
 

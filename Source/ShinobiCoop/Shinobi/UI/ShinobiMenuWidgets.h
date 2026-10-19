@@ -100,7 +100,7 @@ private:
 	TObjectPtr<UVerticalBox> GameList;
 };
 
-/** Resume, Invite Friend (Steam overlay), Leave. The game keeps running (it's online). */
+/** Resume, Jutsu (the Skills screen), Invite Friend (Steam overlay), Settings, Leave. The game keeps running (it's online). */
 UCLASS()
 class SHINOBICOOP_API UShinobiPauseMenuWidget : public UShinobiMenuWidget
 {
@@ -108,12 +108,12 @@ class SHINOBICOOP_API UShinobiPauseMenuWidget : public UShinobiMenuWidget
 
 protected:
 	virtual FString GetTitle() const override { return TEXT("PAUSED"); }
-	virtual TArray<FString> GetEntries() const override { return { TEXT("Resume"), TEXT("Invite Friend"), TEXT("Settings"), TEXT("Leave") }; }
+	virtual TArray<FString> GetEntries() const override { return { TEXT("Resume"), TEXT("Jutsu"), TEXT("Invite Friend"), TEXT("Settings"), TEXT("Leave") }; }
 	virtual void OnEntry(int32 Index) override;
 	virtual void Refresh() override;
 };
 
-/** Graphics settings (ShinobiSettings rows): each click cycles a row, applies and saves; Back returns to the opener. */
+/** Graphics settings (ShinobiSettings rows): each click cycles a row, applies and saves; Shortcuts opens the key bindings; Back returns to the opener. */
 UCLASS()
 class SHINOBICOOP_API UShinobiSettingsWidget : public UShinobiMenuWidget
 {

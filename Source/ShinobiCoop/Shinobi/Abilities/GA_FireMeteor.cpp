@@ -8,9 +8,8 @@
 
 UGA_FireMeteor::UGA_FireMeteor()
 {
-	InputID = EShinobiAbilityInputID::Jutsu3;
-	Page = 3;
 	DisplayName = INVTEXT("Fire Meteor");
+	Description = INVTEXT("Mark a spot, then call down a flaming meteor that leaves the ground on fire.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_FireMeteor.T_Jutsu_FireMeteor")));
 	ChakraCost = 50.f;
 	Cooldown = 18.f;

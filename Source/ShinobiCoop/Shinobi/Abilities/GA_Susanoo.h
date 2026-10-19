@@ -14,6 +14,8 @@ class SHINOBICOOP_API UGA_Susanoo : public UShinobiJutsuAbility
 public:
 	UGA_Susanoo();
 
+	virtual bool IsSlotLocked(const UAbilitySystemComponent& ASC, const FGameplayAbilitySpec& Spec) const override;
+
 protected:
 	virtual void ExecuteJutsu() override;
 };

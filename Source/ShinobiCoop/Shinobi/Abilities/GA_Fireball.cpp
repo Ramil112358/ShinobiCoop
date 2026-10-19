@@ -10,8 +10,8 @@
 
 UGA_Fireball::UGA_Fireball()
 {
-	InputID = EShinobiAbilityInputID::Jutsu1;
 	DisplayName = INVTEXT("Fireball");
+	Description = INVTEXT("A fireball thrown at the crosshair that sets its target burning.");
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_Fireball.T_Jutsu_Fireball")));
 	ChakraCost = 20.f;
 	Cooldown = 4.f;

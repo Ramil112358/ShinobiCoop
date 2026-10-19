@@ -21,6 +21,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
 	float FanDegrees = 12.f;
 
+	virtual bool IsSlotLocked(const UAbilitySystemComponent& ASC, const FGameplayAbilitySpec& Spec) const override;
+
 protected:
 	virtual void ExecuteJutsu() override;
 };
