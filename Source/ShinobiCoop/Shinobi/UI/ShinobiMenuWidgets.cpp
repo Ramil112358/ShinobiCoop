@@ -11,6 +11,7 @@
 #include "Shinobi/ShinobiPlayerController.h"
 #include "Shinobi/Online/ShinobiSessionSubsystem.h"
 #include "Shinobi/UI/ShinobiSettings.h"
+#include "Shinobi/UI/ShinobiShortcutsWidget.h"
 
 namespace
 {
@@ -299,6 +300,7 @@ TArray<FString> UShinobiSettingsWidget::GetEntries() const
 	{
 		Entries.Add(ShinobiSettings::Label(ShinobiSettings::ERow(Row)));
 	}
+	Entries.Add(TEXT("Shortcuts"));
 	Entries.Add(TEXT("Back"));
 	return Entries;
 }
@@ -310,6 +312,14 @@ void UShinobiSettingsWidget::OnEntry(int32 Index)
 		const ShinobiSettings::ERow Row = ShinobiSettings::ERow(Index);
 		ShinobiSettings::Cycle(Row, GetWorld());
 		SetEntryLabel(Index, ShinobiSettings::Label(Row));
+		return;
+	}
+	if (Index == int32(ShinobiSettings::ERow::Num)) // Shortcuts
+	{
+		UShinobiShortcutsWidget* Panel = CreateWidget<UShinobiShortcutsWidget>(GetOwningPlayer(), UShinobiShortcutsWidget::StaticClass());
+		Panel->Opener = this;
+		SetVisibility(ESlateVisibility::Collapsed);
+		Panel->AddToViewport(60);
 		return;
 	}
 	if (UUserWidget* Menu = Opener.Get())

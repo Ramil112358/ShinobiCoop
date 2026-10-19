@@ -113,7 +113,7 @@ protected:
 	virtual void Refresh() override;
 };
 
-/** Graphics settings (ShinobiSettings rows): each click cycles a row, applies and saves; Back returns to the opener. */
+/** Graphics settings (ShinobiSettings rows): each click cycles a row, applies and saves; Shortcuts opens the key bindings; Back returns to the opener. */
 UCLASS()
 class SHINOBICOOP_API UShinobiSettingsWidget : public UShinobiMenuWidget
 {

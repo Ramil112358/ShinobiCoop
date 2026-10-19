@@ -2,6 +2,7 @@
 #include "Shinobi/Abilities/ShinobiLoadout.h"
 #include "Shinobi/Abilities/ShinobiJutsuAbility.h"
 #include "Shinobi/UI/ShinobiSkillsWidget.h"
+#include "Shinobi/UI/ShinobiShortcutsWidget.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "RHI.h"
@@ -526,7 +527,10 @@ void AShinobiPlayerController::RunShotTest()
 	At(10.f, [this]() { ToggleSkillsScreen(); });
 	At(10.6f, [Shot]() { Shot(TEXT("ShinobiShot_6_Skills"), true); });
 	At(10.8f, [this]() { ToggleSkillsScreen(); });
-	At(11.3f, [this]() { ConsoleCommand(TEXT("quit")); });
+	// Settings > Shortcuts.
+	At(11.f, [this]() { if (UUserWidget* Panel = CreateWidget<UShinobiShortcutsWidget>(this, UShinobiShortcutsWidget::StaticClass())) { Panel->AddToViewport(60); } });
+	At(11.5f, [Shot]() { Shot(TEXT("ShinobiShot_7_Shortcuts"), true); });
+	At(12.f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
 
 void AShinobiPlayerController::RunLookShotTest()
