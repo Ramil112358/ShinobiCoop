@@ -29,7 +29,8 @@ LEG_KEEP_AT_HEM = 0.35  # share of the leg weights kept at the hem (the rest goe
 MAX_INFLUENCES = 4
 CLEARANCE = 0.01  # cloth kept this far off the body's skin
 MAX_LIFT = 0.1  # deeper than this it's not cloth caught in the body (the collar's inside, a lining): left alone
-LIFT_RADIUS, LIFT_PASSES = 0.1, 6  # the lift field's smoothing (m) and passes
+LIFT_RADIUS, LIFT_PASSES = 0.1, 24  # the lift field's smoothing (m) and most passes (it stops once the body is under LIFT_DONE)
+LIFT_DONE = 0.005
 SLEEVE_START, SLEEVE_FULL = 0.45, 0.8  # sleeve blend, as shares of the sleeve's angle from straight down at the shoulder
 COAT_SEED = 0.15  # cloth hanging this close to straight down from the shoulder (share of the arm's angle) is surely coat
 MEMBERSHIP_PASSES = 3000  # relaxation passes spreading the sleeve/coat label along the mesh
@@ -89,6 +90,15 @@ for obj in list(bpy.context.scene.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
 bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 outfit.name = name
+# glTF splits the vertices along every UV seam (a Tripo atlas is hundreds of islands): weld them back, or each island moves
+# and shades on its own (faceted patches once the cloth is lifted), and recompute the normals for the moved cloth.
+weld = bmesh.new()
+weld.from_mesh(outfit.data)
+bmesh.ops.remove_doubles(weld, verts=weld.verts, dist=1e-5)
+weld.to_mesh(outfit.data)
+weld.free()
+bpy.ops.mesh.customdata_custom_splitnormals_clear()
+bpy.ops.object.shade_smooth()
 
 
 def bone_head(suffix):
@@ -258,7 +268,11 @@ def sleeve_membership(shoulder, outward, angle):
 # show through in game). Turn each sleeve about the shoulder joint onto the arm (cuff centre onto the arm's line)...
 for side in ("Left", "Right"):
     shoulder, outward, arm_angle = arm_frame(side)
-    picked = [v.co.copy() for v, s in zip(outfit.data.vertices, sleeve_shares(shoulder, outward, arm_angle)) if s > 0.5]
+    # (picked against the cloth's own widest angle when that's narrower than the arm's: Tripo's Akatsuki sleeves hang ~20 deg)
+    spread = numpy.percentile([math.atan2((v.co - shoulder).x * outward, shoulder.z - v.co.z) for v in outfit.data.vertices
+                               if (v.co - shoulder).x * outward > 0 and v.co.z < shoulder.z], 98)
+    pick_angle = min(arm_angle, spread)
+    picked = [v.co.copy() for v, s in zip(outfit.data.vertices, sleeve_shares(shoulder, outward, pick_angle)) if s > 0.5]
     if len(picked) < 20:
         fail(f"no {side} sleeve found out along the arm")
     picked.sort(key=lambda p: (p - shoulder).length)
@@ -280,6 +294,7 @@ all_points = KDTree(len(outfit.data.vertices))
 for vertex in outfit.data.vertices:
     all_points.insert(vertex.co, vertex.index)
 all_points.balance()  # rest positions: neighbourhoods stay those of the cloth as Rodin made it
+rest = [vertex.co.copy() for vertex in outfit.data.vertices]
 for _ in range(LIFT_PASSES):
     lifts = {}
     for vertex in outfit.data.vertices:
@@ -289,15 +304,15 @@ for _ in range(LIFT_PASSES):
             if 0 < lift < MAX_LIFT:
                 lifts[vertex.index] = normal * lift
     log(f"lift pass: {len(lifts)} vertices in or near the body (deepest {max((v.length for v in lifts.values()), default=0) * 100:.1f} cm)")
-    if not lifts:
+    if max((v.length for v in lifts.values()), default=0) < LIFT_DONE:
         break
     touched = set()
     for index in lifts:
-        touched.update(i for _, i, _ in all_points.find_range(outfit.data.vertices[index].co, LIFT_RADIUS))
+        touched.update(i for _, i, _ in all_points.find_range(rest[index], LIFT_RADIUS))
     moves = []
     for index in touched:
         total, weight = Vector(), 0.0
-        for _, other, distance in all_points.find_range(outfit.data.vertices[index].co, LIFT_RADIUS):
+        for _, other, distance in all_points.find_range(rest[index], LIFT_RADIUS):
             k = 1.0 - distance / LIFT_RADIUS
             weight += k
             if other in lifts:
