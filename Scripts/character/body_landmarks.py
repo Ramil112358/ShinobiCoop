@@ -14,10 +14,12 @@ from mathutils import Quaternion, Vector
 TAIL_CLEARANCE = 0.14  # body vertices this far from every leg bone and from the hips joint, behind it, below it: tail
 TAIL_MIN_VERTICES = 500  # smaller pieces out there are trouser folds (Hero, Pabu: under 100), not a tail (Cat, Misha: 2000+)
 
-# Test poses: pose name -> [(bone suffix, axis in armature space, degrees)]. "Left" bones are on +X.
+# Test poses: pose name -> [(bone suffix, world axis, degrees)] (world: Z up, "Left" bones on +X). About +Y a negative
+# angle raises the left arm (+X turns towards +Z), so the right arm takes the opposite sign; the A-pose arms hang ~39
+# degrees out from straight down.
 POSES = {
     "idle": [],
-    "arms_down": [("LeftArm", (0, 1, 0), 50), ("RightArm", (0, 1, 0), -50)],
+    "arms_down": [("LeftArm", (0, 1, 0), 35), ("RightArm", (0, 1, 0), -35)],
     "arms_out": [("LeftArm", (0, 1, 0), -50), ("RightArm", (0, 1, 0), 50)],
     "arms_up": [("LeftArm", (0, 1, 0), -120), ("RightArm", (0, 1, 0), 120)],
     "arms_forward": [("LeftArm", (1, 0, 0), -80), ("RightArm", (1, 0, 0), -80)],
@@ -235,7 +237,8 @@ def measure(fbx):
 
 def pose(armatures, name):
     """Applies POSES[name] to every armature given (a body and the outfit skinned to it pose alike): each rotation is
-    about an armature-space axis, written into the pose bone as M^-1 R M (M = the bone's rest matrix)."""
+    about a world axis (turned into the armature's space: an FBX armature object is itself rotated), written into the
+    pose bone as M^-1 R M (M = the bone's rest matrix in armature space)."""
     for armature in armatures:
         for bone in armature.pose.bones:
             bone.rotation_mode = "QUATERNION"
@@ -243,6 +246,24 @@ def pose(armatures, name):
         for bone_name, axis, degrees in POSES[name]:
             bone = next(b for b in armature.pose.bones if suffix(b.name) == bone_name)
             rest = bone.bone.matrix_local.to_3x3()
-            turn = Quaternion(Vector(axis), math.radians(degrees)).to_matrix()
+            local_axis = (armature.matrix_world.to_3x3().inverted() @ Vector(axis)).normalized()
+            turn = Quaternion(local_axis, math.radians(degrees)).to_matrix()
             bone.rotation_quaternion = (rest.inverted() @ turn @ rest).to_quaternion()
     bpy.context.view_layer.update()
+
+
+if __name__ == "__main__":
+    # blender -b -P body_landmarks.py -- <body_rigged.fbx> <out_tail.json>: the tail capsule and the Hips joint (metres,
+    # file space) or null,
+    # for Scripts/setup_hero.py (UShinobiOutfitBuilderLibrary::AddTailCapsule).
+    import json
+    import sys
+    cli = sys.argv[sys.argv.index("--") + 1:]
+    landmarks = measure(cli[0])
+    found = landmarks["tail"]
+    if found is not None:
+        found = {k: found[k] for k in ("root", "tip", "radius")}
+        found["hips"] = tuple(float(v) for v in bone_head(load_body(cli[0])[0], "Hips"))  # setup_hero.py works from the hips
+    with open(cli[1], "w", encoding="utf-8") as handle:
+        json.dump(found, handle, indent=1)
+    print(f"[body_landmarks] wrote {cli[1]}: {'no tail' if found is None else 'tail'}")

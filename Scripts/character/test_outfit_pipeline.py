@@ -47,7 +47,7 @@ def fit(outfit, name):
     if key not in _fitted:
         out = tempfile.mkdtemp(prefix=f"fit_{outfit}_{name}_")
         master = os.path.join(OUTFITS, outfit, "Akatsuki_clouds.glb" if outfit == "Akatsuki" else f"{outfit}_tripo.glb")
-        run = subprocess.run([bpy.app.binary_path, "-b", "--factory-startup", "-P", os.path.join("Scripts", "character", "skin_outfit.py"),
+        run = subprocess.run([bpy.app.binary_path, "-b", "--factory-startup", "--python-exit-code", "1", "-P", os.path.join("Scripts", "character", "skin_outfit.py"),
                               "--", body(name), master, out, outfit, name], capture_output=True, text=True)
         assert run.returncode == 0, run.stdout[-3000:]
         _fitted[key] = os.path.join(out, f"{outfit}_{name}_outfit.fbx")
@@ -176,7 +176,7 @@ def hide_mask(outfit, name):
     if key not in _masks:
         fbx = fit(outfit, name)
         png = os.path.join(os.path.dirname(fbx), f"{outfit}_{name}_hide.png")
-        run = subprocess.run([bpy.app.binary_path, "-b", "--factory-startup", "-P", os.path.join("Scripts", "character", "bake_hide_mask.py"),
+        run = subprocess.run([bpy.app.binary_path, "-b", "--factory-startup", "--python-exit-code", "1", "-P", os.path.join("Scripts", "character", "bake_hide_mask.py"),
                               "--", body(name), fbx, png], capture_output=True, text=True)
         assert run.returncode == 0, run.stdout[-3000:]
         _masks[key] = png

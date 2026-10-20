@@ -36,6 +36,10 @@ HEM_TOP = 0.05  # the swinging hem starts this far above the hip joint (m)
 SLEEVE_SWING_FROM = 0.4  # the sleeve swings from this share of the shoulder-to-hand distance out to the cuff
 TAIL_MARGIN = 0.04  # the tail opening is this much wider than the tail (m)
 TAIL_EDGE_SWING = 0.2  # hem share at the opening's edge: it swings less than the skirt round it
+UNDERARM_SWING = 0.5  # sleeve share of the cloth under the arm, below the shoulder joint
+CAP_INBOARD, CAP_OUT, CAP_LOW, CAP_HIGH = -0.04, 0.10, -0.02, 0.14  # the shoulder cap round the joint (m: out / up)
+CAP_NEAR, CAP_FADE = 0.03, 0.03  # ...cloth this near the skin, fading in over this (m)
+CAP_CLEARANCE = 0.035  # cloth over the shoulder cap is lifted this far off the skin (m)
 TAIL_FRONT = 0.02  # skirt below the opening is kept this far in front of the tail (m)
 MAX_INFLUENCES = 4
 CLEARANCE = 0.01  # cloth kept this far off the body's skin
@@ -50,7 +54,8 @@ LIMB_NEARER = 0.5  # low cloth this much nearer the arm/hand surface than the to
 SHOULDER_RAMP = 0.08  # sleeve share grows in over this far outboard of the shoulder joint (m)
 ELBOW_BLEND = 0.06  # sleeve weights hand over from upper arm to forearm this far either side of the elbow (m)
 ARMPIT_REACH, ARMPIT_RADIUS = 0.15, 0.05  # the armpit band (m out of / above the shoulder joint) and its smoothing
-TEAR_DROP = 0.16  # sleeve cloth lower than this below the shoulder joint (m) can be surely sleeve (sleeve_membership)
+ARMPIT_FADE_TOP = 0.06  # the smoothing is full from this far below the shoulder joint up, none at the split line (m)
+TEAR_DROP = 0.16  # sleeve cloth lower than this below the shoulder joint (m) is split from the coat (not the armpit seam)
 
 
 def fail(message):
@@ -257,7 +262,7 @@ def sleeve_membership(shoulder, outward, angle):
     # Round the armpit, the white shell and the red lining aren't joined by edges, so the label can differ between them and a
     # raised arm pulls the lining out through the shell: there, every vertex takes the cone-weighted mean label of the cloth
     # within ARMPIT_RADIUS in space (both layers alike), which also widens the seam so it stretches as a band, not an edge.
-    band = numpy.nonzero((out > 0) & (out < ARMPIT_REACH) & (co[:, 2] > -TEAR_DROP - ARMPIT_RADIUS) & (co[:, 2] < ARMPIT_REACH))[0]
+    band = numpy.nonzero((out > 0) & (out < ARMPIT_REACH) & (co[:, 2] > -TEAR_DROP) & (co[:, 2] < ARMPIT_REACH))[0]  # (above the split line: below it sleeve and coat are cut apart and must not mix)
     if len(band):
         points = KDTree(count)
         for index, point in enumerate(co):
@@ -267,7 +272,10 @@ def sleeve_membership(shoulder, outward, angle):
         for index in band.tolist():
             near = points.find_range(co[index], ARMPIT_RADIUS)
             weights = [1.0 - distance / ARMPIT_RADIUS for _, _, distance in near]
-            smoothed[index] = sum(label[other] * k for (_, other, _), k in zip(near, weights)) / sum(weights)
+            mean = sum(label[other] * k for (_, other, _), k in zip(near, weights)) / sum(weights)
+            # fading in from the split line up to the armpit, so cloth just above the split matches the coat cut below it
+            fade = min(max((co[index, 2] + TEAR_DROP) / (TEAR_DROP - ARMPIT_FADE_TOP), 0.0), 1.0)
+            smoothed[index] = label[index] + (mean - label[index]) * fade
         label = smoothed
     # Small loose pieces (slivers where the sleeve touches the coat) move as one, at their mean, or a raised arm tears them
     # into strings.
@@ -325,12 +333,20 @@ for vertex in outfit.data.vertices:
     all_points.insert(vertex.co, vertex.index)
 all_points.balance()  # rest positions: neighbourhoods stay those of the cloth as Rodin made it
 rest = [vertex.co.copy() for vertex in outfit.data.vertices]
+# (more room over the shoulder caps: the deltoid rises when the arm does)
+clearance = [CLEARANCE] * len(outfit.data.vertices)
+for side in ("Left", "Right"):
+    shoulder, outward, _ = arm_frame(side)
+    for vertex in outfit.data.vertices:
+        offset = vertex.co - shoulder
+        if CAP_INBOARD < offset.x * outward < CAP_OUT and CAP_LOW < offset.z < CAP_HIGH:
+            clearance[vertex.index] = CAP_CLEARANCE
 for _ in range(LIFT_PASSES):
     lifts = {}
     for vertex in outfit.data.vertices:
         nearest, normal, _, _ = body_tree.find_nearest(vertex.co)
         if nearest is not None:
-            lift = CLEARANCE - (vertex.co - nearest).dot(normal)
+            lift = clearance[vertex.index] - (vertex.co - nearest).dot(normal)
             if 0 < lift < MAX_LIFT:
                 lifts[vertex.index] = normal * lift
     log(f"lift pass: {len(lifts)} vertices in or near the body (deepest {max((v.length for v in lifts.values()), default=0) * 100:.1f} cm)")
@@ -351,6 +367,34 @@ for _ in range(LIFT_PASSES):
     for index, move in moves:
         outfit.data.vertices[index].co += move
 outfit.data.update()
+
+
+# Tripo and Rodin both weld the tip of each hanging sleeve to the coat where they touch at the hip: those few shared
+# vertices would pull a web from a raised arm down to the hip. Split the sleeve's faces lower than TEAR_DROP below the
+# shoulder off from everything else (bmesh.ops.split duplicates the boundary vertices), then any edge still joining
+# sleeve to coat down there. Nothing is deleted: the split edges stay closed at rest and the cloth swings them apart.
+torn = bmesh.new()
+torn.from_mesh(outfit.data)
+torn.faces.ensure_lookup_table()
+drape, marks = set(), []
+for side in ("Left", "Right"):
+    shoulder, outward, arm_angle = arm_frame(side)
+    membership = sleeve_membership(shoulder, outward, arm_angle)
+    marks.append((shoulder, membership))
+    for face in torn.faces:
+        centre = face.calc_center_median()
+        if (centre.x - shoulder.x) * outward > 0 and centre.z < shoulder.z - TEAR_DROP and                 sum(membership[v.index] for v in face.verts) / len(face.verts) >= 0.5:
+            drape.add(face)
+joins = [e for e in torn.edges if not set(e.link_faces) & drape and any(
+    abs(m[e.verts[0].index] - m[e.verts[1].index]) > 0.5 and max(v.co.z for v in e.verts) < shoulder.z - TEAR_DROP
+    for shoulder, m in marks)]
+before = len(torn.verts)
+bmesh.ops.split(torn, geom=list(drape))
+bmesh.ops.split_edges(torn, edges=[e for e in joins if e.is_valid])
+torn.to_mesh(outfit.data)
+torn.free()
+outfit.data.update()
+log(f"split {len(drape)} hanging-sleeve faces and {len(joins)} edges off the coat ({len(outfit.data.vertices) - before} vertices duplicated)")
 
 
 # Tail: find where its axis leaves the coat (the first point along it, from the root, with no coat behind it). Skirt below
@@ -439,6 +483,36 @@ for side in ("Left", "Right"):
         upper_group.add([vertex.index], (1.0 - fore) * share, "ADD")
         fore_group.add([vertex.index], fore * share, "ADD")
     log(f"{side} sleeve: {sum(1 for s in shares if s == 1.0)} vertices fully on the arm")
+# The shoulder caps: cloth lying on the shoulder rides the deltoid as the skin does (Mixamo weights it to the arm), else the
+# raised shoulder pokes up through cloth pinned to the spine. Cloth within CAP_NEAR of the skin there takes the full body's
+# weights, fading back over CAP_FADE at the cap's edges (not the armpit: there the body's weights web the cloth).
+skin_copy = outfit.copy()
+skin_copy.data = outfit.data.copy()
+bpy.context.scene.collection.objects.link(skin_copy)
+for group in list(skin_copy.vertex_groups):
+    skin_copy.vertex_groups.remove(group)
+transfer_weights(body, skin_copy)
+bpy.context.view_layer.objects.active = outfit
+skin_names = {g.index: g.name for g in skin_copy.vertex_groups}
+capped = 0
+for side in ("Left", "Right"):
+    shoulder, outward, _ = arm_frame(side)
+    for vertex in outfit.data.vertices:
+        offset = vertex.co - shoulder
+        out, up = offset.x * outward, offset.z
+        inside = min(out - CAP_INBOARD, CAP_OUT - out, up - CAP_LOW, CAP_HIGH - up)
+        if inside <= 0 or body_tree.find_nearest(vertex.co)[3] > CAP_NEAR:
+            continue
+        share = min(inside / CAP_FADE, 1.0)
+        target = {skin_names[g.group]: g.weight for g in skin_copy.data.vertices[vertex.index].groups}
+        for group in vertex.groups:
+            group.weight *= 1.0 - share
+        for group_name, weight in target.items():
+            outfit.vertex_groups[group_name].add([vertex.index], weight * share, "ADD")
+        capped += 1
+bpy.data.objects.remove(skin_copy, do_unlink=True)
+bpy.context.view_layer.objects.active = outfit
+log(f"shoulder caps: {capped} vertices on the body's own weights")
 hips_group = outfit.vertex_groups.get(next((g.name for g in outfit.vertex_groups if g.name.split(":")[-1] == "Hips"), ""))
 if hips_group is None:
     fail("no Hips vertex group after the weight transfer")
@@ -455,7 +529,8 @@ for vertex in outfit.data.vertices:
     if moved:
         hips_group.add([vertex.index], moved, "ADD")
 # Cloth regions into the vertex colours (UShinobiOutfitBuilderLibrary::BuildCloth): R = hem share, ramping in from
-# HEM_TOP above the hips down to the hem; G = sleeve share, from SLEEVE_SWING_FROM of the way to the hand out to the cuff;
+# HEM_TOP above the hips down to the hem; G = sleeve share, from SLEEVE_SWING_FROM of the way to the hand out to the cuff,
+# and UNDERARM_SWING under the arm;
 # both 0 on the shoulders, chest, back and collar (pinned to the body).
 count = len(outfit.data.vertices)
 hem_top = hips.z + HEM_TOP
@@ -470,6 +545,13 @@ for side in ("Left", "Right"):
         cuff = along[member].max()
         sleeve_share[member] = numpy.clip((along[member] - SLEEVE_SWING_FROM) / max(cuff - SLEEVE_SWING_FROM, 0.01), 0.0, 1.0)
         hem_share[member] = 0.0
+# The underarm too: pinned there it can only stretch into a web when the arm rises; as short-swinging cloth it drapes.
+for side in ("Left", "Right"):
+    shoulder, outward, _ = arm_frame(side)
+    for vertex in outfit.data.vertices:
+        offset = vertex.co - shoulder
+        if -0.03 < offset.x * outward < ARMPIT_REACH and -TEAR_DROP - 0.02 < offset.z < -0.06:
+            sleeve_share[vertex.index] = max(sleeve_share[vertex.index], UNDERARM_SWING)
 for index in tail_edge:
     hem_share[index] = min(hem_share[index], TAIL_EDGE_SWING)
 span_x = abs(bone_head("LeftArm").x - bone_head("RightArm").x) / 2
