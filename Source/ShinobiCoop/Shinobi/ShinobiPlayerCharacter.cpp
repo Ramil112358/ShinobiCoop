@@ -56,6 +56,8 @@
 #include "Shinobi/Traversal/ShinobiTraversalComponent.h"
 #include "MotionWarpingComponent.h"
 #include "ClothingSimulationInteractor.h"
+#include "ClothingAssetBase.h"
+#include "ChaosCloth/ChaosClothingSimulationInteractor.h"
 #include "Engine/Texture.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
@@ -273,16 +275,19 @@ void AShinobiPlayerCharacter::UpdateOutfitCloth()
 	}
 	if (UClothingSimulationInteractor* Interactor = OutfitMesh->GetClothingSimulationInteractor())
 	{
-		// Wall-running and water-walking turn the character's gravity: the cloth hangs along it, not world down.
+		// Wall-running and water-walking turn the character's gravity: the cloth hangs along it, not world down (each
+		// cloth's own config: the simulation-wide override does nothing in 5.8).
 		const FVector Down = GetCharacterMovement()->GetGravityDirection();
 		const bool bOverride = !Down.Equals(FVector::DownVector, 0.01);
-		if (bOverride)
+		if (bOverride || bOutfitGravityOverridden)
 		{
-			Interactor->EnableGravityOverride(Down * FMath::Abs(GetCharacterMovement()->GetGravityZ()));
-		}
-		else if (bOutfitGravityOverridden)
-		{
-			Interactor->DisableGravityOverride();
+			for (const UClothingAssetBase* Cloth : OutfitMesh->GetSkeletalMeshAsset()->GetMeshClothingAssets())
+			{
+				if (UChaosClothingInteractor* Chaos = Cloth ? Cast<UChaosClothingInteractor>(Interactor->GetClothingInteractor(Cloth->GetName())) : nullptr)
+				{
+					Chaos->SetGravity(1.f, bOverride, Down * FMath::Abs(GetCharacterMovement()->GetGravityZ()));
+				}
+			}
 		}
 		bOutfitGravityOverridden = bOverride;
 	}

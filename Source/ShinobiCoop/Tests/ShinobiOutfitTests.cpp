@@ -2,6 +2,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "ClothingAsset.h"
 #include "ClothingSystemRuntimeTypes.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
@@ -123,7 +124,7 @@ bool FShinobiOutfitGravityTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	P->GetCharacterMovement()->SetMovementMode(MOVE_None); // held still: in a fall cloth and body accelerate alike
-	W.Tick(1.f);
+	W.Tick(0.1f); // (not long: cloth that has settled sleeps, and a gravity change alone doesn't wake it)
 	const FVector Before = P->GetOutfitMesh()->GetComponentTransform().TransformVector(FVector(ClothMean(P->GetOutfitMesh())));
 	P->GetCharacterMovement()->SetGravityDirection(FVector(1.f, 0.f, 0.f)); // a wall-run: "down" is +X
 	W.Tick(1.f);
@@ -212,6 +213,40 @@ bool FShinobiOutfitClothSimulatesTest::RunTest(const FString& Parameters)
 		MostMoved = FMath::Max(MostMoved, FVector3f::Dist(Before[Index], After[Index]));
 	}
 	TestTrue(FString::Printf(TEXT("Some cloth swings more than 1 cm against the body (most %.1f cm)"), MostMoved), MostMoved > 1.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOutfitEveryCopyTest, "ShinobiCoop.Outfit.EveryCopyHasCloth", ShinobiTestFlags)
+bool FShinobiOutfitEveryCopyTest::RunTest(const FString& Parameters)
+{
+	// Every outfit fitted to every roster body (Scripts/character/build_outfits.ps1, Scripts/setup_hero.py).
+	for (int32 Outfit = 1; Outfit < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Outfits); ++Outfit)
+	{
+		for (int32 Body = 0; Body < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster); ++Body)
+		{
+			const FString Who = FString::Printf(TEXT("%s on %s"), AShinobiPlayerCharacter::Outfits[Outfit].Name, AShinobiPlayerCharacter::Roster[Body].Name);
+			const USkeletalMesh* Copy = LoadObject<USkeletalMesh>(nullptr, *AShinobiPlayerCharacter::OutfitMeshPath(Outfit, Body), nullptr, LOAD_NoWarn | LOAD_Quiet);
+			if (!TestNotNull(Who + TEXT(": its copy is imported"), Copy))
+			{
+				continue;
+			}
+			TestNotNull(Who + TEXT(": its hide mask is imported"), LoadObject<UTexture>(nullptr, *AShinobiPlayerCharacter::OutfitHidePath(Outfit, Body), nullptr, LOAD_NoWarn | LOAD_Quiet));
+			if (!TestEqual(Who + TEXT(": one clothing asset"), Copy->GetMeshClothingAssets().Num(), 1))
+			{
+				continue;
+			}
+#if WITH_EDITORONLY_DATA
+			const UClothingAssetCommon* Cloth = Cast<UClothingAssetCommon>(Copy->GetMeshClothingAssets()[0]);
+			const FPointWeightMap* MaxDistance = Cloth && Cloth->LodData.Num() ? Cloth->LodData[0].PointWeightMaps.FindByPredicate(
+				[](const FPointWeightMap& Map) { return Map.CurrentTarget == uint8(EWeightMapTargetCommon::MaxDistance); }) : nullptr;
+			if (TestNotNull(Who + TEXT(": a Max Distance map"), MaxDistance))
+			{
+				TestTrue(Who + TEXT(": the hem swings (Max Distance over 20 cm)"), MaxDistance->Values.ContainsByPredicate([](float V) { return V > 20.f; }));
+				TestTrue(Who + TEXT(": the shoulders stay pinned (Max Distance 0)"), MaxDistance->Values.ContainsByPredicate([](float V) { return V == 0.f; }));
+			}
+#endif
+		}
+	}
 	return true;
 }
 

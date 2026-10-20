@@ -42,6 +42,7 @@ CAP_NEAR, CAP_FADE = 0.03, 0.03  # ...cloth this near the skin, fading in over t
 CAP_CLEARANCE = 0.035  # cloth over the shoulder cap is lifted this far off the skin (m)
 TAIL_FRONT = 0.02  # skirt below the opening is kept this far in front of the tail (m)
 MAX_INFLUENCES = 4
+DEGENERATE = 0.0005  # m: edges shorter than this are collapsed (the clothing builder rejects near-degenerate triangles)
 CLEARANCE = 0.01  # cloth kept this far off the body's skin
 MAX_LIFT = 0.1  # deeper than this it's not cloth caught in the body (the collar's inside, a lining): left alone
 LIFT_RADIUS, LIFT_PASSES = 0.1, 24  # the lift field's smoothing (m) and most passes (it stops once the body is under LIFT_DONE)
@@ -102,6 +103,8 @@ outfit.name = name
 weld = bmesh.new()
 weld.from_mesh(outfit.data)
 bmesh.ops.remove_doubles(weld, verts=weld.verts, dist=1e-5)
+# (and no slivers: UE's clothing builder refuses a triangle with corners closer than a fraction of a millimetre)
+bmesh.ops.dissolve_degenerate(weld, dist=DEGENERATE, edges=weld.edges)
 weld.to_mesh(outfit.data)
 weld.free()
 bpy.ops.mesh.customdata_custom_splitnormals_clear()
