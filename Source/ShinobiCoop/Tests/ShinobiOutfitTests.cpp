@@ -5,6 +5,10 @@
 #include "ClothingSystemRuntimeTypes.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/Texture.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "HAL/IConsoleManager.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 
 // Outfits worn over the roster bodies (docs/character/outfit-steps.md): fitted copies whose hem and sleeves are Chaos
@@ -25,6 +29,145 @@ namespace
 		}
 		return Out;
 	}
+
+	/** A player wearing Outfit as roster body Body, cloth readable (see ClothSimulatesOnFollower), settled 0.5 s. */
+	AShinobiPlayerCharacter* Wearer(FShinobiTestWorld& W, const TCHAR* Outfit, const TCHAR* Body)
+	{
+		W.World->bShouldSimulatePhysics = true; // a game world sets it; cloth actors are only created when it's on
+		AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+		if (!P->GetHeroMesh())
+		{
+			return nullptr;
+		}
+		P->SetCharacterIndex(uint8(AShinobiPlayerCharacter::FindRosterIndex(Body)));
+		P->SetOutfitIndex(uint8(AShinobiPlayerCharacter::FindOutfitIndex(Outfit)));
+		P->GetOutfitMesh()->bWaitForParallelClothTask = true; // GetCurrentClothingData_GameThread() needs it
+		W.Tick(0.5f);
+		return P;
+	}
+
+	/** The texture every body material's HideMask parameter shows, or null if the slots disagree or aren't dynamic. */
+	UTexture* BodyHideMask(const AShinobiPlayerCharacter* P)
+	{
+		UTexture* Shared = nullptr;
+		const USkeletalMeshComponent* Body = P->GetHeroMesh();
+		for (int32 Slot = 0; Slot < Body->GetNumMaterials(); ++Slot)
+		{
+			const UMaterialInstanceDynamic* Material = Cast<UMaterialInstanceDynamic>(Body->GetMaterial(Slot));
+			UTexture* Texture = nullptr;
+			if (!Material || !Material->GetTextureParameterValue(FName(TEXT("HideMask")), Texture) || (Slot > 0 && Texture != Shared))
+			{
+				return nullptr;
+			}
+			Shared = Texture;
+		}
+		return Shared;
+	}
+
+	FVector3f ClothMean(const USkeletalMeshComponent* Mesh)
+	{
+		const TArray<FVector3f> Points = ClothPositions(Mesh);
+		FVector3f Sum = FVector3f::ZeroVector;
+		for (const FVector3f& Point : Points)
+		{
+			Sum += Point;
+		}
+		return Points.Num() ? Sum / float(Points.Num()) : Sum;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOutfitSwapBodyTest, "ShinobiCoop.Outfit.SwapBodyKeepsFit", ShinobiTestFlags)
+bool FShinobiOutfitSwapBodyTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = Wearer(W, TEXT("Akatsuki"), TEXT("Hero"));
+	if (!TestNotNull(TEXT("HeroMesh in use"), P))
+	{
+		return false;
+	}
+	P->SetCharacterIndex(uint8(AShinobiPlayerCharacter::FindRosterIndex(TEXT("Bika"))));
+	W.Tick(0.2f);
+	const USkeletalMesh* Worn = P->GetOutfitMesh()->GetSkeletalMeshAsset();
+	TestEqual(TEXT("Bika wears the copy fitted to her"), Worn ? Worn->GetName() : FString(), FString(TEXT("SK_Akatsuki_Bika")));
+	const UTexture* Mask = BodyHideMask(P);
+	TestEqual(TEXT("Her body hides what that copy covers"), Mask ? Mask->GetName() : FString(), FString(TEXT("T_Akatsuki_Bika_Hide")));
+	TestTrue(TEXT("The copy follows her pose"), P->GetOutfitMesh()->LeaderPoseComponent.Get() == P->GetHeroMesh());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOutfitTeleportTest, "ShinobiCoop.Outfit.TeleportResetsCloth", ShinobiTestFlags)
+bool FShinobiOutfitTeleportTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = Wearer(W, TEXT("Hokage"), TEXT("Hero"));
+	if (!TestNotNull(TEXT("HeroMesh in use"), P))
+	{
+		return false;
+	}
+	const FVector3f Before = ClothMean(P->GetOutfitMesh());
+	P->TeleportTo(P->GetActorLocation() + FVector(5000.f, 0.f, 0.f), P->GetActorRotation(), false, true);
+	W.Tick(1.f / 30.f);
+	const FVector3f After = ClothMean(P->GetOutfitMesh());
+	TestTrue(FString::Printf(TEXT("The cloth comes along at once (%.0f cm off the body's frame)"), FVector3f::Dist(Before, After)),
+		FVector3f::Dist(Before, After) < 50.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOutfitGravityTest, "ShinobiCoop.Outfit.ClothFollowsCharacterGravity", ShinobiTestFlags)
+bool FShinobiOutfitGravityTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = Wearer(W, TEXT("Hokage"), TEXT("Hero"));
+	if (!TestNotNull(TEXT("HeroMesh in use"), P))
+	{
+		return false;
+	}
+	P->GetCharacterMovement()->SetMovementMode(MOVE_None); // held still: in a fall cloth and body accelerate alike
+	W.Tick(1.f);
+	const FVector Before = P->GetOutfitMesh()->GetComponentTransform().TransformVector(FVector(ClothMean(P->GetOutfitMesh())));
+	P->GetCharacterMovement()->SetGravityDirection(FVector(1.f, 0.f, 0.f)); // a wall-run: "down" is +X
+	W.Tick(1.f);
+	const FVector After = P->GetOutfitMesh()->GetComponentTransform().TransformVector(FVector(ClothMean(P->GetOutfitMesh())));
+	TestTrue(FString::Printf(TEXT("The hem swings towards the character's down (%.1f cm along +X)"), After.X - Before.X), After.X - Before.X > 2.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOutfitMissingCopyTest, "ShinobiCoop.Outfit.MissingCopyWearsNothing", ShinobiTestFlags)
+bool FShinobiOutfitMissingCopyTest::RunTest(const FString& Parameters)
+{
+	IConsoleVariable* Suffix = IConsoleManager::Get().FindConsoleVariable(TEXT("Shinobi.OutfitCopySuffix"));
+	if (!TestNotNull(TEXT("Shinobi.OutfitCopySuffix exists"), Suffix))
+	{
+		return false;
+	}
+	const FString Old = Suffix->GetString();
+	Suffix->Set(TEXT("_NotImported"), ECVF_SetByConsole); // no copy of that name exists
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = Wearer(W, TEXT("Hokage"), TEXT("Cat"));
+	Suffix->Set(*Old, ECVF_SetByConsole);
+	if (!TestNotNull(TEXT("HeroMesh in use"), P))
+	{
+		return false;
+	}
+	TestFalse(TEXT("No copy for this body: nothing is worn (not another body's copy)"), P->GetOutfitMesh()->IsVisible());
+	const UTexture* Mask = BodyHideMask(P);
+	TestEqual(TEXT("And nothing of the body is hidden"), Mask ? Mask->GetName() : FString(), FString(TEXT("WhiteSquareTexture")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOutfitNoneTest, "ShinobiCoop.Outfit.NoneRestoresBody", ShinobiTestFlags)
+bool FShinobiOutfitNoneTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = Wearer(W, TEXT("Akatsuki"), TEXT("Hero"));
+	if (!TestNotNull(TEXT("HeroMesh in use"), P))
+	{
+		return false;
+	}
+	P->SetOutfitIndex(0);
+	const UTexture* Mask = BodyHideMask(P);
+	TestEqual(TEXT("Taking the outfit off shows the whole body again"), Mask ? Mask->GetName() : FString(), FString(TEXT("WhiteSquareTexture")));
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOutfitClothSimulatesTest, "ShinobiCoop.Outfit.ClothSimulatesOnFollower", ShinobiTestFlags)

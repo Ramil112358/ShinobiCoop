@@ -25,12 +25,11 @@ struct FShinobiRosterEntry
 	const TCHAR* Retargeter;
 };
 
-/** A wearable outfit: a cloak (skeletal mesh skinned to the Mixamo skeleton) that follows the worn body's pose, so one mesh
- * fits every roster character. Mesh is null for "no outfit". */
+/** A wearable outfit: a garment fitted to each roster body by Scripts/character/build_outfits.ps1, one copy per body
+ * (AShinobiPlayerCharacter::OutfitMeshPath), whose hem and sleeves are Chaos cloth. Entry 0, "None", is no outfit. */
 struct FShinobiOutfitEntry
 {
 	const TCHAR* Name;
-	const TCHAR* Mesh;
 };
 
 /** Player-controlled shinobi: third-person camera, input bound to abilities. */
@@ -102,10 +101,17 @@ public:
 	/** Every outfit a player can wear over any roster character (Scripts/setup_hero.py imports them from
 	 * SourceArt/Character/Outfits; docs/character/outfit-steps.md). Entry 0 is "no outfit" and the fallback. */
 	static constexpr FShinobiOutfitEntry Outfits[] = {
-		{TEXT("None"), nullptr},
-		{TEXT("Hokage"), TEXT("/Game/Shinobi/Outfits/Hokage/SK_Hokage.SK_Hokage")},
-		{TEXT("Akatsuki"), TEXT("/Game/Shinobi/Outfits/Akatsuki/SK_Akatsuki.SK_Akatsuki")},
+		{TEXT("None")},
+		{TEXT("Hokage")},
+		{TEXT("Akatsuki")},
 	};
+
+	/** The copy of Outfits[Outfit] fitted to Roster[Body]: /Game/Shinobi/Outfits/<Outfit>/SK_<Outfit>_<Body>. */
+	static FString OutfitMeshPath(int32 Outfit, int32 Body);
+	/** What of Roster[Body] that copy covers (black = hidden; the body's M_Character HideMask): T_<Outfit>_<Body>_Hide. */
+	static FString OutfitHidePath(int32 Outfit, int32 Body);
+	/** Cloth further than this from the local camera (or unseen for a second) stops simulating. */
+	static constexpr float OutfitClothRangeCm = 4000.f;
 
 	/** Outfits index of Name (case-insensitive), or INDEX_NONE. */
 	static int32 FindOutfitIndex(const FString& Name);
@@ -274,8 +280,11 @@ private:
 	UFUNCTION()
 	void OnRep_CharacterIndex() { ApplyCharacter(); }
 
-	/** Puts the picked outfit on OutfitMesh, following HeroMesh's pose (after every body change). */
+	/** Puts the copy of the picked outfit fitted to the worn body on OutfitMesh, following HeroMesh's pose, and hides what
+	 * it covers of the body (after every body change). A body without a copy wears nothing. */
 	void ApplyOutfit();
+	/** The outfit's cloth: along the character's gravity (wall-runs), and asleep when far from the camera or unseen. */
+	void UpdateOutfitCloth();
 
 	UFUNCTION()
 	void OnRep_OutfitIndex() { ApplyOutfit(); }
@@ -287,6 +296,9 @@ private:
 	/** Outfits index worn over the body; set from the owning controller's pick like CharacterIndex. */
 	UPROPERTY(ReplicatedUsing = OnRep_OutfitIndex)
 	uint8 OutfitIndex = 0;
+	/** Roster index of the body actually worn (the pick, or the hero when the pick isn't imported). */
+	uint8 WornBodyIndex = 0;
+	bool bOutfitGravityOverridden = false;
 
 	/** Owner and server: the jutsu in each bar slot. Each machine stamps its own spec input slots from it (StampLoadoutInputIDs). */
 	UPROPERTY(ReplicatedUsing = OnRep_Loadout)

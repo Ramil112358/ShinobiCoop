@@ -246,7 +246,7 @@ bool FShinobiPickSurvivesRespawnTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOutfitWornTest, "ShinobiCoop.Hero.OutfitFollowsBodyAndComesOff", ShinobiTestFlags)
 bool FShinobiOutfitWornTest::RunTest(const FString& Parameters)
 {
-	// Every imported outfit (Scripts/setup_hero.py) over every imported roster character.
+	// Every imported outfit copy (Scripts/setup_hero.py) on the roster character it was fitted to.
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
 	if (!TestNotNull(TEXT("HeroMesh in use"), P->GetHeroMesh()) || !TestNotNull(TEXT("OutfitMesh exists"), P->GetOutfitMesh()))
@@ -257,14 +257,11 @@ bool FShinobiOutfitWornTest::RunTest(const FString& Parameters)
 	int32 Checked = 0;
 	for (int32 Outfit = 1; Outfit < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Outfits); ++Outfit)
 	{
-		const USkeletalMesh* Cloth = LoadObject<USkeletalMesh>(nullptr, AShinobiPlayerCharacter::Outfits[Outfit].Mesh, nullptr, LOAD_NoWarn | LOAD_Quiet);
-		if (!Cloth)
-		{
-			continue;
-		}
 		for (int32 Index = 0; Index < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster); ++Index)
 		{
-			if (!LoadObject<USkeletalMesh>(nullptr, AShinobiPlayerCharacter::Roster[Index].Mesh, nullptr, LOAD_NoWarn | LOAD_Quiet))
+			// Each body wears the copy fitted to it (Scripts/character/skin_outfit.py).
+			const USkeletalMesh* Cloth = LoadObject<USkeletalMesh>(nullptr, *AShinobiPlayerCharacter::OutfitMeshPath(Outfit, Index), nullptr, LOAD_NoWarn | LOAD_Quiet);
+			if (!Cloth || !LoadObject<USkeletalMesh>(nullptr, AShinobiPlayerCharacter::Roster[Index].Mesh, nullptr, LOAD_NoWarn | LOAD_Quiet))
 			{
 				continue;
 			}
