@@ -10,9 +10,11 @@
 #             an overview, the first wave closing in and a fight.
 #   -Tour:    -ShinobiWorldTour: flies to every tour point of the open world (village, gate, bridge, camps, boss);
 #             -Map picks another world map (London: /Game/Shinobi/Maps/Lvl_London).
+#   -Outfit Hokage: -ShinobiOutfitShot=Hokage: that outfit on every roster body from the front, side and back, idle,
+#             walking, running, mid-jump and settled again (~80 s).
 #   -Perf:    the tour at 1920x1080, Epic preset, no vsync, 10 s per point; prints the average frame time at each point.
 #             Keep the game window in the foreground: Windows throttles background windows (about 2x slower).
-param([switch]$Susanoo, [switch]$Fire, [switch]$Jutsu, [switch]$Look, [switch]$Tour, [switch]$Perf, [int]$TimeoutSec = 300, [string]$Map = "/Game/Shinobi/Maps/Lvl_TrainingGrounds")
+param([string]$Outfit = "", [switch]$Susanoo, [switch]$Fire, [switch]$Jutsu, [switch]$Look, [switch]$Tour, [switch]$Perf, [int]$TimeoutSec = 300, [string]$Map = "/Game/Shinobi/Maps/Lvl_TrainingGrounds")
 $ErrorActionPreference = "Stop"
 $Editor = "C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe"
 $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
@@ -20,12 +22,12 @@ $Project = Join-Path $Root "ShinobiCoop.uproject"
 $ShotRoot = Join-Path $Root "Saved\Screenshots"
 if ($Perf) { $Tour = $true }
 $Res = if ($Perf) { "-ResX=1920 -ResY=1080 -ExecCmds=`"scalability 3,r.VSync 0,t.MaxFPS 0`" -ShinobiPerf" } else { "-ResX=1280 -ResY=720" }
-$Flag = if ($Tour) { "ShinobiWorldTour" } elseif ($Look) { "ShinobiLookShot" } elseif ($Fire) { "ShinobiFireShot" } elseif ($Susanoo) { "ShinobiSusanooShot" } elseif ($Jutsu) { "ShinobiJutsuShot" } else { "ShinobiShot" }
+$Flag = if ($Outfit) { "ShinobiOutfitShot" } elseif ($Tour) { "ShinobiWorldTour" } elseif ($Look) { "ShinobiLookShot" } elseif ($Fire) { "ShinobiFireShot" } elseif ($Susanoo) { "ShinobiSusanooShot" } elseif ($Jutsu) { "ShinobiJutsuShot" } else { "ShinobiShot" }
 $Pattern = "$($Flag)_*.png"
 $Level = if ($Tour) { if ($PSBoundParameters.ContainsKey("Map")) { $Map } else { "/Game/Shinobi/Maps/Lvl_HiddenLeafValley" } } elseif ($Look) { $Map } else { "/Game/ThirdPerson/Lvl_ThirdPerson?game=/Script/ShinobiCoop.ShinobiGameMode" }
 
 Get-ChildItem $ShotRoot -Recurse -Filter $Pattern -ErrorAction SilentlyContinue | Remove-Item
-$game = Start-Process $Editor -PassThru -ArgumentList "`"$Project`" $Level -game -nosteam -windowed $Res -nosound -unattended -nosplash -$Flag -log=$Flag.log"
+$game = Start-Process $Editor -PassThru -ArgumentList "`"$Project`" $Level -game -nosteam -windowed $Res -nosound -unattended -nosplash $(if ($Outfit) { "-ShinobiOutfitShot=$Outfit" } else { "-$Flag" }) -log=$Flag.log"
 $null = $game.Handle
 if (-not $game.WaitForExit($TimeoutSec * 1000)) { Stop-Process $game -Force; throw "Game did not quit within $TimeoutSec s" }
 

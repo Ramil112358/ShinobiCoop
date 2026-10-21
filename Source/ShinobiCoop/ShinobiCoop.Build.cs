@@ -38,12 +38,17 @@ public class ShinobiCoop : ModuleRules
 			"Chooser",
 			"AnimationWarpingRuntime",
 			"PoseSearch",
-			"PhysicsControl"
+			"PhysicsControl",
+			"ClothingSystemRuntimeInterface", // outfit cloth: simulation data and interactors
+			"ClothingSystemRuntimeCommon", // ...and the clothing assets (tests read their painted maps)
+			"ChaosCloth" // ...and each cloth's own gravity (wall-runs)
 		});
 
 		if (Target.bBuildEditor)
 		{
 			PrivateDependencyModuleNames.Add("MeshUtilities"); // world builder: skeletal to static mesh (editor only)
+			// outfit builder: Chaos cloth on the fitted copies (editor only)
+			PrivateDependencyModuleNames.AddRange(new string[] { "ClothingSystemEditorInterface", "SkeletalMeshEditor", "PhysicsUtilities", "AssetRegistry" });
 		}
 
 		PublicIncludePaths.AddRange(new string[] {

@@ -63,7 +63,24 @@ def log(message):
     unreal.log(f"[setup_hero] {message}")
 
 
+CLEAN_RIGS_DIR = os.path.join(PROJECT, "Saved", "CleanRigs")
+
+
+def clean_rig(fbx):
+    """The rig re-exported with unit-scale bones (Scripts/character/clean_rig.py; Saved/CleanRigs/, redone when the
+    source changes): a Mixamo FBX imports with its Hips scaled 100, which throws Chaos cloth and physics assets off."""
+    out = os.path.join(CLEAN_RIGS_DIR, os.path.basename(os.path.dirname(fbx)), os.path.basename(fbx))
+    if not os.path.exists(out) or os.path.getmtime(out) < os.path.getmtime(fbx):
+        script = os.path.join(PROJECT, "Scripts", "character", "clean_rig.py")
+        run = subprocess.run([BLENDER, "-b", "--factory-startup", "--python-exit-code", "1", "-P", script, "--", fbx, out],
+                             capture_output=True, text=True)
+        if run.returncode != 0 or not os.path.exists(out):
+            raise RuntimeError(f"clean_rig.py failed on {fbx}: {run.stdout[-2000:]}")
+    return out
+
+
 def import_hero(fbx, dest=HERO_DIR, name="SK_Hero", materials=True, physics=True):
+    fbx = clean_rig(fbx)
     options = unreal.FbxImportUI()
     options.import_mesh = True
     options.import_as_skeletal = True
@@ -329,8 +346,9 @@ def build_character_material():
     if _character_material is not None:
         return _character_material
     path = f"{CHARACTERS_DIR}/M_Character"
-    if os.environ.get("SETUP_HERO_ONLY") == "outfits" and unreal.EditorAssetLibrary.does_asset_exist(path):
+    if os.environ.get("SETUP_HERO_ONLY") in ("outfits", "cloth") and unreal.EditorAssetLibrary.does_asset_exist(path):
         _character_material = unreal.load_asset(path)  # the bodies' instances stay on it
+        add_hide_mask(_character_material)
         return _character_material
     if unreal.EditorAssetLibrary.does_asset_exist(path):
         unreal.EditorAssetLibrary.delete_asset(path)
@@ -351,6 +369,7 @@ def build_character_material():
     MEL.connect_material_property(shading, "", unreal.MaterialProperty.MP_FRONT_MATERIAL)
     if not MEL.connect_material_property(sample, "A", unreal.MaterialProperty.MP_OPACITY_MASK):
         raise RuntimeError("M_Character: could not connect the opacity mask")
+    add_hide_mask(material, recompile=False)
     MEL.set_base_material_usage(material, unreal.MaterialUsage.MATUSAGE_SKELETAL_MESH, True)
     errors = MEL.recompile_material(material)
     if errors:
@@ -358,6 +377,41 @@ def build_character_material():
     unreal.EditorAssetLibrary.save_loaded_asset(material)
     _character_material = material
     return material
+
+
+def add_hide_mask(material, recompile=True):
+    """M_Character's opacity mask times a HideMask texture's red (default white): while an outfit is worn the game sets it
+    to the body's hide mask for that outfit (AShinobiPlayerCharacter::ApplyOutfit), so the body under the cloak isn't
+    drawn. Also marks it for clothing (the outfits' cloth). Done in place (an existing material keeps its instances).
+    The sampler is Color, matching both the white default and the hide masks (import_hide_mask): a mismatch fails the
+    material, and the game then draws every character on it in the grey default material."""
+    current = MEL.get_material_property_input_node(material, unreal.MaterialProperty.MP_OPACITY_MASK)
+    if isinstance(current, unreal.MaterialExpressionMultiply):
+        # Already there: correct the sampler of a mask wired before it was Color.
+        mask = next((n for n in MEL.get_inputs_for_material_expression(material, current)
+                     if isinstance(n, unreal.MaterialExpressionTextureSampleParameter2D) and str(n.get_editor_property("parameter_name")) == "HideMask"), None)
+        if mask is None:
+            raise RuntimeError("M_Character: the opacity mask is multiplied by something other than HideMask")
+        if (mask.get_editor_property("sampler_type") == unreal.MaterialSamplerType.SAMPLERTYPE_COLOR
+                and material.get_editor_property("used_with_clothing")):
+            return
+    else:
+        output = MEL.get_material_property_input_node_output_name(material, unreal.MaterialProperty.MP_OPACITY_MASK) or "A"
+        mask = MEL.create_material_expression(material, unreal.MaterialExpressionTextureSampleParameter2D, -500, 500)
+        mask.set_editor_property("parameter_name", "HideMask")
+        mask.set_editor_property("texture", unreal.load_asset("/Engine/EngineResources/WhiteSquareTexture"))
+        times = MEL.create_material_expression(material, unreal.MaterialExpressionMultiply, -200, 400)
+        if not (MEL.connect_material_expressions(current, output, times, "A") and MEL.connect_material_expressions(mask, "R", times, "B")
+                and MEL.connect_material_property(times, "", unreal.MaterialProperty.MP_OPACITY_MASK)):
+            raise RuntimeError("M_Character: could not wire HideMask into the opacity mask")
+    mask.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR)
+    MEL.set_base_material_usage(material, unreal.MaterialUsage.MATUSAGE_CLOTHING, True)
+    if recompile:
+        errors = MEL.recompile_material(material)
+        if errors:
+            raise RuntimeError(f"M_Character failed to compile: {errors}")
+        unreal.EditorAssetLibrary.save_loaded_asset(material)
+    log("M_Character: HideMask wired into the opacity mask")
 
 
 def import_texture_file(png, dest, name):
@@ -441,31 +495,159 @@ def build_characters(ik_manny):
         build_retargeter(ik_manny, build_ik_rig(mesh, dest, f"IK_{character}"), dest, f"RTG_MannyTo{character}")
 
 
-def build_outfits():
-    """Every Outfits/<Id>/<Id>_outfit.fbx (+ <Id>_outfit.png) -> /Game/Shinobi/Outfits/<Id>/SK_<Id> on M_Character."""
-    found = sorted(glob.glob(os.path.join(OUTFITS_DIR, "*", "*_outfit.fbx")))
-    if not found:
-        log(f"no outfits in {OUTFITS_DIR}")
+ROSTER = ("Hero", "Bika", "Cat", "Misha", "Pabu")  # AShinobiPlayerCharacter::Roster
+HEM_MAX_DISTANCE_CM, SLEEVE_MAX_DISTANCE_CM = 25.0, 12.0  # how far the hem and sleeve cloth may swing (UShinobiOutfitBuilderLibrary)
+TUNING_BODY = "Hero"  # the copy whose cloth the user tunes; its tuning is kept in Tuning/ across re-imports
+
+
+def body_mesh_path(body):
+    return f"{HERO_DIR}/SK_Hero" if body == "Hero" else f"{CHARACTERS_DIR}/{body}/SK_{body}"
+
+
+def cloth_collision(body):
+    """PA_<Body>_Cloth next to the body: what its outfits' cloth collides with (UShinobiOutfitBuilderLibrary::
+    BuildClothCollision; not the ragdoll's physics asset), with the tail capsule from SourceArt/Character/Models/<Body>/
+    <Body>_tail.json (build_outfits.ps1; null for a body without a tail)."""
+    import json
+    mesh = unreal.load_asset(body_mesh_path(body))
+    if mesh is None:
+        return None
+    folder = body_mesh_path(body).rsplit("/", 1)[0]
+    physics = unreal.ShinobiOutfitBuilderLibrary.build_cloth_collision(mesh, f"{folder}/PA_{body}_Cloth")
+    if physics is None:
+        raise RuntimeError(f"could not build {body}'s cloth collision")
+    path = os.path.join(MODELS_DIR, body, f"{body}_tail.json")
+    tail = None
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as handle:
+            tail = json.load(handle)
+    if tail:
+        hips = unreal.Vector(*tail["hips"])
+        root, tip = (unreal.Vector(*tail[k]) - hips for k in ("root", "tip"))
+        if not unreal.ShinobiOutfitBuilderLibrary.add_tail_capsule(mesh, physics, root, tip, tail["radius"]):
+            raise RuntimeError(f"could not add {body}'s tail capsule")
+    unreal.EditorAssetLibrary.save_loaded_asset(physics)
+    log(f"{body}: cloth collision{' with a tail capsule' if tail else ''}")
+    return physics
+
+
+def import_outfit_copy(fbx, dest, name):
+    """An outfit copy keeps its vertex colours (skin_outfit.py's cloth regions) and gets no physics asset of its own."""
+    options = unreal.FbxImportUI()
+    options.import_mesh = True
+    options.import_as_skeletal = True
+    options.mesh_type_to_import = unreal.FBXImportType.FBXIT_SKELETAL_MESH
+    options.create_physics_asset = False
+    options.import_animations = False
+    options.import_materials = False
+    options.import_textures = False
+    options.skeletal_mesh_import_data.set_editor_property("vertex_color_import_option", unreal.VertexColorImportOption.REPLACE)
+    task = unreal.AssetImportTask()
+    task.filename, task.destination_path, task.destination_name = fbx, dest, name
+    task.automated = task.save = task.replace_existing = True
+    task.options = options
+    TOOLS.import_asset_tasks([task])
+    mesh = next((o for o in task.get_objects() if isinstance(o, unreal.SkeletalMesh)), None)
+    if mesh is None:
+        raise RuntimeError(f"import of {fbx} produced no skeletal mesh")
+    return mesh
+
+
+def import_hide_mask(png, dest, name):
+    texture = import_texture_file(png, dest, name)
+    # A plain colour texture, as M_Character's HideMask sampler expects (black and white survive sRGB unchanged).
+    texture.set_editor_property("srgb", True)
+    texture.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_DEFAULT)
+    texture.set_editor_property("mip_gen_settings", unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
+    unreal.EditorAssetLibrary.save_loaded_asset(texture)
+    return texture
+
+
+def keep_tuning(outfit):
+    """A copy of the tuned copy (SK_<Outfit>_<TUNING_BODY>) in Tuning/, so a re-import can put the user's tuning back."""
+    dest = f"{OUTFITS_GAME_DIR}/{outfit}"
+    source, kept = f"{dest}/SK_{outfit}_{TUNING_BODY}", f"{dest}/Tuning/SK_{outfit}_Tuning"
+    if not unreal.EditorAssetLibrary.does_asset_exist(source):
         return
+    if unreal.EditorAssetLibrary.does_asset_exist(kept):
+        unreal.EditorAssetLibrary.delete_asset(kept)
+    unreal.EditorAssetLibrary.duplicate_asset(source, kept)
+    unreal.EditorAssetLibrary.save_asset(kept)
+
+
+def build_outfits():
+    """Every Outfits/<Outfit>/<Outfit>_<Body>_outfit.fbx (skin_outfit.py, one per roster body) -> /Game/Shinobi/Outfits/
+    <Outfit>/SK_<Outfit>_<Body> with Chaos cloth on its hem and sleeves (colliding with PA_<Body>_Cloth, tail included), its
+    hide mask <Outfit>_<Body>_hide.png -> T_<Outfit>_<Body>_Hide, all copies on one MI of <Outfit>_outfit.png. A tuning
+    kept in Tuning/ (copy_cloth_tuning) is put back on every copy."""
     parent = build_character_material()
-    for outfit_fbx in found:
-        outfit = os.path.basename(os.path.dirname(outfit_fbx))
-        if os.path.basename(outfit_fbx) != f"{outfit}_outfit.fbx":
+    collision = {body: cloth_collision(body) for body in ROSTER}
+    for folder in sorted(glob.glob(os.path.join(OUTFITS_DIR, "*"))):
+        outfit = os.path.basename(folder)
+        copies = [(body, os.path.join(folder, f"{outfit}_{body}_outfit.fbx")) for body in ROSTER]
+        copies = [(body, fbx) for body, fbx in copies if os.path.exists(fbx)]
+        if not copies:
             continue
         if not re.fullmatch(r"[A-Za-z0-9_]+", outfit):
             raise RuntimeError(f"outfit name {outfit!r}: use letters, digits and _ only (it becomes asset names)")
         dest = f"{OUTFITS_GAME_DIR}/{outfit}"
-        for stale in (f"SK_{outfit}", f"SK_{outfit}_Skeleton"):
+        for stale in (f"SK_{outfit}", f"SK_{outfit}_Skeleton"):  # the single copy worn by every body before per-body fitting
             if unreal.EditorAssetLibrary.does_asset_exist(f"{dest}/{stale}"):
                 unreal.EditorAssetLibrary.delete_asset(f"{dest}/{stale}")
-        mesh = import_hero(outfit_fbx, dest, f"SK_{outfit}", materials=False, physics=False)
-        png = os.path.splitext(outfit_fbx)[0] + ".png"
-        use_materials(mesh, outfit, dest, lambda slot, p=png: p, parent)
+        png = os.path.join(folder, f"{outfit}_outfit.png")
+        meshes = []
+        for body, fbx in copies:
+            name = f"SK_{outfit}_{body}"
+            for stale in (name, f"{name}_Skeleton"):
+                if unreal.EditorAssetLibrary.does_asset_exist(f"{dest}/{stale}"):
+                    unreal.EditorAssetLibrary.delete_asset(f"{dest}/{stale}")
+            mesh = import_outfit_copy(fbx, dest, name)
+            use_materials(mesh, outfit, dest, lambda slot, p=png: p, parent)
+            if not unreal.ShinobiOutfitBuilderLibrary.build_cloth(mesh, collision[body], HEM_MAX_DISTANCE_CM, SLEEVE_MAX_DISTANCE_CM):
+                raise RuntimeError(f"{name}: could not build its cloth")
+            unreal.EditorAssetLibrary.save_loaded_asset(mesh)
+            hide = os.path.join(folder, f"{outfit}_{body}_hide.png")
+            if os.path.exists(hide):
+                import_hide_mask(hide, dest, f"T_{outfit}_{body}_Hide")
+            meshes.append(mesh)
+            log(f"{name}: imported with cloth")
+        kept = unreal.load_asset(f"{dest}/Tuning/SK_{outfit}_Tuning") if unreal.EditorAssetLibrary.does_asset_exist(f"{dest}/Tuning/SK_{outfit}_Tuning") else None
+        if kept is not None:
+            if not unreal.ShinobiOutfitBuilderLibrary.copy_cloth_tuning(kept, meshes):
+                raise RuntimeError(f"{outfit}: could not put the kept cloth tuning back")
+            for mesh in meshes:
+                unreal.EditorAssetLibrary.save_loaded_asset(mesh)
+            log(f"{outfit}: the kept cloth tuning is back on {len(meshes)} copies")
+
+
+def copy_cloth_tuning(source):
+    """SETUP_HERO_CLOTH_SOURCE=<Outfit>_<Body>: that copy's cloth tuning onto the outfit's other copies, and kept in
+    Tuning/ for later re-imports."""
+    outfit, _, body = source.partition("_")
+    dest = f"{OUTFITS_GAME_DIR}/{outfit}"
+    tuned = unreal.load_asset(f"{dest}/SK_{outfit}_{body}") if outfit and body else None
+    if tuned is None:
+        raise RuntimeError(f"SETUP_HERO_CLOTH_SOURCE={source!r}: no {dest}/SK_{outfit}_{body} (use <Outfit>_<Body>, e.g. Hokage_Hero)")
+    others = [unreal.load_asset(f"{dest}/SK_{outfit}_{b}") for b in ROSTER if b != body]
+    others = [m for m in others if m is not None]
+    if not unreal.ShinobiOutfitBuilderLibrary.copy_cloth_tuning(tuned, others):
+        raise RuntimeError(f"could not copy {source}'s cloth tuning")
+    for mesh in others:
+        unreal.EditorAssetLibrary.save_loaded_asset(mesh)
+    if body == TUNING_BODY:
+        keep_tuning(outfit)
+    else:
+        log(f"(kept tuning is from SK_{outfit}_{TUNING_BODY}: tune that copy to have it survive re-imports)")
+    log(f"{source}: cloth tuning copied onto {len(others)} copies")
 
 
 if os.environ.get("SETUP_HERO_ONLY") == "outfits":
     # Re-imports just the outfits (set SETUP_HERO_ONLY=outfits before Scripts/run_python.ps1), leaving every body alone.
     build_outfits()
+elif os.environ.get("SETUP_HERO_ONLY") == "cloth":
+    # After tuning one copy's cloth in the Skeletal Mesh editor: SETUP_HERO_CLOTH_SOURCE=<Outfit>_<Body> copies it onto
+    # that outfit's other copies (docs/character/outfit-steps.md, "Tuning the cloth").
+    copy_cloth_tuning(os.environ.get("SETUP_HERO_CLOTH_SOURCE", ""))
 elif os.environ.get("SETUP_HERO_ONLY") == "retargeters":
     # Re-configures every RTG_MannyTo<Id> in place on its existing IK rigs (e.g. after changing ARM_SPREAD_DEGREES).
     for path in unreal.EditorAssetLibrary.list_assets("/Game/Shinobi", recursive=True):

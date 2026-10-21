@@ -125,6 +125,11 @@ private:
 	/** With -ShinobiLookShot (arena mode): screenshots of the map, the character and the first wave closing in, fighting
 	 * the nearest enemy, then quits. Used by `Scripts/shot_chakra.ps1 -Look`. */
 	void RunLookShotTest();
+	/** -ShinobiOutfitShot=<Outfit>: that outfit on every roster body, idle, walking, running, jumping (ShinobiOutfitShot.cpp). */
+	void RunOutfitShotTest(const FString& Outfit);
+	/** What RunOutfitShotTest preloads, kept loaded for the run. */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UObject>> OutfitShotAssets;
 
 	/** With -ShinobiWorldTour: flies the (hovering) pawn to each tour point of the open world (the PlayerStart, actors
 	 * tagged Tour, camp and boss markers tagged ShinobiCampSite), waits for streaming and screenshots it, then quits.

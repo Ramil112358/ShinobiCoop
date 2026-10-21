@@ -39,11 +39,13 @@ __pycache__/
 /SourceArt/Character/Models/*/*
 !/SourceArt/Character/Models/*/*_rigged.fbx
 !/SourceArt/Character/Models/*/*_rigged.png
+!/SourceArt/Character/Models/*/*_tail.json
 
-# Outfits (docs/character/outfit-steps.md): only the skinned FBX and its texture are committed
+# Outfits (docs/character/outfit-steps.md): only the per-body copies, their hide masks and the texture are committed
 /SourceArt/Character/Outfits/*/*
 !/SourceArt/Character/Outfits/*/*_outfit.fbx
 !/SourceArt/Character/Outfits/*/*_outfit.png
+!/SourceArt/Character/Outfits/*/*_hide.png
 
 # Sub-project #3: generated terrain maps and downloaded asset packs (rebuilt by Scripts/world)
 /SourceArt/World/

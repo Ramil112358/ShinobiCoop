@@ -55,6 +55,11 @@
 #include "Shinobi/VFX/ShinobiSusanooComponent.h"
 #include "Shinobi/Traversal/ShinobiTraversalComponent.h"
 #include "MotionWarpingComponent.h"
+#include "ClothingSimulationInteractor.h"
+#include "ClothingAssetBase.h"
+#include "ChaosCloth/ChaosClothingSimulationInteractor.h"
+#include "Engine/Texture.h"
+#include "Materials/MaterialInstanceDynamic.h"
 
 namespace
 {
@@ -62,6 +67,13 @@ namespace
 		TEXT("Shinobi.Hero"),
 		true,
 		TEXT("Players use the hero character (sub-project #2) when its assets exist; 0 = the plain Manny. Read when a player spawns."));
+
+	TAutoConsoleVariable<FString> CVarOutfitCopySuffix(
+		TEXT("Shinobi.OutfitCopySuffix"),
+		TEXT(""),
+		TEXT("Appended to the body's name in outfit copy asset names (tests point it at copies that don't exist)."));
+
+	const TCHAR* const WhiteMaskPath = TEXT("/Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture");
 }
 
 AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& ObjectInitializer)
@@ -114,6 +126,7 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 	OutfitMesh->SetupAttachment(HeroMesh);
 	OutfitMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	OutfitMesh->SetVisibility(false);
+	OutfitMesh->SetTeleportDistanceThreshold(150.f); // a blink, Substitution or respawn snaps the cloth along, not stretched
 
 	NameTag = CreateDefaultSubobject<UShinobiOverheadTextComponent>(TEXT("NameTag"));
 	NameTag->SetupAttachment(RootComponent);
@@ -185,6 +198,18 @@ namespace
 	}
 }
 
+FString AShinobiPlayerCharacter::OutfitMeshPath(int32 Outfit, int32 Body)
+{
+	const FString Name = FString::Printf(TEXT("SK_%s_%s%s"), Outfits[Outfit].Name, Roster[Body].Name, *CVarOutfitCopySuffix.GetValueOnGameThread());
+	return FString::Printf(TEXT("/Game/Shinobi/Outfits/%s/%s.%s"), Outfits[Outfit].Name, *Name, *Name);
+}
+
+FString AShinobiPlayerCharacter::OutfitHidePath(int32 Outfit, int32 Body)
+{
+	const FString Name = FString::Printf(TEXT("T_%s_%s%s_Hide"), Outfits[Outfit].Name, Roster[Body].Name, *CVarOutfitCopySuffix.GetValueOnGameThread());
+	return FString::Printf(TEXT("/Game/Shinobi/Outfits/%s/%s.%s"), Outfits[Outfit].Name, *Name, *Name);
+}
+
 void AShinobiPlayerCharacter::ApplyOutfit()
 {
 	if (!HeroMesh || !OutfitMesh)
@@ -192,10 +217,36 @@ void AShinobiPlayerCharacter::ApplyOutfit()
 		return;
 	}
 	USkeletalMesh* Cloth = nullptr;
-	if (OutfitIndex < UE_ARRAY_COUNT(Outfits) && Outfits[OutfitIndex].Mesh)
+	UTexture* Mask = nullptr;
+	if (OutfitIndex > 0 && OutfitIndex < UE_ARRAY_COUNT(Outfits))
 	{
 		// Quiet: an outfit that isn't imported yet is expected.
-		Cloth = LoadObject<USkeletalMesh>(nullptr, Outfits[OutfitIndex].Mesh, nullptr, LOAD_NoWarn | LOAD_Quiet);
+		Cloth = LoadObject<USkeletalMesh>(nullptr, *OutfitMeshPath(OutfitIndex, WornBodyIndex), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		Mask = Cloth ? LoadObject<UTexture>(nullptr, *OutfitHidePath(OutfitIndex, WornBodyIndex), nullptr, LOAD_NoWarn | LOAD_Quiet) : nullptr;
+		if (!Cloth)
+		{
+			static TSet<FString> Warned; // once per outfit and body
+			const FString Pair = FString::Printf(TEXT("%s/%s"), Outfits[OutfitIndex].Name, Roster[WornBodyIndex].Name);
+			if (!Warned.Contains(Pair))
+			{
+				Warned.Add(Pair);
+				UE_LOG(LogShinobiCoop, Warning, TEXT("No %s copy fitted to %s (Scripts/character/build_outfits.ps1): wearing nothing"),
+					Outfits[OutfitIndex].Name, Roster[WornBodyIndex].Name);
+			}
+		}
+	}
+	// The body hides what the copy covers (its M_Character opacity), and shows everything again without one.
+	if (!Mask)
+	{
+		Mask = LoadObject<UTexture>(nullptr, WhiteMaskPath);
+	}
+	HeroMesh->EmptyOverrideMaterials(); // (a new body brings its own materials)
+	for (int32 Slot = 0; Slot < HeroMesh->GetNumMaterials(); ++Slot)
+	{
+		if (UMaterialInstanceDynamic* Material = HeroMesh->CreateDynamicMaterialInstance(Slot))
+		{
+			Material->SetTextureParameterValue(TEXT("HideMask"), Mask);
+		}
 	}
 	const USkeletalMesh* Body = HeroMesh->GetSkeletalMeshAsset();
 	OutfitMesh->SetSkeletalMeshAsset(Cloth);
@@ -209,9 +260,56 @@ void AShinobiPlayerCharacter::ApplyOutfit()
 	// outfit's would carry the outfit off by the difference: shift it back by the two hips' reference-pose offset.
 	OutfitMesh->SetRelativeLocation(RefHipsLocation(Cloth) - RefHipsLocation(Body));
 	OutfitMesh->SetLeaderPoseComponent(HeroMesh);
+	OutfitMesh->ForceClothNextUpdateTeleportAndReset();
+	bOutfitGravityOverridden = false; // a new cloth simulation starts on world gravity
 	RefreshOutline();
 	// Scripts/smoke_m4.ps1 style check: both machines log what they see.
 	UE_LOG(LogShinobiCoop, Log, TEXT("%s wears %s"), *GetName(), Outfits[OutfitIndex].Name);
+}
+
+void AShinobiPlayerCharacter::UpdateOutfitCloth()
+{
+	if (!OutfitMesh || !OutfitMesh->IsVisible())
+	{
+		return;
+	}
+	if (UClothingSimulationInteractor* Interactor = OutfitMesh->GetClothingSimulationInteractor())
+	{
+		// Wall-running and water-walking turn the character's gravity: the cloth hangs along it, not world down (each
+		// cloth's own config: the simulation-wide override does nothing in 5.8).
+		const FVector Down = GetCharacterMovement()->GetGravityDirection();
+		const bool bOverride = !Down.Equals(FVector::DownVector, 0.01);
+		if (bOverride || bOutfitGravityOverridden)
+		{
+			for (const UClothingAssetBase* Cloth : OutfitMesh->GetSkeletalMeshAsset()->GetMeshClothingAssets())
+			{
+				if (UChaosClothingInteractor* Chaos = Cloth ? Cast<UChaosClothingInteractor>(Interactor->GetClothingInteractor(Cloth->GetName())) : nullptr)
+				{
+					Chaos->SetGravity(1.f, bOverride, Down * FMath::Abs(GetCharacterMovement()->GetGravityZ()));
+				}
+			}
+		}
+		bOutfitGravityOverridden = bOverride;
+	}
+	bool bAsleep = false;
+	if (FApp::CanEverRender())
+	{
+		const APlayerController* Viewer = GetWorld()->GetFirstPlayerController();
+		const bool bFar = Viewer && Viewer->PlayerCameraManager
+			&& FVector::Dist(Viewer->PlayerCameraManager->GetCameraLocation(), GetActorLocation()) > OutfitClothRangeCm;
+		bAsleep = bFar || !OutfitMesh->WasRecentlyRendered(1.f);
+	}
+	if (bAsleep != OutfitMesh->IsClothingSimulationSuspended())
+	{
+		if (bAsleep)
+		{
+			OutfitMesh->SuspendClothingSimulation();
+		}
+		else
+		{
+			OutfitMesh->ResumeClothingSimulation();
+		}
+	}
 }
 
 bool AShinobiPlayerCharacter::ApplyCharacter()
@@ -224,6 +322,7 @@ bool AShinobiPlayerCharacter::ApplyCharacter()
 	{
 		if (Index < UE_ARRAY_COUNT(Roster) && HeroMesh->Wear(Roster[Index].Mesh, Roster[Index].Retargeter))
 		{
+			WornBodyIndex = uint8(Index);
 			// Scripts/smoke_m4.ps1 reads this on both machines to check the picks replicate.
 			UE_LOG(LogShinobiCoop, Log, TEXT("%s plays %s%s"), *GetName(),
 				CharacterIndex < UE_ARRAY_COUNT(Roster) ? Roster[CharacterIndex].Name : TEXT("an unknown pick"),
@@ -683,6 +782,7 @@ void AShinobiPlayerCharacter::Tick(float DeltaSeconds)
 	{
 		FallApexZ = FMath::Max(FallApexZ, GetActorLocation().Z);
 	}
+	UpdateOutfitCloth();
 	// Possession and the player state can arrive after BeginPlay, so keep the tag current here.
 	NameTag->SetVisibility(!IsLocallyControlled());
 	if (const APlayerState* State = GetPlayerState())
