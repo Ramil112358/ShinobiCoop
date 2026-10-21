@@ -123,6 +123,42 @@ public:
 	UGE_DodgeIFrames();
 };
 
+/** Lightning Blink (UGA_Blink) cost: -35 stamina, a little more than a dodge. */
+UCLASS()
+class SHINOBICOOP_API UGE_BlinkCost : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_BlinkCost();
+};
+
+/** Lightning Blink invulnerability: 0.35 s of State.Invulnerable, the vanish and the arrival. */
+UCLASS()
+class SHINOBICOOP_API UGE_BlinkIFrames : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_BlinkIFrames();
+};
+
+/** A dodge opens 1.5 s of State.BlinkReady: a second dodge press in it blinks instead. */
+UCLASS()
+class SHINOBICOOP_API UGE_BlinkWindow : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_BlinkWindow();
+};
+
+/** One blink per window: 1.5 s of Cooldown.Blink, as long as the window it spends. */
+UCLASS()
+class SHINOBICOOP_API UGE_BlinkCooldown : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	UGE_BlinkCooldown();
+};
+
 /** While charging chakra: +25 chakra/s. */
 UCLASS()
 class SHINOBICOOP_API UGE_ChakraCharge : public UShinobiEffect

@@ -724,6 +724,7 @@ void AShinobiPlayerController::RunFireShotTest()
 		{ EShinobiBurst::Spiral, TEXT("ShinobiFireShot_Rasengan"), 150.f, 1.f },
 		{ EShinobiBurst::BlackFlameIgnite, TEXT("ShinobiFireShot_Ignite"), 0.f, 1.f },
 		{ EShinobiBurst::Firestorm, TEXT("ShinobiFireShot_Firestorm"), 0.f, 1.f },
+		{ EShinobiBurst::BlinkStreak, TEXT("ShinobiFireShot_Blink"), -300.f, 0.75f }, // 600 across the view, left to right
 	};
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Bursts); ++Index)
 	{
@@ -734,7 +735,8 @@ void AShinobiPlayerController::RunFireShotTest()
 			if (Shinobi)
 			{
 				const FVector At = Shinobi->GetActorLocation() - FVector(0.f, 0.f, 90.f) + Shinobi->GetActorForwardVector() * 500.f + Shinobi->GetActorRightVector() * Bursts[Index].Right + FVector(0.f, 0.f, 80.f);
-				AShinobiBurst::Spawn(GetWorld(), Bursts[Index].Kind, At, Bursts[Index].Scale, Shinobi->GetActorRotation());
+				const bool bBlink = Bursts[Index].Kind == EShinobiBurst::BlinkStreak; // from the feet, across the view
+				AShinobiBurst::Spawn(GetWorld(), Bursts[Index].Kind, At - FVector(0.f, 0.f, bBlink ? 80.f : 0.f), Bursts[Index].Scale, Shinobi->GetActorRotation() + FRotator(0.f, bBlink ? 90.f : 0.f, 0.f));
 			}
 		});
 		At(When + 0.12f, [Index]() { FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Bursts[Index].Name), false, false); });
