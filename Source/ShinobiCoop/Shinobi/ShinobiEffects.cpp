@@ -154,6 +154,30 @@ UGE_DodgeIFrames::UGE_DodgeIFrames()
 	GrantTag(ShinobiTags::State_Invulnerable);
 }
 
+UGE_BlinkCost::UGE_BlinkCost()
+{
+	DurationPolicy = EGameplayEffectDurationType::Instant;
+	AddModifier(UShinobiAttributeSet::GetStaminaAttribute(), -35.f);
+}
+
+UGE_BlinkIFrames::UGE_BlinkIFrames()
+{
+	SetDuration(0.35f);
+	GrantTag(ShinobiTags::State_Invulnerable);
+}
+
+UGE_BlinkWindow::UGE_BlinkWindow()
+{
+	SetDuration(1.5f);
+	GrantTag(ShinobiTags::State_BlinkReady);
+}
+
+UGE_BlinkCooldown::UGE_BlinkCooldown()
+{
+	SetDuration(1.5f);
+	GrantTag(ShinobiTags::Cooldown_Blink);
+}
+
 UGE_ChakraCharge::UGE_ChakraCharge()
 {
 	SetInfinitePeriodic(0.25f);

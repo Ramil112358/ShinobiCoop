@@ -110,8 +110,8 @@ void AShinobiBurst::BeginPlay()
 	static const EShinobiSfx Sounds[] = { EShinobiSfx::Explosion, EShinobiSfx::Explosion, EShinobiSfx::Zap, EShinobiSfx::Whirr, EShinobiSfx::Poof, EShinobiSfx::Whoosh, EShinobiSfx::Whoosh,
 		EShinobiSfx::Explosion, EShinobiSfx::Whirr, EShinobiSfx::Zap, EShinobiSfx::Thud, EShinobiSfx::Poof,
 		EShinobiSfx::Explosion, EShinobiSfx::Poof, EShinobiSfx::Whoosh,
-		EShinobiSfx::Whirr, EShinobiSfx::Poof, EShinobiSfx::Zap, EShinobiSfx::Explosion };
-	static_assert(UE_ARRAY_COUNT(Sounds) == static_cast<int32>(EShinobiBurst::AlmightyPush) + 1, "a sound for every burst kind");
+		EShinobiSfx::Whirr, EShinobiSfx::Poof, EShinobiSfx::Zap, EShinobiSfx::Explosion, EShinobiSfx::Zap };
+	static_assert(UE_ARRAY_COUNT(Sounds) == static_cast<int32>(EShinobiBurst::BlinkStreak) + 1, "a sound for every burst kind");
 	ShinobiSfx::Play(this, Sounds[static_cast<uint8>(Kind)], GetActorLocation(), Kind == EShinobiBurst::Fire ? 0.7f : 1.f);
 
 	// Mostly-rim shells (low Core) at modest intensity: a solid bright sphere blows out to a white wall under bloom.
@@ -138,8 +138,9 @@ void AShinobiBurst::BeginPlay()
 	case EShinobiBurst::SkyBolt:      Color = ShinobiVfx::Colors::Lightning; Duration = 0.3f; MaxScale = 1.5f; Intensity = 4.f;   LightIntensity = 40000.f; break;
 	case EShinobiBurst::DragonSplash: Color = ShinobiVfx::Colors::Chakra;    Duration = 0.7f; MaxScale = 5.f;  Intensity = 2.f;   LightIntensity = 10000.f; Core = 0.4f; break;
 	case EShinobiBurst::AlmightyPush: Color = ShinobiVfx::Colors::Smoke;     Duration = 2.f;  MaxScale = 1.f;  Intensity = 1.f;   LightIntensity = 0.f;     break;
+	case EShinobiBurst::BlinkStreak:  Color = ShinobiVfx::Colors::Lightning; Duration = 0.3f; MaxScale = 1.5f; Intensity = 4.f;   LightIntensity = 30000.f; break;
 	}
-	MaxScale *= Scale;
+	MaxScale *= Kind == EShinobiBurst::BlinkStreak ? 1.f : Scale; // a blink's Scale is its path length, not its size
 	SphereMaterial = Kind == EShinobiBurst::FireBreath || Kind == EShinobiBurst::BlackFlameIgnite
 		? ShinobiVfx::MakeFlame(this, Color, Intensity, Kind == EShinobiBurst::BlackFlameIgnite)
 		: ShinobiVfx::MakeGlow(this, Color, Intensity, Core);
@@ -332,6 +333,34 @@ bool AShinobiBurst::BuildCards()
 		}
 		break;
 	}
+	case EShinobiBurst::BlinkStreak:
+	{
+		// Lightning Blink: blue bolt cards end to end along the path at chest height with a white core, flickering, and
+		// a crackle of small bolts and a flash on the ground at each end. S is the path length over BlinkLength.
+		Duration = 0.4f;
+		const FVector Along = GetActorForwardVector();
+		const float Length = BlinkLength * S;
+		constexpr int32 Segments = 4;
+		for (int32 Index = 0; Index < Segments && Length > 1.f; ++Index)
+		{
+			const FVector Middle = Along * Length * (Index + 0.5f) / Segments + FVector(0.f, 0.f, 100.f);
+			const float SegmentLength = Length / Segments + 60.f; // overlap so the joins don't show
+			AddCard(Plane, ESprite::Lightning, FLinearColor(0.45f, 0.65f, 1.f), 3.f, Middle, FVector2D(150.f, SegmentLength), 0.f, false, true);
+			Cards.Last().bAlongPath = true;
+			AddCard(Plane, ESprite::Lightning, White, 2.5f, Middle, FVector2D(60.f, SegmentLength), 0.f, false, true);
+			Cards.Last().bAlongPath = true;
+		}
+		for (const FVector End : { FVector::ZeroVector, Along * Length })
+		{
+			AddCard(Plane, ESprite::Burst, FLinearColor(0.5f, 0.6f, 1.f), 1.5f, End + FVector(0.f, 0.f, 40.f), FVector2D(260.f, 260.f));
+			AddCard(Plane, ESprite::Ring, FLinearColor(0.5f, 0.6f, 1.f), 1.5f, End, FVector2D(320.f, 320.f), 0.f, true);
+			for (int32 Index = 0; Index < 3; ++Index)
+			{
+				AddCard(Plane, ESprite::Lightning, White, 2.5f, End + Around(Random.FRandRange(10.f, 50.f), Random.FRandRange(0.f, 2.f * PI)), FVector2D(90.f, 200.f), 0.f, false, true);
+			}
+		}
+		break;
+	}
 	case EShinobiBurst::TeleportFlash:
 		// Flying Raijin: a bright flash and a few bolts where the caster lands.
 		Duration = 0.45f;
@@ -500,6 +529,13 @@ void AShinobiBurst::Tick(float DeltaSeconds)
 				Card.Mesh->SetWorldLocation(Origin + FVector(0.f, 0.f, 8.f));
 				Card.Mesh->SetWorldRotation(FRotator(0.f, Card.Spin * Age, 0.f));
 				Card.Mesh->SetWorldScale3D(FVector(Size.X / 100.f, Size.Y / 100.f, 1.f));
+			}
+			else if (Card.bAlongPath)
+			{
+				// Long side along the path, face turned toward the camera about it; full length from the start.
+				Card.Mesh->SetWorldLocation(Origin);
+				Card.Mesh->SetWorldRotation(FRotationMatrix::MakeFromYZ(GetActorForwardVector(), CameraAt - Origin).ToQuat());
+				Card.Mesh->SetWorldScale3D(FVector(Size.X / 100.f, Card.Size.Y / 100.f, 1.f));
 			}
 			else if (Card.Spin != 0.f)
 			{

@@ -19,6 +19,8 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Sprinting);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_ChakraCharging);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Dodging);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Blinking);   // Lightning Blink streaking: the body is hidden on every machine
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_BlinkReady); // a dodge just started: a second dodge press blinks
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Burning);        // parent: matches either burn
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Burning_Normal);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Burning_Black);
@@ -83,6 +85,7 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Jutsu_SummonPusho);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_DragonBreath);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Substitution);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Blink);
 
 	// Activation failure reasons
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Fail_NoTarget);

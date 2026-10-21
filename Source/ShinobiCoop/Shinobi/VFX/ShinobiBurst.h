@@ -33,6 +33,7 @@ enum class EShinobiBurst : uint8
 	SummonPoof,       // a summon arriving or leaving: a big puff of smoke
 	SkyBolt,          // the owl's lightning: a bolt from the sky down onto the burst's spot (the target's feet)
 	AlmightyPush,     // Almighty Push: a see-through dome of force swelling from the caster's feet, dust rolling out under it
+	BlinkStreak,      // Lightning Blink: a bolt along the burst's forward, from the vanish spot (the burst) to the arrival, crackle at both
 };
 
 /**
@@ -48,6 +49,9 @@ class SHINOBICOOP_API AShinobiBurst : public AActor
 
 public:
 	AShinobiBurst();
+
+	/** BlinkStreak's path length at Scale 1 (UGA_Blink::Distance); Scale is the travelled length over this. */
+	static constexpr float BlinkLength = 800.f;
 
 	/** Server only (does nothing on a client); returns the spawned burst, or null. Scale multiplies its size (a charged
 	 * jutsu's burst is bigger); Rotation aims the directional kinds (FireBreath). */
@@ -107,6 +111,7 @@ private:
 		float Spin = 0.f;        // degrees per second; on a standing card it also turns the card to face the camera fully
 		float Life = 0.f;        // seconds it shows after its delay; 0 lasts to the end of the effect
 		bool bRollOut = false;   // starts near the centre and rides out to its offset with the Almighty Push dome
+		bool bAlongPath = false; // its height lies along the actor's forward, turned to face the camera about it (BlinkStreak)
 		float NextSwap = 0.f;
 		int32 Variant = 0;
 	};

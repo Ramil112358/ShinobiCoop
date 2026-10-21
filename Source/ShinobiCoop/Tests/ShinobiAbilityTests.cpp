@@ -128,6 +128,60 @@ bool FShinobiDodgeTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBlinkTest, "ShinobiCoop.Abilities.SecondDodgePressBlinks", ShinobiTestFlags)
+bool FShinobiBlinkTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	const auto Stamina = [P] { return ShinobiTest::Get(P, UShinobiAttributeSet::GetStaminaAttribute()); };
+	// What AShinobiPlayerCharacter::AbilityInputPressed does with the dodge key (it is private).
+	const auto PressDodge = [P]
+	{
+		if (!P->GetAbilitySystemComponent()->TryActivateAbilityByClass(UGA_Blink::StaticClass()))
+		{
+			ShinobiTest::Press(P, EShinobiAbilityInputID::Dodge);
+		}
+	};
+
+	const float Before = Stamina();
+	PressDodge();
+	TestTrue(TEXT("First press dodges"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
+	TestFalse(TEXT("First press doesn't blink"), ShinobiTest::IsActive(P, UGA_Blink::StaticClass()));
+	TestTrue(TEXT("Dodge opens the blink window"), ShinobiTest::HasTag(P, ShinobiTags::State_BlinkReady));
+	TestEqual(TEXT("Dodge cost 25"), Stamina(), Before - 25.f);
+
+	W.Tick(0.1f);
+	const FVector Mid = P->GetActorLocation();
+	PressDodge();
+	TestTrue(TEXT("Second press blinks"), ShinobiTest::IsActive(P, UGA_Blink::StaticClass()));
+	TestFalse(TEXT("Blink cancels the dodge"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
+	TestEqual(TEXT("Blink cost 35"), Stamina(), Before - 60.f);
+	TestTrue(TEXT("Body hidden while blinking"), P->IsHidden());
+	ShinobiTest::Damage(P, 50.f);
+	TestEqual(TEXT("Blink untouchable"), ShinobiTest::Get(P, UShinobiAttributeSet::GetHealthAttribute()), 500.f);
+
+	W.Tick(0.2f);
+	TestFalse(TEXT("Blink over"), ShinobiTest::IsActive(P, UGA_Blink::StaticClass()));
+	TestFalse(TEXT("Body back"), P->IsHidden());
+	TestTrue(TEXT("Still untouchable on arrival"), ShinobiTest::HasTag(P, ShinobiTags::State_Invulnerable));
+	const FVector Blinked = (P->GetActorLocation() - Mid) * FVector(1.f, 1.f, 0.f);
+	TestTrue(FString::Printf(TEXT("Blinked ~800 on -X (got %s)"), *Blinked.ToString()), Blinked.X < -650.f && Blinked.X > -900.f);
+
+	W.Tick(0.3f);
+	TestFalse(TEXT("Blink i-frames over"), ShinobiTest::HasTag(P, ShinobiTags::State_Invulnerable));
+	PressDodge();
+	TestFalse(TEXT("One blink per dodge"), ShinobiTest::IsActive(P, UGA_Blink::StaticClass()));
+	TestTrue(TEXT("Third press dodges"), ShinobiTest::IsActive(P, UGA_Dodge::StaticClass()));
+
+	W.Tick(1.8f);
+	ShinobiTest::Set(P, UShinobiAttributeSet::GetStaminaAttribute(), 100.f);
+	TestFalse(TEXT("Window closed"), ShinobiTest::HasTag(P, ShinobiTags::State_BlinkReady));
+	PressDodge();
+	TestFalse(TEXT("No blink after the window"), ShinobiTest::IsActive(P, UGA_Blink::StaticClass()));
+	TestEqual(TEXT("A plain dodge after the window"), Stamina(), 75.f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiChakraChargeTest, "ShinobiCoop.Abilities.ChakraChargeRefillsWhileHeld", ShinobiTestFlags)
 bool FShinobiChakraChargeTest::RunTest(const FString& Parameters)
 {

@@ -14,6 +14,8 @@ namespace ShinobiTags
 	UE_DEFINE_GAMEPLAY_TAG(State_Sprinting, "State.Sprinting");
 	UE_DEFINE_GAMEPLAY_TAG(State_ChakraCharging, "State.ChakraCharging");
 	UE_DEFINE_GAMEPLAY_TAG(State_Dodging, "State.Dodging");
+	UE_DEFINE_GAMEPLAY_TAG(State_Blinking, "State.Blinking");
+	UE_DEFINE_GAMEPLAY_TAG(State_BlinkReady, "State.BlinkReady");
 	UE_DEFINE_GAMEPLAY_TAG(State_Burning, "State.Burning");
 	UE_DEFINE_GAMEPLAY_TAG(State_Burning_Normal, "State.Burning.Normal");
 	UE_DEFINE_GAMEPLAY_TAG(State_Burning_Black, "State.Burning.Black");
@@ -71,6 +73,7 @@ namespace ShinobiTags
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Jutsu_SummonPusho, "Cooldown.Jutsu.SummonPusho");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_DragonBreath, "Cooldown.DragonBreath");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Substitution, "Cooldown.Substitution");
+	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Blink, "Cooldown.Blink");
 
 	UE_DEFINE_GAMEPLAY_TAG(Fail_NoTarget, "Fail.NoTarget");
 }

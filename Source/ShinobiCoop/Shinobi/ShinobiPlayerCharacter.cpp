@@ -70,7 +70,7 @@ AShinobiPlayerCharacter::AShinobiPlayerCharacter(const FObjectInitializer& Objec
 	Team = EShinobiTeam::Players;
 	AbilitySystem->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
 	StartupAbilities = {
-		UGA_Melee::StaticClass(), UGA_Dodge::StaticClass(), UGA_Sprint::StaticClass(), UGA_ChakraCharge::StaticClass(), UGA_Block::StaticClass(),
+		UGA_Melee::StaticClass(), UGA_Dodge::StaticClass(), UGA_Blink::StaticClass(), UGA_Sprint::StaticClass(), UGA_ChakraCharge::StaticClass(), UGA_Block::StaticClass(),
 		UGA_Fireball::StaticClass(), UGA_Chidori::StaticClass(), UGA_Rasengan::StaticClass(), UGA_Amaterasu::StaticClass(),
 		UGA_Substitution::StaticClass(), UGA_Revive::StaticClass(),
 		UGA_AlmightyPush::StaticClass(), UGA_Kamui::StaticClass(), UGA_KamuiExit::StaticClass(),
@@ -529,6 +529,11 @@ void AShinobiPlayerCharacter::BeginPlay()
 		ApplyLoadout(ShinobiLoadout::Default()); // the owner sends its saved one once its input is set up
 	}
 	AbilitySystem->RegisterGameplayTagEvent(ShinobiTags::State_Downed).AddUObject(this, &AShinobiPlayerCharacter::OnDownedTagChanged);
+	// Lightning Blink: the body is gone while it streaks (the ability's tag reaches every machine).
+	AbilitySystem->RegisterGameplayTagEvent(ShinobiTags::State_Blinking).AddWeakLambda(this, [this](const FGameplayTag, int32 Count)
+	{
+		SetActorHiddenInGame(Count > 0);
+	});
 }
 
 void AShinobiPlayerCharacter::FellOutOfWorld(const UDamageType& DamageType)
@@ -1056,6 +1061,11 @@ void AShinobiPlayerCharacter::AbilityInputPressed(EShinobiAbilityInputID InputID
 		return;
 	}
 	bFlightDive |= InputID == EShinobiAbilityInputID::Dodge && AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Mounted); // Control dives
+	// A second dodge press inside a dodge's window blinks instead (UGA_Blink checks the window, stamina and its cooldown).
+	if (InputID == EShinobiAbilityInputID::Dodge && AbilitySystem->TryActivateAbilityByClass(UGA_Blink::StaticClass()))
+	{
+		return;
+	}
 	if (bJutsuTargetPlacementActive && ShinobiLoadout::SlotIndexOf(InputID) != INDEX_NONE && !HasAuthority())
 	{
 		ServerSetJutsuTargetAimDirection(GetJutsuTargetAimDirection());
