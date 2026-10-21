@@ -9,6 +9,9 @@
 #include "Engine/Texture.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/IConsoleManager.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialExpressionTextureSampleParameter2D.h"
+#include "Materials/MaterialExpressionUtils.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 
@@ -213,6 +216,8 @@ bool FShinobiOutfitClothSimulatesTest::RunTest(const FString& Parameters)
 		MostMoved = FMath::Max(MostMoved, FVector3f::Dist(Before[Index], After[Index]));
 	}
 	TestTrue(FString::Printf(TEXT("Some cloth swings more than 1 cm against the body (most %.1f cm)"), MostMoved), MostMoved > 1.f);
+	// ...and stays on the body: no cloth flies further than the hem may swing (25 cm) plus a run's lean.
+	TestTrue(FString::Printf(TEXT("The cloth stays on the body (most %.1f cm off its rest)"), MostMoved), MostMoved < 60.f);
 	return true;
 }
 
@@ -249,5 +254,49 @@ bool FShinobiOutfitEveryCopyTest::RunTest(const FString& Parameters)
 	}
 	return true;
 }
+
+#if WITH_EDITOR
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOutfitCharacterMaterialTest, "ShinobiCoop.Outfit.CharacterMaterialCompiles", ShinobiTestFlags)
+bool FShinobiOutfitCharacterMaterialTest::RunTest(const FString& Parameters)
+{
+	// M_Character (Scripts/setup_hero.py) draws every roster body but the hero, and every outfit: a texture parameter whose
+	// sampler doesn't suit its texture fails the material, and the game draws them all in the grey default material.
+	const UMaterial* Material = LoadObject<UMaterial>(nullptr, TEXT("/Game/Shinobi/Characters/M_Character.M_Character"));
+	if (!TestNotNull(TEXT("M_Character is imported"), Material))
+	{
+		return true;
+	}
+	TestTrue(TEXT("M_Character is marked for clothing (the outfits' cloth)"), Material->bUsedWithClothing);
+	EMaterialSamplerType HideSampler = SAMPLERTYPE_MAX;
+	for (const UMaterialExpression* Expression : Material->GetExpressions())
+	{
+		if (const UMaterialExpressionTextureSampleParameter2D* Sample = Cast<UMaterialExpressionTextureSampleParameter2D>(Expression))
+		{
+			TestEqual(FString::Printf(TEXT("%s's sampler suits its default texture"), *Sample->ParameterName.ToString()),
+				int32(Sample->SamplerType), int32(MaterialExpressionUtils::GetSamplerTypeForTexture(Sample->Texture)));
+			if (Sample->ParameterName == TEXT("HideMask"))
+			{
+				HideSampler = Sample->SamplerType;
+			}
+		}
+	}
+	if (!TestNotEqual(TEXT("M_Character has a HideMask"), int32(HideSampler), int32(SAMPLERTYPE_MAX)))
+	{
+		return true;
+	}
+	// ...and so do the hide masks the game puts there.
+	for (int32 Outfit = 1; Outfit < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Outfits); ++Outfit)
+	{
+		for (int32 Body = 0; Body < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster); ++Body)
+		{
+			if (const UTexture* Mask = LoadObject<UTexture>(nullptr, *AShinobiPlayerCharacter::OutfitHidePath(Outfit, Body), nullptr, LOAD_NoWarn | LOAD_Quiet))
+			{
+				TestEqual(FString::Printf(TEXT("%s suits the HideMask sampler"), *Mask->GetName()), int32(MaterialExpressionUtils::GetSamplerTypeForTexture(Mask)), int32(HideSampler));
+			}
+		}
+	}
+	return true;
+}
+#endif
 
 #endif

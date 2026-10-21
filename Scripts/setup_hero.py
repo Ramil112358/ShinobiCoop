@@ -63,7 +63,24 @@ def log(message):
     unreal.log(f"[setup_hero] {message}")
 
 
+CLEAN_RIGS_DIR = os.path.join(PROJECT, "Saved", "CleanRigs")
+
+
+def clean_rig(fbx):
+    """The rig re-exported with unit-scale bones (Scripts/character/clean_rig.py; Saved/CleanRigs/, redone when the
+    source changes): a Mixamo FBX imports with its Hips scaled 100, which throws Chaos cloth and physics assets off."""
+    out = os.path.join(CLEAN_RIGS_DIR, os.path.basename(os.path.dirname(fbx)), os.path.basename(fbx))
+    if not os.path.exists(out) or os.path.getmtime(out) < os.path.getmtime(fbx):
+        script = os.path.join(PROJECT, "Scripts", "character", "clean_rig.py")
+        run = subprocess.run([BLENDER, "-b", "--factory-startup", "--python-exit-code", "1", "-P", script, "--", fbx, out],
+                             capture_output=True, text=True)
+        if run.returncode != 0 or not os.path.exists(out):
+            raise RuntimeError(f"clean_rig.py failed on {fbx}: {run.stdout[-2000:]}")
+    return out
+
+
 def import_hero(fbx, dest=HERO_DIR, name="SK_Hero", materials=True, physics=True):
+    fbx = clean_rig(fbx)
     options = unreal.FbxImportUI()
     options.import_mesh = True
     options.import_as_skeletal = True
@@ -365,19 +382,30 @@ def build_character_material():
 def add_hide_mask(material, recompile=True):
     """M_Character's opacity mask times a HideMask texture's red (default white): while an outfit is worn the game sets it
     to the body's hide mask for that outfit (AShinobiPlayerCharacter::ApplyOutfit), so the body under the cloak isn't
-    drawn. Done in place, once (an existing material keeps its instances)."""
+    drawn. Also marks it for clothing (the outfits' cloth). Done in place (an existing material keeps its instances).
+    The sampler is Color, matching both the white default and the hide masks (import_hide_mask): a mismatch fails the
+    material, and the game then draws every character on it in the grey default material."""
     current = MEL.get_material_property_input_node(material, unreal.MaterialProperty.MP_OPACITY_MASK)
     if isinstance(current, unreal.MaterialExpressionMultiply):
-        return  # already there
-    output = MEL.get_material_property_input_node_output_name(material, unreal.MaterialProperty.MP_OPACITY_MASK) or "A"
-    mask = MEL.create_material_expression(material, unreal.MaterialExpressionTextureSampleParameter2D, -500, 500)
-    mask.set_editor_property("parameter_name", "HideMask")
-    mask.set_editor_property("texture", unreal.load_asset("/Engine/EngineResources/WhiteSquareTexture"))
-    mask.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_GRAYSCALE)
-    times = MEL.create_material_expression(material, unreal.MaterialExpressionMultiply, -200, 400)
-    if not (MEL.connect_material_expressions(current, output, times, "A") and MEL.connect_material_expressions(mask, "R", times, "B")
-            and MEL.connect_material_property(times, "", unreal.MaterialProperty.MP_OPACITY_MASK)):
-        raise RuntimeError("M_Character: could not wire HideMask into the opacity mask")
+        # Already there: correct the sampler of a mask wired before it was Color.
+        mask = next((n for n in MEL.get_inputs_for_material_expression(material, current)
+                     if isinstance(n, unreal.MaterialExpressionTextureSampleParameter2D) and str(n.get_editor_property("parameter_name")) == "HideMask"), None)
+        if mask is None:
+            raise RuntimeError("M_Character: the opacity mask is multiplied by something other than HideMask")
+        if (mask.get_editor_property("sampler_type") == unreal.MaterialSamplerType.SAMPLERTYPE_COLOR
+                and material.get_editor_property("used_with_clothing")):
+            return
+    else:
+        output = MEL.get_material_property_input_node_output_name(material, unreal.MaterialProperty.MP_OPACITY_MASK) or "A"
+        mask = MEL.create_material_expression(material, unreal.MaterialExpressionTextureSampleParameter2D, -500, 500)
+        mask.set_editor_property("parameter_name", "HideMask")
+        mask.set_editor_property("texture", unreal.load_asset("/Engine/EngineResources/WhiteSquareTexture"))
+        times = MEL.create_material_expression(material, unreal.MaterialExpressionMultiply, -200, 400)
+        if not (MEL.connect_material_expressions(current, output, times, "A") and MEL.connect_material_expressions(mask, "R", times, "B")
+                and MEL.connect_material_property(times, "", unreal.MaterialProperty.MP_OPACITY_MASK)):
+            raise RuntimeError("M_Character: could not wire HideMask into the opacity mask")
+    mask.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR)
+    MEL.set_base_material_usage(material, unreal.MaterialUsage.MATUSAGE_CLOTHING, True)
     if recompile:
         errors = MEL.recompile_material(material)
         if errors:
@@ -476,24 +504,31 @@ def body_mesh_path(body):
     return f"{HERO_DIR}/SK_Hero" if body == "Hero" else f"{CHARACTERS_DIR}/{body}/SK_{body}"
 
 
-def add_tail(body):
-    """The tail capsule (SourceArt/Character/Models/<Body>/<Body>_tail.json from build_outfits.ps1) onto the body's physics
-    asset, for its outfits' cloth to hang over (a body without a tail has null there)."""
+def cloth_collision(body):
+    """PA_<Body>_Cloth next to the body: what its outfits' cloth collides with (UShinobiOutfitBuilderLibrary::
+    BuildClothCollision; not the ragdoll's physics asset), with the tail capsule from SourceArt/Character/Models/<Body>/
+    <Body>_tail.json (build_outfits.ps1; null for a body without a tail)."""
     import json
-    path = os.path.join(MODELS_DIR, body, f"{body}_tail.json")
     mesh = unreal.load_asset(body_mesh_path(body))
-    if not os.path.exists(path) or mesh is None:
-        return
-    with open(path, encoding="utf-8") as handle:
-        tail = json.load(handle)
-    if not tail:
-        return
-    hips = unreal.Vector(*tail["hips"])
-    root, tip = (unreal.Vector(*tail[k]) - hips for k in ("root", "tip"))
-    if not unreal.ShinobiOutfitBuilderLibrary.add_tail_capsule(mesh, root, tip, tail["radius"]):
-        raise RuntimeError(f"could not add {body}'s tail capsule")
-    unreal.EditorAssetLibrary.save_loaded_asset(mesh.get_editor_property("physics_asset"))
-    log(f"{body}: tail capsule for the cloth")
+    if mesh is None:
+        return None
+    folder = body_mesh_path(body).rsplit("/", 1)[0]
+    physics = unreal.ShinobiOutfitBuilderLibrary.build_cloth_collision(mesh, f"{folder}/PA_{body}_Cloth")
+    if physics is None:
+        raise RuntimeError(f"could not build {body}'s cloth collision")
+    path = os.path.join(MODELS_DIR, body, f"{body}_tail.json")
+    tail = None
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as handle:
+            tail = json.load(handle)
+    if tail:
+        hips = unreal.Vector(*tail["hips"])
+        root, tip = (unreal.Vector(*tail[k]) - hips for k in ("root", "tip"))
+        if not unreal.ShinobiOutfitBuilderLibrary.add_tail_capsule(mesh, physics, root, tip, tail["radius"]):
+            raise RuntimeError(f"could not add {body}'s tail capsule")
+    unreal.EditorAssetLibrary.save_loaded_asset(physics)
+    log(f"{body}: cloth collision{' with a tail capsule' if tail else ''}")
+    return physics
 
 
 def import_outfit_copy(fbx, dest, name):
@@ -520,8 +555,9 @@ def import_outfit_copy(fbx, dest, name):
 
 def import_hide_mask(png, dest, name):
     texture = import_texture_file(png, dest, name)
-    texture.set_editor_property("srgb", False)
-    texture.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_GRAYSCALE)
+    # A plain colour texture, as M_Character's HideMask sampler expects (black and white survive sRGB unchanged).
+    texture.set_editor_property("srgb", True)
+    texture.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_DEFAULT)
     texture.set_editor_property("mip_gen_settings", unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
     unreal.EditorAssetLibrary.save_loaded_asset(texture)
     return texture
@@ -541,12 +577,11 @@ def keep_tuning(outfit):
 
 def build_outfits():
     """Every Outfits/<Outfit>/<Outfit>_<Body>_outfit.fbx (skin_outfit.py, one per roster body) -> /Game/Shinobi/Outfits/
-    <Outfit>/SK_<Outfit>_<Body> with Chaos cloth on its hem and sleeves (colliding with that body, tail included), its
+    <Outfit>/SK_<Outfit>_<Body> with Chaos cloth on its hem and sleeves (colliding with PA_<Body>_Cloth, tail included), its
     hide mask <Outfit>_<Body>_hide.png -> T_<Outfit>_<Body>_Hide, all copies on one MI of <Outfit>_outfit.png. A tuning
     kept in Tuning/ (copy_cloth_tuning) is put back on every copy."""
     parent = build_character_material()
-    for body in ROSTER:
-        add_tail(body)
+    collision = {body: cloth_collision(body) for body in ROSTER}
     for folder in sorted(glob.glob(os.path.join(OUTFITS_DIR, "*"))):
         outfit = os.path.basename(folder)
         copies = [(body, os.path.join(folder, f"{outfit}_{body}_outfit.fbx")) for body in ROSTER]
@@ -568,9 +603,7 @@ def build_outfits():
                     unreal.EditorAssetLibrary.delete_asset(f"{dest}/{stale}")
             mesh = import_outfit_copy(fbx, dest, name)
             use_materials(mesh, outfit, dest, lambda slot, p=png: p, parent)
-            body_asset = unreal.load_asset(body_mesh_path(body))
-            physics = body_asset.get_editor_property("physics_asset") if body_asset else None
-            if not unreal.ShinobiOutfitBuilderLibrary.build_cloth(mesh, physics, HEM_MAX_DISTANCE_CM, SLEEVE_MAX_DISTANCE_CM):
+            if not unreal.ShinobiOutfitBuilderLibrary.build_cloth(mesh, collision[body], HEM_MAX_DISTANCE_CM, SLEEVE_MAX_DISTANCE_CM):
                 raise RuntimeError(f"{name}: could not build its cloth")
             unreal.EditorAssetLibrary.save_loaded_asset(mesh)
             hide = os.path.join(folder, f"{outfit}_{body}_hide.png")

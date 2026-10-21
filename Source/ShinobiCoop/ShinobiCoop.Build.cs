@@ -48,7 +48,7 @@ public class ShinobiCoop : ModuleRules
 		{
 			PrivateDependencyModuleNames.Add("MeshUtilities"); // world builder: skeletal to static mesh (editor only)
 			// outfit builder: Chaos cloth on the fitted copies (editor only)
-			PrivateDependencyModuleNames.AddRange(new string[] { "ClothingSystemEditorInterface", "SkeletalMeshEditor" });
+			PrivateDependencyModuleNames.AddRange(new string[] { "ClothingSystemEditorInterface", "SkeletalMeshEditor", "PhysicsUtilities", "AssetRegistry" });
 		}
 
 		PublicIncludePaths.AddRange(new string[] {

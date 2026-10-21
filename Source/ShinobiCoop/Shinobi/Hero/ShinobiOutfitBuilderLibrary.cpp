@@ -14,6 +14,9 @@
 #include "PointWeightMap.h"
 #include "ClothConfigBase.h"
 #include "PhysicsEngine/SkeletalBodySetup.h"
+#include "PhysicsAssetUtils.h"
+#include "AssetRegistry/AssetRegistryModule.h"
+#include "Misc/PackageName.h"
 #include "Rendering/SkeletalMeshModel.h"
 #include "SkeletalMeshClothingSystemUtilities.h"
 #endif
@@ -36,7 +39,7 @@ namespace
 		}
 		Config->Density = 0.35f;
 		Config->EdgeStiffnessWeighted = {1.f, 1.f};
-		Config->BendingStiffnessWeighted = {0.5f, 0.5f};
+		Config->BendingStiffnessWeighted = {0.8f, 0.8f}; // softer, and an idle hem crumples into strips
 		Config->DampingCoefficient = 0.1f;
 		Config->Drag = {0.07f, 0.07f};
 		Config->Lift = {0.07f, 0.07f};
@@ -45,6 +48,9 @@ namespace
 		Config->bUseSelfCollisions = false;
 		Config->LinearVelocityScale = FVector(0.6f);
 		Config->AngularVelocityScale = 0.6f;
+		// A light pull back to the fitted (skinned) shape: an idle hem keeps its flare, and still swings and trails in motion.
+		Config->AnimDriveStiffness = {0.15f, 0.15f};
+		Config->AnimDriveDamping = {0.2f, 0.2f};
 	}
 }
 #endif
@@ -270,13 +276,12 @@ bool UShinobiOutfitBuilderLibrary::CopyClothTuning(USkeletalMesh* Source, const 
 #endif
 }
 
-bool UShinobiOutfitBuilderLibrary::AddTailCapsule(USkeletalMesh* Body, FVector RootFromHips, FVector TipFromHips, float Radius)
+bool UShinobiOutfitBuilderLibrary::AddTailCapsule(USkeletalMesh* Body, UPhysicsAsset* Physics, FVector RootFromHips, FVector TipFromHips, float Radius)
 {
 #if WITH_EDITOR
-	UPhysicsAsset* Physics = Body ? Body->GetPhysicsAsset() : nullptr;
-	if (!Physics)
+	if (!Body || !Physics)
 	{
-		UE_LOG(LogShinobiCoop, Warning, TEXT("AddTailCapsule: %s has no physics asset"), Body ? *Body->GetName() : TEXT("(null)"));
+		UE_LOG(LogShinobiCoop, Warning, TEXT("AddTailCapsule: needs a body and its cloth collision"));
 		return false;
 	}
 	const FReferenceSkeleton& Ref = Body->GetRefSkeleton();
@@ -315,5 +320,45 @@ bool UShinobiOutfitBuilderLibrary::AddTailCapsule(USkeletalMesh* Body, FVector R
 	return true;
 #else
 	return false;
+#endif
+}
+
+UPhysicsAsset* UShinobiOutfitBuilderLibrary::BuildClothCollision(USkeletalMesh* Body, const FString& AssetPath)
+{
+#if WITH_EDITOR
+	if (!Body || Body->GetRefSkeleton().GetNum() == 0)
+	{
+		UE_LOG(LogShinobiCoop, Warning, TEXT("BuildClothCollision: no body"));
+		return nullptr;
+	}
+	const FString Name = FPackageName::GetShortName(AssetPath);
+	UPackage* Package = CreatePackage(*AssetPath);
+	UPhysicsAsset* Physics = FindObject<UPhysicsAsset>(Package, *Name);
+	if (!Physics)
+	{
+		Physics = NewObject<UPhysicsAsset>(Package, *Name, RF_Public | RF_Standalone);
+		FAssetRegistryModule::AssetCreated(Physics);
+	}
+	Physics->SkeletalBodySetups.Reset();
+	Physics->ConstraintSetup.Reset();
+	// The root bone's component-space scale is the rig's unit (100 on these Mixamo imports): sizes below are in bone units.
+	const float BoneScale = FMath::Max(FAnimationRuntime::GetComponentSpaceTransformRefPose(Body->GetRefSkeleton(), 0).GetScale3D().GetAbsMax(), UE_KINDA_SMALL_NUMBER);
+	FPhysAssetCreateParams Params;
+	Params.MinBoneSize = 8.f / BoneScale; // bones shorter than 8 cm (fingers, toes) get no capsule of their own
+	Params.GeomType = EFG_Sphyl;
+	Params.VertWeight = EVW_DominantWeight;
+	Params.bCreateConstraints = false; // collision only: nothing simulates it
+	FText Error;
+	if (!FPhysicsAssetUtils::CreateFromSkeletalMesh(Physics, Body, Params, Error, /*bSetToMesh=*/false, /*bShowProgress=*/false))
+	{
+		UE_LOG(LogShinobiCoop, Warning, TEXT("BuildClothCollision: %s: %s"), *Body->GetName(), *Error.ToString());
+		return nullptr;
+	}
+	Physics->SetPreviewMesh(Body);
+	Physics->MarkPackageDirty();
+	UE_LOG(LogShinobiCoop, Log, TEXT("BuildClothCollision: %s: %d bodies (bone scale %.0f)"), *Physics->GetName(), Physics->SkeletalBodySetups.Num(), BoneScale);
+	return Physics;
+#else
+	return nullptr;
 #endif
 }

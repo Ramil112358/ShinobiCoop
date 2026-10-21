@@ -38,11 +38,19 @@ public:
 	static bool CopyClothTuning(USkeletalMesh* Source, const TArray<USkeletalMesh*>& Targets);
 
 	/**
-	 * Adds (or replaces) a capsule named "Tail" on Body's physics asset, on its Hips body, for its outfits' cloth to hang
-	 * over the tail (it collides in the ragdoll too). Root and Tip are the tail capsule's ends relative to the Hips joint
+	 * Adds (or replaces) a capsule named "Tail" on Physics (Body's cloth collision, BuildClothCollision), on its Hips body,
+	 * for its outfits' cloth to hang over the tail. Root and Tip are the tail capsule's ends relative to the Hips joint
 	 * and Radius its radius, in metres in Blender's space for the body file (body_landmarks.find_tail: Z up, the body
 	 * facing -Y); they become UE's component space here (Y flipped, cm).
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|Outfit")
-	static bool AddTailCapsule(USkeletalMesh* Body, FVector RootFromHips, FVector TipFromHips, float Radius);
+	static bool AddTailCapsule(USkeletalMesh* Body, UPhysicsAsset* Physics, FVector RootFromHips, FVector TipFromHips, float Radius);
+
+	/**
+	 * A cloth-only physics asset for Body at AssetPath (created or rebuilt; the caller saves it): capsules fitted to the
+	 * vertices each bone carries, plus the tail (AddTailCapsule), kept apart from the ragdoll's. Sizes are in bone units,
+	 * so the minimum bone size is divided by the rig's scale (1 for bodies cleaned by Scripts/character/clean_rig.py).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Shinobi|Outfit")
+	static UPhysicsAsset* BuildClothCollision(USkeletalMesh* Body, const FString& AssetPath);
 };

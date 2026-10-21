@@ -28,6 +28,7 @@ from mathutils.kdtree import KDTree
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from body_landmarks import find_tail, outer_layer, skin_depth  # noqa: E402 (needs the path above)
+from clean_rig import export_unit_scale_fbx  # noqa: E402
 
 GIRTH = 1.04  # the outfit is cut a little wide so it hangs loose
 KNEE_DROP = 0.03  # hem this far below the knee bone
@@ -110,7 +111,9 @@ weld.free()
 bpy.ops.mesh.customdata_custom_splitnormals_clear()
 bpy.ops.object.shade_smooth()
 # Each vertex's place in the master, before fitting: every body's copy carries it, so cloth tuning can be copied between them.
-master_xy, master_z = outfit.data.uv_layers.new(name="MasterXY"), outfit.data.uv_layers.new(name="MasterZ")
+# UE 5.8's FBX import orders UV sets by name, so the names keep the texture's UVs in channel 0.
+outfit.data.uv_layers[0].name = "UV0_Texture"
+master_xy, master_z = outfit.data.uv_layers.new(name="UV1_MasterXY"), outfit.data.uv_layers.new(name="UV2_MasterZ")
 for loop in outfit.data.loops:
     co = outfit.data.vertices[loop.vertex_index].co
     master_xy.data[loop.index].uv = (co.x, co.y)
@@ -617,7 +620,8 @@ image.file_format = "PNG"
 image.save()
 log(f"wrote {png}")
 
-# Skin to the skeleton and export only the skeleton and the outfit.
+# Skin to the skeleton and export only the skeleton and the outfit, in centimetres with unit-scale bones (clean_rig.py:
+# the bodies Unreal imports are cleaned the same way, and Chaos cloth needs it).
 bpy.data.objects.remove(body, do_unlink=True)
 outfit.parent = armature
 outfit.matrix_parent_inverse = armature.matrix_world.inverted()
@@ -627,22 +631,22 @@ armature.select_set(True)
 outfit.select_set(True)
 bpy.context.view_layer.objects.active = armature
 fbx_path = os.path.join(out_dir, f"{name}_{body_name}_outfit.fbx")
-bpy.ops.export_scene.fbx(filepath=fbx_path, use_selection=True, object_types={"ARMATURE", "MESH"}, add_leaf_bones=False,
-                         bake_anim=False, path_mode="STRIP", apply_scale_options="FBX_SCALE_UNITS", mesh_smooth_type="FACE",
-                         colors_type="SRGB")
+reference = {b.name: (armature.matrix_world @ b.matrix_local).copy() for b in armature.data.bones}
+export_unit_scale_fbx(fbx_path, [armature, outfit])
 log(f"exported {fbx_path}")
 
 # Round trip: UE reads the FBX's bone orientations, and a worn outfit only lines up with the body when they match the
-# body's (the outfit's bones follow the body's in component space).
-reference = {b.name: (armature.matrix_world @ b.matrix_local).copy() for b in armature.data.bones}
+# body's (the outfit's bones follow the body's in component space). Compared as positions and rotations: the file is in
+# centimetres, so the re-imported rig may carry a unit scale.
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.fbx(filepath=fbx_path)
 again = next(o for o in bpy.context.scene.objects if o.type == "ARMATURE")
 worst = 0.0
 for bone in again.data.bones:
     if bone.name in reference:
-        delta = (again.matrix_world @ bone.matrix_local) - reference[bone.name]
-        worst = max(worst, max(abs(x) for row in delta for x in row))
+        now, then = again.matrix_world @ bone.matrix_local, reference[bone.name]
+        worst = max(worst, (now.to_translation() - then.to_translation()).length,
+                    min(turn := now.to_quaternion().rotation_difference(then.to_quaternion()).angle, 2 * math.pi - turn))  # (q and -q)
 log(f"bone round trip: worst matrix difference {worst:.5f} over {len(again.data.bones)} bones")
 if worst > 0.001:
     fail("the exported skeleton's bone orientations differ from the body's")
