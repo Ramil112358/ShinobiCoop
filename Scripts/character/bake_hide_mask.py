@@ -124,7 +124,9 @@ for polygon in body.data.polygons:
         colours.data[loop].color = (value, value, value, 1.0)
 body.data.uv_layers.active_index = 0
 image = bpy.data.images.new("Hide", MASK_SIZE, MASK_SIZE, alpha=False)
-image.generated_color = (1.0, 1.0, 1.0, 1.0)
+# Filled white by hand, and not cleared by the bake (it clears to black by default): the gaps between UV islands must show, or a
+# body of tiny islands (a Tripo head scan, Ramil) samples black at their edges and goes see-through.
+image.pixels.foreach_set(numpy.ones(MASK_SIZE * MASK_SIZE * 4, dtype=numpy.float32))
 material = bpy.data.materials.new("HideBake")
 material.use_nodes = True
 tree = material.node_tree
@@ -149,6 +151,7 @@ scene.render.engine = "CYCLES"
 scene.cycles.samples = 1
 scene.cycles.device = "CPU"
 scene.render.bake.margin = 4
+scene.render.bake.use_clear = False  # keep the white fill above
 bpy.ops.object.bake(type="EMIT")
 scene.render.image_settings.file_format = "PNG"
 scene.render.image_settings.color_mode = "BW"

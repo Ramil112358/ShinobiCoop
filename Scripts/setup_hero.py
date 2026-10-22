@@ -463,6 +463,20 @@ def mixamo_texture(fbx_path):
     return png
 
 
+# Bodies whose FBX normals are authored, not just smooth: Ramil's hair cards carry the hair shell's normals
+# (Scripts/character/build_ramil.py), which the default recompute throws away (each card then lights as a dark flake).
+KEEP_NORMALS = ("Ramil",)
+
+
+def keep_normals(mesh):
+    editor = unreal.get_editor_subsystem(unreal.SkeletalMeshEditorSubsystem)
+    settings = editor.get_lod_build_settings(mesh, 0)
+    settings.set_editor_property("recompute_normals", False)
+    editor.set_lod_build_settings(mesh, 0, settings)
+    unreal.EditorAssetLibrary.save_loaded_asset(mesh)
+    log(f"{mesh.get_name()}: keeps its imported normals")
+
+
 def build_characters(ik_manny):
     convert_vrms()
     # (character, fbx, slot -> base-colour PNG): VRoid conversions, then Mixamo-rigged models (Rodin meshes etc.).
@@ -491,11 +505,13 @@ def build_characters(ik_manny):
             if unreal.EditorAssetLibrary.does_asset_exist(f"{dest}/{stale}"):
                 unreal.EditorAssetLibrary.delete_asset(f"{dest}/{stale}")
         mesh = import_hero(character_fbx, dest, f"SK_{character}", materials=False)
+        if character in KEEP_NORMALS:
+            keep_normals(mesh)
         use_materials(mesh, character, dest, png_for_slot, parent)
         build_retargeter(ik_manny, build_ik_rig(mesh, dest, f"IK_{character}"), dest, f"RTG_MannyTo{character}")
 
 
-ROSTER = ("Hero", "Bika", "Cat", "Misha", "Pabu")  # AShinobiPlayerCharacter::Roster
+ROSTER = ("Hero", "Bika", "Cat", "Misha", "Pabu", "Ramil")  # AShinobiPlayerCharacter::Roster
 HEM_MAX_DISTANCE_CM, SLEEVE_MAX_DISTANCE_CM = 25.0, 12.0  # how far the hem and sleeve cloth may swing (UShinobiOutfitBuilderLibrary)
 TUNING_BODY = "Hero"  # the copy whose cloth the user tunes; its tuning is kept in Tuning/ across re-imports
 

@@ -89,6 +89,7 @@ public:
 		{TEXT("Cat"), TEXT("/Game/Shinobi/Characters/Cat/SK_Cat.SK_Cat"), TEXT("/Game/Shinobi/Characters/Cat/RTG_MannyToCat.RTG_MannyToCat")},
 		{TEXT("Misha"), TEXT("/Game/Shinobi/Characters/Misha/SK_Misha.SK_Misha"), TEXT("/Game/Shinobi/Characters/Misha/RTG_MannyToMisha.RTG_MannyToMisha")},
 		{TEXT("Pabu"), TEXT("/Game/Shinobi/Characters/Pabu/SK_Pabu.SK_Pabu"), TEXT("/Game/Shinobi/Characters/Pabu/RTG_MannyToPabu.RTG_MannyToPabu")},
+		{TEXT("Ramil"), TEXT("/Game/Shinobi/Characters/Ramil/SK_Ramil.SK_Ramil"), TEXT("/Game/Shinobi/Characters/Ramil/RTG_MannyToRamil.RTG_MannyToRamil")},
 	};
 
 	/** Roster index of Name (case-insensitive), or INDEX_NONE. */
