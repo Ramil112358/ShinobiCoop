@@ -111,6 +111,11 @@ public:
 	static FString OutfitMeshPath(int32 Outfit, int32 Body);
 	/** What of Roster[Body] that copy covers (black = hidden; the body's M_Character HideMask): T_<Outfit>_<Body>_Hide. */
 	static FString OutfitHidePath(int32 Outfit, int32 Body);
+	/** Index 0 (None) is always built; otherwise whether Outfits[Outfit]'s copy fitted to Roster[Body] is imported. */
+	static bool IsOutfitBuilt(int32 Outfit, int32 Body);
+	/** Puts Outfits[OutfitIndex]'s copy fitted to Roster[BodyIndex] on Outfit, following BodyMesh's pose, and hides what it
+	 * covers of BodyMesh (HideMask). False (outfit hidden, body fully shown) when there's no such copy. Pawn and menu stage. */
+	static bool DressOutfit(USkeletalMeshComponent& BodyMesh, USkeletalMeshComponent& Outfit, int32 OutfitIndex, int32 BodyIndex);
 	/** Cloth further than this from the local camera (or unseen for a second) stops simulating. */
 	static constexpr float OutfitClothRangeCm = 4000.f;
 

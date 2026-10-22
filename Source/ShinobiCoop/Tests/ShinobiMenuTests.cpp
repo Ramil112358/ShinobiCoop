@@ -10,6 +10,9 @@
 #include "Shinobi/Online/ShinobiSessionSubsystem.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/UI/ShinobiMenuArt.h"
+#include "Shinobi/UI/ShinobiMenuStage.h"
+#include "Shinobi/Hero/ShinobiBodyComponent.h"
+#include "Engine/SkeletalMesh.h"
 #include "Shinobi/UI/ShinobiSettings.h"
 
 // The main menu (docs/superpowers/specs/2026-10-20-main-menu-polish-design.md): its data, the stage and the tabs.
@@ -103,6 +106,77 @@ bool FShinobiMenuJutsuGroupsTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Susanoo"), ShinobiLoadout::GroupOf(UGA_Susanoo::StaticClass()) == EGroup::SummonsAndDragons);
 	TestEqual(TEXT("group name"), ShinobiLoadout::GroupName(EGroup::SummonsAndDragons).ToString(), FString(TEXT("SUMMONS & DRAGONS")));
 	TestTrue(TEXT("the pawn knows jutsu"), GetDefault<AShinobiPlayerCharacter>()->GetKnownJutsu().Num() > 0);
+	return true;
+}
+
+namespace
+{
+	bool MenuTestBodyImported(int32 Body)
+	{
+		return LoadObject<USkeletalMesh>(nullptr, AShinobiPlayerCharacter::Roster[Body].Mesh, nullptr, LOAD_NoWarn | LOAD_Quiet) != nullptr;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMenuStageShowsPickTest, "ShinobiCoop.UI.MenuStageShowsPick", ShinobiTestFlags)
+bool FShinobiMenuStageShowsPickTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiMenuStage* Stage = W.Spawn<AShinobiMenuStage>();
+	if (MenuTestBodyImported(1))
+	{
+		Stage->Show(1, 0);
+		TestEqual(TEXT("shows the pick"), Stage->GetShownBody(), 1);
+		TestEqual(TEXT("wears its mesh"), Stage->GetBody()->GetSkeletalMeshAsset()->GetPathName(), FString(AShinobiPlayerCharacter::Roster[1].Mesh));
+	}
+	Stage->Show(99, 0);
+	TestEqual(TEXT("an unknown pick falls back to the hero"), Stage->GetShownBody(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMenuStageMissingOutfitTest, "ShinobiCoop.UI.MenuStageMissingOutfitShowsBody", ShinobiTestFlags)
+bool FShinobiMenuStageMissingOutfitTest::RunTest(const FString& Parameters)
+{
+	for (int32 Body = 0; Body < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster); ++Body)
+	{
+		for (int32 Outfit = 1; Outfit < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Outfits); ++Outfit)
+		{
+			if (MenuTestBodyImported(Body) && !AShinobiPlayerCharacter::IsOutfitBuilt(Outfit, Body))
+			{
+				FShinobiTestWorld W;
+				AShinobiMenuStage* Stage = W.Spawn<AShinobiMenuStage>();
+				Stage->Show(Body, Outfit);
+				TestFalse(TEXT("no outfit shown"), Stage->GetOutfit()->IsVisible());
+				TestTrue(TEXT("body shown"), Stage->GetBody()->IsVisible());
+				return true;
+			}
+		}
+	}
+	AddInfo(TEXT("every outfit is built for every imported body: nothing to check"));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMenuStageWearsOutfitTest, "ShinobiCoop.UI.MenuStageWearsOutfit", ShinobiTestFlags)
+bool FShinobiMenuStageWearsOutfitTest::RunTest(const FString& Parameters)
+{
+	TestTrue(TEXT("no outfit is always built"), AShinobiPlayerCharacter::IsOutfitBuilt(0, 0));
+	for (int32 Body = 0; Body < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster); ++Body)
+	{
+		for (int32 Outfit = 1; Outfit < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Outfits); ++Outfit)
+		{
+			if (MenuTestBodyImported(Body) && AShinobiPlayerCharacter::IsOutfitBuilt(Outfit, Body))
+			{
+				FShinobiTestWorld W;
+				AShinobiMenuStage* Stage = W.Spawn<AShinobiMenuStage>();
+				Stage->Show(Body, Outfit);
+				const USkeletalMesh* Worn = Stage->GetOutfit()->GetSkeletalMeshAsset();
+				TestEqual(TEXT("the fitted copy"), Worn ? Worn->GetPathName() : FString(), AShinobiPlayerCharacter::OutfitMeshPath(Outfit, Body));
+				TestTrue(TEXT("follows the body"), Stage->GetOutfit()->LeaderPoseComponent.Get() == Stage->GetBody());
+				TestTrue(TEXT("shown"), Stage->GetOutfit()->IsVisible());
+				return true;
+			}
+		}
+	}
+	AddWarning(TEXT("no outfit copy is built: run Scripts/character/build_outfits.ps1"));
 	return true;
 }
 
