@@ -307,25 +307,28 @@ void UShinobiPauseMenuWidget::Refresh()
 TArray<FString> UShinobiSettingsWidget::GetEntries() const
 {
 	TArray<FString> Entries;
-	for (uint8 Row = 0; Row < uint8(ShinobiSettings::ERow::Num); ++Row)
+	for (const ShinobiSettings::ERow Row : ShinobiSettings::RowsFor(bMainMenu))
 	{
-		Entries.Add(ShinobiSettings::Label(ShinobiSettings::ERow(Row)));
+		Entries.Add(ShinobiSettings::Label(Row));
 	}
 	Entries.Add(TEXT("Shortcuts"));
-	Entries.Add(TEXT("Back"));
+	if (!bMainMenu)
+	{
+		Entries.Add(TEXT("Back"));
+	}
 	return Entries;
 }
 
 void UShinobiSettingsWidget::OnEntry(int32 Index)
 {
-	if (Index < int32(ShinobiSettings::ERow::Num))
+	const TArray<ShinobiSettings::ERow> Rows = ShinobiSettings::RowsFor(bMainMenu);
+	if (Rows.IsValidIndex(Index))
 	{
-		const ShinobiSettings::ERow Row = ShinobiSettings::ERow(Index);
-		ShinobiSettings::Cycle(Row, GetWorld());
-		SetEntryLabel(Index, ShinobiSettings::Label(Row));
+		ShinobiSettings::Cycle(Rows[Index], GetWorld());
+		SetEntryLabel(Index, ShinobiSettings::Label(Rows[Index]));
 		return;
 	}
-	if (Index == int32(ShinobiSettings::ERow::Num)) // Shortcuts
+	if (Index == Rows.Num()) // Shortcuts
 	{
 		UShinobiShortcutsWidget* Panel = CreateWidget<UShinobiShortcutsWidget>(GetOwningPlayer(), UShinobiShortcutsWidget::StaticClass());
 		Panel->Opener = this;

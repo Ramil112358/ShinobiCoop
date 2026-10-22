@@ -126,6 +126,8 @@ class SHINOBICOOP_API UShinobiSettingsWidget : public UShinobiMenuWidget
 public:
 	/** The menu hidden underneath, shown again on Back. */
 	TWeakObjectPtr<UUserWidget> Opener;
+	/** The main menu's SETTINGS tab: no Character / Outfit rows (SHINOBI has them) and no Back. Set before it's built. */
+	bool bMainMenu = false;
 
 protected:
 	virtual FString GetTitle() const override { return TEXT("SETTINGS"); }
