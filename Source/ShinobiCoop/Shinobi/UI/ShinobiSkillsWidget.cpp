@@ -21,11 +21,12 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiPlayerController.h"
 #include "Shinobi/UI/ShinobiKeyBindings.h"
+#include "Shinobi/UI/ShinobiMenuStyle.h"
 
 namespace
 {
 	constexpr float SkillsCellSize = 56.f;
-	constexpr int32 SkillsPoolColumns = 7;
+	constexpr int32 SkillsPoolColumns = 6;
 	const FLinearColor SkillsBackdropColor(0.02f, 0.02f, 0.04f, 0.85f);
 	const FLinearColor SkillsGoldColor(0.91f, 0.79f, 0.48f);
 	const FLinearColor SkillsSlottedColor(0.55f, 0.25f, 1.f);
@@ -45,11 +46,6 @@ namespace
 		return Text;
 	}
 
-	FText SkillsTooltipFor(const UShinobiJutsuAbility& Jutsu)
-	{
-		return FText::FromString(FString::Printf(TEXT("%s\nChakra %d  ·  Cooldown %ds\n%s"), *Jutsu.DisplayName.ToString(),
-			FMath::RoundToInt(Jutsu.ChakraCost), FMath::RoundToInt(Jutsu.Cooldown), *Jutsu.Description.ToString()));
-	}
 }
 
 // --- UShinobiSkillCell ---
@@ -99,7 +95,6 @@ void UShinobiSkillCell::Show(TSubclassOf<UShinobiJutsuAbility> Jutsu, const FLin
 		UTexture2D* Texture = Ability && !Ability->Icon.IsNull() ? Ability->Icon.LoadSynchronous() : nullptr;
 		Icon->SetBrushFromTexture(Texture);
 		Icon->SetColorAndOpacity(Texture ? FLinearColor::White : FLinearColor(0.08f, 0.08f, 0.1f)); // an empty slot is a dark square
-		SetToolTipText(Ability ? SkillsTooltipFor(*Ability) : FText::GetEmpty());
 	}
 	FrameColor = Frame;
 	FrameBorder->SetBrushColor(bFocused ? FLinearColor::White : FrameColor);
@@ -186,10 +181,23 @@ FReply UShinobiSkillCell::NativeOnKeyDown(const FGeometry& Geometry, const FKeyE
 	return Super::NativeOnKeyDown(Geometry, Event);
 }
 
+void UShinobiSkillCell::NativeOnMouseEnter(const FGeometry& Geometry, const FPointerEvent& Event)
+{
+	Super::NativeOnMouseEnter(Geometry, Event);
+	if (UShinobiSkillsWidget* Screen = Owner.Get(); Screen && ShownJutsu.IsValid())
+	{
+		Screen->SelectJutsu(ShownJutsu.Get());
+	}
+}
+
 void UShinobiSkillCell::NativeOnAddedToFocusPath(const FFocusEvent& Event)
 {
 	Super::NativeOnAddedToFocusPath(Event);
 	bFocused = true;
+	if (UShinobiSkillsWidget* Screen = Owner.Get(); Screen && ShownJutsu.IsValid())
+	{
+		Screen->SelectJutsu(ShownJutsu.Get());
+	}
 	if (FrameBorder)
 	{
 		FrameBorder->SetBrushColor(FLinearColor::White);
@@ -220,56 +228,94 @@ TSharedRef<SWidget> UShinobiSkillsWidget::RebuildWidget()
 		SetIsFocusable(true); // K, Esc and B reach it when no cell has focus
 		UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Root"));
 		WidgetTree->RootWidget = Root;
-		UBorder* Backdrop = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Backdrop"));
-		Backdrop->SetBrushColor(SkillsBackdropColor);
-		Backdrop->SetHorizontalAlignment(HAlign_Center);
-		Backdrop->SetVerticalAlignment(VAlign_Center);
-		UCanvasPanelSlot* BackdropSlot = Root->AddChildToCanvas(Backdrop);
-		BackdropSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
-		BackdropSlot->SetOffsets(FMargin(0.f));
-
-		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-		Backdrop->SetContent(Column);
-		const auto AddRow = [Column](UWidget* Widget, float Top)
+		const auto Place = [Root](UWidget* Widget, const FAnchors& Anchors, const FVector2D& Alignment, const FVector2D& Position)
 		{
-			UVerticalBoxSlot* RowSlot = Column->AddChildToVerticalBox(Widget);
-			RowSlot->SetHorizontalAlignment(HAlign_Center);
-			RowSlot->SetPadding(FMargin(0.f, Top, 0.f, 0.f));
+			UCanvasPanelSlot* Slot = Root->AddChildToCanvas(Widget);
+			Slot->SetAnchors(Anchors);
+			Slot->SetAlignment(Alignment);
+			Slot->SetPosition(Position);
+			Slot->SetAutoSize(true);
+			return Slot;
 		};
-		UTextBlock* Title = SkillsMakeLabel(*WidgetTree, 26, SkillsGoldColor);
-		Title->SetText(INVTEXT("J U T S U"));
-		AddRow(Title, 0.f);
-		UTextBlock* Hint = SkillsMakeLabel(*WidgetTree, 11, SkillsTextColor);
-		Hint->SetText(INVTEXT("Hover a jutsu for details  ·  K or Esc closes"));
-		AddRow(Hint, 4.f);
-
-		UUniformGridPanel* Pool = WidgetTree->ConstructWidget<UUniformGridPanel>(UUniformGridPanel::StaticClass());
-		Pool->SetSlotPadding(FMargin(4.f));
-		AddRow(Pool, 16.f);
-		const AShinobiPlayerCharacter* Player = GetPlayer();
-		Known = Player ? Player->GetKnownJutsu() : TArray<TSubclassOf<UShinobiJutsuAbility>>();
-		for (int32 Index = 0; Index < Known.Num(); ++Index)
+		if (!bMenuMode) // in the main menu the stage shows through
 		{
-			UShinobiSkillCell* Cell = WidgetTree->ConstructWidget<UShinobiSkillCell>(UShinobiSkillCell::StaticClass());
-			Cell->Owner = this;
-			Cell->Index = Index;
-			Pool->AddChildToUniformGrid(Cell, Index / SkillsPoolColumns, Index % SkillsPoolColumns);
-			PoolCells.Add(Cell);
+			UBorder* Backdrop = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Backdrop"));
+			Backdrop->SetBrushColor(SkillsBackdropColor);
+			UCanvasPanelSlot* BackdropSlot = Root->AddChildToCanvas(Backdrop);
+			BackdropSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+			BackdropSlot->SetOffsets(FMargin(0.f));
 		}
 
-		USizeBox* Rule = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		Rule->SetWidthOverride(SkillsPoolColumns * (SkillsCellSize + 8.f));
-		Rule->SetHeightOverride(1.f);
-		UBorder* RuleLine = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
-		RuleLine->SetBrushColor(SkillsGoldColor * FLinearColor(1.f, 1.f, 1.f, 0.6f));
-		Rule->AddChild(RuleLine);
-		AddRow(Rule, 18.f);
-		UTextBlock* SlotsLabel = SkillsMakeLabel(*WidgetTree, 11, SkillsTextColor);
-		SlotsLabel->SetText(INVTEXT("Your 8 slots   (gamepad: RB page 1 | page 2)"));
-		AddRow(SlotsLabel, 10.f);
+		// Left: every known jutsu, under its group's heading.
+		UBorder* PoolPanel = ShinobiMenuStyle::PanelBox(*WidgetTree, FMargin(20.f, 6.f, 20.f, 16.f));
+		Place(PoolPanel, FAnchors(0.f, 0.f), FVector2D::ZeroVector, FVector2D(40.f, bMenuMode ? 20.f : 40.f));
+		UVerticalBox* Pool = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Pool"));
+		PoolPanel->SetContent(Pool);
+		if (bMenuMode)
+		{
+			Known = GetDefault<AShinobiPlayerCharacter>()->GetKnownJutsu();
+			MenuLoadout = ShinobiLoadout::LoadSaved(Known);
+		}
+		else
+		{
+			Pool->AddChildToVerticalBox(ShinobiMenuStyle::Text(*WidgetTree, INVTEXT("JUTSU"), 34, FLinearColor::White, true));
+			const AShinobiPlayerCharacter* Player = GetPlayer();
+			Known = Player ? Player->GetKnownJutsu() : TArray<TSubclassOf<UShinobiJutsuAbility>>();
+		}
+		PoolCells.SetNum(Known.Num());
+		for (const ShinobiLoadout::EGroup Group : { ShinobiLoadout::EGroup::Combat, ShinobiLoadout::EGroup::Elements, ShinobiLoadout::EGroup::SummonsAndDragons })
+		{
+			UUniformGridPanel* Grid = nullptr;
+			int32 Count = 0;
+			for (int32 Index = 0; Index < Known.Num(); ++Index)
+			{
+				if (ShinobiLoadout::GroupOf(Known[Index]) != Group)
+				{
+					continue;
+				}
+				if (!Grid)
+				{
+					Pool->AddChildToVerticalBox(ShinobiMenuStyle::Text(*WidgetTree, ShinobiLoadout::GroupName(Group), 12, ShinobiMenuStyle::Accent))
+						->SetPadding(FMargin(0.f, 14.f, 0.f, 6.f));
+					Grid = WidgetTree->ConstructWidget<UUniformGridPanel>(UUniformGridPanel::StaticClass());
+					Grid->SetSlotPadding(FMargin(3.f));
+					Pool->AddChildToVerticalBox(Grid);
+				}
+				UShinobiSkillCell* Cell = WidgetTree->ConstructWidget<UShinobiSkillCell>(UShinobiSkillCell::StaticClass());
+				Cell->Owner = this;
+				Cell->Index = Index;
+				Grid->AddChildToUniformGrid(Cell, Count / SkillsPoolColumns, Count % SkillsPoolColumns);
+				PoolCells[Index] = Cell;
+				++Count;
+			}
+		}
 
+		// Right: the jutsu under the cursor or focus.
+		UBorder* Detail = ShinobiMenuStyle::PanelBox(*WidgetTree, FMargin(26.f, 22.f));
+		Place(Detail, FAnchors(1.f, 0.42f), FVector2D(1.f, 0.5f), FVector2D(-48.f, 0.f));
+		USizeBox* DetailWidth = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		DetailWidth->SetWidthOverride(360.f);
+		Detail->SetContent(DetailWidth);
+		UVerticalBox* DetailColumn = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
+		DetailWidth->AddChild(DetailColumn);
+		DetailGroup = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 12, ShinobiMenuStyle::Accent);
+		DetailColumn->AddChildToVerticalBox(DetailGroup);
+		DetailName = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 30, FLinearColor::White, true);
+		DetailName->SetAutoWrapText(true);
+		DetailColumn->AddChildToVerticalBox(DetailName);
+		DetailText = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 15, FLinearColor(0.9f, 0.9f, 0.92f));
+		DetailText->SetAutoWrapText(true);
+		DetailColumn->AddChildToVerticalBox(DetailText)->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
+		DetailStats = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 14, ShinobiMenuStyle::TextDim);
+		DetailColumn->AddChildToVerticalBox(DetailStats)->SetPadding(FMargin(0.f, 12.f, 0.f, 0.f));
+
+		// Bottom: the 8 slots with their keys, the hint or lock banner under them.
+		UVerticalBox* Bottom = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
+		Place(Bottom, FAnchors(0.5f, 1.f), FVector2D(0.5f, 1.f), FVector2D(0.f, bMenuMode ? -20.f : -110.f)); // in game: above the HUD bar
+		UBorder* Bar = ShinobiMenuStyle::PanelBox(*WidgetTree, FMargin(12.f, 10.f));
+		Bottom->AddChildToVerticalBox(Bar)->SetHorizontalAlignment(HAlign_Center);
 		UHorizontalBox* Slots = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-		AddRow(Slots, 6.f);
+		Bar->SetContent(Slots);
 		for (int32 Index = 0; Index < ShinobiLoadout::NumSlots; ++Index)
 		{
 			UShinobiSkillCell* Cell = WidgetTree->ConstructWidget<UShinobiSkillCell>(UShinobiSkillCell::StaticClass());
@@ -279,38 +325,84 @@ TSharedRef<SWidget> UShinobiSkillsWidget::RebuildWidget()
 			Slots->AddChildToHorizontalBox(Cell)->SetPadding(FMargin(Index == 4 ? 18.f : 4.f, 0.f, 4.f, 0.f));
 			SlotCells.Add(Cell);
 		}
-		Banner = SkillsMakeLabel(*WidgetTree, 13, SkillsGoldColor);
-		AddRow(Banner, 16.f);
+		Banner = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 13, SkillsGoldColor);
+		Banner->SetJustification(ETextJustify::Center);
+		Bottom->AddChildToVerticalBox(Banner)->SetPadding(FMargin(0.f, 10.f, 0.f, 0.f));
 	}
-	return Super::RebuildWidget();
+	TSharedRef<SWidget> Result = Super::RebuildWidget();
+	SelectJutsu(Known.Num() > 0 ? Known[0] : nullptr);
+	RefreshCells();
+	return Result;
 }
 
 void UShinobiSkillsWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	UWidget* First = PoolCells.Num() > 0 ? static_cast<UWidget*>(PoolCells[0]) : this;
-	First->SetKeyboardFocus();
+	if (!bMenuMode) // the main menu focuses it when its tab opens
+	{
+		GetFocusTarget()->SetKeyboardFocus();
+	}
+}
+
+UWidget* UShinobiSkillsWidget::GetFocusTarget() const
+{
+	return PoolCells.Num() > 0 ? static_cast<UWidget*>(PoolCells[0]) : const_cast<UShinobiSkillsWidget*>(this);
+}
+
+UShinobiSkillCell* UShinobiSkillsWidget::GetCell(bool bSlot, int32 Index) const
+{
+	const TArray<TObjectPtr<UShinobiSkillCell>>& Cells = bSlot ? SlotCells : PoolCells;
+	return Cells.IsValidIndex(Index) ? Cells[Index].Get() : nullptr;
+}
+
+const ShinobiLoadout::FSlots& UShinobiSkillsWidget::GetShownLoadout() const
+{
+	static const ShinobiLoadout::FSlots Empty;
+	if (bMenuMode)
+	{
+		return MenuLoadout;
+	}
+	const AShinobiPlayerCharacter* Player = GetPlayer();
+	return Player ? Player->GetLoadout() : Empty;
+}
+
+void UShinobiSkillsWidget::SelectJutsu(TSubclassOf<UShinobiJutsuAbility> Jutsu)
+{
+	const UShinobiJutsuAbility* Ability = Jutsu ? Jutsu->GetDefaultObject<UShinobiJutsuAbility>() : nullptr;
+	if (!DetailName || !Ability)
+	{
+		return;
+	}
+	DetailGroup->SetText(ShinobiLoadout::GroupName(ShinobiLoadout::GroupOf(Jutsu)));
+	DetailName->SetText(Ability->DisplayName.ToUpper());
+	DetailText->SetText(Ability->Description);
+	DetailStats->SetText(FText::FromString(FString::Printf(TEXT("Chakra  %d\nCooldown  %d s\nSeal time  %.1f s"),
+		FMath::RoundToInt(Ability->ChakraCost), FMath::RoundToInt(Ability->Cooldown), Ability->WindUp)));
 }
 
 void UShinobiSkillsWidget::NativeTick(const FGeometry& Geometry, float DeltaTime)
 {
 	Super::NativeTick(Geometry, DeltaTime);
-	AShinobiPlayerCharacter* Player = GetPlayer();
-	if (!Player)
+	if (!bMenuMode && !GetPlayer())
 	{
 		Close(); // died, or the pawn went away
 		return;
 	}
-	const UAbilitySystemComponent& ASC = *Player->GetAbilitySystemComponent();
-	const ShinobiLoadout::FSlots& Loadout = Player->GetLoadout();
-	const FText Reason = Player->GetLoadoutLockReason();
+	RefreshCells();
+}
+
+void UShinobiSkillsWidget::RefreshCells()
+{
+	AShinobiPlayerCharacter* Player = bMenuMode ? nullptr : GetPlayer();
+	const ShinobiLoadout::FSlots& Loadout = GetShownLoadout();
 	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	const FText Reason = Player ? Player->GetLoadoutLockReason() : FText::GetEmpty();
 	FText BannerText;
 	if (Now < NoticeUntil)
 	{
 		BannerText = Notice;
 	}
-	else if (Player->IsInCombat())
+	else if (Player && Player->IsInCombat())
 	{
 		BannerText = FText::FromString(FString::Printf(TEXT("In combat: swaps unlock in %ds"), FMath::CeilToInt(Player->GetCombatSecondsLeft())));
 	}
@@ -320,9 +412,9 @@ void UShinobiSkillsWidget::NativeTick(const FGeometry& Geometry, float DeltaTime
 	}
 	else
 	{
-		BannerText = INVTEXT("Click a jutsu, then a slot (or drag it)  ·  drag slots to reorder  ·  right-click or Y empties a slot");
+		BannerText = INVTEXT("Click a jutsu, then a slot (or drag it)  |  drag slots to reorder  |  right-click or Y empties a slot");
 	}
-	if (!Banner->GetText().EqualTo(BannerText))
+	if (Banner && !Banner->GetText().EqualTo(BannerText))
 	{
 		Banner->SetText(BannerText);
 	}
@@ -330,7 +422,7 @@ void UShinobiSkillsWidget::NativeTick(const FGeometry& Geometry, float DeltaTime
 	for (int32 Index = 0; Index < PoolCells.Num(); ++Index)
 	{
 		const bool bSlotted = Loadout.Contains(Known[Index]);
-		PoolCells[Index]->Show(Known[Index], Index == PickedPool ? SkillsGoldColor : (bSlotted ? SkillsSlottedColor : SkillsIdleColor), FText::GetEmpty(), FText::GetEmpty(), 1.f);
+		PoolCells[Index]->Show(Known[Index], Index == PickedPool ? SkillsGoldColor : (bSlotted ? ShinobiMenuStyle::Accent : SkillsIdleColor), FText::GetEmpty(), FText::GetEmpty(), 1.f);
 	}
 	const AShinobiPlayerController* PC = Cast<AShinobiPlayerController>(GetOwningPlayer());
 	const bool bPad = PC && PC->IsUsingGamepad();
@@ -338,14 +430,14 @@ void UShinobiSkillsWidget::NativeTick(const FGeometry& Geometry, float DeltaTime
 	for (int32 Index = 0; Index < SlotCells.Num(); ++Index)
 	{
 		const TSubclassOf<UShinobiJutsuAbility> Jutsu = Loadout.IsValidIndex(Index) ? Loadout[Index] : nullptr;
-		const bool bLocked = Player->IsSlotLocked(Index);
+		const bool bLocked = Player && Player->IsSlotLocked(Index);
 		FText Overlay;
-		if (bLocked)
+		if (bLocked && Jutsu)
 		{
-			const FShinobiJutsuSlotState State = Jutsu->GetDefaultObject<UShinobiJutsuAbility>()->GetSlotState(ASC);
+			const FShinobiJutsuSlotState State = Jutsu->GetDefaultObject<UShinobiJutsuAbility>()->GetSlotState(*Player->GetAbilitySystemComponent());
 			Overlay = State.CooldownRemaining > 0.f ? FText::FromString(FString::Printf(TEXT("%ds"), FMath::CeilToInt(State.CooldownRemaining))) : INVTEXT("IN USE");
 		}
-		const FText Key = bPad ? FText::FromString(FString::Printf(TEXT("%s%s"), Index < 4 ? TEXT("") : TEXT("2·"), FaceLabels[Index % 4]))
+		const FText Key = bPad ? FText::FromString(FString::Printf(TEXT("%s%s"), Index < 4 ? TEXT("") : TEXT("2-"), FaceLabels[Index % 4]))
 			: ShinobiKeyBindings::KeyLabel(ShinobiKeyBindings::Get(static_cast<ShinobiKeyBindings::EBindable>(Index)), true);
 		SlotCells[Index]->Show(Jutsu, Index == PickedSlot ? SkillsGoldColor : (bLocked ? SkillsLockedColor : SkillsIdleColor), Overlay, Key, bLocked ? 0.45f : 1.f);
 	}
@@ -354,6 +446,17 @@ void UShinobiSkillsWidget::NativeTick(const FGeometry& Geometry, float DeltaTime
 void UShinobiSkillsWidget::Request(const ShinobiLoadout::FSlots& Slots)
 {
 	PickedPool = PickedSlot = INDEX_NONE;
+	if (bMenuMode)
+	{
+		// No pawn, no combat: the bar is just saved, and the next game starts with it (LoadSaved on spawn).
+		if (Slots != MenuLoadout && ShinobiLoadout::IsValid(Slots, Known))
+		{
+			MenuLoadout = Slots;
+			ShinobiLoadout::Save(Slots);
+		}
+		RefreshCells();
+		return;
+	}
 	AShinobiPlayerCharacter* Player = GetPlayer();
 	if (!Player || Slots == Player->GetLoadout())
 	{
@@ -373,12 +476,15 @@ void UShinobiSkillsWidget::Request(const ShinobiLoadout::FSlots& Slots)
 
 void UShinobiSkillsWidget::OnCellClicked(const UShinobiSkillCell& Cell)
 {
-	const AShinobiPlayerCharacter* Player = GetPlayer();
-	if (!Player)
+	if (!bMenuMode && !GetPlayer())
 	{
 		return;
 	}
-	const ShinobiLoadout::FSlots& Loadout = Player->GetLoadout();
+	const ShinobiLoadout::FSlots Loadout = GetShownLoadout();
+	if (!Cell.bSlot && Known.IsValidIndex(Cell.Index))
+	{
+		SelectJutsu(Known[Cell.Index]);
+	}
 	if (!Cell.bSlot)
 	{
 		if (PickedSlot != INDEX_NONE)
@@ -387,6 +493,7 @@ void UShinobiSkillsWidget::OnCellClicked(const UShinobiSkillCell& Cell)
 			return;
 		}
 		PickedPool = PickedPool == Cell.Index ? INDEX_NONE : Cell.Index;
+		RefreshCells();
 		return;
 	}
 	if (PickedPool != INDEX_NONE)
@@ -405,24 +512,24 @@ void UShinobiSkillsWidget::OnCellClicked(const UShinobiSkillCell& Cell)
 		return;
 	}
 	PickedSlot = Cell.Index;
+	RefreshCells();
 }
 
 void UShinobiSkillsWidget::OnCellRightClicked(const UShinobiSkillCell& Cell)
 {
-	if (const AShinobiPlayerCharacter* Player = GetPlayer(); Player && Cell.bSlot)
+	if ((bMenuMode || GetPlayer()) && Cell.bSlot)
 	{
-		Request(ShinobiLoadout::Clear(Player->GetLoadout(), Cell.Index));
+		Request(ShinobiLoadout::Clear(GetShownLoadout(), Cell.Index));
 	}
 }
 
 void UShinobiSkillsWidget::OnCellDropped(const UShinobiSkillCell& From, const UShinobiSkillCell& To)
 {
-	const AShinobiPlayerCharacter* Player = GetPlayer();
-	if (!Player || &From == &To)
+	if ((!bMenuMode && !GetPlayer()) || &From == &To)
 	{
 		return;
 	}
-	const ShinobiLoadout::FSlots& Loadout = Player->GetLoadout();
+	const ShinobiLoadout::FSlots Loadout = GetShownLoadout();
 	if (!From.bSlot && To.bSlot)
 	{
 		Request(ShinobiLoadout::Place(Loadout, Known[From.Index], To.Index));
@@ -445,6 +552,10 @@ FReply UShinobiSkillsWidget::NativeOnKeyDown(const FGeometry& Geometry, const FK
 	{
 		PickedPool = PickedSlot = INDEX_NONE; // B first drops the pick
 		return FReply::Handled();
+	}
+	if (bMenuMode)
+	{
+		return Super::NativeOnKeyDown(Geometry, Event); // the main menu's Esc / B / tabs
 	}
 	if (bCancel || Key == EKeys::Escape || Key == ShinobiKeyBindings::Get(ShinobiKeyBindings::EBindable::SkillsScreen).Key || Key == EKeys::Gamepad_Special_Right)
 	{

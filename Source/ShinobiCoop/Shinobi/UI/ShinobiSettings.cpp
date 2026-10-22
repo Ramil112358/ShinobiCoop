@@ -100,6 +100,39 @@ FString ShinobiSettings::Label(ERow Row)
 	}
 }
 
+void ShinobiSettings::SetSavedCharacter(const FString& Name)
+{
+	const int32 Index = AShinobiPlayerCharacter::FindRosterIndex(Name);
+	if (Index != INDEX_NONE)
+	{
+		GConfig->SetString(ConfigSection, CharacterKey, AShinobiPlayerCharacter::Roster[Index].Name, GGameUserSettingsIni);
+		GConfig->Flush(false, GGameUserSettingsIni);
+	}
+}
+
+void ShinobiSettings::SetSavedOutfit(const FString& Name)
+{
+	const int32 Index = AShinobiPlayerCharacter::FindOutfitIndex(Name);
+	if (Index != INDEX_NONE)
+	{
+		GConfig->SetString(ConfigSection, OutfitKey, AShinobiPlayerCharacter::Outfits[Index].Name, GGameUserSettingsIni);
+		GConfig->Flush(false, GGameUserSettingsIni);
+	}
+}
+
+TArray<ShinobiSettings::ERow> ShinobiSettings::RowsFor(bool bMainMenu)
+{
+	TArray<ERow> Rows;
+	for (uint8 Row = 0; Row < uint8(ERow::Num); ++Row)
+	{
+		if (!bMainMenu || (ERow(Row) != ERow::Character && ERow(Row) != ERow::Outfit))
+		{
+			Rows.Add(ERow(Row));
+		}
+	}
+	return Rows;
+}
+
 void ShinobiSettings::Cycle(ERow Row, UWorld* World)
 {
 	UGameUserSettings* S = Settings();

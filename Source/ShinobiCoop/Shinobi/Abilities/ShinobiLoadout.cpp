@@ -152,6 +152,39 @@ namespace ShinobiLoadout
 		return Slots;
 	}
 
+	EGroup GroupOf(TSubclassOf<UShinobiJutsuAbility> Jutsu)
+	{
+		const UClass* Class = Jutsu.Get();
+		if (!Class)
+		{
+			return EGroup::Combat;
+		}
+		for (const UClass* Element : { UGA_EarthWall::StaticClass(), UGA_WaterWall::StaticClass(), UGA_WaterDragon::StaticClass(),
+			UGA_FireMeteor::StaticClass(), UGA_IceMeteor::StaticClass() })
+		{
+			if (Class->IsChildOf(Element))
+			{
+				return EGroup::Elements;
+			}
+		}
+		if (Class->IsChildOf(UGA_SummonBase::StaticClass()) || Class->IsChildOf(UGA_SummonDragonBase::StaticClass())
+			|| Class->IsChildOf(UGA_Susanoo::StaticClass()))
+		{
+			return EGroup::SummonsAndDragons;
+		}
+		return EGroup::Combat;
+	}
+
+	FText GroupName(EGroup Group)
+	{
+		switch (Group)
+		{
+		case EGroup::Elements: return INVTEXT("ELEMENTS");
+		case EGroup::SummonsAndDragons: return INVTEXT("SUMMONS & DRAGONS");
+		default: return INVTEXT("COMBAT");
+		}
+	}
+
 	FSlots LoadSaved(const TArray<TSubclassOf<UShinobiJutsuAbility>>& Known)
 	{
 		TArray<FString> Paths;

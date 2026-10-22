@@ -21,6 +21,12 @@ namespace ShinobiSettings
 	SHINOBICOOP_API FString GetSavedCharacter();
 	/** The outfit this machine's player wears (saved by the Outfit row; None by default). */
 	SHINOBICOOP_API FString GetSavedOutfit();
+	/** Saves the pick (the main menu's SHINOBI tab); a name not in the roster / outfit list is ignored. */
+	SHINOBICOOP_API void SetSavedCharacter(const FString& Name);
+	SHINOBICOOP_API void SetSavedOutfit(const FString& Name);
+
+	/** The rows the settings panel shows: the main menu leaves out Character and Outfit (its SHINOBI tab has them). */
+	SHINOBICOOP_API TArray<ERow> RowsFor(bool bMainMenu);
 
 	SHINOBICOOP_API float GetRenderScale();
 	SHINOBICOOP_API void SetRenderScale(float Percent);

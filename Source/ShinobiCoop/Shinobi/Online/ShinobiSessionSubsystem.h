@@ -14,6 +14,10 @@ struct FShinobiMap
 	const TCHAR* Path;
 	/** A PvP arena: hosted on the PvP game mode in a chosen format instead of the co-op one. */
 	bool bArena = false;
+	/** One line for the main menu's map card. */
+	const TCHAR* Blurb = TEXT("");
+	/** A developer test level: listed last on the menu. */
+	bool bTest = false;
 };
 
 /** One joinable game from Find Games. */
@@ -50,6 +54,14 @@ public:
 
 	/** The maps Host Game offers; the first is the default. */
 	static const TArray<FShinobiMap>& GetMaps();
+
+	/** Main-menu order of GetMaps() indices: co-op maps, then arenas, then test levels. */
+	static TArray<int32> GetHostOrder();
+	/** The formats Map can be hosted in: None for co-op, 1v1 and 2v2 for an arena. */
+	static TArray<EShinobiPvpFormat> GetModes(const FShinobiMap& Map);
+	static int32 GetMaxPlayers(const FShinobiMap& Map, EShinobiPvpFormat Format);
+	/** GetMaps() index of the map with this display name (a found game's MapName), or INDEX_NONE. */
+	static int32 FindMapByName(const FString& DisplayName);
 
 	/** The OpenLevel options for hosting Map: "listen", plus the PvP game mode and Format for an arena. */
 	static FString MakeTravelOptions(const FShinobiMap& Map, EShinobiPvpFormat Format);

@@ -19,18 +19,53 @@ const FName UShinobiSessionSubsystem::FormatKey(TEXT("SHINOBIFORMAT"));
 const TArray<FShinobiMap>& UShinobiSessionSubsystem::GetMaps()
 {
 	static const TArray<FShinobiMap> Maps = {
-		{ TEXT("Hidden Leaf Valley"), TEXT("/Game/Shinobi/Maps/Lvl_HiddenLeafValley") },
-		{ TEXT("London"), TEXT("/Game/Shinobi/Maps/Lvl_London") },
-		{ TEXT("Training Grounds"), TEXT("/Game/Shinobi/Maps/Lvl_TrainingGrounds") },
-		{ TEXT("Test Level"), TEXT("/Game/ThirdPerson/Lvl_ThirdPerson") },
-		{ TEXT("Combat Level"), TEXT("/Game/Variant_Combat/Lvl_Combat") },
+		{ TEXT("Hidden Leaf Valley"), TEXT("/Game/Shinobi/Maps/Lvl_HiddenLeafValley"), false,
+			TEXT("The village, its gate and bridge, and the bandit camps beyond. Co-op, up to 4.") },
+		{ TEXT("London"), TEXT("/Game/Shinobi/Maps/Lvl_London"), false,
+			TEXT("Rooftops, the Thames and Westminster at street scale. Co-op, up to 4.") },
+		{ TEXT("Training Grounds"), TEXT("/Game/Shinobi/Maps/Lvl_TrainingGrounds"), false,
+			TEXT("Dummies and waves of enemies to test your jutsu on. Co-op, up to 4.") },
+		{ TEXT("Test Level"), TEXT("/Game/ThirdPerson/Lvl_ThirdPerson"), false, TEXT("The developer test level."), true },
+		{ TEXT("Combat Level"), TEXT("/Game/Variant_Combat/Lvl_Combat"), false, TEXT("The developer melee test level."), true },
 		// Appended after the co-op maps so their indices (and the default) don't move.
-		{ TEXT("Arena: West End"), TEXT("/Game/Shinobi/Maps/Lvl_Arena_WestEnd"), true },
-		{ TEXT("Arena: Camden"), TEXT("/Game/Shinobi/Maps/Lvl_Arena_Camden"), true },
-		{ TEXT("Arena: Westminster"), TEXT("/Game/Shinobi/Maps/Lvl_Arena_Westminster"), true },
-		{ TEXT("Arena: Tower"), TEXT("/Game/Shinobi/Maps/Lvl_Arena_Tower"), true },
+		{ TEXT("Arena: West End"), TEXT("/Game/Shinobi/Maps/Lvl_Arena_WestEnd"), true, TEXT("The streets of the West End. PvP arena.") },
+		{ TEXT("Arena: Camden"), TEXT("/Game/Shinobi/Maps/Lvl_Arena_Camden"), true, TEXT("The streets of Camden. PvP arena.") },
+		{ TEXT("Arena: Westminster"), TEXT("/Game/Shinobi/Maps/Lvl_Arena_Westminster"), true, TEXT("Westminster, by Parliament. PvP arena.") },
+		{ TEXT("Arena: Tower"), TEXT("/Game/Shinobi/Maps/Lvl_Arena_Tower"), true, TEXT("Around the Tower of London. PvP arena.") },
 	};
 	return Maps;
+}
+
+TArray<int32> UShinobiSessionSubsystem::GetHostOrder()
+{
+	TArray<int32> Order;
+	const TArray<FShinobiMap>& Maps = GetMaps();
+	for (const int32 Pass : { 0, 1, 2 }) // co-op, arenas, test
+	{
+		for (int32 Index = 0; Index < Maps.Num(); ++Index)
+		{
+			if ((Maps[Index].bTest ? 2 : Maps[Index].bArena ? 1 : 0) == Pass)
+			{
+				Order.Add(Index);
+			}
+		}
+	}
+	return Order;
+}
+
+TArray<EShinobiPvpFormat> UShinobiSessionSubsystem::GetModes(const FShinobiMap& Map)
+{
+	return Map.bArena ? TArray<EShinobiPvpFormat>{ EShinobiPvpFormat::OneVsOne, EShinobiPvpFormat::TwoVsTwo } : TArray<EShinobiPvpFormat>{ EShinobiPvpFormat::None };
+}
+
+int32 UShinobiSessionSubsystem::GetMaxPlayers(const FShinobiMap& Map, EShinobiPvpFormat Format)
+{
+	return Map.bArena && Format == EShinobiPvpFormat::OneVsOne ? 2 : MaxPlayers;
+}
+
+int32 UShinobiSessionSubsystem::FindMapByName(const FString& DisplayName)
+{
+	return GetMaps().IndexOfByPredicate([&DisplayName](const FShinobiMap& Map) { return DisplayName.Equals(Map.DisplayName, ESearchCase::IgnoreCase); });
 }
 
 FString UShinobiSessionSubsystem::MakeTravelOptions(const FShinobiMap& Map, EShinobiPvpFormat Format)

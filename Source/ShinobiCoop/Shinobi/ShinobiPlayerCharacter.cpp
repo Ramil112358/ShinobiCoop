@@ -1,4 +1,5 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Misc/PackageName.h"
 #include "ShinobiCoop.h"
 #include "Shinobi/ShinobiPlayerController.h"
 #include "AbilitySystemComponent.h"
@@ -210,28 +211,37 @@ FString AShinobiPlayerCharacter::OutfitHidePath(int32 Outfit, int32 Body)
 	return FString::Printf(TEXT("/Game/Shinobi/Outfits/%s/%s.%s"), Outfits[Outfit].Name, *Name, *Name);
 }
 
-void AShinobiPlayerCharacter::ApplyOutfit()
+bool AShinobiPlayerCharacter::IsOutfitBuilt(int32 Outfit, int32 Body)
 {
-	if (!HeroMesh || !OutfitMesh)
+	if (Outfit <= 0)
 	{
-		return;
+		return true;
 	}
+	if (Outfit >= UE_ARRAY_COUNT(Outfits) || Body < 0 || Body >= UE_ARRAY_COUNT(Roster))
+	{
+		return false;
+	}
+	return FPackageName::DoesPackageExist(FPackageName::ObjectPathToPackageName(OutfitMeshPath(Outfit, Body)));
+}
+
+bool AShinobiPlayerCharacter::DressOutfit(USkeletalMeshComponent& BodyMesh, USkeletalMeshComponent& Outfit, int32 OutfitIndex, int32 BodyIndex)
+{
 	USkeletalMesh* Cloth = nullptr;
 	UTexture* Mask = nullptr;
-	if (OutfitIndex > 0 && OutfitIndex < UE_ARRAY_COUNT(Outfits))
+	if (OutfitIndex > 0 && OutfitIndex < UE_ARRAY_COUNT(Outfits) && BodyIndex >= 0 && BodyIndex < UE_ARRAY_COUNT(Roster))
 	{
 		// Quiet: an outfit that isn't imported yet is expected.
-		Cloth = LoadObject<USkeletalMesh>(nullptr, *OutfitMeshPath(OutfitIndex, WornBodyIndex), nullptr, LOAD_NoWarn | LOAD_Quiet);
-		Mask = Cloth ? LoadObject<UTexture>(nullptr, *OutfitHidePath(OutfitIndex, WornBodyIndex), nullptr, LOAD_NoWarn | LOAD_Quiet) : nullptr;
+		Cloth = LoadObject<USkeletalMesh>(nullptr, *OutfitMeshPath(OutfitIndex, BodyIndex), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		Mask = Cloth ? LoadObject<UTexture>(nullptr, *OutfitHidePath(OutfitIndex, BodyIndex), nullptr, LOAD_NoWarn | LOAD_Quiet) : nullptr;
 		if (!Cloth)
 		{
 			static TSet<FString> Warned; // once per outfit and body
-			const FString Pair = FString::Printf(TEXT("%s/%s"), Outfits[OutfitIndex].Name, Roster[WornBodyIndex].Name);
+			const FString Pair = FString::Printf(TEXT("%s/%s"), Outfits[OutfitIndex].Name, Roster[BodyIndex].Name);
 			if (!Warned.Contains(Pair))
 			{
 				Warned.Add(Pair);
 				UE_LOG(LogShinobiCoop, Warning, TEXT("No %s copy fitted to %s (Scripts/character/build_outfits.ps1): wearing nothing"),
-					Outfits[OutfitIndex].Name, Roster[WornBodyIndex].Name);
+					Outfits[OutfitIndex].Name, Roster[BodyIndex].Name);
 			}
 		}
 	}
@@ -240,27 +250,40 @@ void AShinobiPlayerCharacter::ApplyOutfit()
 	{
 		Mask = LoadObject<UTexture>(nullptr, WhiteMaskPath);
 	}
-	HeroMesh->EmptyOverrideMaterials(); // (a new body brings its own materials)
-	for (int32 Slot = 0; Slot < HeroMesh->GetNumMaterials(); ++Slot)
+	BodyMesh.EmptyOverrideMaterials(); // (a new body brings its own materials)
+	for (int32 Slot = 0; Slot < BodyMesh.GetNumMaterials(); ++Slot)
 	{
-		if (UMaterialInstanceDynamic* Material = HeroMesh->CreateDynamicMaterialInstance(Slot))
+		if (UMaterialInstanceDynamic* Material = BodyMesh.CreateDynamicMaterialInstance(Slot))
 		{
 			Material->SetTextureParameterValue(TEXT("HideMask"), Mask);
 		}
 	}
-	const USkeletalMesh* Body = HeroMesh->GetSkeletalMeshAsset();
-	OutfitMesh->SetSkeletalMeshAsset(Cloth);
-	OutfitMesh->SetVisibility(Cloth != nullptr);
+	const USkeletalMesh* Body = BodyMesh.GetSkeletalMeshAsset();
+	Outfit.SetSkeletalMeshAsset(Cloth);
+	Outfit.SetVisibility(Cloth != nullptr);
 	if (!Cloth || !Body)
 	{
-		OutfitMesh->SetLeaderPoseComponent(nullptr);
-		return;
+		Outfit.SetLeaderPoseComponent(nullptr);
+		return false;
 	}
 	// The outfit's bones take the body's component-space pose, so a body whose skeleton sits elsewhere in its FBX than the
 	// outfit's would carry the outfit off by the difference: shift it back by the two hips' reference-pose offset.
-	OutfitMesh->SetRelativeLocation(RefHipsLocation(Cloth) - RefHipsLocation(Body));
-	OutfitMesh->SetLeaderPoseComponent(HeroMesh);
-	OutfitMesh->ForceClothNextUpdateTeleportAndReset();
+	Outfit.SetRelativeLocation(RefHipsLocation(Cloth) - RefHipsLocation(Body));
+	Outfit.SetLeaderPoseComponent(&BodyMesh);
+	Outfit.ForceClothNextUpdateTeleportAndReset();
+	return true;
+}
+
+void AShinobiPlayerCharacter::ApplyOutfit()
+{
+	if (!HeroMesh || !OutfitMesh)
+	{
+		return;
+	}
+	if (!DressOutfit(*HeroMesh, *OutfitMesh, OutfitIndex, WornBodyIndex))
+	{
+		return;
+	}
 	bOutfitGravityOverridden = false; // a new cloth simulation starts on world gravity
 	RefreshOutline();
 	// Scripts/smoke_m4.ps1 style check: both machines log what they see.

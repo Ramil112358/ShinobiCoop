@@ -32,6 +32,7 @@ protected:
 	virtual void NativeOnDragDetected(const FGeometry& Geometry, const FPointerEvent& Event, UDragDropOperation*& OutOperation) override;
 	virtual bool NativeOnDrop(const FGeometry& Geometry, const FDragDropEvent& Event, UDragDropOperation* Operation) override;
 	virtual FReply NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event) override;
+	virtual void NativeOnMouseEnter(const FGeometry& Geometry, const FPointerEvent& Event) override;
 	virtual void NativeOnAddedToFocusPath(const FFocusEvent& Event) override;
 	virtual void NativeOnRemovedFromFocusPath(const FFocusEvent& Event) override;
 
@@ -62,11 +63,23 @@ class SHINOBICOOP_API UShinobiSkillsWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	/** The main menu's JUTSU tab: the pawn's known jutsu and the saved bar, edited and saved directly (no pawn, no combat).
+	 * Esc / B / K are left to the menu. Set before the widget is built. */
+	bool bMenuMode = false;
+
 	void OnCellClicked(const UShinobiSkillCell& Cell);
 	void OnCellRightClicked(const UShinobiSkillCell& Cell);
 	void OnCellDropped(const UShinobiSkillCell& From, const UShinobiSkillCell& To);
 	/** B (no pick), K or Esc. */
 	void Close();
+	/** Shows Jutsu in the detail panel (hover, focus or click). */
+	void SelectJutsu(TSubclassOf<UShinobiJutsuAbility> Jutsu);
+	/** The bar on screen: the pawn's, or in menu mode the saved one. */
+	const ShinobiLoadout::FSlots& GetShownLoadout() const;
+	/** A pool cell (index into the known jutsu) or a slot cell (0-7). */
+	UShinobiSkillCell* GetCell(bool bSlot, int32 Index) const;
+	/** The first pool cell. */
+	UWidget* GetFocusTarget() const;
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -77,6 +90,8 @@ protected:
 
 private:
 	AShinobiPlayerCharacter* GetPlayer() const;
+	/** Cell frames, slot keys and the banner from the shown bar. */
+	void RefreshCells();
 	/** Sends Slots to the server if nothing obvious forbids it; otherwise says why. */
 	void Request(const ShinobiLoadout::FSlots& Slots);
 
@@ -86,6 +101,17 @@ private:
 	TArray<TObjectPtr<UShinobiSkillCell>> SlotCells;
 	UPROPERTY()
 	TObjectPtr<UTextBlock> Banner;
+	UPROPERTY()
+	TObjectPtr<UTextBlock> DetailGroup;
+	UPROPERTY()
+	TObjectPtr<UTextBlock> DetailName;
+	UPROPERTY()
+	TObjectPtr<UTextBlock> DetailText;
+	UPROPERTY()
+	TObjectPtr<UTextBlock> DetailStats;
+
+	/** Menu mode's bar. */
+	ShinobiLoadout::FSlots MenuLoadout;
 
 	TArray<TSubclassOf<class UShinobiJutsuAbility>> Known;
 	int32 PickedPool = INDEX_NONE;
