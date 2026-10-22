@@ -24,6 +24,7 @@
 #include "Shinobi/UI/ShinobiMenuArt.h"
 #include "Shinobi/UI/ShinobiMenuStage.h"
 #include "Shinobi/UI/ShinobiMenuStyle.h"
+#include "Shinobi/UI/ShinobiRosterPage.h"
 
 namespace
 {
@@ -132,7 +133,11 @@ TSharedRef<SWidget> UShinobiMainMenuWidget::RebuildWidget()
 		MainMenuPlace(Root, Pages, FAnchors(0.f, 0.f, 1.f, 1.f), FMargin(0.f, MainMenuTopBar, 0.f, 40.f));
 		FocusTargets.SetNum(int32(EShinobiMenuTab::Num));
 		Pages->AddChild(BuildPlayPage());
-		Pages->AddChild(WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("ShinobiPage")));
+		UShinobiRosterPage* Roster = CreateWidget<UShinobiRosterPage>(this, UShinobiRosterPage::StaticClass());
+		Roster->Stage = GetStage();
+		Pages->AddChild(Roster);
+		Roster->TakeWidget();
+		FocusTargets[int32(EShinobiMenuTab::Shinobi)] = Roster->GetFocusTarget();
 		Pages->AddChild(WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("JutsuPage")));
 		UShinobiSettingsWidget* Settings = CreateWidget<UShinobiSettingsWidget>(this, UShinobiSettingsWidget::StaticClass());
 		Settings->bMainMenu = true;

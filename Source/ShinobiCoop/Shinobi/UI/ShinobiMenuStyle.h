@@ -26,7 +26,7 @@ namespace ShinobiMenuStyle
 	/** Sheared panel button, accent on hover and focus; primary = filled accent with black text. */
 	SHINOBICOOP_API UButton* Button(UWidgetTree& Tree, const FText& Label, int32 Size, bool bPrimary = false);
 	/** Gives an existing button (and its text child, if any) the Button look. */
-	SHINOBICOOP_API void StyleButton(UButton& Button, bool bPrimary);
+	SHINOBICOOP_API void StyleButton(UButton& Button, bool bPrimary, const FMargin& Padding = FMargin(18.f, 8.f));
 	/** Call every tick: lights the focused styled button in Tree (FButtonStyle has no focused state). */
 	SHINOBICOOP_API void TickFocus(UWidgetTree& Tree);
 	/** Translucent dark panel with a faint accent outline. */

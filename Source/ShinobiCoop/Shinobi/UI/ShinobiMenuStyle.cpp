@@ -22,7 +22,7 @@ namespace
 		return Brush;
 	}
 
-	FButtonStyle MenuStyleButtonStyle(bool bPrimary, bool bFocused)
+	FButtonStyle MenuStyleButtonStyle(bool bPrimary, bool bFocused, const FMargin& Padding)
 	{
 		using namespace ShinobiMenuStyle;
 		const FLinearColor Hot = bPrimary ? FLinearColor(1.f, 0.62f, 0.3f) : Accent.CopyWithNewOpacity(0.4f);
@@ -35,8 +35,8 @@ namespace
 		Style.SetPressed(MenuStyleBox(bPrimary ? Accent * FLinearColor(0.8f, 0.8f, 0.8f, 1.f) : Accent.CopyWithNewOpacity(0.6f), Accent, 2.f));
 		Style.SetDisabled(bPrimary ? MenuStyleBox(Accent.CopyWithNewOpacity(0.35f), FLinearColor(0.f, 0.f, 0.f, 0.f), 0.f)
 			: MenuStyleBox(Panel.CopyWithNewOpacity(0.35f), FLinearColor(1.f, 1.f, 1.f, 0.05f), 1.f));
-		Style.SetNormalPadding(FMargin(18.f, 8.f));
-		Style.SetPressedPadding(FMargin(18.f, 9.f, 18.f, 7.f));
+		Style.SetNormalPadding(Padding);
+		Style.SetPressedPadding(FMargin(Padding.Left, Padding.Top + 1.f, Padding.Right, Padding.Bottom - 1.f));
 		return Style;
 	}
 }
@@ -67,9 +67,9 @@ UButton* ShinobiMenuStyle::Button(UWidgetTree& Tree, const FText& Label, int32 S
 	return Result;
 }
 
-void ShinobiMenuStyle::StyleButton(UButton& Button, bool bPrimary)
+void ShinobiMenuStyle::StyleButton(UButton& Button, bool bPrimary, const FMargin& Padding)
 {
-	Button.SetStyle(MenuStyleButtonStyle(bPrimary, false));
+	Button.SetStyle(MenuStyleButtonStyle(bPrimary, false, Padding));
 	Button.SetRenderShear(FVector2D(Shear, 0.f));
 	if (UWidget* Content = Button.GetChildAt(0))
 	{
@@ -97,7 +97,7 @@ void ShinobiMenuStyle::TickFocus(UWidgetTree& Tree)
 		// Gamepad and keyboard users see the focused button lit like a hovered one (FButtonStyle has no focused state).
 		const bool bPrimary = Button->GetStyle().Pressed.TintColor.GetSpecifiedColor().A > 0.99f;
 		const bool bFocused = Button->HasAnyUserFocus();
-		const FButtonStyle Wanted = MenuStyleButtonStyle(bPrimary, bFocused);
+		const FButtonStyle Wanted = MenuStyleButtonStyle(bPrimary, bFocused, Button->GetStyle().NormalPadding);
 		if (!(Button->GetStyle().Normal == Wanted.Normal))
 		{
 			Button->SetStyle(Wanted);

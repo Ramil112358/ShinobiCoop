@@ -12,6 +12,7 @@
 #include "Shinobi/UI/ShinobiMenuArt.h"
 #include "Shinobi/UI/ShinobiMenuStage.h"
 #include "Shinobi/UI/ShinobiMainMenuWidget.h"
+#include "Shinobi/UI/ShinobiRosterPage.h"
 #include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Shinobi/UI/ShinobiSettings.h"
@@ -210,7 +211,7 @@ bool FShinobiMainMenuTabFocusTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	UShinobiMainMenuWidget* Menu = CreateWidget<UShinobiMainMenuWidget>(W.World, UShinobiMainMenuWidget::StaticClass());
 	Menu->TakeWidget();
-	for (const EShinobiMenuTab Tab : { EShinobiMenuTab::Play, EShinobiMenuTab::Settings })
+	for (const EShinobiMenuTab Tab : { EShinobiMenuTab::Play, EShinobiMenuTab::Shinobi, EShinobiMenuTab::Settings })
 	{
 		Menu->SelectTab(Tab);
 		TestTrue(TEXT("tab selected"), Menu->GetTab() == Tab);
@@ -228,6 +229,32 @@ bool FShinobiMainMenuHostRowsTest::RunTest(const FString& Parameters)
 	UShinobiMainMenuWidget* Menu = CreateWidget<UShinobiMainMenuWidget>(W.World, UShinobiMainMenuWidget::StaticClass());
 	Menu->TakeWidget();
 	TestEqual(TEXT("a row per map"), Menu->GetHostRowCount(), UShinobiSessionSubsystem::GetMaps().Num());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMenuRosterPickTest, "ShinobiCoop.UI.MenuRosterPickSaves", ShinobiTestFlags)
+bool FShinobiMenuRosterPickTest::RunTest(const FString& Parameters)
+{
+	const FString OldCharacter = ShinobiSettings::GetSavedCharacter();
+	const FString OldOutfit = ShinobiSettings::GetSavedOutfit();
+	FShinobiTestWorld W;
+	UShinobiRosterPage* Page = CreateWidget<UShinobiRosterPage>(W.World, UShinobiRosterPage::StaticClass());
+	Page->TakeWidget();
+
+	Page->Pick(1);
+	TestEqual(TEXT("pick saved"), ShinobiSettings::GetSavedCharacter(), FString(AShinobiPlayerCharacter::Roster[1].Name));
+	ShinobiSettings::SetSavedOutfit(AShinobiPlayerCharacter::Outfits[0].Name);
+	Page->StepOutfit(+1);
+	TestEqual(TEXT("next outfit"), ShinobiSettings::GetSavedOutfit(), FString(AShinobiPlayerCharacter::Outfits[1].Name));
+	Page->StepOutfit(-1);
+	Page->StepOutfit(-1);
+	TestEqual(TEXT("wraps to the last outfit"), ShinobiSettings::GetSavedOutfit(),
+		FString(AShinobiPlayerCharacter::Outfits[UE_ARRAY_COUNT(AShinobiPlayerCharacter::Outfits) - 1].Name));
+	TestNotNull(TEXT("a card to focus"), Page->GetFocusTarget());
+
+	ShinobiSettings::SetSavedCharacter(OldCharacter);
+	ShinobiSettings::SetSavedOutfit(OldOutfit);
+	GConfig->Flush(false, GGameUserSettingsIni);
 	return true;
 }
 
