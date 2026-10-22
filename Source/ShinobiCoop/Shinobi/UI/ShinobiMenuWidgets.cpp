@@ -3,6 +3,7 @@
 #include "Components/Border.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/Spacer.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
@@ -10,12 +11,12 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "Shinobi/ShinobiPlayerController.h"
 #include "Shinobi/Online/ShinobiSessionSubsystem.h"
+#include "Shinobi/UI/ShinobiMenuStyle.h"
 #include "Shinobi/UI/ShinobiSettings.h"
 #include "Shinobi/UI/ShinobiShortcutsWidget.h"
 
 namespace
 {
-	const FLinearColor PanelColor(0.f, 0.f, 0.f, 0.7f);
 	const FLinearColor MessageColor(1.f, 0.75f, 0.3f);
 	const FLinearColor DimColor(0.7f, 0.7f, 0.7f);
 }
@@ -36,25 +37,38 @@ TSharedRef<SWidget> UShinobiMenuWidget::RebuildWidget()
 	{
 		UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Root"));
 		WidgetTree->RootWidget = Root;
-		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Panel"));
-		Panel->SetBrushColor(PanelColor);
-		Panel->SetPadding(FMargin(40.f, 30.f));
+		UBorder* Panel = ShinobiMenuStyle::PanelBox(*WidgetTree, FMargin(44.f, 30.f));
 		UCanvasPanelSlot* PanelSlot = Root->AddChildToCanvas(Panel);
 		PanelSlot->SetAnchors(FAnchors(0.5f, 0.5f));
 		PanelSlot->SetAlignment(FVector2D(0.5f, 0.5f));
 		PanelSlot->SetAutoSize(true);
-
-		Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Column"));
-		Panel->SetContent(Column);
-		AddText(Column, GetTitle(), 36, FLinearColor::White);
-		const TArray<FString> Entries = GetEntries();
-		for (int32 Index = 0; Index < Entries.Num(); ++Index)
-		{
-			EntryButtons.Add(AddButton(Column, Entries[Index], Index, FShinobiIndexClicked::CreateUObject(this, &UShinobiMenuWidget::OnEntry)));
-		}
-		MessageText = AddText(Column, FString(), 14, MessageColor);
+		BuildColumn(Panel);
 	}
 	return Super::RebuildWidget();
+}
+
+void UShinobiMenuWidget::BuildColumn(UContentWidget* Parent)
+{
+	Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Column"));
+	Parent->SetContent(Column);
+	if (!GetTitle().IsEmpty())
+	{
+		AddText(Column, GetTitle(), 34, FLinearColor::White, true);
+		UBorder* Rule = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+		Rule->SetBrush(ShinobiMenuStyle::ColorBrush(ShinobiMenuStyle::Accent));
+		Rule->SetPadding(FMargin(0.f, 1.5f));
+		UVerticalBoxSlot* RuleSlot = Column->AddChildToVerticalBox(Rule);
+		RuleSlot->SetHorizontalAlignment(HAlign_Center);
+		RuleSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
+		Rule->SetContent(WidgetTree->ConstructWidget<USpacer>(USpacer::StaticClass()));
+		Cast<USpacer>(Rule->GetContent())->SetSize(FVector2D(120.f, 0.f));
+	}
+	const TArray<FString> Entries = GetEntries();
+	for (int32 Index = 0; Index < Entries.Num(); ++Index)
+	{
+		EntryButtons.Add(AddButton(Column, Entries[Index], Index, FShinobiIndexClicked::CreateUObject(this, &UShinobiMenuWidget::OnEntry)));
+	}
+	MessageText = AddText(Column, FString(), 14, MessageColor);
 }
 
 void UShinobiMenuWidget::NativeConstruct()
@@ -69,6 +83,12 @@ void UShinobiMenuWidget::NativeConstruct()
 	{
 		EntryButtons[0]->SetKeyboardFocus(); // gamepad / keyboard navigation starts on the first entry
 	}
+}
+
+void UShinobiMenuWidget::NativeTick(const FGeometry& Geometry, float DeltaTime)
+{
+	Super::NativeTick(Geometry, DeltaTime);
+	ShinobiMenuStyle::TickFocus(*WidgetTree);
 }
 
 void UShinobiMenuWidget::NativeDestruct()
@@ -102,29 +122,20 @@ UShinobiIndexButton* UShinobiMenuWidget::AddButton(UVerticalBox* Box, const FStr
 	Button->Index = Index;
 	Button->OnIndexClicked = MoveTemp(Handler);
 	Button->Arm();
-	UTextBlock* Text = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-	FSlateFontInfo Font = Text->GetFont();
-	Font.Size = 20;
-	Text->SetFont(Font);
-	Text->SetText(FText::FromString(Label));
-	Text->SetColorAndOpacity(FSlateColor(FLinearColor::Black));
-	Button->AddChild(Text);
+	Button->AddChild(ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Label), 18, FLinearColor::White));
+	ShinobiMenuStyle::StyleButton(*Button, false);
 	UVerticalBoxSlot* ButtonSlot = Box->AddChildToVerticalBox(Button);
-	ButtonSlot->SetPadding(FMargin(0.f, 6.f));
+	ButtonSlot->SetPadding(FMargin(0.f, 4.f));
 	ButtonSlot->SetHorizontalAlignment(HAlign_Fill);
 	return Button;
 }
 
-UTextBlock* UShinobiMenuWidget::AddText(UVerticalBox* Box, const FString& Text, int32 Size, const FLinearColor& Color)
+UTextBlock* UShinobiMenuWidget::AddText(UVerticalBox* Box, const FString& Text, int32 Size, const FLinearColor& Color, bool bHeading)
 {
-	UTextBlock* Block = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-	FSlateFontInfo Font = Block->GetFont();
-	Font.Size = Size;
-	Block->SetFont(Font);
-	Block->SetText(FText::FromString(Text));
-	Block->SetColorAndOpacity(FSlateColor(Color));
+	UTextBlock* Block = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Text), Size, Color, bHeading);
 	Block->SetJustification(ETextJustify::Center);
-	Box->AddChildToVerticalBox(Block)->SetPadding(FMargin(0.f, 8.f));
+	Block->SetAutoWrapText(true);
+	Box->AddChildToVerticalBox(Block)->SetPadding(FMargin(0.f, 6.f));
 	return Block;
 }
 

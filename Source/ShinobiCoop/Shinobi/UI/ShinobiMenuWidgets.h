@@ -40,6 +40,10 @@ protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+	virtual void NativeTick(const FGeometry& Geometry, float DeltaTime) override;
+
+	/** Title, entry buttons and message line into Parent (RebuildWidget's centred panel, or a tab page). */
+	void BuildColumn(class UContentWidget* Parent);
 
 	/** Title and button labels, in order. */
 	virtual FString GetTitle() const PURE_VIRTUAL(UShinobiMenuWidget::GetTitle, return FString(););
@@ -50,7 +54,7 @@ protected:
 
 	UShinobiSessionSubsystem* GetSessions() const;
 	UShinobiIndexButton* AddButton(UVerticalBox* Box, const FString& Label, int32 Index, FShinobiIndexClicked Handler);
-	UTextBlock* AddText(UVerticalBox* Box, const FString& Text, int32 Size, const FLinearColor& Color);
+	UTextBlock* AddText(UVerticalBox* Box, const FString& Text, int32 Size, const FLinearColor& Color, bool bHeading = false);
 	void SetEntryLabel(int32 Index, const FString& Label);
 	/** Opens the settings panel over this menu (hidden until the panel's Back). */
 	void OpenSettings();
