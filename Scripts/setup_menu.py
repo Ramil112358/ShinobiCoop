@@ -15,7 +15,7 @@ LONDON = "/Game/Shinobi/London"
 TILES = [(x, y) for x in (-3, -2, -1) for y in (-2, -1, 0, 1)]
 # The tiles' patch sits this far behind the stage and this far down, so the rooftop looks over most roofs.
 CITY_GAP_CM = 2500.0
-CITY_DROP_CM = 3200.0
+CITY_DROP_CM = 2400.0
 
 actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
 
@@ -58,7 +58,7 @@ spawn(stage_class, (0, 0, 0), label="MenuStage")
 
 # Rooftop: a flat roof slab, a low parapet behind the character, rooftop clutter at the sides.
 CUBE = "/Engine/BasicShapes/Cube.Cube"
-ROOF = LONDON + "/Materials/MI_L_BD_Roof_Flat.MI_L_BD_Roof_Flat"
+ROOF = LONDON + "/Materials/MI_L_Concrete.MI_L_Concrete"
 PARAPET = LONDON + "/Materials/MI_L_BD_Brick_Stock.MI_L_BD_Brick_Stock"
 mesh_actor(CUBE, (-200, 0, -50), scale=(24, 30, 1), material=ROOF, label="Roof")
 mesh_actor(CUBE, (-1350, 0, 40), scale=(0.4, 30, 0.8), material=PARAPET, label="Parapet")
@@ -92,7 +92,7 @@ for name, m in meshes:
 log("%d city tiles, offset %s" % (len(meshes), offset))
 
 # Dusk: a low sun behind the character (rim light, sunset sky), atmosphere, fog, a warm key light from the front.
-sun = spawn(unreal.DirectionalLight, (0, 0, 800), unreal.Rotator(0, -7, 0), "Sun")  # (roll, pitch, yaw): light travels +X
+sun = spawn(unreal.DirectionalLight, (0, 0, 800), unreal.Rotator(0, -7, 14), "Sun")  # (roll, pitch, yaw): light travels +X
 sc = sun.light_component
 sc.set_intensity(6.0)
 sc.set_light_color(unreal.LinearColor(1.0, 0.62, 0.38))
@@ -103,7 +103,7 @@ sky.light_component.set_editor_property("real_time_capture", True)
 sky.light_component.set_intensity(1.2)
 fog = spawn(unreal.ExponentialHeightFog, (0, 0, -3000), label="Fog")
 fc = fog.component
-fc.set_editor_property("fog_density", 0.012)
+fc.set_editor_property("fog_density", 0.004)
 fc.set_editor_property("fog_inscattering_luminance", unreal.LinearColor(0.9, 0.42, 0.2))
 fc.set_editor_property("directional_inscattering_luminance", unreal.LinearColor(1.0, 0.55, 0.3))
 key = spawn(unreal.RectLight, (260, 170, 210), unreal.Rotator(0, -25, -150), "KeyLight")

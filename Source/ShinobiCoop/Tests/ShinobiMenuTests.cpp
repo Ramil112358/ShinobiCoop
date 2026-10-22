@@ -11,6 +11,7 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/UI/ShinobiMenuArt.h"
 #include "Shinobi/UI/ShinobiMenuStage.h"
+#include "Shinobi/UI/ShinobiMainMenuWidget.h"
 #include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Shinobi/UI/ShinobiSettings.h"
@@ -177,6 +178,56 @@ bool FShinobiMenuStageWearsOutfitTest::RunTest(const FString& Parameters)
 		}
 	}
 	AddWarning(TEXT("no outfit copy is built: run Scripts/character/build_outfits.ps1"));
+	return true;
+}
+
+namespace
+{
+	/** Up through parents and owning user widgets. */
+	bool MenuTestIsInside(const UWidget* Widget, const UWidget* Container)
+	{
+		while (Widget)
+		{
+			if (Widget == Container)
+			{
+				return true;
+			}
+			const UWidget* Parent = Widget->GetParent();
+			if (!Parent)
+			{
+				const UUserWidget* Owner = Widget->GetTypedOuter<UUserWidget>();
+				Parent = Owner != Widget ? Owner : nullptr;
+			}
+			Widget = Parent;
+		}
+		return false;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMainMenuTabFocusTest, "ShinobiCoop.UI.MainMenuTabFocus", ShinobiTestFlags)
+bool FShinobiMainMenuTabFocusTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	UShinobiMainMenuWidget* Menu = CreateWidget<UShinobiMainMenuWidget>(W.World, UShinobiMainMenuWidget::StaticClass());
+	Menu->TakeWidget();
+	for (const EShinobiMenuTab Tab : { EShinobiMenuTab::Play, EShinobiMenuTab::Settings })
+	{
+		Menu->SelectTab(Tab);
+		TestTrue(TEXT("tab selected"), Menu->GetTab() == Tab);
+		const UWidget* Target = Menu->GetFocusTarget(Tab);
+		TestNotNull(TEXT("something to focus"), Target);
+		TestTrue(TEXT("focus target is on that tab's page"), MenuTestIsInside(Target, Menu->GetTabPage(Tab)));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMainMenuHostRowsTest, "ShinobiCoop.UI.MainMenuHostRowsCoverMaps", ShinobiTestFlags)
+bool FShinobiMainMenuHostRowsTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	UShinobiMainMenuWidget* Menu = CreateWidget<UShinobiMainMenuWidget>(W.World, UShinobiMainMenuWidget::StaticClass());
+	Menu->TakeWidget();
+	TestEqual(TEXT("a row per map"), Menu->GetHostRowCount(), UShinobiSessionSubsystem::GetMaps().Num());
 	return true;
 }
 

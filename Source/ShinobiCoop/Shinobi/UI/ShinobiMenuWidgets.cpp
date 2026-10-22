@@ -18,7 +18,6 @@
 namespace
 {
 	const FLinearColor MessageColor(1.f, 0.75f, 0.3f);
-	const FLinearColor DimColor(0.7f, 0.7f, 0.7f);
 }
 
 void UShinobiIndexButton::Arm()
@@ -39,7 +38,7 @@ TSharedRef<SWidget> UShinobiMenuWidget::RebuildWidget()
 		WidgetTree->RootWidget = Root;
 		UBorder* Panel = ShinobiMenuStyle::PanelBox(*WidgetTree, FMargin(44.f, 30.f));
 		UCanvasPanelSlot* PanelSlot = Root->AddChildToCanvas(Panel);
-		PanelSlot->SetAnchors(FAnchors(0.5f, 0.5f));
+		PanelSlot->SetAnchors(FAnchors(GetPanelAnchor().X, GetPanelAnchor().Y));
 		PanelSlot->SetAlignment(FVector2D(0.5f, 0.5f));
 		PanelSlot->SetAutoSize(true);
 		BuildColumn(Panel);
@@ -156,111 +155,6 @@ void UShinobiMenuWidget::OpenSettings()
 	Panel->Opener = this;
 	SetVisibility(ESlateVisibility::Collapsed);
 	Panel->AddToViewport(50);
-}
-
-TSharedRef<SWidget> UShinobiMainMenuWidget::RebuildWidget()
-{
-	const bool bBuild = WidgetTree && !WidgetTree->RootWidget;
-	TSharedRef<SWidget> Result = Super::RebuildWidget();
-	if (bBuild)
-	{
-		const UShinobiSessionSubsystem* Sessions = GetSessions();
-		AddText(Column, Sessions && Sessions->IsLanMode() ? TEXT("Steam not detected - LAN mode") : TEXT("Online via Steam"), 12, DimColor);
-		GameList = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("GameList"));
-		Column->AddChildToVerticalBox(GameList);
-	}
-	return Result;
-}
-
-void UShinobiMainMenuWidget::OnEntry(int32 Index)
-{
-	UShinobiSessionSubsystem* Sessions = GetSessions();
-	switch (Index)
-	{
-	case 0:
-		bPickingMap = !bPickingMap;
-		Refresh();
-		break;
-	case 1:
-		bPickingMap = false;
-		if (Sessions)
-		{
-			Sessions->FindGames();
-		}
-		break;
-	case 2:
-		OpenSettings();
-		break;
-	default:
-		UKismetSystemLibrary::QuitGame(this, GetOwningPlayer(), EQuitPreference::Quit, false);
-		break;
-	}
-}
-
-void UShinobiMainMenuWidget::Refresh()
-{
-	Super::Refresh();
-	const UShinobiSessionSubsystem* Sessions = GetSessions();
-	GameList->ClearChildren();
-	if (!Sessions)
-	{
-		return;
-	}
-	if (bPickingMap)
-	{
-		// Co-op maps keep their rows; each arena gets one row per format (ponytail: a format toggle when more modes exist).
-		HostRows.Reset();
-		const TArray<FShinobiMap>& Maps = UShinobiSessionSubsystem::GetMaps();
-		for (int32 Index = 0; Index < Maps.Num(); ++Index)
-		{
-			if (!Maps[Index].bArena)
-			{
-				HostRows.Add({ Index, EShinobiPvpFormat::None });
-			}
-		}
-		for (int32 Index = 0; Index < Maps.Num(); ++Index)
-		{
-			if (Maps[Index].bArena)
-			{
-				HostRows.Add({ Index, EShinobiPvpFormat::OneVsOne });
-				HostRows.Add({ Index, EShinobiPvpFormat::TwoVsTwo });
-			}
-		}
-		for (int32 Row = 0; Row < HostRows.Num(); ++Row)
-		{
-			const FShinobiMap& Map = Maps[HostRows[Row].MapIndex];
-			const FString Label = !Map.bArena ? FString::Printf(TEXT("Host on %s"), Map.DisplayName)
-				: FString::Printf(TEXT("Host %s %s"), Map.DisplayName, HostRows[Row].Format == EShinobiPvpFormat::TwoVsTwo ? TEXT("2v2") : TEXT("1v1"));
-			AddButton(GameList, Label, Row,
-				FShinobiIndexClicked::CreateUObject(this, &UShinobiMainMenuWidget::OnMapRow))->SetIsEnabled(!Sessions->IsBusy());
-		}
-		return;
-	}
-	const TArray<FShinobiFoundGame>& Games = Sessions->GetFoundGames();
-	for (int32 Index = 0; Index < Games.Num(); ++Index)
-	{
-		const FShinobiFoundGame& Game = Games[Index];
-		const FString Label = FString::Printf(TEXT("Join %s - %s%s  (%d/%d, %d ms)"), *Game.HostName,
-			Game.MapName.IsEmpty() ? TEXT("?") : *Game.MapName, Game.Format.IsEmpty() ? TEXT("") : *(TEXT(" ") + Game.Format),
-			Game.Players, Game.MaxPlayers, Game.PingMs);
-		AddButton(GameList, Label, Index, FShinobiIndexClicked::CreateUObject(this, &UShinobiMainMenuWidget::OnJoinRow))->SetIsEnabled(!Sessions->IsBusy());
-	}
-}
-
-void UShinobiMainMenuWidget::OnMapRow(int32 Index)
-{
-	if (UShinobiSessionSubsystem* Sessions = GetSessions(); Sessions && HostRows.IsValidIndex(Index))
-	{
-		Sessions->HostGame(HostRows[Index].MapIndex, HostRows[Index].Format);
-	}
-}
-
-void UShinobiMainMenuWidget::OnJoinRow(int32 Index)
-{
-	if (UShinobiSessionSubsystem* Sessions = GetSessions())
-	{
-		Sessions->JoinGame(Index);
-	}
 }
 
 void UShinobiPauseMenuWidget::OnEntry(int32 Index)

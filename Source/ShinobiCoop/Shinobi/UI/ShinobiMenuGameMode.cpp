@@ -4,7 +4,11 @@
 #include "TimerManager.h"
 #include "ShinobiCoop.h"
 #include "Shinobi/Online/ShinobiSessionSubsystem.h"
-#include "Shinobi/UI/ShinobiMenuWidgets.h"
+#include "EngineUtils.h"
+#include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/UI/ShinobiMainMenuWidget.h"
+#include "Shinobi/UI/ShinobiMenuStage.h"
+#include "Shinobi/UI/ShinobiSettings.h"
 
 AShinobiMenuGameMode::AShinobiMenuGameMode()
 {
@@ -18,6 +22,11 @@ void AShinobiMenuPlayerController::BeginPlay()
 	if (!IsLocalController())
 	{
 		return;
+	}
+	for (TActorIterator<AShinobiMenuStage> Stage(GetWorld()); Stage; ++Stage)
+	{
+		Stage->Show(AShinobiPlayerCharacter::FindRosterIndex(ShinobiSettings::GetSavedCharacter()),
+			AShinobiPlayerCharacter::FindOutfitIndex(ShinobiSettings::GetSavedOutfit()));
 	}
 	UShinobiMainMenuWidget* Menu = CreateWidget<UShinobiMainMenuWidget>(this, UShinobiMainMenuWidget::StaticClass());
 	Menu->AddToViewport();

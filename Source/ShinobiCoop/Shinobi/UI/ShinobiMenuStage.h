@@ -35,7 +35,7 @@ public:
 	USkeletalMeshComponent* GetDriver() const { return Driver; }
 
 	/** Sideways offset of the character for Left / Right focus (cm along the camera's right). */
-	static constexpr float FocusOffsetCm = 70.f;
+	static constexpr float FocusOffsetCm = 110.f;
 
 	virtual void Tick(float DeltaSeconds) override;
 

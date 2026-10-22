@@ -36,10 +36,16 @@ class SHINOBICOOP_API UShinobiMenuWidget : public UUserWidget
 {
 	GENERATED_BODY()
 
+public:
+	/** The first entry button (keyboard / gamepad focus starts there); null before it's built. */
+	UWidget* GetFirstEntry() const { return EntryButtons.Num() > 0 ? EntryButtons[0].Get() : nullptr; }
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+	/** Where the panel's centre sits on screen (0-1). */
+	virtual FVector2D GetPanelAnchor() const { return FVector2D(0.5f, 0.5f); }
 	virtual void NativeTick(const FGeometry& Geometry, float DeltaTime) override;
 
 	/** Title, entry buttons and message line into Parent (RebuildWidget's centred panel, or a tab page). */
@@ -71,39 +77,6 @@ protected:
 	FDelegateHandle ChangedHandle;
 };
 
-/** Host Game, Find Games (a list of games to join), Quit; online status and the last failure. */
-UCLASS()
-class SHINOBICOOP_API UShinobiMainMenuWidget : public UShinobiMenuWidget
-{
-	GENERATED_BODY()
-
-protected:
-	virtual TSharedRef<SWidget> RebuildWidget() override;
-	virtual FString GetTitle() const override { return TEXT("SHINOBI CO-OP"); }
-	virtual TArray<FString> GetEntries() const override { return { TEXT("Host Game"), TEXT("Find Games"), TEXT("Settings"), TEXT("Quit") }; }
-	virtual void OnEntry(int32 Index) override;
-	virtual void Refresh() override;
-
-private:
-	void OnJoinRow(int32 Index);
-	/** Index into HostRows. */
-	void OnMapRow(int32 Index);
-
-	/** One Host Game row: a map and, for an arena, its format. Rebuilt by Refresh. */
-	struct FHostRow
-	{
-		int32 MapIndex;
-		EShinobiPvpFormat Format;
-	};
-	TArray<FHostRow> HostRows;
-
-	/** Host Game was pressed: the list shows maps to host on instead of found games. */
-	bool bPickingMap = false;
-
-	UPROPERTY()
-	TObjectPtr<UVerticalBox> GameList;
-};
-
 /** Resume, Jutsu (the Skills screen), Invite Friend (Steam overlay), Settings, Leave. The game keeps running (it's online). */
 UCLASS()
 class SHINOBICOOP_API UShinobiPauseMenuWidget : public UShinobiMenuWidget
@@ -131,6 +104,8 @@ public:
 
 protected:
 	virtual FString GetTitle() const override { return TEXT("SETTINGS"); }
+	/** In the main menu's SETTINGS tab the panel sits right of the stage's character. */
+	virtual FVector2D GetPanelAnchor() const override { return bMainMenu ? FVector2D(0.72f, 0.5f) : FVector2D(0.5f, 0.5f); }
 	virtual TArray<FString> GetEntries() const override;
 	virtual void OnEntry(int32 Index) override;
 	virtual void Refresh() override;

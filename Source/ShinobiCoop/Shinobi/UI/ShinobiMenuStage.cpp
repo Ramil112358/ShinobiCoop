@@ -26,6 +26,9 @@ AShinobiMenuStage::AShinobiMenuStage()
 
 	Body = CreateDefaultSubobject<UShinobiBodyComponent>(TEXT("Body"));
 	Body->SetupAttachment(Driver);
+	// The mesh's own bounds: physics-asset bounds can be a few cm (a cloth-only physics asset), which the cloak in front
+	// occludes, culling the whole body.
+	Body->bComponentUseFixedSkelBounds = true;
 
 	Outfit = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("Outfit"));
 	Outfit->SetupAttachment(Body);
@@ -34,8 +37,8 @@ AShinobiMenuStage::AShinobiMenuStage()
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(Root);
-	Camera->SetRelativeLocation(FVector(340.f, 0.f, 105.f));
-	Camera->SetRelativeRotation(FRotator(-4.f, 180.f, 0.f));
+	Camera->SetRelativeLocation(FVector(560.f, 0.f, 115.f));
+	Camera->SetRelativeRotation(FRotator(-3.f, 180.f, 0.f));
 	Camera->SetFieldOfView(45.f);
 }
 
@@ -74,6 +77,7 @@ void AShinobiMenuStage::Show(int32 RosterIndex, int32 OutfitIndex)
 	}
 	Body->HideDriver();
 	AShinobiPlayerCharacter::DressOutfit(*Body, *Outfit, OutfitIndex, ShownBody);
+
 }
 
 void AShinobiMenuStage::SetFocus(EShinobiMenuStageFocus Focus)

@@ -33,7 +33,8 @@ namespace
 		Style.SetHovered(Hovered);
 		// Only a primary button's pressed fill is opaque: TickFocus tells the two kinds apart by it.
 		Style.SetPressed(MenuStyleBox(bPrimary ? Accent * FLinearColor(0.8f, 0.8f, 0.8f, 1.f) : Accent.CopyWithNewOpacity(0.6f), Accent, 2.f));
-		Style.SetDisabled(MenuStyleBox(Panel.CopyWithNewOpacity(0.35f), FLinearColor(1.f, 1.f, 1.f, 0.05f), 1.f));
+		Style.SetDisabled(bPrimary ? MenuStyleBox(Accent.CopyWithNewOpacity(0.35f), FLinearColor(0.f, 0.f, 0.f, 0.f), 0.f)
+			: MenuStyleBox(Panel.CopyWithNewOpacity(0.35f), FLinearColor(1.f, 1.f, 1.f, 0.05f), 1.f));
 		Style.SetNormalPadding(FMargin(18.f, 8.f));
 		Style.SetPressedPadding(FMargin(18.f, 9.f, 18.f, 7.f));
 		return Style;
@@ -73,13 +74,13 @@ void ShinobiMenuStyle::StyleButton(UButton& Button, bool bPrimary)
 	if (UWidget* Content = Button.GetChildAt(0))
 	{
 		Content->SetRenderShear(FVector2D(-Shear, 0.f));
-		if (UTextBlock* Label = Cast<UTextBlock>(Content))
+		if (UTextBlock* Label = Cast<UTextBlock>(Content)) // a label is centred; richer content (a row) keeps its own layout
 		{
 			Label->SetColorAndOpacity(FSlateColor(bPrimary ? FLinearColor::Black : FLinearColor::White));
-		}
-		if (UButtonSlot* ContentSlot = Cast<UButtonSlot>(Content->Slot))
-		{
-			ContentSlot->SetHorizontalAlignment(HAlign_Center);
+			if (UButtonSlot* ContentSlot = Cast<UButtonSlot>(Content->Slot))
+			{
+				ContentSlot->SetHorizontalAlignment(HAlign_Center);
+			}
 		}
 	}
 }
