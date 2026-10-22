@@ -37,6 +37,8 @@ public:
 	AShinobiMenuStage* GetStage() const;
 	/** Number of map rows on the Host list (one per GetMaps() entry). */
 	int32 GetHostRowCount() const { return HostRows.Num(); }
+	/** The Host list's row button for display row Row (GetHostOrder() order). */
+	UWidget* GetHostRow(int32 Row) const { return HostRowButtons.IsValidIndex(Row) ? HostRowButtons[Row].Get() : nullptr; }
 	/** Screenshot tour (UShinobiMenuShotSubsystem): select the Host row of DisplayName in its Mode-th format. */
 	void TourSelectHost(const FString& DisplayName, int32 Mode);
 	void TourShowFind() { ShowFind(true); }
@@ -81,6 +83,8 @@ private:
 	TArray<TObjectPtr<UShinobiIndexButton>> TabButtons;
 	UPROPERTY()
 	TArray<TObjectPtr<UWidget>> FocusTargets;
+	UPROPERTY()
+	TObjectPtr<class UShinobiRosterPage> RosterPage;
 	UPROPERTY()
 	TObjectPtr<UImage> Backdrop;
 	/** Darkens the left of the screen behind the PLAY lists. */

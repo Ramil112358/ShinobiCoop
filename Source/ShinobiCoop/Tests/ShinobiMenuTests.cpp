@@ -315,4 +315,53 @@ bool FShinobiMenuArtAllCapturedTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+namespace
+{
+	/** Visible all the way up (a collapsed list hides its rows from focus). */
+	bool MenuTestShown(const UWidget* Widget)
+	{
+		for (; Widget; Widget = Widget->GetParent())
+		{
+			if (Widget->GetVisibility() == ESlateVisibility::Collapsed || Widget->GetVisibility() == ESlateVisibility::Hidden)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMainMenuReturnKeepsPickTest, "ShinobiCoop.UI.MainMenuReturnKeepsPick", ShinobiTestFlags)
+bool FShinobiMainMenuReturnKeepsPickTest::RunTest(const FString& Parameters)
+{
+	const FString OldCharacter = ShinobiSettings::GetSavedCharacter();
+	FShinobiTestWorld W;
+	UShinobiMainMenuWidget* Menu = CreateWidget<UShinobiMainMenuWidget>(W.World, UShinobiMainMenuWidget::StaticClass());
+	Menu->TakeWidget();
+
+	// PLAY: focus returns to the chosen map's row, so the focus-follow doesn't switch maps.
+	Menu->TourSelectHost(TEXT("Arena: Camden"), 1);
+	const int32 Camden = UShinobiSessionSubsystem::GetHostOrder().IndexOfByKey(UShinobiSessionSubsystem::FindMapByName(TEXT("Arena: Camden")));
+	Menu->SelectTab(EShinobiMenuTab::Jutsu);
+	Menu->SelectTab(EShinobiMenuTab::Play);
+	TestTrue(TEXT("focus on the chosen map's row"), Menu->GetFocusTarget(EShinobiMenuTab::Play) == Menu->GetHostRow(Camden));
+
+	// FIND GAMES: something visible gets focus.
+	Menu->TourShowFind();
+	Menu->SelectTab(EShinobiMenuTab::Jutsu);
+	Menu->SelectTab(EShinobiMenuTab::Play);
+	TestTrue(TEXT("a visible focus target in Find Games"), MenuTestShown(Menu->GetFocusTarget(EShinobiMenuTab::Play)));
+
+	// SHINOBI: focus returns to the card picked now, not the one picked when the menu opened.
+	UShinobiRosterPage* Roster = Cast<UShinobiRosterPage>(Menu->GetTabPage(EShinobiMenuTab::Shinobi));
+	if (TestNotNull(TEXT("roster page"), Roster))
+	{
+		Roster->Pick(2);
+		TestTrue(TEXT("focus on the new pick"), Menu->GetFocusTarget(EShinobiMenuTab::Shinobi) == Roster->GetFocusTarget());
+	}
+	ShinobiSettings::SetSavedCharacter(OldCharacter);
+	GConfig->Flush(false, GGameUserSettingsIni);
+	return true;
+}
+
 #endif

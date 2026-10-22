@@ -134,11 +134,10 @@ TSharedRef<SWidget> UShinobiMainMenuWidget::RebuildWidget()
 		MainMenuPlace(Root, Pages, FAnchors(0.f, 0.f, 1.f, 1.f), FMargin(0.f, MainMenuTopBar, 0.f, 40.f));
 		FocusTargets.SetNum(int32(EShinobiMenuTab::Num));
 		Pages->AddChild(BuildPlayPage());
-		UShinobiRosterPage* Roster = CreateWidget<UShinobiRosterPage>(this, UShinobiRosterPage::StaticClass());
-		Roster->Stage = GetStage();
-		Pages->AddChild(Roster);
-		Roster->TakeWidget();
-		FocusTargets[int32(EShinobiMenuTab::Shinobi)] = Roster->GetFocusTarget();
+		RosterPage = CreateWidget<UShinobiRosterPage>(this, UShinobiRosterPage::StaticClass());
+		RosterPage->Stage = GetStage();
+		Pages->AddChild(RosterPage);
+		RosterPage->TakeWidget();
 		UShinobiSkillsWidget* Jutsu = CreateWidget<UShinobiSkillsWidget>(this, UShinobiSkillsWidget::StaticClass());
 		Jutsu->bMenuMode = true;
 		Pages->AddChild(Jutsu);
@@ -355,6 +354,23 @@ UWidget* UShinobiMainMenuWidget::GetTabPage(EShinobiMenuTab Which) const
 
 UWidget* UShinobiMainMenuWidget::GetFocusTarget(EShinobiMenuTab Which) const
 {
+	// Worked out now: PLAY's chosen map row (focusing another row would select it) or the visible Find Games button,
+	// SHINOBI's current pick.
+	if (Which == EShinobiMenuTab::Play)
+	{
+		if (bFinding)
+		{
+			return RefreshButton ? static_cast<UWidget*>(RefreshButton) : static_cast<UWidget*>(FindTab);
+		}
+		if (HostRowButtons.IsValidIndex(SelectedRow))
+		{
+			return HostRowButtons[SelectedRow];
+		}
+	}
+	if (Which == EShinobiMenuTab::Shinobi && RosterPage)
+	{
+		return RosterPage->GetFocusTarget();
+	}
 	return FocusTargets.IsValidIndex(int32(Which)) ? FocusTargets[int32(Which)].Get() : nullptr;
 }
 
