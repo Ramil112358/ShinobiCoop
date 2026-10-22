@@ -49,4 +49,15 @@ The roster characters (Hero, Bika, Cat, Misha, Pabu) are made from real photos, 
 3. **Prep, rig, import.** `Scripts/character/prep_mesh.py` and the Mixamo steps are the same as for the NPC cast above. `SourceArt/Character/Models/Hero/Hero_rigged.fbx` is the hero itself (`/Game/Shinobi/Hero`, used before any other roster character); every other `<Name>_rigged.fbx` imports to `/Game/Shinobi/Characters/<Name>/`.
 4. **Roster.** Add a line to `AShinobiPlayerCharacter::Roster` (`{TEXT("<Name>"), TEXT("/Game/Shinobi/Characters/<Name>/SK_<Name>.SK_<Name>"), TEXT("/Game/Shinobi/Characters/<Name>/RTG_MannyTo<Name>.RTG_MannyTo<Name>")}`) and rebuild. `ShinobiCoop.Hero.PickSwapsBody` checks every imported entry.
 
+### A real head on the hero's body (Ramil)
+
+Ramil is the hero's body with a Tripo head scan instead of an A-pose reference: four head photos (front, back, left, right, in `SourceArt/Character/Photos/Ramil/`) go into Tripo Studio, and the textured head is exported **without** auto-rigging as `SourceArt/Character/Models/Ramil/Ramil_head.glb`. Then:
+
+```
+"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe" -b --factory-startup --python-exit-code 1 -P Scripts/character/build_ramil.py
+Scripts/character/build_outfits.ps1 -Body Ramil
+```
+
+`build_ramil.py` swaps the hero's head, glasses and headband for the scan (chin on the hero's chin, the neck drawn down inside the turtleneck collar), gives it the hero's weights, so there is no Mixamo step, and tints the hands and feet to the head's skin. Tripo's hair is one smooth shell, so the script also grows about 3,000 hair cards over it: thin strips with a painted strand texture that follow the hair's flow, read from the strands in Tripo's texture. It writes `Ramil_rigged.fbx`, its texture `Ramil_rigged.png` (the hero's and the head's textures on top, the cards' strand strips below) and the previews. A change to the mesh or its UVs means fitting the outfits again (`build_outfits.ps1 -Body Ramil`). The landmark constants at the top of the script (`HEAD_SCALE`, `HEAD_CHIN_Z`, ...) are for this scan: measure them again on gridded renders for a new one. Then run `setup_hero.py` as above.
+
 Animal characters keep their tails: Mixamo skins a tail to the hips and legs, so it swings stiffly. Cloaks leave the tail outside.

@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 $Blender = "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
 $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $Scripts = Join-Path $Root "Scripts\character"
-$Bodies = @("Hero", "Bika", "Cat", "Misha", "Pabu") | Where-Object { -not $Body -or $_ -eq $Body }
+$Bodies = @("Hero", "Bika", "Cat", "Misha", "Pabu", "Ramil") | Where-Object { -not $Body -or $_ -eq $Body }
 $Outfits = Get-ChildItem (Join-Path $Root "SourceArt\Character\Outfits") -Directory | Where-Object { -not $Outfit -or $_.Name -eq $Outfit }
 $CheckDir = Join-Path $Root "Saved\OutfitCheck"
 New-Item -ItemType Directory -Force $CheckDir | Out-Null
