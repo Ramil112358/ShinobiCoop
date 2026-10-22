@@ -202,6 +202,7 @@ UWidget* UShinobiMainMenuWidget::BuildPlayPage()
 		UTextBlock* Chip = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Map.bTest ? TEXT("TEST") : Map.bArena ? TEXT("PVP") : TEXT("CO-OP")), 11,
 			Map.bArena ? ShinobiMenuStyle::Accent : ShinobiMenuStyle::TextDim);
 		Line->AddChildToHorizontalBox(Chip)->SetVerticalAlignment(VAlign_Center);
+		HostRowChips.Add(Chip);
 		ShinobiMenuStyle::StyleButton(*Button, Row == SelectedRow); // the selected map is filled
 		Cast<UButtonSlot>(Line->Slot)->SetHorizontalAlignment(HAlign_Fill);
 		HostList->AddChild(Button);
@@ -226,9 +227,21 @@ UWidget* UShinobiMainMenuWidget::BuildPlayPage()
 	Detail = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Detail"));
 	Width->AddChild(Detail);
 
+	StyleChips();
 	FocusTargets[int32(EShinobiMenuTab::Play)] = HostRowButtons.Num() > 0 ? static_cast<UWidget*>(HostRowButtons[0]) : HostTab.Get();
 	BuildHostDetail();
 	return Page;
+}
+
+void UShinobiMainMenuWidget::StyleChips()
+{
+	const TArray<FShinobiMap>& Maps = UShinobiSessionSubsystem::GetMaps();
+	for (int32 Row = 0; Row < HostRowChips.Num(); ++Row)
+	{
+		// Orange on the dark rows marks an arena; on the filled (selected) row every chip is black.
+		const FLinearColor Color = Row == SelectedRow ? FLinearColor::Black : Maps[HostRows[Row]].bArena ? ShinobiMenuStyle::Accent : ShinobiMenuStyle::TextDim;
+		HostRowChips[Row]->SetColorAndOpacity(FSlateColor(Color));
+	}
 }
 
 void UShinobiMainMenuWidget::BuildHostDetail()
@@ -432,6 +445,7 @@ void UShinobiMainMenuWidget::OnHostRow(int32 Row)
 	}
 	SelectedRow = Row;
 	SelectedMode = 0;
+	StyleChips();
 	BuildHostDetail();
 	UpdateBackdrop();
 

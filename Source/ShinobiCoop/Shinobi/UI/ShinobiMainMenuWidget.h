@@ -54,6 +54,8 @@ protected:
 private:
 	UWidget* BuildPlayPage();
 	void BuildHostDetail();
+	/** Host row chips' colours for the current selection. */
+	void StyleChips();
 	void OnTabButton(int32 Index);
 	void OnHostRow(int32 Row);
 	void OnMode(int32 Index);
@@ -96,6 +98,8 @@ private:
 	TObjectPtr<UScrollBox> FindList;
 	UPROPERTY()
 	TArray<TObjectPtr<UShinobiIndexButton>> HostRowButtons;
+	UPROPERTY()
+	TArray<TObjectPtr<UTextBlock>> HostRowChips;
 	UPROPERTY()
 	TObjectPtr<UVerticalBox> Detail;
 	UPROPERTY()

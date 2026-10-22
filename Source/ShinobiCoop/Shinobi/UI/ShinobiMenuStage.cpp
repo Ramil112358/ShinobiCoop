@@ -80,6 +80,26 @@ void AShinobiMenuStage::Show(int32 RosterIndex, int32 OutfitIndex)
 
 }
 
+void AShinobiMenuStage::FramePortrait()
+{
+	TargetOffset = 0.f;
+	Driver->SetRelativeLocation(FVector::ZeroVector);
+	// The head bone's height (bodies differ), head and shoulders around it.
+	float HeadZ = 165.f;
+	for (int32 Bone = 0; Bone < Body->GetNumBones(); ++Bone)
+	{
+		if (Body->GetBoneName(Bone).ToString().EndsWith(TEXT("Head"), ESearchCase::IgnoreCase))
+		{
+			HeadZ = GetActorTransform().InverseTransformPosition(Body->GetBoneLocation(Body->GetBoneName(Bone))).Z;
+			break;
+		}
+	}
+	// The head bone sits at the skull's base: framed from just above the hair to the chest (tuned on the roster).
+	Camera->SetFieldOfView(24.f);
+	Camera->SetRelativeLocation(FVector(300.f, 0.f, HeadZ - 2.f));
+	Camera->SetRelativeRotation(FRotator(0.f, 180.f, 0.f));
+}
+
 void AShinobiMenuStage::SetFocus(EShinobiMenuStageFocus Focus)
 {
 	// The camera looks along -X, so screen-left is +Y.

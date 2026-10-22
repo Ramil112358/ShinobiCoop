@@ -26,6 +26,8 @@ public:
 	/** Wears Roster[RosterIndex] (the hero when it isn't imported) and Outfits[OutfitIndex]. */
 	void Show(int32 RosterIndex, int32 OutfitIndex);
 	int32 GetShownBody() const { return ShownBody; }
+	/** Head and shoulders of the body worn, for a portrait (a 3:4 view); the character stands centred at once. */
+	void FramePortrait();
 	/** Eases the character sideways to Focus's spot. */
 	void SetFocus(EShinobiMenuStageFocus Focus);
 

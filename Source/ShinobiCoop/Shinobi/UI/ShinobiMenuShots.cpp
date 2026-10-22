@@ -1,13 +1,20 @@
 #include "Shinobi/UI/ShinobiMenuShots.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
+#include "Camera/CameraActor.h"
+#include "Camera/CameraComponent.h"
 #include "Engine/World.h"
-#include "HAL/IConsoleManager.h"
+#include "EngineUtils.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerStart.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Misc/CommandLine.h"
 #include "TimerManager.h"
 #include "UnrealClient.h"
 #include "Shinobi/Online/ShinobiSessionSubsystem.h"
+#include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/UI/ShinobiMainMenuWidget.h"
+#include "Shinobi/UI/ShinobiMenuArt.h"
+#include "Shinobi/UI/ShinobiMenuStage.h"
 
 namespace
 {
@@ -18,23 +25,39 @@ namespace
 		return Found.Num() > 0 ? Cast<UShinobiMainMenuWidget>(Found[0]) : nullptr;
 	}
 
-	void MenuShotsTake(const FString& Name)
+	void MenuShotsTake(const FString& Name, bool bShowUI = true)
 	{
-		FScreenshotRequest::RequestScreenshot(Name, true, false);
+		FScreenshotRequest::RequestScreenshot(Name, bShowUI, false);
 	}
+
+	/** Seconds a level gets to stream in and settle before its picture. */
+	constexpr float MenuShotsMapSettle = 10.f;
 }
 
 bool UShinobiMenuShotSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 {
 	const UWorld* World = Cast<UWorld>(Outer);
-	return World && World->IsGameWorld() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiMenuTour"));
+	const TCHAR* Cmd = FCommandLine::Get();
+	return World && World->IsGameWorld()
+		&& (FParse::Param(Cmd, TEXT("ShinobiMenuTour")) || FParse::Param(Cmd, TEXT("ShinobiMenuPortraits")) || FParse::Param(Cmd, TEXT("ShinobiMapShot")));
 }
 
 void UShinobiMenuShotSubsystem::OnWorldBeginPlay(UWorld& World)
 {
 	Super::OnWorldBeginPlay(World);
+	const TCHAR* Cmd = FCommandLine::Get();
+	if (FParse::Param(Cmd, TEXT("ShinobiMapShot")))
+	{
+		StartMapShot(World);
+		return;
+	}
 	if (!World.GetMapName().EndsWith(TEXT("Lvl_MainMenu")))
 	{
+		return;
+	}
+	if (FParse::Param(Cmd, TEXT("ShinobiMenuPortraits")))
+	{
+		StartPortraits(World);
 		return;
 	}
 	TWeakObjectPtr<UWorld> WeakWorld(&World);
@@ -64,6 +87,88 @@ void UShinobiMenuShotSubsystem::OnWorldBeginPlay(UWorld& World)
 	View(EShinobiMenuTab::Jutsu, TEXT("ShinobiMenuTour_5_Jutsu"), nullptr);
 	View(EShinobiMenuTab::Settings, TEXT("ShinobiMenuTour_6_Settings"), nullptr);
 	RunSteps(MoveTemp(Steps), 1.5f);
+}
+
+void UShinobiMenuShotSubsystem::StartPortraits(UWorld& World)
+{
+	TActorIterator<AShinobiMenuStage> It(&World);
+	TWeakObjectPtr<AShinobiMenuStage> Stage = It ? *It : nullptr;
+	TArray<TFunction<void()>> Steps;
+	Steps.Add([Stage]()
+	{
+		// The menu goes; the stage's camera frames each character's head and shoulders.
+		TArray<UUserWidget*> Widgets;
+		if (Stage.IsValid())
+		{
+			UWidgetBlueprintLibrary::GetAllWidgetsOfClass(Stage->GetWorld(), Widgets, UUserWidget::StaticClass(), true);
+		}
+		for (UUserWidget* Widget : Widgets)
+		{
+			Widget->RemoveFromParent();
+		}
+	});
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster); ++Index)
+	{
+		Steps.Add([Stage, Index]()
+		{
+			if (Stage.IsValid())
+			{
+				Stage->Show(Index, 0);
+				Stage->FramePortrait();
+			}
+		});
+		Steps.Add([Index]() { MenuShotsTake(FString(TEXT("ShinobiMenuPortrait_")) + AShinobiPlayerCharacter::Roster[Index].Name, false); });
+	}
+	RunSteps(MoveTemp(Steps), 1.5f);
+}
+
+void UShinobiMenuShotSubsystem::StartMapShot(UWorld& World)
+{
+	TWeakObjectPtr<UWorld> WeakWorld(&World);
+	FString Id = World.GetMapName();
+	Id.RemoveFromStart(World.StreamingLevelsPrefix);
+	Id.RemoveFromStart(TEXT("Lvl_"));
+	TArray<TFunction<void()>> Steps;
+	Steps.Add([WeakWorld]()
+	{
+		UWorld* W = WeakWorld.Get();
+		APlayerController* PC = W ? W->GetFirstPlayerController() : nullptr;
+		if (!PC)
+		{
+			return;
+		}
+		// The view: a camera tagged ShinobiMenuShot placed in the level, else above and behind the first
+		// PlayerStart, looking along and down it.
+		FTransform View;
+		bool bFound = false;
+		for (TActorIterator<ACameraActor> It(W); It && !bFound; ++It)
+		{
+			if (It->ActorHasTag(TEXT("ShinobiMenuShot")))
+			{
+				View = It->GetActorTransform();
+				bFound = true;
+			}
+		}
+		if (!bFound)
+		{
+			TActorIterator<APlayerStart> Start(W);
+			const FTransform From = Start ? Start->GetActorTransform() : FTransform::Identity;
+			const FVector Forward = From.GetRotation().GetForwardVector().GetSafeNormal2D();
+			// An aerial: 25 m behind and 18 m above, looking down over the start.
+			View = FTransform(FRotator(-25.f, Forward.Rotation().Yaw, 0.f), From.GetLocation() - Forward * 2500.f + FVector(0.f, 0.f, 1800.f));
+		}
+		ACameraActor* Camera = W->SpawnActor<ACameraActor>(View.GetLocation(), View.Rotator());
+		Camera->GetCameraComponent()->SetFieldOfView(80.f);
+		Camera->GetCameraComponent()->bConstrainAspectRatio = false;
+		if (APawn* Pawn = PC->GetPawn())
+		{
+			Pawn->SetActorHiddenInGame(true);
+		}
+		PC->SetViewTarget(Camera);
+	});
+	Steps.Add([] {}); // the new view's streaming and exposure settle
+	Steps.Add([Id]() { MenuShotsTake(TEXT("ShinobiMapShot_") + Id, false); });
+	RunSteps(MoveTemp(Steps), MenuShotsMapSettle / 2.f);
 }
 
 void UShinobiMenuShotSubsystem::RunSteps(TArray<TFunction<void()>> Steps, float Interval)

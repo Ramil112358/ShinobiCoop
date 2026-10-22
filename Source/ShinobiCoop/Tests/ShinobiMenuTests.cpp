@@ -297,4 +297,22 @@ bool FShinobiMenuLoadoutTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMenuArtAllCapturedTest, "ShinobiCoop.UI.MenuArtAllCaptured", ShinobiTestFlags)
+bool FShinobiMenuArtAllCapturedTest::RunTest(const FString& Parameters)
+{
+	for (const FShinobiMap& Map : UShinobiSessionSubsystem::GetMaps())
+	{
+		TestNotNull(FString::Printf(TEXT("%s has a picture (Scripts/menu_shots.ps1 -Maps)"), Map.DisplayName), ShinobiMenuArt::LoadArt(ShinobiMenuArt::MapImagePath(Map)));
+	}
+	// A character added later has no portrait until it's shot: its card shows its initial, so only warn.
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster); ++Index)
+	{
+		if (!ShinobiMenuArt::LoadArt(ShinobiMenuArt::PortraitPath(Index)))
+		{
+			AddWarning(FString::Printf(TEXT("%s has no portrait: Scripts/menu_shots.ps1 -Portraits"), AShinobiPlayerCharacter::Roster[Index].Name));
+		}
+	}
+	return true;
+}
+
 #endif
