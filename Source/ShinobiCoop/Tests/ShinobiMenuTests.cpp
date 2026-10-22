@@ -13,6 +13,7 @@
 #include "Shinobi/UI/ShinobiMenuStage.h"
 #include "Shinobi/UI/ShinobiMainMenuWidget.h"
 #include "Shinobi/UI/ShinobiRosterPage.h"
+#include "Shinobi/UI/ShinobiSkillsWidget.h"
 #include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Shinobi/UI/ShinobiSettings.h"
@@ -211,7 +212,7 @@ bool FShinobiMainMenuTabFocusTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	UShinobiMainMenuWidget* Menu = CreateWidget<UShinobiMainMenuWidget>(W.World, UShinobiMainMenuWidget::StaticClass());
 	Menu->TakeWidget();
-	for (const EShinobiMenuTab Tab : { EShinobiMenuTab::Play, EShinobiMenuTab::Shinobi, EShinobiMenuTab::Settings })
+	for (const EShinobiMenuTab Tab : { EShinobiMenuTab::Play, EShinobiMenuTab::Shinobi, EShinobiMenuTab::Jutsu, EShinobiMenuTab::Settings })
 	{
 		Menu->SelectTab(Tab);
 		TestTrue(TEXT("tab selected"), Menu->GetTab() == Tab);
@@ -254,6 +255,44 @@ bool FShinobiMenuRosterPickTest::RunTest(const FString& Parameters)
 
 	ShinobiSettings::SetSavedCharacter(OldCharacter);
 	ShinobiSettings::SetSavedOutfit(OldOutfit);
+	GConfig->Flush(false, GGameUserSettingsIni);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMenuLoadoutTest, "ShinobiCoop.UI.MenuLoadoutSavesValid", ShinobiTestFlags)
+bool FShinobiMenuLoadoutTest::RunTest(const FString& Parameters)
+{
+	const TCHAR* Section = TEXT("/Script/ShinobiCoop.ShinobiLoadout");
+	TArray<FString> OldSlots;
+	const bool bHadSlots = GConfig->GetArray(Section, TEXT("Slots"), OldSlots, GGameUserSettingsIni) > 0;
+	GConfig->SetArray(Section, TEXT("Slots"), TArray<FString>{ TEXT("a"), TEXT("b"), TEXT("c") }, GGameUserSettingsIni); // an old, broken save
+
+	const TArray<TSubclassOf<UShinobiJutsuAbility>> Known = GetDefault<AShinobiPlayerCharacter>()->GetKnownJutsu();
+	FShinobiTestWorld W;
+	UShinobiSkillsWidget* Jutsu = CreateWidget<UShinobiSkillsWidget>(W.World, UShinobiSkillsWidget::StaticClass());
+	Jutsu->bMenuMode = true;
+	Jutsu->TakeWidget();
+	TestTrue(TEXT("a broken save shows the default bar"), Jutsu->GetShownLoadout() == ShinobiLoadout::Default());
+
+	const int32 Spare = Known.IndexOfByPredicate([](const TSubclassOf<UShinobiJutsuAbility>& J) { return !ShinobiLoadout::Default().Contains(J); });
+	if (TestTrue(TEXT("a jutsu not on the default bar"), Spare != INDEX_NONE))
+	{
+		Jutsu->OnCellClicked(*Jutsu->GetCell(false, Spare));
+		Jutsu->OnCellClicked(*Jutsu->GetCell(true, 7));
+		const ShinobiLoadout::FSlots Saved = ShinobiLoadout::LoadSaved(Known);
+		TestTrue(TEXT("saved in slot 8"), Saved[7] == Known[Spare]);
+		TestTrue(TEXT("a valid bar"), ShinobiLoadout::IsValid(Saved, Known));
+		TestTrue(TEXT("shown"), Jutsu->GetShownLoadout() == Saved);
+	}
+
+	if (bHadSlots)
+	{
+		GConfig->SetArray(Section, TEXT("Slots"), OldSlots, GGameUserSettingsIni);
+	}
+	else
+	{
+		GConfig->RemoveKey(Section, TEXT("Slots"), GGameUserSettingsIni);
+	}
 	GConfig->Flush(false, GGameUserSettingsIni);
 	return true;
 }

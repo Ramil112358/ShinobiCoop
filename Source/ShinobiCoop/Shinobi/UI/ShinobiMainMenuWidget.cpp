@@ -25,6 +25,7 @@
 #include "Shinobi/UI/ShinobiMenuStage.h"
 #include "Shinobi/UI/ShinobiMenuStyle.h"
 #include "Shinobi/UI/ShinobiRosterPage.h"
+#include "Shinobi/UI/ShinobiSkillsWidget.h"
 
 namespace
 {
@@ -138,7 +139,11 @@ TSharedRef<SWidget> UShinobiMainMenuWidget::RebuildWidget()
 		Pages->AddChild(Roster);
 		Roster->TakeWidget();
 		FocusTargets[int32(EShinobiMenuTab::Shinobi)] = Roster->GetFocusTarget();
-		Pages->AddChild(WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("JutsuPage")));
+		UShinobiSkillsWidget* Jutsu = CreateWidget<UShinobiSkillsWidget>(this, UShinobiSkillsWidget::StaticClass());
+		Jutsu->bMenuMode = true;
+		Pages->AddChild(Jutsu);
+		Jutsu->TakeWidget();
+		FocusTargets[int32(EShinobiMenuTab::Jutsu)] = Jutsu->GetFocusTarget();
 		UShinobiSettingsWidget* Settings = CreateWidget<UShinobiSettingsWidget>(this, UShinobiSettingsWidget::StaticClass());
 		Settings->bMainMenu = true;
 		Pages->AddChild(Settings);
@@ -322,6 +327,8 @@ void UShinobiMainMenuWidget::SelectTab(EShinobiMenuTab NewTab)
 	}
 	UpdateBackdrop();
 	Shade->SetVisibility(NewTab == EShinobiMenuTab::Play ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	// Session news ("Searching...", "Host left") belongs to PLAY; a failed game drops you there anyway.
+	MessageText->SetVisibility(NewTab == EShinobiMenuTab::Play ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	if (UWidget* Target = GetFocusTarget(NewTab))
 	{
 		Target->SetKeyboardFocus();
