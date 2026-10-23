@@ -27,7 +27,7 @@ from mathutils.bvhtree import BVHTree
 from mathutils.kdtree import KDTree
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from body_landmarks import find_bone, find_tail, outer_layer, skin_depth, suffix  # noqa: E402 (needs the path above)
+from body_landmarks import find_bone, find_tail, outer_layer, skin_depth, straight_hand, suffix  # noqa: E402 (needs the path above)
 from clean_rig import export_unit_scale_fbx  # noqa: E402
 
 GIRTH = 1.04  # the outfit is cut a little wide so it hangs loose
@@ -177,7 +177,7 @@ for modifier in list(body.modifiers):
 
 def arm_frame(side):
     """The shoulder joint, which way is out (+-1 along x) and the arm's angle out from straight down, seen from the front."""
-    shoulder, hand = bone_head(f"{side}Arm"), bone_head(f"{side}Hand")
+    shoulder, hand = bone_head(f"{side}Arm"), straight_hand(armature, side)
     return shoulder, (1.0 if hand.x > shoulder.x else -1.0), math.atan2(abs(hand.x - shoulder.x), shoulder.z - hand.z)
 
 
@@ -317,7 +317,9 @@ for side in ("Left", "Right"):
     cuff_points = picked[-max(len(picked) // 20, 1):]
     cuff = sum(cuff_points, Vector()) / len(cuff_points)
     sleeve_angle = math.atan2(abs(cuff.x - shoulder.x), shoulder.z - cuff.z)
-    turn = (cuff - shoulder).rotation_difference(bone_head(f"{side}Hand") - shoulder)
+    # (onto the straightened arm: turned to a MetaHuman's bent-forward hand, the sleeve hung in front of the upper arm and the
+    # game's arm roll swung it off behind)
+    turn = (cuff - shoulder).rotation_difference(straight_hand(armature, side) - shoulder)
     for vertex, share in zip(outfit.data.vertices, sleeve_shares(shoulder, outward, sleeve_angle)):
         if share > 0:
             vertex.co = shoulder + Quaternion().slerp(turn, share) @ (vertex.co - shoulder)
@@ -494,7 +496,7 @@ for side in ("Left", "Right"):
     shoulder, outward, arm_angle = arm_frame(side)
     shares = sleeve_membership(shoulder, outward, arm_angle)
     elbow = bone_head(f"{side}ForeArm")
-    forearm_dir = (bone_head(f"{side}Hand") - elbow).normalized()
+    forearm_dir = (straight_hand(armature, side) - elbow).normalized()
     # (a MetaHuman's upper arm and forearm bones carry no weights of their own, only their twist bones: no group yet)
     upper_group, fore_group = (outfit.vertex_groups.get(bone) or outfit.vertex_groups.new(name=bone)
                                for bone in (find_bone(armature.data.bones, n).name for n in (f"{side}Arm", f"{side}ForeArm")))

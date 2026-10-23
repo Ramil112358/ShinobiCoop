@@ -84,8 +84,16 @@ RamilMH (a MetaHuman, `Scripts/setup_metahuman.py`) wears the same cloaks. The d
 - **Its source body** is the built body exported from Unreal and cleaned: `SourceArt/Character/Models/RamilMH/RamilMH_rigged.fbx` (from `RamilMH_ue.fbx` through `clean_rig.py`, which drops the 0.01-scaled empty Unreal hangs the rig under). Re-export it after a MetaHuman rebuild changes the body.
 - **Bone names.** `body_landmarks.suffix` maps MetaHuman bones onto the Mixamo roles the scripts use (`pelvis` = Hips, `upperarm_l` and its twist and corrective bones = LeftArm, ...). Of several bones with one role, `find_bone` takes the one nearest the root.
 - **Corrective bones.** A MetaHuman's correctives (under `*_correctiveRoot_*`) reach far onto the neck and hips, and only follow their limb part of the way when its rig solver runs, which ours doesn't. `skin_outfit.py` moves their weight on the coat to the limb's parent (clavicle, pelvis), or the collar and waist tear when an arm or leg moves.
+- **Bent elbows.** A MetaHuman binds with its elbows bent about 37° forward, and the game's arms hang straight. `skin_outfit.py` turns each sleeve onto the straightened arm (`body_landmarks.straight_hand`), and the test poses straighten the elbow first (`ELBOW_STRAIGHTEN_MIN`). Turned to the bent-forward hand, the sleeve hung in front of the upper arm, and the game's arm roll swung it off behind the arm.
+- **Cloth collision.** The capsules come from the skin weights. A MetaHuman's arm bones carry none, so the clavicle's capsule wrapped the bind pose's upper arm and pushed the sleeves into spikes. `BuildClothCollision` drops any capsule that doesn't touch its own bone.
 - **Hide mask.** MetaHuman skin has no opacity: the `bodyhide` stage of `setup_metahuman.py` (run by every build) puts the body's material instance on `M_RamilMH_BodySkin`, a masked copy of the skin material with `HideMask`.
 - **Import just its copies:** `$env:SETUP_HERO_ONLY="outfits"; $env:SETUP_HERO_OUTFIT_BODY="RamilMH"; Scripts/run_python.ps1 -Script Scripts/setup_hero.py`. Its cloth collision is `/Game/Shinobi/MetaHumans/RamilMH/PA_RamilMH_Cloth`.
+
+## Cloth collision
+
+`BuildClothCollision` makes each body's `PA_<Body>_Cloth` from its skin weights, then shrinks every capsule to sit inside the skin: the 25th percentile of its own skin's distance from the capsule's axis. Fitted to the skin's bounds, the hip and belly capsules stood out of the body and blew the coat out into a ball. A little cloth sinking into skin the coat hides doesn't show.
+
+Until 2026-10-23 it lost every rebuild of an existing asset: the new object was overwritten by the old file when the package loaded. Every body has been rebuilt since.
 
 ## Limits
 
