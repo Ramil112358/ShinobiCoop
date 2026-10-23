@@ -58,6 +58,7 @@ void UShinobiBodyComponent::WearMetaHumanParts(const TCHAR* ClassPath)
 		MetaHumanParts.Add(Part);
 		return Part;
 	};
+	USkinnedMeshComponent* StrandsFace = nullptr; // what a ShinobiStrands groom is bound to (see below)
 	// The blueprint's tree (Root > Body > Face > grooms): this stands in for Root and Body.
 	TFunction<void(const USCS_Node*, USceneComponent*)> Wear = [&](const USCS_Node* Node, USceneComponent* Parent)
 	{
@@ -79,7 +80,11 @@ void UShinobiBodyComponent::WearMetaHumanParts(const TCHAR* ClassPath)
 				// Hair and brows draw their cards even up close: their strands render thin and washed out in our outdoor light
 				// (the brows came out light brown), the cards dark and full. Stubble keeps its strands (it has no cards), and so
 				// does a groom tagged ShinobiStrands (a Fab hair with untextured cards, Scripts/setup_metahuman.py fab_hair).
-				if ((Var == TEXT("Hair") || Var == TEXT("Eyebrows")) && !Placed->ComponentHasTag(TEXT("ShinobiStrands")))
+				if (Placed->ComponentHasTag(TEXT("ShinobiStrands")))
+				{
+					StrandsFace = Cast<USkinnedMeshComponent>(Parent);
+				}
+				else if (Var == TEXT("Hair") || Var == TEXT("Eyebrows"))
 				{
 					if (FBoolProperty* UseCards = FindFProperty<FBoolProperty>(Placed->GetClass(), TEXT("bUseCards")))
 					{
@@ -128,6 +133,16 @@ void UShinobiBodyComponent::WearMetaHumanParts(const TCHAR* ClassPath)
 		for (FComponentSync& Entry : Sync->ComponentsToSync)
 		{
 			Entry.Name = Entry.Name == Body ? GetFName() : Entry.Name;
+			// A Fab strands hair is bound to the face's LOD0 only: its binding matches the head skin by material, and the
+			// face's lower LODs skin the head with other materials, so the hair vanished whenever the face dropped a LOD.
+			if (StrandsFace && Entry.Name == FName(*StrandsFace->GetFName().GetPlainNameString()))
+			{
+				Entry.SyncOption = ESyncOption::Disabled;
+			}
+		}
+		if (StrandsFace)
+		{
+			StrandsFace->SetForcedLOD(1); // (1 = LOD0)
 		}
 		if (FLODMappingData* Mapping = Sync->CustomLODMapping.Find(Body))
 		{

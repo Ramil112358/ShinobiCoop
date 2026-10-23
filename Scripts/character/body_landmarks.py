@@ -12,6 +12,7 @@ import numpy
 from mathutils import Quaternion, Vector
 
 TAIL_CLEARANCE = 0.14  # body vertices this far from every leg bone and from the hips joint, behind it, below it: tail
+ELBOW_STRAIGHTEN_MIN = 20  # degrees: test poses straighten a bind pose's elbow bent more (Mixamo bodies: 11-14)
 TAIL_MIN_VERTICES = 500  # smaller pieces out there are trouser folds (Hero, Pabu: under 100), not a tail (Cat, Misha: 2000+)
 
 # Test poses: pose name -> [(bone suffix, world axis, degrees)] (world: Z up, "Left" bones on +X). About +Y a negative
@@ -80,6 +81,15 @@ def bone_head(armature, name):
     if bone is None:
         raise RuntimeError(f"skeleton has no {name} bone (is it a Mixamo or MetaHuman rig?)")
     return armature.matrix_world @ bone.head_local
+
+
+def straight_hand(armature, side):
+    """The hand joint, or where it hangs with a bind pose's elbow bent more than ELBOW_STRAIGHTEN_MIN straightened (a
+    MetaHuman's, bent ~37 deg forward: the game's arms hang straight)."""
+    shoulder, elbow, hand = (bone_head(armature, side + b) for b in ("Arm", "ForeArm", "Hand"))
+    if math.degrees((elbow - shoulder).angle(hand - elbow)) <= ELBOW_STRAIGHTEN_MIN:
+        return hand
+    return elbow + (elbow - shoulder).normalized() * (hand - elbow).length
 
 
 def facing(armature):
@@ -259,17 +269,27 @@ def measure(fbx):
 def pose(armatures, name):
     """Applies POSES[name] to every armature given (a body and the outfit skinned to it pose alike): each rotation is
     about a world axis (turned into the armature's space: an FBX armature object is itself rotated), written into the
-    pose bone as M^-1 R M (M = the bone's rest matrix in armature space)."""
+    pose bone as M^-1 R M (M = the bone's rest matrix in armature space). A bind pose's elbow bent more than
+    ELBOW_STRAIGHTEN_MIN (a MetaHuman's, ~37 deg forward) is straightened first in every pose: the game's arms hang straight."""
     for armature in armatures:
         for bone in armature.pose.bones:
             bone.rotation_mode = "QUATERNION"
             bone.rotation_quaternion = (1, 0, 0, 0)
-        for bone_name, axis, degrees in POSES[name]:
+
+        def turn(bone_name, axis, radians):
             bone = armature.pose.bones[find_bone(armature.data.bones, bone_name).name]
             rest = bone.bone.matrix_local.to_3x3()
             local_axis = (armature.matrix_world.to_3x3().inverted() @ Vector(axis)).normalized()
-            turn = Quaternion(local_axis, math.radians(degrees)).to_matrix()
-            bone.rotation_quaternion = (rest.inverted() @ turn @ rest).to_quaternion()
+            delta = (rest.inverted() @ Quaternion(local_axis, radians).to_matrix() @ rest).to_quaternion()
+            bone.rotation_quaternion = delta @ bone.rotation_quaternion
+
+        for side in ("Left", "Right"):
+            shoulder, elbow, hand = (bone_head(armature, side + b) for b in ("Arm", "ForeArm", "Hand"))
+            upper, fore = elbow - shoulder, hand - elbow
+            if math.degrees(upper.angle(fore)) > ELBOW_STRAIGHTEN_MIN:
+                turn(f"{side}ForeArm", fore.cross(upper), upper.angle(fore))
+        for bone_name, axis, degrees in POSES[name]:
+            turn(bone_name, axis, math.radians(degrees))
     bpy.context.view_layer.update()
 
 

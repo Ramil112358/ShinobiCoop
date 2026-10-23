@@ -17,6 +17,7 @@
 #include "PhysicsAssetUtils.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Misc/PackageName.h"
+#include "Rendering/SkeletalMeshLODModel.h"
 #include "Rendering/SkeletalMeshModel.h"
 #include "SkeletalMeshClothingSystemUtilities.h"
 #endif
@@ -332,15 +333,18 @@ UPhysicsAsset* UShinobiOutfitBuilderLibrary::BuildClothCollision(USkeletalMesh* 
 		return nullptr;
 	}
 	const FString Name = FPackageName::GetShortName(AssetPath);
-	UPackage* Package = CreatePackage(*AssetPath);
-	UPhysicsAsset* Physics = FindObject<UPhysicsAsset>(Package, *Name);
+	// Load the saved one first: a new object in an unloaded package is overwritten by the old file when anything loads it
+	// later, so every rebuild was lost.
+	UPhysicsAsset* Physics = LoadObject<UPhysicsAsset>(nullptr, *(AssetPath + TEXT(".") + Name), nullptr, LOAD_NoWarn | LOAD_Quiet);
 	if (!Physics)
 	{
-		Physics = NewObject<UPhysicsAsset>(Package, *Name, RF_Public | RF_Standalone);
+		Physics = NewObject<UPhysicsAsset>(CreatePackage(*AssetPath), *Name, RF_Public | RF_Standalone);
 		FAssetRegistryModule::AssetCreated(Physics);
 	}
 	Physics->SkeletalBodySetups.Reset();
 	Physics->ConstraintSetup.Reset();
+	Physics->UpdateBodySetupIndexMap(); // (stale maps of the loaded bodies crash CreateFromSkeletalMesh)
+	Physics->UpdateBoundsBodiesArray();
 	// The root bone's component-space scale is the rig's unit (100 on these Mixamo imports): sizes below are in bone units.
 	const float BoneScale = FMath::Max(FAnimationRuntime::GetComponentSpaceTransformRefPose(Body->GetRefSkeleton(), 0).GetScale3D().GetAbsMax(), UE_KINDA_SMALL_NUMBER);
 	FPhysAssetCreateParams Params;
@@ -354,9 +358,82 @@ UPhysicsAsset* UShinobiOutfitBuilderLibrary::BuildClothCollision(USkeletalMesh* 
 		UE_LOG(LogShinobiCoop, Warning, TEXT("BuildClothCollision: %s: %s"), *Body->GetName(), *Error.ToString());
 		return nullptr;
 	}
+	// A capsule centred beyond its own bone wraps the next limb's skin: a MetaHuman's arm bones carry no weights, so the
+	// clavicle's takes the bind pose's upper arm, stays out there when the arm drops and pushes the sleeve into spikes.
+	const FReferenceSkeleton& Ref = Body->GetRefSkeleton();
+	int32 Dropped = 0;
+	for (int32 Index = Physics->SkeletalBodySetups.Num() - 1; Index >= 0; --Index)
+	{
+		USkeletalBodySetup* Setup = Physics->SkeletalBodySetups[Index];
+		const int32 Bone = Ref.FindBoneIndex(Setup->BoneName);
+		float Reach = 0.f; // to its farthest child joint, in bone units
+		for (int32 Child = Bone + 1; Child < Ref.GetNum(); ++Child)
+		{
+			if (Ref.GetParentIndex(Child) == Bone)
+			{
+				Reach = FMath::Max(Reach, float(Ref.GetRefBonePose()[Child].GetLocation().Size()));
+			}
+		}
+		const FKSphylElem* Capsule = Setup->AggGeom.SphylElems.Num() == 1 ? &Setup->AggGeom.SphylElems[0] : nullptr;
+		if (Reach > 0.f && Capsule && Capsule->Center.Size() > Reach + Capsule->Radius) // (it doesn't even touch its bone)
+		{
+			UE_LOG(LogShinobiCoop, Log, TEXT("BuildClothCollision: %s: no capsule on %s (centred %.0f out, its bone reaches %.0f)"), *Physics->GetName(),
+				*Setup->BoneName.ToString(), Capsule->Center.Size(), Reach);
+			Physics->SkeletalBodySetups.RemoveAt(Index);
+			Setup->MarkAsGarbage();
+			++Dropped;
+		}
+	}
+	Physics->UpdateBodySetupIndexMap();
+	Physics->UpdateBoundsBodiesArray();
+	// A capsule fits its skin's bounds, so it stands out of a flat section (the hips, the belly) and blew the fitted coat
+	// out into a ball: shrink each to the SkinInsideShare quantile of its skin's distances from its axis, inside the body. (Cloth
+	// sinking that little into skin the coat hides anyway doesn't show.)
+	constexpr float SkinInsideShare = 0.25f;
+	TArray<FTransform> RefComponent;
+	FAnimationRuntime::FillUpComponentSpaceTransforms(Ref, Ref.GetRefBonePose(), RefComponent);
+	TMap<int32, TArray<FVector>> SkinByBone; // render vertices by their strongest bone
+	for (const FSkelMeshSection& Section : Body->GetImportedModel()->LODModels[0].Sections)
+	{
+		for (const FSoftSkinVertex& Vertex : Section.SoftVertices)
+		{
+			int32 Top = 0;
+			for (int32 Influence = 1; Influence < MAX_TOTAL_INFLUENCES; ++Influence)
+			{
+				Top = Vertex.InfluenceWeights[Influence] > Vertex.InfluenceWeights[Top] ? Influence : Top;
+			}
+			SkinByBone.FindOrAdd(Section.BoneMap[Vertex.InfluenceBones[Top]]).Add(FVector(Vertex.Position));
+		}
+	}
+	int32 Shrunk = 0;
+	for (USkeletalBodySetup* Setup : Physics->SkeletalBodySetups)
+	{
+		const int32 Bone = Ref.FindBoneIndex(Setup->BoneName);
+		const TArray<FVector>* Skin = SkinByBone.Find(Bone);
+		if (Setup->AggGeom.SphylElems.Num() != 1 || !Skin || Skin->Num() < 20)
+		{
+			continue;
+		}
+		FKSphylElem& Capsule = Setup->AggGeom.SphylElems[0];
+		const FTransform World = FTransform(Capsule.Rotation, Capsule.Center) * RefComponent[Bone];
+		const FVector A = World.TransformPosition(FVector(0, 0, -Capsule.Length / 2)), B = World.TransformPosition(FVector(0, 0, Capsule.Length / 2));
+		TArray<float> Distances;
+		for (const FVector& Point : *Skin)
+		{
+			Distances.Add(FMath::PointDistToSegment(Point, A, B));
+		}
+		Distances.Sort();
+		const float Inside = Distances[int32(Distances.Num() * SkinInsideShare)] / RefComponent[Bone].GetMaximumAxisScale();
+		if (Inside < Capsule.Radius)
+		{
+			Capsule.Radius = FMath::Max(Inside, 0.5f);
+			++Shrunk;
+		}
+	}
 	Physics->SetPreviewMesh(Body);
 	Physics->MarkPackageDirty();
-	UE_LOG(LogShinobiCoop, Log, TEXT("BuildClothCollision: %s: %d bodies (bone scale %.0f)"), *Physics->GetName(), Physics->SkeletalBodySetups.Num(), BoneScale);
+	UE_LOG(LogShinobiCoop, Log, TEXT("BuildClothCollision: %s: %d bodies, %d dropped, %d shrunk inside the skin (bone scale %.0f)"), *Physics->GetName(),
+		Physics->SkeletalBodySetups.Num(), Dropped, Shrunk, BoneScale);
 	return Physics;
 #else
 	return nullptr;
