@@ -123,6 +123,11 @@ for polygon in body.data.polygons:
     for loop in polygon.loop_indices:
         colours.data[loop].color = (value, value, value, 1.0)
 body.data.uv_layers.active_index = 0
+# A MetaHuman body's UVs are in UDIM tile 1002 (u 1..2): moved into the 0..1 image, which the game's wrapping sampler repeats.
+corners = numpy.empty((len(body.data.loops), 2))
+body.data.uv_layers[0].data.foreach_get("uv", corners.ravel())
+corners -= numpy.floor(corners.min(0))  # the whole tile moves (Mixamo bodies, already in 0..1, don't)
+body.data.uv_layers[0].data.foreach_set("uv", corners.ravel())
 image = bpy.data.images.new("Hide", MASK_SIZE, MASK_SIZE, alpha=False)
 # Filled white by hand, and not cleared by the bake (it clears to black by default): the gaps between UV islands must show, or a
 # body of tiny islands (a Tripo head scan, Ramil) samples black at their edges and goes see-through.
