@@ -343,7 +343,7 @@ bool AShinobiPlayerCharacter::ApplyCharacter()
 	}
 	for (const int32 Index : {int32(CharacterIndex), 0}) // the pick, else the hero
 	{
-		if (Index < UE_ARRAY_COUNT(Roster) && HeroMesh->Wear(Roster[Index].Mesh, Roster[Index].Retargeter))
+		if (Index < UE_ARRAY_COUNT(Roster) && HeroMesh->Wear(Roster[Index].Mesh, Roster[Index].Retargeter, Roster[Index].MetaHuman))
 		{
 			WornBodyIndex = uint8(Index);
 			// Scripts/smoke_m4.ps1 reads this on both machines to check the picks replicate.

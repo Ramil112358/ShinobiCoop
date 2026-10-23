@@ -77,6 +77,16 @@ The cloth starts from defaults in `UShinobiOutfitBuilderLibrary::BuildCloth`. Tu
 - **The body material.** Every texture parameter in `M_Character` must have a sampler that suits its texture. A mismatch fails the whole material, and the game then draws every roster body (except the hero, which has `M_Hero`) and every outfit in the grey default material. The hide masks are therefore plain colour textures on a Color sampler.
 - **Grey shots.** An uncooked `-game` run builds new meshes and textures in the background. The outfit shot preloads them and waits, but other shot modes can catch them grey on a first run after an import.
 
+## MetaHuman bodies
+
+RamilMH (a MetaHuman, `Scripts/setup_metahuman.py`) wears the same cloaks. The differences:
+
+- **Its source body** is the built body exported from Unreal and cleaned: `SourceArt/Character/Models/RamilMH/RamilMH_rigged.fbx` (from `RamilMH_ue.fbx` through `clean_rig.py`, which drops the 0.01-scaled empty Unreal hangs the rig under). Re-export it after a MetaHuman rebuild changes the body.
+- **Bone names.** `body_landmarks.suffix` maps MetaHuman bones onto the Mixamo roles the scripts use (`pelvis` = Hips, `upperarm_l` and its twist and corrective bones = LeftArm, ...). Of several bones with one role, `find_bone` takes the one nearest the root.
+- **Corrective bones.** A MetaHuman's correctives (under `*_correctiveRoot_*`) reach far onto the neck and hips, and only follow their limb part of the way when its rig solver runs, which ours doesn't. `skin_outfit.py` moves their weight on the coat to the limb's parent (clavicle, pelvis), or the collar and waist tear when an arm or leg moves.
+- **Hide mask.** MetaHuman skin has no opacity: the `bodyhide` stage of `setup_metahuman.py` (run by every build) puts the body's material instance on `M_RamilMH_BodySkin`, a masked copy of the skin material with `HideMask`.
+- **Import just its copies:** `$env:SETUP_HERO_ONLY="outfits"; $env:SETUP_HERO_OUTFIT_BODY="RamilMH"; Scripts/run_python.ps1 -Script Scripts/setup_hero.py`. Its cloth collision is `/Game/Shinobi/MetaHumans/RamilMH/PA_RamilMH_Cloth`.
+
 ## Limits
 
 - One outfit at a time. Shirts, jumpers and glasses fit the same way (a garment over the body, its own copy per body), but none has been made yet. Glasses would need no cloth (paint no red or green).

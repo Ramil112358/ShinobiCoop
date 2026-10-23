@@ -18,6 +18,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiTrainingDummy.h"
+#include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "Shinobi/Hero/ShinobiRetargetAnimInstance.h"
 #include "Shinobi/UI/ShinobiOverheadTextComponent.h"
 
@@ -122,10 +123,19 @@ bool FShinobiPickSwapsBodyTest::RunTest(const FString& Parameters)
 		const FString Name = Entry.Name;
 		TestTrue(Name + TEXT(" body"), Body->GetSkeletalMeshAsset() == Mesh);
 		TestTrue(Name + TEXT(" retargeter"), Anim && Anim->GetRetargeter() == Retargeter);
-		TestTrue(Name + TEXT(" has Mixamo hand and head bones"), Body->GetBoneIndex(TEXT("RightHand")) != INDEX_NONE && Body->GetBoneIndex(TEXT("Head")) != INDEX_NONE);
+		// Mixamo bodies name their bones RightHand / Head; MetaHumans have Manny's hand_r / head, and wear their face and grooms.
+		const FName HandBone = Entry.MetaHuman ? FName(TEXT("hand_r")) : FName(TEXT("RightHand"));
+		const FName HeadBone = Entry.MetaHuman ? FName(TEXT("head")) : FName(TEXT("Head"));
+		TestTrue(Name + TEXT(" has hand and head bones"), Body->GetBoneIndex(HandBone) != INDEX_NONE && Body->GetBoneIndex(HeadBone) != INDEX_NONE);
+		if (Entry.MetaHuman)
+		{
+			const TArray<TObjectPtr<UActorComponent>>& Parts = CastChecked<UShinobiBodyComponent>(P->GetHeroMesh())->GetMetaHumanParts();
+			TestTrue(Name + TEXT(" wears its MetaHuman face and hair"), Parts.ContainsByPredicate([](const UActorComponent* Part) { return Part && Part->GetFName() == TEXT("Face"); })
+				&& Parts.ContainsByPredicate([](const UActorComponent* Part) { return Part && Part->GetFName() == TEXT("Hair"); }));
+		}
 		TestTrue(Name + TEXT(" is the body mesh"), P->GetBodyMesh() == Body);
 		// The retargeted pose must be full size: a stray scaled root bone (an FBX armature node) shrinks it to nothing.
-		const float HeadHeight = Body->GetBoneLocation(TEXT("Head")).Z - Body->GetComponentLocation().Z;
+		const float HeadHeight = Body->GetBoneLocation(HeadBone).Z - Body->GetComponentLocation().Z;
 		TestTrue(FString::Printf(TEXT("%s head %.0f cm above the feet"), *Name, HeadHeight), HeadHeight > 120.f && HeadHeight < 200.f);
 		++Checked;
 	}

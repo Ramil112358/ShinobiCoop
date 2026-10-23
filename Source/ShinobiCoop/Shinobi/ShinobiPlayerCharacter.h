@@ -23,6 +23,8 @@ struct FShinobiRosterEntry
 	const TCHAR* Name;
 	const TCHAR* Mesh;
 	const TCHAR* Retargeter;
+	/** A MetaHuman's built blueprint (Scripts/setup_metahuman.py): Mesh is its body, and its face and grooms are worn too. */
+	const TCHAR* MetaHuman = nullptr;
 };
 
 /** A wearable outfit: a garment fitted to each roster body by Scripts/character/build_outfits.ps1, one copy per body
@@ -90,6 +92,9 @@ public:
 		{TEXT("Misha"), TEXT("/Game/Shinobi/Characters/Misha/SK_Misha.SK_Misha"), TEXT("/Game/Shinobi/Characters/Misha/RTG_MannyToMisha.RTG_MannyToMisha")},
 		{TEXT("Pabu"), TEXT("/Game/Shinobi/Characters/Pabu/SK_Pabu.SK_Pabu"), TEXT("/Game/Shinobi/Characters/Pabu/RTG_MannyToPabu.RTG_MannyToPabu")},
 		{TEXT("Ramil"), TEXT("/Game/Shinobi/Characters/Ramil/SK_Ramil.SK_Ramil"), TEXT("/Game/Shinobi/Characters/Ramil/RTG_MannyToRamil.RTG_MannyToRamil")},
+		{TEXT("RamilMH"), TEXT("/Game/Shinobi/MetaHumans/RamilMH/Build/MHC_RamilMH/Body/SKM_MHC_RamilMH_BodyMesh.SKM_MHC_RamilMH_BodyMesh"),
+			TEXT("/Game/Shinobi/MetaHumans/RamilMH/RTG_MannyToRamilMH.RTG_MannyToRamilMH"),
+			TEXT("/Game/Shinobi/MetaHumans/RamilMH/Build/MHC_RamilMH/BP_MHC_RamilMH.BP_MHC_RamilMH_C")},
 	};
 
 	/** Roster index of Name (case-insensitive), or INDEX_NONE. */

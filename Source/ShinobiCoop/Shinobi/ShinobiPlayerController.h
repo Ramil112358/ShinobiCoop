@@ -127,6 +127,9 @@ private:
 	void RunLookShotTest();
 	/** -ShinobiOutfitShot=<Outfit>: that outfit on every roster body, idle, walking, running, jumping (ShinobiOutfitShot.cpp). */
 	void RunOutfitShotTest(const FString& Outfit);
+	/** -ShinobiPortraitShot=<Character>: that roster character's face up close from the front, three-quarter and side, and
+	 * its whole body from the front (ShinobiPortraitShot.cpp; Scripts/shot_chakra.ps1 -Portrait <Character>). */
+	void RunPortraitShotTest(const FString& Who);
 	/** What RunOutfitShotTest preloads, kept loaded for the run. */
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UObject>> OutfitShotAssets;

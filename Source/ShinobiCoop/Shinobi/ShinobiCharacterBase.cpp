@@ -17,6 +17,7 @@
 #include "Shinobi/Hero/ShinobiLocomotionAnimInstance.h"
 #include "Shinobi/Hero/ShinobiPhysicalReactionComponent.h"
 #include "Shinobi/ShinobiLook.h"
+#include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
@@ -141,6 +142,13 @@ void AShinobiCharacterBase::ApplyOutlineFor(const AShinobiCharacterBase* Viewer)
 	// ponytail: without a viewer (dedicated server, nobody possessed yet) the stencil is the old static rule, since only Enemies
 	// were ever red; PvP characters are first drawn with it and corrected by RefreshAllOutlines when the local pawn arrives.
 	ShinobiLook::EnableOutline(GetBodyMesh(), OutlineStencilFor(Viewer));
+	if (const UShinobiBodyComponent* Body = Cast<UShinobiBodyComponent>(GetBodyMesh()))
+	{
+		for (UActorComponent* Part : Body->GetMetaHumanParts()) // a MetaHuman's face and hair outline with the body
+		{
+			ShinobiLook::EnableOutline(Cast<UPrimitiveComponent>(Part), OutlineStencilFor(Viewer));
+		}
+	}
 }
 
 uint8 AShinobiCharacterBase::OutlineStencilFor(const AShinobiCharacterBase* Viewer) const
