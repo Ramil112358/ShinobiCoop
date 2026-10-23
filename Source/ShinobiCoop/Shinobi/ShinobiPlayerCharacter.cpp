@@ -21,6 +21,9 @@
 #include "Engine/SkeletalMesh.h"
 #include "Shinobi/ShinobiGameState.h"
 #include "Shinobi/ShinobiTags.h"
+#include "Shinobi/Hero/ShinobiPhysicalReactionComponent.h"
+#include "Shinobi/VFX/ShinobiSfx.h"
+#include "TimerManager.h"
 #include "Shinobi/Pvp/ShinobiPvpGameMode.h"
 #include "Shinobi/Abilities/GA_AlmightyPush.h"
 #include "Shinobi/Abilities/GA_Amaterasu.h"
@@ -728,9 +731,13 @@ void AShinobiPlayerCharacter::OnDownedTagChanged(const FGameplayTag Tag, int32 C
 	UAnimMontage* Anim = DownedMontage.LoadSynchronous();
 	if (Count > 0)
 	{
-		if (Anim)
+		if (PhysicalReactions && PhysicalReactions->Down())
 		{
-			PlayAnimMontage(Anim); // AM_Downed doesn't auto blend out: it holds the last (lying) frame
+			ShinobiSfx::Play(this, EShinobiSfx::Thud, GetActorLocation()); // AM_Downed's sound (UShinobiFeedbackComponent)
+		}
+		else if (Anim)
+		{
+			PlayAnimMontage(Anim); // AM_Downed doesn't auto blend out: it holds its last (hunched) frame
 		}
 		return;
 	}
@@ -742,6 +749,15 @@ void AShinobiPlayerCharacter::OnDownedTagChanged(const FGameplayTag Tag, int32 C
 	{
 		AbilitySystem->ApplyGameplayEffectToSelf(GetDefault<UGE_Dead>(), 1.f, AbilitySystem->MakeEffectContext());
 	}
+	// Revived: get up. A bleed-out stays down (State.Dead, applied just above on the server). Next tick, so a client has
+	// the dead tag from the same update before it decides.
+	GetWorldTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]()
+	{
+		if (PhysicalReactions && !AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Dead))
+		{
+			PhysicalReactions->Revive();
+		}
+	}));
 }
 
 void AShinobiPlayerCharacter::ToggleLockOn()
