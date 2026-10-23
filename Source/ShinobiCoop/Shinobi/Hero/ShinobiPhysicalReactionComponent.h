@@ -41,6 +41,13 @@ public:
 	/** Every machine (State.Dead replicates). False when there's no physics control here, so the caller ragdolls itself. */
 	bool Die();
 
+	/** Every machine (State.Downed replicates): collapses like Die, but held over the capsule for a revive. False when
+	 * there's no physics control here, so the caller plays its downed animation instead. */
+	bool Down();
+
+	/** Every machine, on a revive: gets up from where the body lies. */
+	void Revive();
+
 	/** Whether the body is physically controlled on this machine (never on a dedicated server). */
 	bool IsPhysical() const { return Physics != nullptr; }
 
@@ -76,6 +83,11 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	float TetherStrength = 4.f;
 
+	/** Extra speed on the upper body in a knockdown, as a share of the launch across the ground: the torso leads and the
+	 * body topples, where one shared velocity flew it upright and landed it on its feet. */
+	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
+	float ToppleShare = 0.6f;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
@@ -88,9 +100,14 @@ private:
 	void MulticastKnockdown(FVector_NetQuantize Velocity);
 
 	void SetProfile(FName Profile);
-	void SetStrength(float Strength);
+	/** Scales the parent-space controls, and with bWorldSpace the world-space ones too (they pin each body to the animation). */
+	void SetStrength(float Strength, bool bWorldSpace = false);
 	void GetUp();
 	void EndKnockdown();
+	/** Pulls the pelvis back over the capsule, across the ground only, while the body simulates. */
+	void TetherPelvis();
+	/** Leans a collapsing body back so it falls over instead of sitting down on its folded legs. */
+	void TipOver();
 
 	UPROPERTY(Transient)
 	TObjectPtr<UPhysicsControlComponent> Physics;
@@ -104,8 +121,9 @@ private:
 	bool bKnockedDown = false;
 	bool bGettingUp = false;
 	bool bDead = false;
+	bool bDowned = false;
 	double KnockdownTime = 0.0;
 	double HitTime = -1.e9;
-	double DeathTime = 0.0;
+	double CollapseTime = 0.0; // dying or downed
 	FTimerHandle HoldTimer;
 };

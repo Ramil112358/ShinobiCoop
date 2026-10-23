@@ -236,7 +236,7 @@ bool FShinobiAnimReactionTest::RunTest(const FString& Parameters)
 	P->LaunchCharacter(FVector(1500.f, 0.f, 300.f), true, true);
 	float MeshOff = 0.f, PelvisOff = 0.f;
 	bool bGotUp = false;
-	for (int32 Step = 0; Step < 30; ++Step)
+	for (int32 Step = 0; Step < 45; ++Step) // the body lands lying before the getup (~2.3 s) starts
 	{
 		W.Tick(0.1f);
 		MeshOff = FMath::Max(MeshOff, FVector::Dist(Mesh->GetComponentLocation(), P->GetActorLocation() + FVector(0.f, 0.f, -96.f)));

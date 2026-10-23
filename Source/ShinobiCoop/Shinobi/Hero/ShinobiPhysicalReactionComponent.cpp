@@ -34,13 +34,15 @@ namespace
 	const FName KinematicProfile(TEXT("Kinematic"));
 	const FName RagdollProfile(TEXT("Ragdoll"));
 	const FName ParentSpaceControls(TEXT("ParentSpace"));
+	const FName WorldSpaceControls(TEXT("WorldSpace"));
 	const FName ChestBone(TEXT("spine_03"));
 	const FName PelvisBone(TEXT("pelvis"));
 
 	constexpr float MinTumbleSeconds = 0.7f;   // the sample's ragdoll also lies a beat before getting up
-	constexpr float MaxTumbleSeconds = 1.2f;
+	constexpr float MaxTumbleSeconds = 1.8f;   // at 1.2 the getup started before a launched body had come down
 	constexpr float SettledSpeed = 150.f;      // the sample's threshold between rolling and standing getups
-	constexpr float DeathSagSeconds = 1.2f;    // strength on death fades from TumbleStrength to nothing over this
+	constexpr float CollapseSeconds = 0.5f;    // strength on death or downed fades from TumbleStrength to nothing over this
+	constexpr float CollapseTipSpeed = 200.f;  // cm/s backwards on the upper body as it collapses
 
 	/** Without the sample's AnimBP (Shinobi.MotionMatching 0) its chooser has no pose history: pick by how the body lies. */
 	UAnimMontage* GetUpByFacing(const USkeletalMeshComponent* Mesh)
@@ -100,7 +102,7 @@ void UShinobiPhysicalReactionComponent::BeginPlay()
 			PelvisModifiers.Add(Name);
 		}
 	}
-	for (const FName Name : Physics->GetControlNamesInSet(TEXT("WorldSpace")))
+	for (const FName Name : Physics->GetControlNamesInSet(WorldSpaceControls))
 	{
 		if (Name.ToString().Contains(PelvisBone.ToString()))
 		{
@@ -125,12 +127,16 @@ void UShinobiPhysicalReactionComponent::SetProfile(FName NewProfile)
 	}
 }
 
-void UShinobiPhysicalReactionComponent::SetStrength(float Strength)
+void UShinobiPhysicalReactionComponent::SetStrength(float Strength, bool bWorldSpace)
 {
 	FPhysicsControlMultiplier Multiplier;
 	Multiplier.LinearStrengthMultiplier = FVector(Strength);
 	Multiplier.AngularStrengthMultiplier = Strength;
 	Physics->SetControlMultipliersInSet(ParentSpaceControls, Multiplier, true);
+	if (bWorldSpace)
+	{
+		Physics->SetControlMultipliersInSet(WorldSpaceControls, Multiplier, true);
+	}
 }
 
 void UShinobiPhysicalReactionComponent::Hit(const FVector& Direction, float Damage)
@@ -142,9 +148,10 @@ void UShinobiPhysicalReactionComponent::MulticastHit_Implementation(FVector_NetQ
 {
 	if (Physics && !bDead && !bKnockedDown && Profile == PhysicalAnimationProfile)
 	{
-		// The profile's controls hold the pose too stiffly for an impulse to show: slacken them, then ease back (Tick).
+		// The profile's controls hold the pose too stiffly for an impulse to show: slacken them, then ease back (Tick). The
+		// world-space ones too: at full strength they pinned every body to the animation and the hit barely showed.
 		HitTime = GetWorld()->GetTimeSeconds();
-		SetStrength(HitStrength);
+		SetStrength(HitStrength, true);
 		const float Impulse = FMath::Min(Damage * HitImpulsePerDamage, MaxHitImpulse);
 		// The whole upper body (chest, arms, head) as one, or the joints to the pinned pelvis soak it up.
 		CastChecked<ACharacter>(GetOwner())->GetMesh()->AddImpulseToAllBodiesBelow(FVector(Direction) * Impulse, ChestBone, true, true);
@@ -158,9 +165,9 @@ void UShinobiPhysicalReactionComponent::Knockdown(const FVector& Velocity)
 
 void UShinobiPhysicalReactionComponent::MulticastKnockdown_Implementation(FVector_NetQuantize Velocity)
 {
-	if (bDead)
+	if (bDead || bDowned)
 	{
-		return;
+		return; // already down: a getup would stand a downed body back up
 	}
 	// Held the same time everywhere: the server's AI and the owner's input read the tag.
 	if (!bKnockedDown)
@@ -188,6 +195,13 @@ void UShinobiPhysicalReactionComponent::MulticastKnockdown_Implementation(FVecto
 	// across the ground only, so the body flies with the launch and falls freely but can't slide away from it.
 	SetProfile(RagdollProfile);
 	SetStrength(TumbleStrength);
+	TetherPelvis();
+	Mesh->SetAllPhysicsLinearVelocity(Velocity); // fly with the capsule, which the launch carries
+	Mesh->SetAllBodiesBelowLinearVelocity(ChestBone, Velocity + FVector(Velocity.X, Velocity.Y, 0.f) * ToppleShare, true);
+}
+
+void UShinobiPhysicalReactionComponent::TetherPelvis()
+{
 	FPhysicsControlData Tether;
 	Tether.LinearStrength = TetherStrength;
 	Tether.AngularStrength = 0.f;
@@ -198,7 +212,6 @@ void UShinobiPhysicalReactionComponent::MulticastKnockdown_Implementation(FVecto
 		Physics->SetControlData(Name, Tether);
 		Physics->SetControlMultiplier(Name, AcrossOnly, true);
 	}
-	Mesh->SetAllPhysicsLinearVelocity(Velocity); // fly with the capsule, which the launch carries
 }
 
 void UShinobiPhysicalReactionComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -210,9 +223,9 @@ void UShinobiPhysicalReactionComponent::TickComponent(float DeltaTime, ELevelTic
 	}
 	const ACharacter* Character = CastChecked<ACharacter>(GetOwner());
 	const double Now = GetWorld()->GetTimeSeconds();
-	if (bDead)
+	if (bDead || bDowned)
 	{
-		SetStrength(TumbleStrength * FMath::Max(0.f, 1.f - static_cast<float>(Now - DeathTime) / DeathSagSeconds));
+		SetStrength(TumbleStrength * FMath::Max(0.f, 1.f - static_cast<float>(Now - CollapseTime) / CollapseSeconds));
 		return;
 	}
 	if (bKnockedDown)
@@ -239,7 +252,7 @@ void UShinobiPhysicalReactionComponent::TickComponent(float DeltaTime, ELevelTic
 	const float SinceHit = static_cast<float>(Now - HitTime);
 	if (Profile == PhysicalAnimationProfile)
 	{
-		SetStrength(FMath::Lerp(HitStrength, 1.f, FMath::Clamp(SinceHit / HitRecoverySeconds, 0.f, 1.f)));
+		SetStrength(FMath::Lerp(HitStrength, 1.f, FMath::Clamp(SinceHit / HitRecoverySeconds, 0.f, 1.f)), true);
 	}
 }
 
@@ -305,7 +318,8 @@ void UShinobiPhysicalReactionComponent::GetUp()
 	{
 		const ERootMotionMode::Type RootMotion = AnimInstance->RootMotionMode;
 		AnimInstance->SetRootMotionMode(ERootMotionMode::IgnoreRootMotion); // cosmetic: the capsule stays the server's
-		AnimInstance->Montage_Play(Montage, 1.f, EMontagePlayReturnType::MontageLength, StartTime);
+		// No blend-in: blending from the standing idle pulled the lying body halfway up for a moment, then back down.
+		AnimInstance->Montage_PlayWithBlendIn(Montage, FAlphaBlendArgs(0.f), 1.f, EMontagePlayReturnType::MontageLength, StartTime);
 		FOnMontageEnded Ended = FOnMontageEnded::CreateWeakLambda(this, [this, RootMotion](UAnimMontage*, bool)
 		{
 			if (UAnimInstance* Anim = CastChecked<ACharacter>(GetOwner())->GetMesh()->GetAnimInstance())
@@ -327,7 +341,7 @@ void UShinobiPhysicalReactionComponent::EndKnockdown()
 		}
 	}
 	bKnockedDown = false;
-	if (Physics && !bGettingUp && !bDead)
+	if (Physics && !bGettingUp && !bDead && !bDowned)
 	{
 		GetUp(); // the hold ended before the body settled (still sliding): get up now
 	}
@@ -340,11 +354,60 @@ bool UShinobiPhysicalReactionComponent::Die()
 	{
 		return false;
 	}
+	const bool bWasDown = bDowned || bKnockedDown;
 	bDead = true;
-	DeathTime = GetWorld()->GetTimeSeconds();
+	CollapseTime = GetWorld()->GetTimeSeconds();
 	GetWorld()->GetTimerManager().ClearTimer(HoldTimer);
 	SetProfile(RagdollProfile);
 	CastChecked<ACharacter>(GetOwner())->GetMesh()->SetSimulatePhysics(true);
 	SetStrength(TumbleStrength);
+	if (!bWasDown)
+	{
+		TipOver();
+	}
 	return true;
+}
+
+void UShinobiPhysicalReactionComponent::TipOver()
+{
+	// Straight down, the legs folded and the body sat up for a second before it slumped: lean it back as it goes.
+	const AActor* Owner = GetOwner();
+	CastChecked<ACharacter>(Owner)->GetMesh()->SetAllBodiesBelowLinearVelocity(ChestBone, -Owner->GetActorForwardVector() * CollapseTipSpeed, true);
+}
+
+bool UShinobiPhysicalReactionComponent::Down()
+{
+	if (!Physics)
+	{
+		return false;
+	}
+	// The downed clip (the template's MM_Death_Front_01) only stumbles: it ends hunched over, hips at standing height, as
+	// it was made to hand over to a ragdoll. So collapse like a death, kept over the capsule where the reviver kneels. A
+	// knockdown in progress keeps its hold timer (it clears State.Staggered) but no longer gets up.
+	bDowned = true;
+	CollapseTime = GetWorld()->GetTimeSeconds();
+	if (UAnimInstance* AnimInstance = CastChecked<ACharacter>(GetOwner())->GetMesh()->GetAnimInstance())
+	{
+		AnimInstance->Montage_Stop(0.1f); // a getup or attack would hold the body up
+	}
+	SetProfile(RagdollProfile);
+	SetStrength(TumbleStrength);
+	TetherPelvis();
+	if (!bKnockedDown)
+	{
+		TipOver();
+	}
+	return true;
+}
+
+void UShinobiPhysicalReactionComponent::Revive()
+{
+	if (bDowned)
+	{
+		bDowned = false;
+		if (Physics && !bDead)
+		{
+			GetUp();
+		}
+	}
 }
