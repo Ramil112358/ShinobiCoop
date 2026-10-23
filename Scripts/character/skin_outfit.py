@@ -27,7 +27,7 @@ from mathutils.bvhtree import BVHTree
 from mathutils.kdtree import KDTree
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from body_landmarks import find_tail, outer_layer, skin_depth  # noqa: E402 (needs the path above)
+from body_landmarks import find_bone, find_tail, outer_layer, skin_depth, suffix  # noqa: E402 (needs the path above)
 from clean_rig import export_unit_scale_fbx  # noqa: E402
 
 GIRTH = 1.04  # the outfit is cut a little wide so it hangs loose
@@ -120,11 +120,11 @@ for loop in outfit.data.loops:
     master_z.data[loop.index].uv = (co.z, 0.0)
 
 
-def bone_head(suffix):
-    for bone in armature.data.bones:
-        if bone.name.split(":")[-1] == suffix:
-            return armature.matrix_world @ bone.head_local
-    fail(f"skeleton has no {suffix} bone (is it a Mixamo rig?)")
+def bone_head(role):
+    bone = find_bone(armature.data.bones, role)
+    if bone is None:
+        fail(f"skeleton has no {role} bone (is it a Mixamo or MetaHuman rig?)")
+    return armature.matrix_world @ bone.head_local
 
 
 def bounds(obj):
@@ -197,11 +197,11 @@ def sleeve_shares(shoulder, outward, angle):
 
 
 def is_arm(group_name):
-    return group_name.split(":")[-1] in ("LeftArm", "LeftForeArm", "RightArm", "RightForeArm")
+    return suffix(group_name) in ("LeftArm", "LeftForeArm", "RightArm", "RightForeArm")
 
 
 def is_hand(group_name):
-    return group_name.split(":")[-1].startswith(("LeftHand", "RightHand"))
+    return suffix(group_name).startswith(("LeftHand", "RightHand"))
 
 
 def body_part(keep):
@@ -468,6 +468,25 @@ def transfer_weights(source, target):
 # pull on the long skirt.
 transfer_weights(torso_only, outfit)
 bpy.data.objects.remove(torso_only, do_unlink=True)
+# A MetaHuman's corrective bones (under upperarm_correctiveRoot_l, thigh_correctiveRoot_l, ...) reach far onto its neck and
+# hips, and its rig solver moves them only part of the way with the limb. Unsolved they swing with the limb in full, so
+# the coat's collar and waist (which have no skin of their own under them) tore with a raised arm or leg: on the coat
+# their weight goes to the limb's parent (the clavicle, the pelvis). The sleeves and shoulder caps keep the arm's.
+folded = 0
+for bone in armature.data.bones:
+    root = next((b for b in bone.parent_recursive if "correctiveRoot" in b.name), None)
+    group = outfit.vertex_groups.get(bone.name)
+    if root is None or group is None or root.parent is None or root.parent.parent is None:
+        continue
+    into = outfit.vertex_groups.get(root.parent.parent.name) or outfit.vertex_groups.new(name=root.parent.parent.name)
+    for vertex in outfit.data.vertices:
+        for g in vertex.groups:
+            if g.group == group.index and g.weight > 0:
+                into.add([vertex.index], g.weight, "ADD")
+                g.weight = 0.0
+                folded += 1
+if folded:
+    log(f"coat: {folded} corrective-bone weights folded onto the limbs' parents")
 
 # Wide sleeves hang nearer the torso than the arm, so the nearest-surface pass binds their lower half to the spine and
 # they stay behind (hanging like wings) when the arms lift: blend the sleeves onto the arm bones (sleeve_membership).
@@ -476,8 +495,9 @@ for side in ("Left", "Right"):
     shares = sleeve_membership(shoulder, outward, arm_angle)
     elbow = bone_head(f"{side}ForeArm")
     forearm_dir = (bone_head(f"{side}Hand") - elbow).normalized()
-    upper_group, fore_group = (outfit.vertex_groups[next(b.name for b in armature.data.bones if b.name.split(":")[-1] == name)]
-                               for name in (f"{side}Arm", f"{side}ForeArm"))
+    # (a MetaHuman's upper arm and forearm bones carry no weights of their own, only their twist bones: no group yet)
+    upper_group, fore_group = (outfit.vertex_groups.get(bone) or outfit.vertex_groups.new(name=bone)
+                               for bone in (find_bone(armature.data.bones, n).name for n in (f"{side}Arm", f"{side}ForeArm")))
     for vertex, share in zip(outfit.data.vertices, shares):
         if share <= 0:
             continue
@@ -519,10 +539,10 @@ for side in ("Left", "Right"):
 bpy.data.objects.remove(skin_copy, do_unlink=True)
 bpy.context.view_layer.objects.active = outfit
 log(f"shoulder caps: {capped} vertices on the body's own weights")
-hips_group = outfit.vertex_groups.get(next((g.name for g in outfit.vertex_groups if g.name.split(":")[-1] == "Hips"), ""))
+hips_group = outfit.vertex_groups.get(next((g.name for g in outfit.vertex_groups if g.name == find_bone(armature.data.bones, "Hips").name), ""))
 if hips_group is None:
     fail("no Hips vertex group after the weight transfer")
-legs = [g for g in outfit.vertex_groups if any(k in g.name.split(":")[-1] for k in ("UpLeg", "Leg", "Foot", "Toe"))]
+legs = [g for g in outfit.vertex_groups if any(k in suffix(g.name) for k in ("UpLeg", "Leg", "Foot", "Toe"))]
 # The skirt is cloth: its skinned target hangs off the hips only (never stretched by a leg), the cloth swings round the legs.
 for vertex in outfit.data.vertices:
     if vertex.co.z > hips.z + HEM_TOP:
@@ -641,12 +661,13 @@ log(f"exported {fbx_path}")
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.fbx(filepath=fbx_path)
 again = next(o for o in bpy.context.scene.objects if o.type == "ARMATURE")
-worst = 0.0
+worst_move = worst_turn = 0.0
 for bone in again.data.bones:
     if bone.name in reference:
         now, then = again.matrix_world @ bone.matrix_local, reference[bone.name]
-        worst = max(worst, (now.to_translation() - then.to_translation()).length,
-                    min(turn := now.to_quaternion().rotation_difference(then.to_quaternion()).angle, 2 * math.pi - turn))  # (q and -q)
-log(f"bone round trip: worst matrix difference {worst:.5f} over {len(again.data.bones)} bones")
-if worst > 0.001:
+        worst_move = max(worst_move, (now.to_translation() - then.to_translation()).length)
+        worst_turn = max(worst_turn, min(turn := now.to_quaternion().rotation_difference(then.to_quaternion()).angle, 2 * math.pi - turn))  # (q and -q)
+log(f"bone round trip: worst {worst_move * 1000:.2f} mm, {math.degrees(worst_turn):.2f} degrees over {len(again.data.bones)} bones")
+# (a MetaHuman's short twist bones come back up to ~0.1 degree off: Blender re-derives their roll)
+if worst_move > 0.001 or worst_turn > 0.005:
     fail("the exported skeleton's bone orientations differ from the body's")

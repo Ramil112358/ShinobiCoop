@@ -511,12 +511,15 @@ def build_characters(ik_manny):
         build_retargeter(ik_manny, build_ik_rig(mesh, dest, f"IK_{character}"), dest, f"RTG_MannyTo{character}")
 
 
-ROSTER = ("Hero", "Bika", "Cat", "Misha", "Pabu", "Ramil")  # AShinobiPlayerCharacter::Roster
+ROSTER = ("Hero", "Bika", "Cat", "Misha", "Pabu", "Ramil", "RamilMH")  # AShinobiPlayerCharacter::Roster
+METAHUMANS = ("RamilMH",)  # built by Scripts/setup_metahuman.py into /Game/Shinobi/MetaHumans/<Body>/Build
 HEM_MAX_DISTANCE_CM, SLEEVE_MAX_DISTANCE_CM = 25.0, 12.0  # how far the hem and sleeve cloth may swing (UShinobiOutfitBuilderLibrary)
 TUNING_BODY = "Hero"  # the copy whose cloth the user tunes; its tuning is kept in Tuning/ across re-imports
 
 
 def body_mesh_path(body):
+    if body in METAHUMANS:
+        return f"/Game/Shinobi/MetaHumans/{body}/Build/MHC_{body}/Body/SKM_MHC_{body}_BodyMesh"
     return f"{HERO_DIR}/SK_Hero" if body == "Hero" else f"{CHARACTERS_DIR}/{body}/SK_{body}"
 
 
@@ -528,7 +531,8 @@ def cloth_collision(body):
     mesh = unreal.load_asset(body_mesh_path(body))
     if mesh is None:
         return None
-    folder = body_mesh_path(body).rsplit("/", 1)[0]
+    # (a MetaHuman's next to its Build folder, which its next build remakes)
+    folder = f"/Game/Shinobi/MetaHumans/{body}" if body in METAHUMANS else body_mesh_path(body).rsplit("/", 1)[0]
     physics = unreal.ShinobiOutfitBuilderLibrary.build_cloth_collision(mesh, f"{folder}/PA_{body}_Cloth")
     if physics is None:
         raise RuntimeError(f"could not build {body}'s cloth collision")
@@ -597,10 +601,11 @@ def build_outfits():
     hide mask <Outfit>_<Body>_hide.png -> T_<Outfit>_<Body>_Hide, all copies on one MI of <Outfit>_outfit.png. A tuning
     kept in Tuning/ (copy_cloth_tuning) is put back on every copy."""
     parent = build_character_material()
-    collision = {body: cloth_collision(body) for body in ROSTER}
+    bodies = [b for b in ROSTER if os.environ.get("SETUP_HERO_OUTFIT_BODY") in (None, "", b)]  # =RamilMH: just that body's copies
+    collision = {body: cloth_collision(body) for body in bodies}
     for folder in sorted(glob.glob(os.path.join(OUTFITS_DIR, "*"))):
         outfit = os.path.basename(folder)
-        copies = [(body, os.path.join(folder, f"{outfit}_{body}_outfit.fbx")) for body in ROSTER]
+        copies = [(body, os.path.join(folder, f"{outfit}_{body}_outfit.fbx")) for body in bodies]
         copies = [(body, fbx) for body, fbx in copies if os.path.exists(fbx)]
         if not copies:
             continue

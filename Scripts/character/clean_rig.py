@@ -49,6 +49,13 @@ if __name__ == "__main__":
     if not any(o.type == "ARMATURE" for o in rig):
         print(f"[clean_rig] ERROR: {source} has no armature")
         sys.exit(1)
+    # An FBX Unreal exported (a MetaHuman body) hangs the armature under a 0.01-scaled empty: the rig takes its transform.
+    for armature in (o for o in rig if o.type == "ARMATURE" and o.parent and o.parent.type == "EMPTY"):
+        world = armature.matrix_world.copy()
+        empty = armature.parent
+        armature.parent = None
+        armature.matrix_world = world
+        bpy.data.objects.remove(empty, do_unlink=True)
     os.makedirs(os.path.dirname(target), exist_ok=True)
     export_unit_scale_fbx(target, rig)
     print(f"[clean_rig] wrote {target}")

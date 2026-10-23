@@ -28,8 +28,23 @@ POSES = {
 }
 
 
+# A MetaHuman (UE Manny) skeleton's bones -> the Mixamo bone whose role they play here: the pipeline names bones the
+# Mixamo way, and a MetaHuman's twist and corrective bones count as the limb they sit in.
+MANNY = {"pelvis": "Hips", "spine_01": "Spine", "spine_02": "Spine", "spine_03": "Spine1", "spine_04": "Spine1",
+         "spine_05": "Spine2", "neck_01": "Neck", "neck_02": "Neck", "head": "Head"}
+MANNY_SIDED = (("spine_04", "Shoulder"), ("clavicle", "Shoulder"), ("upperarm", "Arm"), ("lowerarm", "ForeArm"),
+               ("wrist", "Hand"), ("hand", "Hand"), ("thumb", "HandThumb"), ("index", "HandIndex"), ("middle", "HandMiddle"),
+               ("ring", "HandRing"), ("pinky", "HandPinky"), ("thigh", "UpLeg"), ("calf", "Leg"), ("ankle", "Foot"),
+               ("foot", "Foot"), ("ball", "ToeBase"), ("bigtoe", "ToeBase"), ("littletoe", "ToeBase"))
+
+
 def suffix(name):
-    return name.split(":")[-1]
+    """The bone's Mixamo name: "mixamorig:LeftArm" -> LeftArm; a MetaHuman's upperarm_twist_01_l -> LeftArm."""
+    name = name.split(":")[-1]
+    if name in MANNY:
+        return MANNY[name]
+    side = {"_l": "Left", "_r": "Right"}.get(name[-2:])
+    return next((side + role for prefix, role in MANNY_SIDED if side and name.startswith(prefix)), name)
 
 
 def is_arm(group_name):
@@ -54,11 +69,17 @@ def load_body(fbx):
     return armature, mesh
 
 
+def find_bone(bones, name):
+    """The bone playing that Mixamo role: of several (a MetaHuman limb and its twist bones), the one nearest the root."""
+    found = [b for b in bones if suffix(b.name) == name]
+    return min(found, key=lambda b: len(b.parent_recursive)) if found else None
+
+
 def bone_head(armature, name):
-    for bone in armature.data.bones:
-        if suffix(bone.name) == name:
-            return armature.matrix_world @ bone.head_local
-    raise RuntimeError(f"skeleton has no {name} bone (is it a Mixamo rig?)")
+    bone = find_bone(armature.data.bones, name)
+    if bone is None:
+        raise RuntimeError(f"skeleton has no {name} bone (is it a Mixamo or MetaHuman rig?)")
+    return armature.matrix_world @ bone.head_local
 
 
 def facing(armature):
@@ -244,7 +265,7 @@ def pose(armatures, name):
             bone.rotation_mode = "QUATERNION"
             bone.rotation_quaternion = (1, 0, 0, 0)
         for bone_name, axis, degrees in POSES[name]:
-            bone = next(b for b in armature.pose.bones if suffix(b.name) == bone_name)
+            bone = armature.pose.bones[find_bone(armature.data.bones, bone_name).name]
             rest = bone.bone.matrix_local.to_3x3()
             local_axis = (armature.matrix_world.to_3x3().inverted() @ Vector(axis)).normalized()
             turn = Quaternion(local_axis, math.radians(degrees)).to_matrix()

@@ -87,6 +87,10 @@ void AShinobiPlayerController::BeginPlay()
 	{
 		RunOutfitShotTest(ShotOutfit);
 	}
+	if (FString ShotCharacter; FApp::CanEverRender() && FParse::Value(FCommandLine::Get(), TEXT("ShinobiPortraitShot="), ShotCharacter))
+	{
+		RunPortraitShotTest(ShotCharacter);
+	}
 	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiLookShot")))
 	{
 		RunLookShotTest();
