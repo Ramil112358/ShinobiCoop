@@ -66,7 +66,7 @@ pixels = numpy.array(mask.pixels[:], dtype=numpy.float32).reshape(h, w, mask.cha
 uv = body.data.uv_layers[0].data
 hidden = numpy.zeros(len(body.data.vertices), dtype=bool)
 for loop in body.data.loops:
-    u, v = uv[loop.index].uv
+    u, v = (c % 1.0 for c in uv[loop.index].uv)  # wrapped as the game samples it (a MetaHuman body's UVs are UDIM tile 1002)
     hidden[loop.vertex_index] = pixels[min(max(int(v * h), 0), h - 1), min(max(int(u * w), 0), w - 1)] < 0.5
 names = {g.index: suffix(g.name) for g in body.vertex_groups}
 pokeable = numpy.zeros(len(body.data.vertices), dtype=bool)
