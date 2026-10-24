@@ -8,12 +8,15 @@ UClass* UShinobiAnimGenAnimInstance::LoadAnimBlueprintClass()
 	return AnimBlueprint.LoadSynchronous();
 }
 
-const TArray<FName>& UShinobiAnimGenAnimInstance::PropFreeStyles()
+FName UShinobiAnimGenAnimInstance::PickStyle(int32 Seed, TOptional<bool> bWoman)
 {
-	static const TArray<FName> Styles = {
-		TEXT("NeutralMale"), TEXT("NeutralFemale"), TEXT("Hurried"), TEXT("Slow"), TEXT("Strut"), TEXT("Tired"),
-		TEXT("Thinking"), TEXT("SpacedOut"), TEXT("ElderlyMale"), TEXT("ElderlyFemale") };
-	return Styles;
+	static const TArray<FName> Either = { TEXT("Hurried"), TEXT("Slow"), TEXT("Strut"), TEXT("Tired"), TEXT("Thinking"), TEXT("SpacedOut") };
+	static const TArray<FName> Man = { TEXT("Hurried"), TEXT("Slow"), TEXT("Strut"), TEXT("Tired"), TEXT("Thinking"), TEXT("SpacedOut"),
+		TEXT("NeutralMale"), TEXT("NeutralMale"), TEXT("ElderlyMale") };
+	static const TArray<FName> Woman = { TEXT("Hurried"), TEXT("Slow"), TEXT("Strut"), TEXT("Tired"), TEXT("Thinking"), TEXT("SpacedOut"),
+		TEXT("NeutralFemale"), TEXT("NeutralFemale"), TEXT("ElderlyFemale") };
+	const TArray<FName>& Styles = !bWoman.IsSet() ? Either : (*bWoman ? Woman : Man);
+	return Styles[FMath::Abs(Seed) % Styles.Num()];
 }
 
 void UShinobiAnimGenAnimInstance::UpdateAnimGenInputs(float DeltaSeconds)

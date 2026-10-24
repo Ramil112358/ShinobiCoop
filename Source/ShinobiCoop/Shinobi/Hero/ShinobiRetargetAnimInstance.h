@@ -83,6 +83,9 @@ public:
 	/** The retargeter in use: its UShinobiBodyComponent's, as of the last (re)initialise. */
 	const UIKRetargeter* GetRetargeter() const { return RetargetNode.IKRetargeterAsset; }
 
+	/** On a mesh that isn't a UShinobiBodyComponent (a Londoner's crowd body): the retargeter to copy the parent through. */
+	void UseRetargeter(UIKRetargeter* Retargeter) { RetargetNode.IKRetargeterAsset = Retargeter; }
+
 protected:
 	virtual FAnimInstanceProxy* CreateAnimInstanceProxy() override;
 	virtual void NativeInitializeAnimation() override;

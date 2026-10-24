@@ -53,11 +53,15 @@ public:
 	UPROPERTY(Replicated, EditAnywhere, Category = "Villager")
 	bool bCrowd = false;
 
-	/** Crowd characters draw only this near a camera (cm); their hair (grooms) nearer still. */
-	static constexpr float CrowdDrawDistance = 7000.f;
+	/** Crowd characters draw only this near a camera (cm); their hair (grooms) nearer still. 120 m: a street's length, so
+	 * the half of London's crowd that walks near the hub (Scripts/london/cluster_crowd.py) shows from the spawn. */
+	static constexpr float CrowdDrawDistance = 12000.f;
 	static constexpr float CrowdHairDrawDistance = 2000.f;
 
 	static constexpr const TCHAR* CrowdLookClass = TEXT("/Game/CitySampleCrowd/Blueprints/BP_CrowdCharacter.BP_CrowdCharacter_C");
+
+	/** Copies the hidden Quinn's AnimGen walk onto a crowd body (Scripts/anim/setup_crowd_retarget.py). */
+	static constexpr const TCHAR* CrowdRetargeter = TEXT("/Game/Shinobi/AnimGen/RTG_MannyToCrowd.RTG_MannyToCrowd");
 
 	/** The crowd character actor while bCrowd (local, cosmetic: never replicated). */
 	AActor* GetCrowdLook() const { return CrowdLook; }
@@ -72,7 +76,9 @@ public:
 
 private:
 	void HideBark();
-	bool WearCrowdLook();
+	/** AnimGen: the AnimGen AnimBP for the hidden Quinn to walk with (the body retargets from it), else null for City
+	 * Sample's own idle and walk loops. */
+	bool WearCrowdLook(UClass* AnimGen);
 
 	UPROPERTY(Transient)
 	TObjectPtr<AActor> CrowdLook;
@@ -80,6 +86,7 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<USkeletalMeshComponent> CrowdRoot;
 
+	/** City Sample's loops, when not walking with AnimGen (null when it is). */
 	UPROPERTY(Transient)
 	TObjectPtr<UAnimSequence> CrowdIdle;
 

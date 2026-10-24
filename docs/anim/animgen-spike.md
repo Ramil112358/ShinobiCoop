@@ -1,14 +1,16 @@
-# AnimGen trial (feature/animgen)
+# AnimGen ambient walking
 
 AnimGen is UE 5.8's experimental machine-learned locomotion: a controller trained on mocap generates the pose every
-frame, steered by a trajectory and a *style* (Hurried, Tired, PhoneTalking, ...). This branch tries Epic's
-AnimGen Example controller on our villagers. It is off by default.
+frame, steered by a trajectory and a *style* (Hurried, Tired, PhoneTalking, ...). Epic's AnimGen Example controller walks our
+villagers and the London crowd. On by default; players and enemies keep their own AnimBP (the example controllers know
+only walking: no run, jump, wall-run or montage slot).
 
-## Try it
+## Switch
 
-`Shinobi.AnimGenVillagers 1` (console, or `-dpcvars=Shinobi.AnimGenVillagers=1`), then spawn villagers (the cvar is
-read on spawn). Non-crowd villagers then walk with AnimGen in one of ten prop-free trained styles, picked from their
-`Variant`. Crowd pedestrians keep their City Sample loops.
+`Shinobi.AnimGenVillagers 0` (console, or `-dpcvars=Shinobi.AnimGenVillagers=0`) goes back to the locomotion AnimBP for
+villagers and City Sample's idle/walk loops for the crowd; read on spawn. With it on, every villager walks at controller
+LOD 2 (`UShinobiAnimGenAnimInstance::AmbientLOD`) in a prop-free style picked from its `Variant`: villagers from the six
+that suit anyone, Londoners also from the neutral and elderly styles of their crowd character's gender.
 
 ## How it is wired
 
@@ -22,6 +24,9 @@ read on spawn). Non-crowd villagers then walk with AnimGen in one of ten prop-fr
   instead; no Mover pawn is needed.
 - The controller was trained on the UEFN mannequin. It runs on our hidden Quinn driver, matching bones by name, and the
   villager's character mesh follows through the usual retarget.
+- Londoners (`bCrowd`): the City Sample crowd character attaches to the hidden Quinn and its body runs
+  `UShinobiRetargetAnimInstance` through `/Game/Shinobi/AnimGen/RTG_MannyToCrowd` (Scripts/anim/setup_crowd_retarget.py;
+  every crowd body is on `metahuman_base_skel`). The driver ticks only while its crowd body was rendered in the last 0.5 s.
 
 ## Measured (`ShinobiCoop.AnimGen.*`, headless, 20 idle villagers, whole frame)
 
@@ -41,10 +46,7 @@ At LOD 2 AnimGen costs less than motion matching. `FAnimNode_AnimGenController::
   generated characters have no `prop_01` bone. Supporting them means sockets on the character meshes plus the prop
   meshes (`/AnimGenExample/Characters/UEFN_Mannequin/Meshes/SM_*`).
 - **Look-at** (`Properties.LookAt`) is left off.
-- **Not judged by eye yet.** It needs a playtest in Lvl_London with the cvar on.
-- **Experimental.** The plugin's API and assets may change between 5.8 hotfixes. Keep it on this branch until judged.
-
-## Decision to make
-
-If it looks better than motion matching on villagers in a playtest, use AnimGen at LOD 2 for ambient villagers. That
-could include the London crowd, replacing the City Sample loops, once props are supported. Otherwise drop the branch.
+- **City Sample accessories.** A Londoner's random `AccessoryIndex` (bag, phone, cup) isn't matched to the style that
+  holds one; matching them would unlock the prop styles for the crowd.
+- **Not judged by eye yet.** Needs a playtest in Lvl_London and the valley.
+- **Experimental.** The plugin's API and assets may change between 5.8 hotfixes; the cvar is the way back.

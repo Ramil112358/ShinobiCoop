@@ -6,7 +6,7 @@
 #include "ShinobiAnimGenAnimInstance.generated.h"
 
 /**
- * TRIAL (feature/animgen): native parent of ABP_AnimGenVillager, a copy of the AnimGen Example's NPC AnimBP
+ * Ambient walking (villagers and Londoners, Shinobi.AnimGenVillagers): native parent of ABP_AnimGenVillager, a copy of the AnimGen Example's NPC AnimBP
  * (/AnimGenExample/Blueprints/ABP_AnimGenNPC), whose AnimGen node generates walking from a trained ML controller
  * (AGC_AnimGenNPC) in one of ~40 trained styles.
  *
@@ -24,8 +24,12 @@ public:
 	/** The AnimBP (a subclass of this), or null when the AnimGen plugins aren't enabled. BeginPlay or later only. */
 	static UClass* LoadAnimBlueprintClass();
 
-	/** Trained styles that need no props (the example's other styles hold phones, bags, ... on its own prop bones). */
-	static const TArray<FName>& PropFreeStyles();
+	/** A trained style that needs no props (the example's others hold phones, bags, ... on its own prop bones), picked by
+	 * Seed: a man's or a woman's when known, else only the styles that suit either. */
+	static FName PickStyle(int32 Seed, TOptional<bool> bWoman = {});
+
+	/** The controller LOD ambient walkers use: measured cheaper than motion matching (docs/anim/animgen-spike.md). */
+	static constexpr int32 AmbientLOD = 2;
 
 	/** Game thread: called from the AnimBP's EventBlueprintUpdateAnimation. */
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|Animation")

@@ -20,6 +20,7 @@
 #include "Shinobi/Enemies/ShinobiSummon.h"
 #include "Shinobi/Enemies/ShinobiOwl.h"
 #include "Shinobi/Pvp/ShinobiPickup.h"
+#include "Shinobi/World/ShinobiWorldGameMode.h"
 
 namespace
 {
@@ -104,6 +105,8 @@ void AShinobiPvpGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 	SpawnPickups();
+	// Ambient Londoners (Scripts/london/arena_crowd.py's markers): nothing targets them, and they outlive rounds.
+	UE_LOG(LogShinobiCoop, Log, TEXT("Pvp: %d Londoners"), AShinobiWorldGameMode::SpawnVillagers(GetWorld()));
 	if (PvpFormat != EShinobiPvpFormat::None && GetPvpState())
 	{
 		StartWarmup();
