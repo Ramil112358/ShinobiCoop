@@ -34,6 +34,9 @@ public:
 	/** Parses a villager marker (tagged ShinobiVillager, Route:x,y,z|x,y,z|...); false if it isn't one. */
 	static bool ReadVillagerMarker(const AActor& Marker, TArray<FVector>& OutRoute);
 
+	/** Server: spawns a villager at every villager marker in the world (also the PvP arenas' crowd); returns how many. */
+	static int32 SpawnVillagers(UWorld* World);
+
 	/** The value of an actor's Key:Value tag (Hub, Victory, Barks), or empty. */
 	static FString TagValue(const AActor& Actor, const TCHAR* Key);
 

@@ -147,8 +147,13 @@ void AShinobiWorldGameMode::BeginPlay()
 			State->HubName = Hub;
 		}
 	}
+	UE_LOG(LogShinobiCoop, Log, TEXT("World: %d villagers"), SpawnVillagers(GetWorld()));
+}
+
+int32 AShinobiWorldGameMode::SpawnVillagers(UWorld* World)
+{
 	int32 Villagers = 0;
-	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	for (TActorIterator<AActor> It(World); It; ++It)
 	{
 		TArray<FVector> Route;
 		if (!ReadVillagerMarker(**It, Route))
@@ -156,7 +161,7 @@ void AShinobiWorldGameMode::BeginPlay()
 			continue;
 		}
 		const FTransform Where(FRotator::ZeroRotator, Route[0] + FVector(0.f, 0.f, 100.f));
-		AShinobiVillager* Villager = GetWorld()->SpawnActorDeferred<AShinobiVillager>(AShinobiVillager::StaticClass(), Where, nullptr, nullptr,
+		AShinobiVillager* Villager = World->SpawnActorDeferred<AShinobiVillager>(AShinobiVillager::StaticClass(), Where, nullptr, nullptr,
 			ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
 		Villager->Route = MoveTemp(Route);
 		Villager->Variant = Villagers++;
@@ -164,7 +169,7 @@ void AShinobiWorldGameMode::BeginPlay()
 		Villager->bCrowd = TagValue(**It, TEXT("Look")) == TEXT("Crowd");
 		Villager->FinishSpawning(Where);
 	}
-	UE_LOG(LogShinobiCoop, Log, TEXT("World: %d villagers"), Villagers);
+	return Villagers;
 }
 
 void AShinobiWorldGameMode::OnCampCleared(AShinobiCamp* Camp)

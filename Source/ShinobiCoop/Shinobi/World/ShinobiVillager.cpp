@@ -20,14 +20,27 @@
 #include "Shinobi/Hero/ShinobiLocomotionAnimInstance.h"
 #include "Shinobi/Hero/ShinobiAnimGenAnimInstance.h"
 #include "HAL/IConsoleManager.h"
+#include "Misc/App.h"
+#include "Retargeter/IKRetargeter.h"
+#include "Shinobi/Hero/ShinobiRetargetAnimInstance.h"
 #include "Shinobi/UI/ShinobiOverheadTextComponent.h"
 
 namespace
 {
 	TAutoConsoleVariable<bool> CVarAnimGenVillagers(
 		TEXT("Shinobi.AnimGenVillagers"),
-		false,
-		TEXT("TRIAL: villagers (not the crowd) walk with AnimGen's machine-learned controller in a random trained style instead of motion matching. Read when a villager spawns."));
+		true,
+		TEXT("Villagers and Londoners walk with AnimGen's machine-learned controller in a trained style (0: the locomotion AnimBP, and City Sample's loops for the crowd). Read when a villager spawns."));
+
+	/** The AnimGen style and LOD, if Driver runs the AnimGen AnimBP. */
+	void SetUpAnimGen(USkeletalMeshComponent* Driver, FName Style)
+	{
+		if (UShinobiAnimGenAnimInstance* Generated = Cast<UShinobiAnimGenAnimInstance>(Driver->GetAnimInstance()))
+		{
+			Generated->Style = Style;
+			Generated->LODLevel = UShinobiAnimGenAnimInstance::AmbientLOD;
+		}
+	}
 
 	// ponytail: a fixed bank of lines; per-villager data arrives with quests in sub-project #4
 	const TCHAR* Barks[] = {
@@ -108,27 +121,23 @@ void AShinobiVillager::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 void AShinobiVillager::BeginPlay()
 {
 	Super::BeginPlay();
-	if (bCrowd && WearCrowdLook())
+	UClass* AnimGen = CVarAnimGenVillagers.GetValueOnGameThread() ? UShinobiAnimGenAnimInstance::LoadAnimBlueprintClass() : nullptr;
+	if (bCrowd && WearCrowdLook(AnimGen))
 	{
 		Body->DestroyComponent();
 		Body = nullptr;
-		GetMesh()->SetVisibility(false, true);
+		GetMesh()->SetVisibility(false);  // not its children: the crowd body is one
 		TalkCount = Variant;
 		IdleTime = 1.f + (Variant % 4);
 		return;
 	}
-	// Motion-matched walking from the Game Animation Sample; the constructor's ABP_Unarmed until it's migrated. Not for the
-	// crowd above: City Sample characters play their own loops, and motion matching per crowd member would cost too much.
-	UClass* AnimGen = CVarAnimGenVillagers.GetValueOnGameThread() ? UShinobiAnimGenAnimInstance::LoadAnimBlueprintClass() : nullptr;
+	// AnimGen walking, else the locomotion AnimBP (the constructor's ABP_Unarmed when neither loads). Styles that suit
+	// either: the villager bodies aren't tagged man or woman.
 	if (UClass* Locomotion = AnimGen ? AnimGen : UShinobiLocomotionAnimInstance::LoadAnimBlueprintClass())
 	{
 		GetMesh()->SetAnimInstanceClass(Locomotion);
 	}
-	if (UShinobiAnimGenAnimInstance* Generated = Cast<UShinobiAnimGenAnimInstance>(GetMesh()->GetAnimInstance()))
-	{
-		const TArray<FName>& Styles = UShinobiAnimGenAnimInstance::PropFreeStyles();
-		Generated->Style = Styles[FMath::Abs(Variant) % Styles.Num()];
-	}
+	SetUpAnimGen(GetMesh(), UShinobiAnimGenAnimInstance::PickStyle(Variant));
 	if (Body->WearCharacter(Bodies[FMath::Abs(Variant) % UE_ARRAY_COUNT(Bodies)]))
 	{
 		Body->HideDriver();
@@ -184,16 +193,20 @@ void AShinobiVillager::EndPlay(const EEndPlayReason::Type Reason)
 	Super::EndPlay(Reason);
 }
 
-bool AShinobiVillager::WearCrowdLook()
+bool AShinobiVillager::WearCrowdLook(UClass* AnimGen)
 {
 	if (IsNetMode(NM_DedicatedServer))
 	{
 		return false;
 	}
 	UClass* LookClass = LoadClass<AActor>(nullptr, CrowdLookClass);
-	CrowdIdle = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/CitySampleCrowd/Character/Anims/Loco/MTN_N_Idle.MTN_N_Idle"));
-	CrowdWalk = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/CitySampleCrowd/Character/Anims/Loco/MTN_N_Walk_InPlace.MTN_N_Walk_InPlace"));
-	if (!LookClass || !CrowdIdle || !CrowdWalk)
+	UIKRetargeter* Retargeter = AnimGen ? LoadObject<UIKRetargeter>(nullptr, CrowdRetargeter) : nullptr;
+	if (!Retargeter)
+	{
+		CrowdIdle = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/CitySampleCrowd/Character/Anims/Loco/MTN_N_Idle.MTN_N_Idle"));
+		CrowdWalk = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/CitySampleCrowd/Character/Anims/Loco/MTN_N_Walk_InPlace.MTN_N_Walk_InPlace"));
+	}
+	if (!LookClass || (!Retargeter && (!CrowdIdle || !CrowdWalk)))
 	{
 		UE_LOG(LogShinobiCoop, Warning, TEXT("Villager %s: City Sample crowd character not found, using the villager body"), *GetName());
 		return false;
@@ -206,7 +219,8 @@ bool AShinobiVillager::WearCrowdLook()
 	{
 		return false;
 	}
-	SetBlueprintNumber(Look, TEXT("Skeleton"), Pick.RandRange(0, 1));  // A = man, B = woman
+	const bool bWoman = Pick.RandRange(0, 1) == 1;
+	SetBlueprintNumber(Look, TEXT("Skeleton"), bWoman ? 1 : 0);  // A = man, B = woman
 	const float Build = Pick.FRand();
 	SetBlueprintNumber(Look, TEXT("Body Shape"), Build < 0.6f ? 0 : (Build < 0.82f ? 1 : 2));  // normal, over, under weight
 	for (const TCHAR* Index : { TEXT("HeadIndex"), TEXT("OutfitIndex"), TEXT("OutfitMaterialIndex"), TEXT("HairIndex"),
@@ -217,9 +231,8 @@ bool AShinobiVillager::WearCrowdLook()
 	}
 	Look->FinishSpawning(Where);
 	Look->SetActorEnableCollision(false);
-	Look->AttachToComponent(GetCapsuleComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-	Look->SetActorRelativeLocation(FVector(0.f, 0.f, -GetCapsuleComponent()->GetScaledCapsuleHalfHeight()));
-	Look->SetActorRelativeRotation(FRotator(0.f, -90.f, 0.f));
+	// On the hidden Quinn, which the retarget copies from (its parent): at its feet and facing, but not its 0.95 scale.
+	Look->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
 	CrowdLook = Look;
 	if (const ASkeletalMeshActor* Skeletal = Cast<ASkeletalMeshActor>(Look))
 	{
@@ -255,6 +268,19 @@ bool AShinobiVillager::WearCrowdLook()
 			Part->SetLeaderPoseComponent(CrowdRoot);
 		}
 	}
+	if (Retargeter)
+	{
+		GetMesh()->SetAnimInstanceClass(AnimGen);
+		SetUpAnimGen(GetMesh(), UShinobiAnimGenAnimInstance::PickStyle(Variant, bWoman));
+		// Hidden, so a character mesh's AlwaysTickPose would never refresh its bones (as UShinobiBodyComponent::HideDriver).
+		GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+		CrowdRoot->SetAnimInstanceClass(UShinobiRetargetAnimInstance::StaticClass());
+		if (UShinobiRetargetAnimInstance* Retarget = Cast<UShinobiRetargetAnimInstance>(CrowdRoot->GetAnimInstance()))
+		{
+			Retarget->UseRetargeter(Retargeter);
+		}
+		return true;
+	}
 	CrowdRoot->PlayAnimation(CrowdIdle, true);
 	CrowdRoot->SetPosition(Pick.FRand() * CrowdIdle->GetPlayLength());
 	return true;
@@ -263,7 +289,17 @@ bool AShinobiVillager::WearCrowdLook()
 void AShinobiVillager::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	if (CrowdRoot)
+	if (CrowdRoot && !CrowdWalk)
+	{
+		// AnimGen: the hidden driver is never rendered itself, so it animates only while its crowd body was seen lately.
+		// Headless (tests) nothing renders: keep it going.
+		const bool bSeen = !FApp::CanEverRender() || CrowdRoot->WasRecentlyRendered(0.5f);
+		if (GetMesh()->IsComponentTickEnabled() != bSeen)
+		{
+			GetMesh()->SetComponentTickEnabled(bSeen);
+		}
+	}
+	else if (CrowdRoot)
 	{
 		const float Speed = GetVelocity().Size2D();
 		const bool bMoving = Speed > 30.f;

@@ -3,13 +3,15 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "AnimationRuntime.h"
+#include "Animation/SkeletalMeshActor.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformTime.h"
 #include "Shinobi/Hero/ShinobiAnimGenAnimInstance.h"
+#include "Shinobi/Hero/ShinobiRetargetAnimInstance.h"
 #include "Shinobi/World/ShinobiVillager.h"
 
-// TRIAL (feature/animgen): AnimGen's machine-learned walking on villagers, against the motion-matching AnimBP.
+// AnimGen's machine-learned walking on villagers and Londoners, against the motion-matching AnimBP.
 namespace
 {
 	struct FAnimGenVillagers
@@ -25,12 +27,13 @@ namespace
 		bool Previous = false;
 	};
 
-	AShinobiVillager* SpawnVillager(FShinobiTestWorld& W, int32 Variant, const FVector& Where)
+	AShinobiVillager* SpawnVillager(FShinobiTestWorld& W, int32 Variant, const FVector& Where, bool bCrowd = false)
 	{
 		const FTransform Transform(Where);
 		AShinobiVillager* Villager = W.World->SpawnActorDeferred<AShinobiVillager>(AShinobiVillager::StaticClass(), Transform, nullptr, nullptr,
 			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 		Villager->Variant = Variant;
+		Villager->bCrowd = bCrowd;
 		Villager->FinishSpawning(Transform);
 		return Villager;
 	}
@@ -74,6 +77,46 @@ bool FShinobiAnimGenVillagerTest::RunTest(const FString& Parameters)
 	const FVector Posed = Mesh->GetComponentSpaceTransforms()[Hand].GetLocation();
 	const FVector Reference = FAnimationRuntime::GetComponentSpaceTransformRefPose(Mesh->GetSkeletalMeshAsset()->GetRefSkeleton(), Hand).GetLocation();
 	TestTrue(FString::Printf(TEXT("The hand moved off the reference pose (%.0f cm)"), FVector::Dist(Posed, Reference)), FVector::Dist(Posed, Reference) > 10.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiAnimGenLondonerTest, "ShinobiCoop.AnimGen.LondonerBodyFollowsTheController", ShinobiTestFlags)
+bool FShinobiAnimGenLondonerTest::RunTest(const FString& Parameters)
+{
+	FAnimGenVillagers Mode(true);
+	FShinobiTestWorld W;
+	AShinobiVillager* Londoner = SpawnVillager(W, 3, FVector::ZeroVector, true);
+	const ASkeletalMeshActor* Look = Cast<ASkeletalMeshActor>(Londoner->GetCrowdLook());
+	if (!TestNotNull(TEXT("The Londoner wears a City Sample crowd character"), Look))
+	{
+		return false;
+	}
+	TestNotNull(TEXT("The hidden Quinn runs the AnimGen AnimBP"), Cast<UShinobiAnimGenAnimInstance>(Londoner->GetMesh()->GetAnimInstance()));
+	// In game a hidden mesh refreshes its bones only with this (the editor test world refreshes them anyway).
+	TestTrue(TEXT("whose bones refresh while hidden"),
+		Londoner->GetMesh()->VisibilityBasedAnimTickOption == EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones);
+	USkeletalMeshComponent* Body = Look->GetSkeletalMeshComponent();
+	const UShinobiRetargetAnimInstance* Retarget = Cast<UShinobiRetargetAnimInstance>(Body->GetAnimInstance());
+	if (!TestNotNull(TEXT("The crowd body retargets"), Retarget) || !TestNotNull(TEXT("through RTG_MannyToCrowd"), Retarget->GetRetargeter()))
+	{
+		return false;
+	}
+	TestTrue(TEXT("from the hidden Quinn"), Body->GetAttachParent() == Londoner->GetMesh());
+	TestTrue(TEXT("The crowd body is visible"), Body->IsVisible());
+	Body->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones; // headless: never rendered
+	W.Tick(1.f);
+	// The controller's pose reaches the crowd body: its hand moves off the reference pose the way the driver's does.
+	auto HandMove = [](const USkeletalMeshComponent* Mesh)
+	{
+		const int32 Hand = Mesh->GetBoneIndex(TEXT("hand_r"));
+		return Mesh->GetComponentSpaceTransforms()[Hand].GetLocation()
+			- FAnimationRuntime::GetComponentSpaceTransformRefPose(Mesh->GetSkeletalMeshAsset()->GetRefSkeleton(), Hand).GetLocation();
+	};
+	const FVector Driven = HandMove(Londoner->GetMesh());
+	const FVector Moved = HandMove(Body);
+	AddInfo(FString::Printf(TEXT("Hand off the reference pose: driver %s, body %s"), *Driven.ToString(), *Moved.ToString()));
+	TestTrue(FString::Printf(TEXT("The body's hand moved (%.1f cm)"), Moved.Size()), Moved.Size() > 3.f);
+	TestTrue(TEXT("the way the driver's did"), FVector::DotProduct(Moved.GetSafeNormal(), Driven.GetSafeNormal()) > 0.7f);
 	return true;
 }
 
