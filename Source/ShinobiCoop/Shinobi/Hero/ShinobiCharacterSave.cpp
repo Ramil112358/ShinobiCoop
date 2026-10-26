@@ -3,7 +3,8 @@
 
 UShinobiCharacterSave* UShinobiCharacterSave::Load()
 {
-	UShinobiCharacterSave* Saved = Cast<UShinobiCharacterSave>(UGameplayStatics::LoadGameFromSlot(SlotName, 0));
+	UShinobiCharacterSave* Saved = UGameplayStatics::DoesSaveGameExist(SlotName, 0) // (loading a missing slot logs a warning)
+		? Cast<UShinobiCharacterSave>(UGameplayStatics::LoadGameFromSlot(SlotName, 0)) : nullptr;
 	if (!Saved)
 	{
 		return CastChecked<UShinobiCharacterSave>(UGameplayStatics::CreateSaveGameObject(StaticClass()));

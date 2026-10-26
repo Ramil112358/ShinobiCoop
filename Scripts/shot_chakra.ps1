@@ -20,16 +20,22 @@
 #   -FacePresets: -ShinobiFacePresetShot: every character-creator catalog face, front and 3/4 (~5 s per face).
 #   -FaceBlend: -ShinobiFaceBlendShot: a face blended toward another in 25% steps, then the other face (~35 s).
 #   -BodySliders: -ShinobiBodySliderShot: a creator look with each body slider at -1 and +1, front and side (~35 s).
+#   -Packaged: run the shot in the built game (Packaged\Windows, Scripts/package.ps1) instead of the editor.
 #   -Extra "<args>": more game arguments, e.g. -Extra "-ShinobiLookCode=AQECAgD__wAAAP__AAAAAA" for any shot as a made character.
 #   -CreatorOutfits: -ShinobiCreatorOutfitShot: each cloak over every creator frame, front and side (~60 s).
 #   -Perf:    the tour at 1920x1080, Epic preset, no vsync, 10 s per point; prints the average frame time at each point.
 #             Keep the game window in the foreground: Windows throttles background windows (about 2x slower).
-param([string]$Outfit = "", [string]$Portrait = "", [switch]$Phone, [switch]$Susanoo, [switch]$Fire, [switch]$Jutsu, [switch]$Look, [switch]$Tour, [switch]$Perf, [switch]$CreatorSpike, [switch]$FaceSliders, [switch]$FacePresets, [switch]$FaceBlend, [switch]$BodySliders, [switch]$CreatorOutfits, [string]$Extra = "", [int]$TimeoutSec = 300, [string]$Map = "/Game/Shinobi/Maps/Lvl_TrainingGrounds")
+param([string]$Outfit = "", [string]$Portrait = "", [switch]$Phone, [switch]$Susanoo, [switch]$Fire, [switch]$Jutsu, [switch]$Look, [switch]$Tour, [switch]$Perf, [switch]$CreatorSpike, [switch]$FaceSliders, [switch]$FacePresets, [switch]$FaceBlend, [switch]$BodySliders, [switch]$CreatorOutfits, [string]$Extra = "", [switch]$Packaged, [int]$TimeoutSec = 300, [string]$Map = "/Game/Shinobi/Maps/Lvl_TrainingGrounds")
 $ErrorActionPreference = "Stop"
 $Editor = "C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe"
 $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $Project = Join-Path $Root "ShinobiCoop.uproject"
 $ShotRoot = Join-Path $Root "Saved\Screenshots"
+$ProjectArg = "`"$Project`""
+if ($Packaged) { # the built game (Scripts/package.ps1) instead of the editor
+    $Editor = Join-Path $Root "Packaged\Windows\ShinobiCoop.exe"; $ProjectArg = ""
+    $ShotRoot = Join-Path $Root "Packaged\Windows\ShinobiCoop\Saved\Screenshots"
+}
 if ($Perf) { $Tour = $true }
 $Res = if ($Perf) { "-ResX=1920 -ResY=1080 -ExecCmds=`"scalability 3,r.VSync 0,t.MaxFPS 0`" -ShinobiPerf" } else { "-ResX=1280 -ResY=720" }
 if ($CreatorSpike -or $FaceSliders -or $FacePresets -or $FaceBlend -or $BodySliders -or $CreatorOutfits) { $Res += " -ExecCmds=`"r.Streaming.FullyLoadUsedTextures 1`"" } # close-ups of fragmented atlases bleed at low mips
@@ -38,7 +44,7 @@ $Pattern = "$($Flag)_*.png"
 $Level = if ($Portrait) { $Map } elseif ($Tour) { if ($PSBoundParameters.ContainsKey("Map")) { $Map } else { "/Game/Shinobi/Maps/Lvl_HiddenLeafValley" } } elseif ($Look) { $Map } else { "/Game/ThirdPerson/Lvl_ThirdPerson?game=/Script/ShinobiCoop.ShinobiGameMode" }
 
 Get-ChildItem $ShotRoot -Recurse -Filter $Pattern -ErrorAction SilentlyContinue | Remove-Item
-$game = Start-Process $Editor -PassThru -ArgumentList "`"$Project`" $Level -game -nosteam -windowed $Res -nosound -unattended -nosplash $(if ($Portrait) { "-ShinobiPortraitShot=$Portrait$(if ($Phone) { ' -ShinobiPortraitPhone' })" } elseif ($Outfit) { "-ShinobiOutfitShot=$Outfit" } else { "-$Flag" }) $Extra -log=$Flag.log"
+$game = Start-Process $Editor -PassThru -ArgumentList "$ProjectArg $Level -game -nosteam -windowed $Res -nosound -unattended -nosplash $(if ($Portrait) { "-ShinobiPortraitShot=$Portrait$(if ($Phone) { ' -ShinobiPortraitPhone' })" } elseif ($Outfit) { "-ShinobiOutfitShot=$Outfit" } else { "-$Flag" }) $Extra -log=$Flag.log"
 $null = $game.Handle
 if (-not $game.WaitForExit($TimeoutSec * 1000)) { Stop-Process $game -Force; throw "Game did not quit within $TimeoutSec s" }
 

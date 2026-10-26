@@ -89,6 +89,7 @@ bool UShinobiBodyComponent::WearAppearance(const FShinobiAppearance& Look)
 			{
 				UGroomComponent* Strands = CastChecked<UGroomComponent>(Place(UGroomComponent::StaticClass(), *Binding->GetGroom()->GetName(), Face));
 				Strands->SetGroomAsset(Binding->GetGroom(), Binding);
+				Strands->PrecachePSOs(); // (SetGroomAsset doesn't; a packaged build ensures, and stalls on the first one)
 				Strands->RegisterComponent();
 			}
 		}
@@ -106,6 +107,7 @@ bool UShinobiBodyComponent::WearAppearance(const FShinobiAppearance& Look)
 			UGroomAsset* Asset = Binding && Binding->GetGroom() ? Binding->GetGroom() : Groom->Groom.LoadSynchronous();
 			Strands->SetGroomAsset(Asset, Binding);
 			// The crowd grooms' own LODs decide strands or cards (forcing cards hid Hair_S_Messy, whose cards are switched off).
+			Strands->PrecachePSOs();
 			Strands->RegisterComponent();
 		}
 	}
@@ -399,6 +401,7 @@ void UShinobiBodyComponent::WearMetaHumanParts(const TCHAR* ClassPath)
 				{
 					Primitive->SetCustomDepthStencilValue(CustomDepthStencilValue);
 					Primitive->SetRenderCustomDepth(bRenderCustomDepth);
+					Primitive->PrecachePSOs(); // (a groom's isn't requested by its setup)
 				}
 				Placed->RegisterComponent();
 				UE_LOG(LogShinobiCoop, Log, TEXT("%s wears MetaHuman part %s (%s) on %s"), *GetNameSafe(GetOwner()), *Placed->GetName(),

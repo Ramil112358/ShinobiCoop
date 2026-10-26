@@ -1,6 +1,6 @@
 #include "Tests/ShinobiTestWorld.h"
 
-#if WITH_DEV_AUTOMATION_TESTS
+#if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR // (run in the editor only: some use editor-only APIs)
 
 // The motion-matching AnimBP and physical reactions against the template AnimBP (Shinobi.MotionMatching 0): montages,
 // wall runs and knockdowns must look as they did, or as intended.
