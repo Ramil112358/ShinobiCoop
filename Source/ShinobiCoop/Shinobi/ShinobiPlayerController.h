@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "Shinobi/Hero/ShinobiCreatorCatalog.h"
 #include "ShinobiPlayerController.generated.h"
 
 class UGameplayEffect;
@@ -51,6 +52,30 @@ public:
 	 * menu's Outfit row calls this after saving the pick; on its own it lasts for this session only. */
 	UFUNCTION(Exec)
 	void ShinobiOutfit(const FString& Name);
+
+	/** Console (local live edit, the creator's preview): ShinobiBodyShape <Slider> <-1..1> -- one body slider on the worn
+	 * creator look (Height, Shoulders, ...). */
+	UFUNCTION(Exec)
+	void ShinobiBodyShape(const FString& Slider, float Value);
+
+	/** Console (local live edit): ShinobiFaceBlend <face> <0..1> [<face> <0..1>] -- blend the worn creator face toward
+	 * those faces (catalog indices within the sex; -1 = off). */
+	UFUNCTION(Exec)
+	void ShinobiFaceBlend(int32 FaceA, float WeightA, int32 FaceB = -1, float WeightB = 0.f);
+
+	/** Console: ShinobiLook <sex 0/1> <build 0-2> <face> <hair> <beard> <mustache> <top> <bottom> <shoes> -- play a
+	 * character-creator look (UShinobiCreatorCatalog indices within the sex; 255 = none), replicated, for this session. */
+	UFUNCTION(Exec)
+	void ShinobiLook(int32 Sex, int32 Build, int32 Face, int32 Hair, int32 Beard, int32 Mustache, int32 Top, int32 Bottom, int32 Shoes);
+
+	/** Console: ShinobiLookCode <code> -- play the look a preset code holds (FShinobiAppearance::ToCode); with no code,
+	 * prints the worn look's (live edits included). */
+	UFUNCTION(Exec)
+	void ShinobiLookCode(const FString& Code);
+
+	/** Server: play as a creator-made character (sanitized: a client's value); given to every pawn it possesses. */
+	UFUNCTION(Server, Reliable)
+	void ServerPickAppearance(const FShinobiAppearance& Look);
 
 	/** Local: open or close the pause menu (Esc / Start). */
 	void TogglePauseMenu();
@@ -102,6 +127,9 @@ private:
 	/** Server: this player's outfit pick, likewise. */
 	uint8 PickedOutfit = 0;
 
+	/** Server: the creator-made look played while PickedCharacter is AShinobiPlayerCharacter::CustomCharacter. */
+	FShinobiAppearance PickedAppearance;
+
 	/** Server only: applies an instant SetByCaller effect to this controller's own pawn. */
 	void ApplyToOwnPawn(TSubclassOf<UGameplayEffect> EffectClass, const FGameplayTag& DataTag, float Magnitude);
 
@@ -130,6 +158,18 @@ private:
 	/** -ShinobiPortraitShot=<Character>: that roster character's face up close from the front, three-quarter and side, and
 	 * its whole body from the front (ShinobiPortraitShot.cpp; Scripts/shot_chakra.ps1 -Portrait <Character>). */
 	void RunPortraitShotTest(const FString& Who);
+	/** -ShinobiCreatorSpike: the character creator's phase-0 checks on film (ShinobiCreatorSpikeShot.cpp). */
+	void RunCreatorSpikeShot();
+	/** -ShinobiFaceSliderShot: every face slider at -1 and +1 on a creator look (ShinobiCreatorSpikeShot.cpp). */
+	void RunFaceSliderShot();
+	/** -ShinobiFacePresetShot: every catalog face, front and three-quarter (ShinobiCreatorSpikeShot.cpp). */
+	void RunFacePresetShot();
+	/** -ShinobiFaceBlendShot: preset blending steps between two faces (ShinobiCreatorSpikeShot.cpp). */
+	void RunFaceBlendShot();
+	/** -ShinobiBodySliderShot: every body slider at -1 and +1 (ShinobiCreatorSpikeShot.cpp). */
+	void RunBodySliderShot();
+	/** -ShinobiCreatorOutfitShot: each cloak over every creator frame, front and side (ShinobiCreatorSpikeShot.cpp). */
+	void RunCreatorOutfitShot();
 	/** What RunOutfitShotTest preloads, kept loaded for the run. */
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UObject>> OutfitShotAssets;

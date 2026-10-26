@@ -24,12 +24,16 @@
 #include "Shinobi/UI/ShinobiMenuArt.h"
 #include "Shinobi/UI/ShinobiMenuStage.h"
 #include "Shinobi/UI/ShinobiMenuStyle.h"
+#include "Shinobi/Hero/ShinobiCharacterSave.h"
+#include "Shinobi/UI/ShinobiSettings.h"
+#include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/UI/ShinobiCreatorPage.h"
 #include "Shinobi/UI/ShinobiRosterPage.h"
 #include "Shinobi/UI/ShinobiSkillsWidget.h"
 
 namespace
 {
-	const TCHAR* const MainMenuTabNames[] = { TEXT("PLAY"), TEXT("SHINOBI"), TEXT("JUTSU"), TEXT("SETTINGS") };
+	const TCHAR* const MainMenuTabNames[] = { TEXT("PLAY"), TEXT("SHINOBI"), TEXT("CREATE"), TEXT("JUTSU"), TEXT("SETTINGS") };
 	constexpr float MainMenuFadeSeconds = 0.2f;
 	constexpr float MainMenuTopBar = 64.f;
 
@@ -138,6 +142,10 @@ TSharedRef<SWidget> UShinobiMainMenuWidget::RebuildWidget()
 		RosterPage->Stage = GetStage();
 		Pages->AddChild(RosterPage);
 		RosterPage->TakeWidget();
+		CreatorPage = CreateWidget<UShinobiCreatorPage>(this, UShinobiCreatorPage::StaticClass());
+		CreatorPage->Stage = GetStage();
+		Pages->AddChild(CreatorPage);
+		CreatorPage->TakeWidget();
 		UShinobiSkillsWidget* Jutsu = CreateWidget<UShinobiSkillsWidget>(this, UShinobiSkillsWidget::StaticClass());
 		Jutsu->bMenuMode = true;
 		Pages->AddChild(Jutsu);
@@ -317,11 +325,26 @@ void UShinobiMainMenuWidget::NativeConstruct()
 		GetOwningPlayer()->SetViewTarget(Stage);
 	}
 	SelectTab(EShinobiMenuTab::Play);
+	ShowPlayed();
 	UpdateBackdrop();
+}
+
+void UShinobiMainMenuWidget::ShowPlayed()
+{
+	AShinobiMenuStage* Stage = GetStage();
+	if (const FShinobiAppearance* Made = UShinobiCharacterSave::Load()->GetActiveLook(); Made && Stage)
+	{
+		Stage->ShowAppearance(*Made, FMath::Max(0, AShinobiPlayerCharacter::FindOutfitIndex(ShinobiSettings::GetSavedOutfit())));
+	}
+	else if (RosterPage)
+	{
+		RosterPage->Show();
+	}
 }
 
 void UShinobiMainMenuWidget::SelectTab(EShinobiMenuTab NewTab)
 {
+	const EShinobiMenuTab Left = Tab;
 	Tab = NewTab;
 	if (Pages)
 	{
@@ -335,7 +358,25 @@ void UShinobiMainMenuWidget::SelectTab(EShinobiMenuTab NewTab)
 	}
 	if (AShinobiMenuStage* Stage = GetStage())
 	{
-		Stage->SetFocus(NewTab == EShinobiMenuTab::Shinobi || NewTab == EShinobiMenuTab::Settings ? EShinobiMenuStageFocus::Left : EShinobiMenuStageFocus::Center);
+		Stage->SetFocus(NewTab == EShinobiMenuTab::Shinobi || NewTab == EShinobiMenuTab::Settings ? EShinobiMenuStageFocus::Left
+			: NewTab == EShinobiMenuTab::Create ? EShinobiMenuStageFocus::Right : EShinobiMenuStageFocus::Center);
+	}
+	// The stage wears what the tab edits: the made character on CREATE, the roster pick on SHINOBI.
+	if (AShinobiMenuStage* Stage = NewTab != EShinobiMenuTab::Create ? GetStage() : nullptr)
+	{
+		Stage->SetCloseUp(false);
+	}
+	if (NewTab == EShinobiMenuTab::Create && CreatorPage)
+	{
+		CreatorPage->ShowOnStage();
+	}
+	else if (NewTab == EShinobiMenuTab::Shinobi && RosterPage)
+	{
+		RosterPage->Show();
+	}
+	else if (Left == EShinobiMenuTab::Create || Left == EShinobiMenuTab::Shinobi)
+	{
+		ShowPlayed(); // (not an unsaved edit or a browsed roster card)
 	}
 	UpdateBackdrop();
 	Shade->SetVisibility(NewTab == EShinobiMenuTab::Play ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
@@ -366,6 +407,10 @@ UWidget* UShinobiMainMenuWidget::GetFocusTarget(EShinobiMenuTab Which) const
 		{
 			return HostRowButtons[SelectedRow];
 		}
+	}
+	if (Which == EShinobiMenuTab::Create && CreatorPage)
+	{
+		return CreatorPage->GetFocusTarget();
 	}
 	if (Which == EShinobiMenuTab::Shinobi && RosterPage)
 	{

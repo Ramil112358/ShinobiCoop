@@ -212,7 +212,7 @@ bool FShinobiMainMenuTabFocusTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	UShinobiMainMenuWidget* Menu = CreateWidget<UShinobiMainMenuWidget>(W.World, UShinobiMainMenuWidget::StaticClass());
 	Menu->TakeWidget();
-	for (const EShinobiMenuTab Tab : { EShinobiMenuTab::Play, EShinobiMenuTab::Shinobi, EShinobiMenuTab::Jutsu, EShinobiMenuTab::Settings })
+	for (const EShinobiMenuTab Tab : { EShinobiMenuTab::Play, EShinobiMenuTab::Shinobi, EShinobiMenuTab::Create, EShinobiMenuTab::Jutsu, EShinobiMenuTab::Settings })
 	{
 		Menu->SelectTab(Tab);
 		TestTrue(TEXT("tab selected"), Menu->GetTab() == Tab);

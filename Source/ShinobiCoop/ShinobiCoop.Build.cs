@@ -26,6 +26,9 @@ public class ShinobiCoop : ModuleRules
 			"OnlineSubsystem",
 			"OnlineSubsystemUtils",
 			"IKRig",
+			"RigLogicModule", // face sliders run RigLogic natively (ShinobiFaceShapeAnimInstance)
+			"AnimGraphRuntime",
+			"HairStrandsCore", // creator looks: grooms bound to the picked face
 			"AnimationCore",
 			"Landscape",
 			"ImageCore",
@@ -34,6 +37,7 @@ public class ShinobiCoop : ModuleRules
 			"RHI",
 			"MeshDescription",
 			"StaticMeshDescription",
+			"SkeletalMeshDescription", // creator: face blend morphs baked into mesh descriptions (ShinobiFaceBlendLibrary)
 			"MotionWarping",
 			"Chooser",
 			"AnimationWarpingRuntime",

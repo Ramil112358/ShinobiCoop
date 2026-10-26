@@ -37,9 +37,7 @@ AShinobiMenuStage::AShinobiMenuStage()
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(Root);
-	Camera->SetRelativeLocation(FVector(560.f, 0.f, 115.f));
-	Camera->SetRelativeRotation(FRotator(-3.f, 180.f, 0.f));
-	Camera->SetFieldOfView(45.f);
+	SetCloseUp(false);
 }
 
 void AShinobiMenuStage::BeginPlay()
@@ -51,7 +49,7 @@ void AShinobiMenuStage::BeginPlay()
 	}
 }
 
-void AShinobiMenuStage::Show(int32 RosterIndex, int32 OutfitIndex)
+void AShinobiMenuStage::StartDriver()
 {
 	if (!Driver->GetSkeletalMeshAsset())
 	{
@@ -59,6 +57,24 @@ void AShinobiMenuStage::Show(int32 RosterIndex, int32 OutfitIndex)
 		Driver->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 		Driver->PlayAnimation(LoadObject<UAnimSequence>(nullptr, MenuStageIdle), true);
 	}
+}
+
+void AShinobiMenuStage::ShowAppearance(const FShinobiAppearance& Look, int32 OutfitIndex)
+{
+	StartDriver();
+	if (!Body->WearAppearance(Look))
+	{
+		Show(0, OutfitIndex);
+		return;
+	}
+	ShownBody = 0; // (no roster body: a portrait of it would be the hero's)
+	Body->HideDriver();
+	AShinobiPlayerCharacter::DressOutfit(*Body, *Outfit, OutfitIndex, Body->GetFittingName());
+}
+
+void AShinobiMenuStage::Show(int32 RosterIndex, int32 OutfitIndex)
+{
+	StartDriver();
 	ShownBody = INDEX_NONE;
 	for (const int32 Index : { RosterIndex, 0 }) // the pick, else the hero
 	{
@@ -76,28 +92,43 @@ void AShinobiMenuStage::Show(int32 RosterIndex, int32 OutfitIndex)
 		return;
 	}
 	Body->HideDriver();
-	AShinobiPlayerCharacter::DressOutfit(*Body, *Outfit, OutfitIndex, ShownBody);
+	AShinobiPlayerCharacter::DressOutfit(*Body, *Outfit, OutfitIndex, AShinobiPlayerCharacter::Roster[ShownBody].Name);
 
+}
+
+float AShinobiMenuStage::HeadHeight() const
+{
+	// The head bone's height (bodies differ).
+	for (int32 Bone = 0; Bone < Body->GetNumBones(); ++Bone)
+	{
+		if (Body->GetBoneName(Bone).ToString().EndsWith(TEXT("Head"), ESearchCase::IgnoreCase))
+		{
+			return GetActorTransform().InverseTransformPosition(Body->GetBoneLocation(Body->GetBoneName(Bone))).Z;
+		}
+	}
+	return 165.f;
 }
 
 void AShinobiMenuStage::FramePortrait()
 {
 	TargetOffset = 0.f;
+	bCloseUp = false;
 	Driver->SetRelativeLocation(FVector::ZeroVector);
-	// The head bone's height (bodies differ), head and shoulders around it.
-	float HeadZ = 165.f;
-	for (int32 Bone = 0; Bone < Body->GetNumBones(); ++Bone)
-	{
-		if (Body->GetBoneName(Bone).ToString().EndsWith(TEXT("Head"), ESearchCase::IgnoreCase))
-		{
-			HeadZ = GetActorTransform().InverseTransformPosition(Body->GetBoneLocation(Body->GetBoneName(Bone))).Z;
-			break;
-		}
-	}
 	// The head bone sits at the skull's base: framed from just above the hair to the chest (tuned on the roster).
 	Camera->SetFieldOfView(24.f);
-	Camera->SetRelativeLocation(FVector(300.f, 0.f, HeadZ - 2.f));
+	Camera->SetRelativeLocation(FVector(300.f, 0.f, HeadHeight() - 2.f));
 	Camera->SetRelativeRotation(FRotator(0.f, 180.f, 0.f));
+}
+
+void AShinobiMenuStage::SetCloseUp(bool bHead)
+{
+	bCloseUp = bHead;
+	Camera->SetRelativeRotation(FRotator(bHead ? 0.f : -3.f, 180.f, 0.f));
+	Camera->SetFieldOfView(bHead ? 22.f : 45.f);
+	if (!bHead)
+	{
+		Camera->SetRelativeLocation(FVector(560.f, 0.f, 115.f)); // (Tick keeps a close-up on the head)
+	}
 }
 
 void AShinobiMenuStage::SetFocus(EShinobiMenuStageFocus Focus)
@@ -114,5 +145,10 @@ void AShinobiMenuStage::Tick(float DeltaSeconds)
 	{
 		Location.Y = FMath::FInterpTo(Location.Y, TargetOffset, DeltaSeconds, 6.f);
 		Driver->SetRelativeLocation(Location);
+	}
+	if (bCloseUp)
+	{
+		// Straight at the face, which then sits mid-screen, clear of a side panel.
+		Camera->SetRelativeLocation(FVector(330.f, Location.Y, HeadHeight() + 2.f));
 	}
 }

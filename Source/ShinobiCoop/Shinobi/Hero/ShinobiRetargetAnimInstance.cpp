@@ -33,6 +33,11 @@ void FShinobiRetargetAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance,
 	ContactWeight = 0.f;
 	OrbWeight = 0.f;
 	const USkeletalMeshComponent* Mesh = InAnimInstance->GetSkelMeshComponent();
+	BoneShapes.Reset();
+	if (const UShinobiBodyComponent* Body = Cast<UShinobiBodyComponent>(Mesh))
+	{
+		BoneShapes = Body->GetBoneShapes().Array();
+	}
 	const USkeletalMeshComponent* Source = Mesh ? Cast<USkeletalMeshComponent>(Mesh->GetAttachParent()) : nullptr;
 	const UAnimInstance* SourceAnim = Source ? Source->GetAnimInstance() : nullptr;
 	if (!SourceAnim)
@@ -96,6 +101,10 @@ void FShinobiRetargetAnimInstanceProxy::CacheBones()
 bool FShinobiRetargetAnimInstanceProxy::Evaluate(FPoseContext& Output)
 {
 	RetargetNode->Evaluate_AnyThread(Output);
+	if (BoneShapes.Num())
+	{
+		ShapeBones(Output);
+	}
 	if (ContactWeight > UE_KINDA_SMALL_NUMBER)
 	{
 		KeepHandContact(Output);
@@ -105,6 +114,40 @@ bool FShinobiRetargetAnimInstanceProxy::Evaluate(FPoseContext& Output)
 		KeepPalmOnOrb(Output);
 	}
 	return true;
+}
+
+void FShinobiRetargetAnimInstanceProxy::ShapeBones(FPoseContext& Output) const
+{
+	const FBoneContainer& Bones = Output.Pose.GetBoneContainer();
+	const FReferenceSkeleton& Ref = Bones.GetReferenceSkeleton();
+	for (const TPair<FName, FVector>& Shape : BoneShapes)
+	{
+		const int32 MeshIndex = Ref.FindBoneIndex(Shape.Key);
+		const FCompactPoseBoneIndex Bone = MeshIndex != INDEX_NONE ? Bones.MakeCompactPoseIndex(FMeshPoseBoneIndex(MeshIndex)) : FCompactPoseBoneIndex(INDEX_NONE);
+		if (!Bone.IsValid())
+		{
+			continue;
+		}
+		Output.Pose[Bone].SetScale3D(Output.Pose[Bone].GetScale3D() * Shape.Value);
+		const FVector Inverse = FVector::OneVector / Shape.Value;
+		for (int32 Child = MeshIndex + 1; Child < Ref.GetNum(); ++Child)
+		{
+			if (Ref.GetParentIndex(Child) != MeshIndex)
+			{
+				continue;
+			}
+			bool bHasChildren = false;
+			for (int32 Grandchild = Child + 1; Grandchild < Ref.GetNum() && !bHasChildren; ++Grandchild)
+			{
+				bHasChildren = Ref.GetParentIndex(Grandchild) == Child;
+			}
+			const FCompactPoseBoneIndex Compact = Bones.MakeCompactPoseIndex(FMeshPoseBoneIndex(Child));
+			if (bHasChildren && Compact.IsValid())
+			{
+				Output.Pose[Compact].SetScale3D(Output.Pose[Compact].GetScale3D() * Inverse);
+			}
+		}
+	}
 }
 
 bool FShinobiRetargetAnimInstanceProxy::GetArms(const FPoseContext& Output, FCSPose<FCompactPose>& Pose, FCompactPoseBoneIndex (&Index)[2][3], FTransform (&Arm)[2][3]) const

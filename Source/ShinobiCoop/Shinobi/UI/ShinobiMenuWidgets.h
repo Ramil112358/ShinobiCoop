@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/Button.h"
+#include "Components/Slider.h"
 #include "Shinobi/Pvp/ShinobiPvpMatch.h"
 #include "ShinobiMenuWidgets.generated.h"
 
@@ -11,6 +12,7 @@ class UTextBlock;
 class UVerticalBox;
 
 DECLARE_DELEGATE_OneParam(FShinobiIndexClicked, int32);
+DECLARE_DELEGATE_TwoParams(FShinobiIndexValue, int32, float);
 
 /** A button that reports its index when clicked (session list rows, menu entries). */
 UCLASS()
@@ -28,6 +30,24 @@ public:
 private:
 	UFUNCTION()
 	void HandleClicked();
+};
+
+/** A slider that reports its index with each value (the character creator's shape rows). */
+UCLASS()
+class SHINOBICOOP_API UShinobiIndexSlider : public USlider
+{
+	GENERATED_BODY()
+
+public:
+	int32 Index = 0;
+	FShinobiIndexValue OnIndexValue;
+
+	/** Bind OnIndexValue, then call this. */
+	void Arm();
+
+private:
+	UFUNCTION()
+	void HandleValue(float NewValue);
 };
 
 /** Base for the menus: a centred column of a title, a message line and buttons, built in code like the HUD. */

@@ -27,6 +27,8 @@ public:
 	void StepOutfit(int32 Direction);
 	/** The picked character's card. */
 	UWidget* GetFocusTarget() const;
+	/** Card looks, name and outfit line from the saved picks; the stage wears them. */
+	void Show();
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -34,9 +36,6 @@ protected:
 	virtual FReply NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event) override;
 
 private:
-	/** Card looks, name and outfit line from the saved picks; the stage wears them. */
-	void Show();
-
 	UPROPERTY()
 	TArray<TObjectPtr<UShinobiIndexButton>> Cards;
 	UPROPERTY()

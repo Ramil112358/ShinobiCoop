@@ -1,8 +1,8 @@
 # Menu and session smoke test over LAN (-nosteam: the Null subsystem): a host process hosts from the main menu, a
 # client process finds that game and joins it through the menu; then the host quits and the client must land back
 # on the main menu with a "lost the connection" message. On the way, each player's roster pick (saved picks are
-# overridden on the command line) must show on both machines. ponytail: the roster is only the hero until the
-# photo-based heroes join; then give host and client different picks here.
+# overridden on the command line) must show on both machines: the host plays the roster Hero, the client a made
+# character from a preset code (a heavy woman, face 3: FShinobiAppearance::ToCode), which the host must see.
 $ErrorActionPreference = "Stop"
 $UE = "C:\Program Files\Epic Games\UE_5.8"
 $Editor = "$UE\Engine\Binaries\Win64\UnrealEditor.exe"
@@ -35,12 +35,13 @@ $client = $null
 try {
     Wait-Log $HostLog "Online subsystem: Null" 240 "host fell back to LAN mode"
     Wait-Log $HostLog "Bringing World /Game/Shinobi/Maps/Lvl_HiddenLeafValley.* up for play" 180 "host created the game and opened Hidden Leaf Valley"
-    $client = Start-Process $Editor -PassThru -ArgumentList "$Common $(Pick Hero) -ShinobiAutoJoin -ShinobiLoadoutSmoke -abslog=`"$ClientLog`""
+    $LookCode = "AQECAgD__wAAAP__AAAAAA"
+    $client = Start-Process $Editor -PassThru -ArgumentList "$Common $(Pick Hero) -ShinobiLookCode=$LookCode -ShinobiAutoJoin -ShinobiLoadoutSmoke -abslog=`"$ClientLog`""
     Wait-Log $ClientLog "Welcomed by server" 240 "client found and joined the game from the menu"
     Wait-Log $HostLog "Join succeeded" 30 "host accepted the client"
-    Wait-Log $HostLog "plays Hero" 30 "host sees the client's pick"
+    Wait-Log $HostLog "plays a made character \($LookCode\)" 30 "host sees the client's made character"
     Wait-Log $ClientLog "plays Hero" 30 "client sees the host's pick"
-    Wait-Log $ClientLog "plays Hero" 30 "client sees its own pick"
+    Wait-Log $ClientLog "plays a made character \($LookCode\)" 30 "client sees its own made character"
     # Jutsu loadout: the client asked for Water Wall in slot 1 (-ShinobiLoadoutSmoke); the host takes it and the client's own keys follow.
     Wait-Log $HostLog "ShinobiLoadout .* \(server\): slot1=GA_WaterWall" 30 "host applied the client's loadout"
     Wait-Log $ClientLog "ShinobiLoadout .* \(client\): slot1=GA_WaterWall\(ok\)" 30 "client's slot 1 key fires Water Wall"
