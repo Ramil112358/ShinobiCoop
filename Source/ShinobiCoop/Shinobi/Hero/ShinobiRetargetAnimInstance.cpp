@@ -8,6 +8,13 @@
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/VFX/ShinobiCastFxComponent.h"
 
+namespace
+{
+	/** Where Amaterasu's index and middle knuckles rest, from the right eye: cm on the face's forward, right, up (the
+	 * pose's "face" in Scripts/character/build_jutsu_anims.py). */
+	const FVector FaceKnuckleOffset(0.5, 1.3, -4.3);
+}
+
 bool ShinobiIsJutsuCast(const UAnimMontage* Montage)
 {
 	const FString Name = Montage ? Montage->GetName() : FString();
@@ -32,6 +39,7 @@ void FShinobiRetargetAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance,
 	FAnimInstanceProxy::PreUpdate(InAnimInstance, DeltaSeconds);
 	ContactWeight = 0.f;
 	OrbWeight = 0.f;
+	FaceWeight = 0.f;
 	const USkeletalMeshComponent* Mesh = InAnimInstance->GetSkelMeshComponent();
 	BoneShapes.Reset();
 	if (const UShinobiBodyComponent* Body = Cast<UShinobiBodyComponent>(Mesh))
@@ -46,12 +54,14 @@ void FShinobiRetargetAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance,
 	}
 	float MontageWeight = 0.f;
 	float FormingWeight = 0.f; // the Rasengan forming in the hand (not the dash)
+	float AmaterasuWeight = 0.f;
 	for (const FAnimMontageInstance* Montage : SourceAnim->MontageInstances)
 	{
 		// Only the jutsu casts; the guard, roll and seat keep the plain retarget.
 		MontageWeight += Montage && ShinobiIsJutsuCast(Montage->Montage) ? Montage->GetWeight() : 0.f;
 		const FString Name = Montage && Montage->Montage ? Montage->Montage->GetName() : FString();
 		FormingWeight += Name == TEXT("AM_Rasengan_Seal") || Name == TEXT("AM_Rasengan_Charge") ? Montage->GetWeight() : 0.f;
+		AmaterasuWeight += Name.StartsWith(TEXT("AM_Amaterasu_")) ? Montage->GetWeight() : 0.f;
 	}
 	const AShinobiCharacterBase* Owner = Cast<AShinobiCharacterBase>(Mesh->GetOwner());
 	const UShinobiCastFxComponent* CastFx = Owner ? Owner->GetCastFx() : nullptr;
@@ -64,6 +74,15 @@ void FShinobiRetargetAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance,
 	// The source is Manny (the hidden mesh running the gameplay animations).
 	const FVector HandL = Source->GetSocketLocation(TEXT("hand_l"));
 	const FVector HandR = Source->GetSocketLocation(TEXT("hand_r"));
+	FVector EyeL, EyeR;
+	FQuat Facing;
+	if (AmaterasuWeight > 0.f && CastFx && CastFx->GetEyes(EyeL, EyeR, Facing))
+	{
+		// On the face while the source's hand is up at its head: it eases on as the hand rises and off as it drops.
+		const float Reach = FVector::Dist(HandR, Source->GetSocketLocation(TEXT("head")));
+		FaceWeight = FMath::Min(AmaterasuWeight, 1.f) * (1.f - FMath::SmoothStep(FaceNear, FaceFar, Reach));
+		FaceKnuckles = EyeR + Facing.RotateVector(FaceKnuckleOffset * Mesh->GetComponentScale().Z);
+	}
 	SourceHandOffset = HandL - HandR;
 	SourceForeArmLength = FVector::Dist(HandR, Source->GetSocketLocation(TEXT("lowerarm_r")));
 	ComponentToWorld = Mesh->GetComponentTransform();
@@ -95,6 +114,36 @@ void FShinobiRetargetAnimInstanceProxy::CacheBones()
 				Index = Index != INDEX_NONE ? RefSkeleton.GetParentIndex(Index) : INDEX_NONE;
 			}
 		}
+
+		// The right index and middle fingers' roots (past a MetaHuman's metacarpals), in the hand's space.
+		const FReferenceSkeleton& RefSkeleton = Bones.GetReferenceSkeleton();
+		const TArray<FTransform>& RefPose = RefSkeleton.GetRefBonePose();
+		const int32 Hand = RefSkeleton.FindBoneIndex(ArmBones[1][2].BoneName);
+		KnuckleLocal = FVector::ZeroVector;
+		int32 Found = 0;
+		for (int32 Bone = Hand + 1; Hand != INDEX_NONE && Bone < RefSkeleton.GetNum(); ++Bone)
+		{
+			const FString Name = RefSkeleton.GetBoneName(Bone).ToString();
+			if (RefSkeleton.GetParentIndex(Bone) != Hand || !(Name.Contains(TEXT("index")) || Name.Contains(TEXT("middle"))))
+			{
+				continue;
+			}
+			FTransform Root = RefPose[Bone];
+			int32 Finger = Bone;
+			while (RefSkeleton.GetBoneName(Finger).ToString().Contains(TEXT("metacarpal")))
+			{
+				const int32 Child = Finger + 1 < RefSkeleton.GetNum() && RefSkeleton.GetParentIndex(Finger + 1) == Finger ? Finger + 1 : INDEX_NONE;
+				if (Child == INDEX_NONE)
+				{
+					break;
+				}
+				Root = RefPose[Child] * Root;
+				Finger = Child;
+			}
+			KnuckleLocal += Root.GetTranslation();
+			++Found;
+		}
+		KnuckleLocal /= FMath::Max(Found, 1);
 	}
 }
 
@@ -112,6 +161,10 @@ bool FShinobiRetargetAnimInstanceProxy::Evaluate(FPoseContext& Output)
 	if (OrbWeight > UE_KINDA_SMALL_NUMBER)
 	{
 		KeepPalmOnOrb(Output);
+	}
+	if (FaceWeight > UE_KINDA_SMALL_NUMBER)
+	{
+		KeepHandOnFace(Output);
 	}
 	return true;
 }
@@ -194,6 +247,27 @@ void FShinobiRetargetAnimInstanceProxy::KeepPalmOnOrb(FPoseContext& Output) cons
 	AnimationCore::SolveTwoBoneIK(Upper, Lower, Hand, Lower.GetLocation(), FMath::Lerp(Wrist, OnSurface, static_cast<double>(OrbWeight)), false, 1.0, 1.0);
 	Hand.SetRotation(HandRotation);
 	TArray<FBoneTransform, TInlineAllocator<3>> Solved = {FBoneTransform(Index[0][0], Upper), FBoneTransform(Index[0][1], Lower), FBoneTransform(Index[0][2], Hand)};
+	Pose.SafeSetCSBoneTransforms(Solved);
+	FCSPose<FCompactPose>::ConvertComponentPosesToLocalPoses(MoveTemp(Pose), Output.Pose);
+}
+
+void FShinobiRetargetAnimInstanceProxy::KeepHandOnFace(FPoseContext& Output) const
+{
+	FCSPose<FCompactPose> Pose;
+	FCompactPoseBoneIndex Index[2][3] = {{FCompactPoseBoneIndex(INDEX_NONE), FCompactPoseBoneIndex(INDEX_NONE), FCompactPoseBoneIndex(INDEX_NONE)},
+		{FCompactPoseBoneIndex(INDEX_NONE), FCompactPoseBoneIndex(INDEX_NONE), FCompactPoseBoneIndex(INDEX_NONE)}};
+	FTransform Arm[2][3];
+	if (!GetArms(Output, Pose, Index, Arm))
+	{
+		return;
+	}
+	FTransform Upper = Arm[1][0], Lower = Arm[1][1], Hand = Arm[1][2];
+	const FQuat HandRotation = Hand.GetRotation();
+	const FVector Knuckles = Hand.TransformPosition(KnuckleLocal);
+	const FVector Wrist = Hand.GetLocation() + (ComponentToWorld.InverseTransformPosition(FaceKnuckles) - Knuckles) * FaceWeight;
+	AnimationCore::SolveTwoBoneIK(Upper, Lower, Hand, Lower.GetLocation(), Wrist, false, 1.0, 1.0);
+	Hand.SetRotation(HandRotation);
+	TArray<FBoneTransform, TInlineAllocator<3>> Solved = {FBoneTransform(Index[1][0], Upper), FBoneTransform(Index[1][1], Lower), FBoneTransform(Index[1][2], Hand)};
 	Pose.SafeSetCSBoneTransforms(Solved);
 	FCSPose<FCompactPose>::ConvertComponentPosesToLocalPoses(MoveTemp(Pose), Output.Pose);
 }

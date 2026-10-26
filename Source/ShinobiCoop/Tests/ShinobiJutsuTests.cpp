@@ -500,6 +500,19 @@ bool FShinobiCastFxPartsTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Amaterasu cast"), ShinobiTest::IsActive(P, UGA_Amaterasu::StaticClass()));
 	TestTrue(TEXT("Amaterasu: glowing, bleeding eyes"), Shows(EShinobiCastPart::EyeGlow) && Shows(EShinobiCastPart::BloodStreaks));
 	TestFalse(TEXT("Amaterasu: nothing in the hand"), Shows(EShinobiCastPart::HandOrb));
+
+	// The eyes sit on the face: in front of and above the head bone, the right one on the right, a few cm apart.
+	FVector EyeL, EyeR;
+	FQuat Facing;
+	TestTrue(TEXT("Eyes found"), Fx->GetEyes(EyeL, EyeR, Facing));
+	const FVector Head = P->GetBodyMesh()->GetSocketLocation(P->GetHeadBone());
+	for (const FVector& Eye : { EyeL, EyeR })
+	{
+		const FVector Local = Facing.UnrotateVector(Eye - Head);
+		TestTrue(FString::Printf(TEXT("Eye on the face, not floating (%s)"), *Local.ToString()), Local.X > 5.f && Local.X < 16.f && Local.Z > 3.f && Local.Z < 14.f);
+	}
+	const float Apart = Facing.UnrotateVector(EyeR - EyeL).Y;
+	TestTrue(FString::Printf(TEXT("Right eye right of the left, eye-width apart (%.1f cm)"), Apart), Apart > 5.f && Apart < 13.f);
 	return true;
 }
 

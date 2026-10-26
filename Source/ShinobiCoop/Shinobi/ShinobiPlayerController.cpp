@@ -1007,6 +1007,9 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(6.7f, [FaceCamera]() { FaceCamera(25.f); }); // zoomed in on the eyes
 	At(7.f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_05_AmaterasuEyes")); });
 	At(7.2f, BackToPlayer);
+	At(7.45f, [FaceCamera]() { FaceCamera(22.f, 35.f); }); // mid-charge, 3/4: the hand on the face and the blood
+	At(7.65f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_05b_AmaterasuFace")); });
+	At(7.75f, BackToPlayer);
 	At(8.8f, [Shot]() { Shot(TEXT("ShinobiJutsuShot_06_BlackFlame")); });
 	At(9.5f, [CastJutsu]() { CastJutsu(2, 2.f); }); // Chidori: 0.5 s seals, released at 11.5
 	At(10.9f, [FaceCamera]() { FaceCamera(80.f, 20.f, 0.f, 420.f); }); // the stance and the orb, from the front, whole body

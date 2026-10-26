@@ -60,6 +60,11 @@ public:
 	 * release; 1 when not charging. */
 	float GetChargeVisualScale() const;
 
+	/** World positions of the front of the caster's eyes and the way the face looks (the head's turn on the actor's
+	 * forward, right, up): a MetaHuman face's eye joints, else the eyes measured per body from the head bone. False
+	 * without a body. */
+	bool GetEyes(FVector& Left, FVector& Right, FQuat& Facing) const;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -69,6 +74,9 @@ private:
 	void OnChargingTagChanged(const FGameplayTag Tag, int32 NewCount);
 	void Refresh();
 	void UpdateHead(float ChargeScale);
+
+	/** The head bone's world position and the face's facing (GetEyes); false without a body. */
+	bool GetHeadFrame(FVector& Head, FQuat& Facing) const;
 	void UpdateArcs(float ChargeScale);
 	void UpdateRing(float ChargeScale);
 	void UpdateOrbCards();

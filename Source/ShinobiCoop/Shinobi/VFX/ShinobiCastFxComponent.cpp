@@ -53,8 +53,8 @@ namespace
 	constexpr float RasenganCardSphere = 1.4f; // the swirl card's sphere across, in orb diameters (the glow orb is its core)
 	constexpr float RasenganOuterLayer = 1.25f; // the fainter wind card, in swirl spheres
 
-	// Face offsets from the head bone, in the actor's frame (forward, right, up), per body. The eye offset is the
-	// left eye; the right mirrors it.
+	// Face offsets from the head bone, in the actor's frame (forward, right, up). The eye offset is the left eye; the
+	// right mirrors it.
 	// ponytail: hand-tuned against the -ShinobiJutsuShot screenshots; retune if the hero mesh changes
 	struct FFaceOffsets
 	{
@@ -62,7 +62,28 @@ namespace
 		FVector Eye;
 	};
 	const FFaceOffsets MannyFace = { FVector(14.f, 0.f, 2.f), FVector(10.f, -3.5f, 7.f) };
-	const FFaceOffsets HeroFace = { FVector(12.f, 0.f, 4.f), FVector(12.f, -3.f, 10.5f) }; // eyes in front of the glasses
+	const FFaceOffsets HeroFace = { FVector(12.f, 0.f, 4.f), FVector(10.7f, -3.6f, 9.5f) };
+
+	// The front of each eye from the head bone at rest, actor frame, per roster body: measured on front and side ortho
+	// renders of SourceArt/Character/Models/<Name>/<Name>_rigged.fbx (Mixamo rigs have no eye bones). Others use HeroFace.
+	// ponytail: a table per body; re-measure when a roster head changes
+	struct FBodyEyes
+	{
+		const TCHAR* Mesh;
+		FVector Left;
+		FVector Right;
+	};
+	const FBodyEyes BodyEyes[] = {
+		{ TEXT("SK_Hero"),  FVector(11.f, -3.6f, 9.6f),     FVector(11.f, 3.5f, 9.6f) }, // behind the glasses
+		{ TEXT("SK_Bika"),  FVector(11.7f, -3.4f, 8.8f),    FVector(11.7f, 3.8f, 8.8f) },
+		{ TEXT("SK_Cat"),   FVector(13.7f, -4.2f, 10.2f),   FVector(13.7f, 4.4f, 10.2f) },
+		{ TEXT("SK_Misha"), FVector(13.2f, -5.3f, 12.f),    FVector(13.2f, 5.8f, 12.f) },
+		{ TEXT("SK_Pabu"),  FVector(14.f, -6.1f, 12.7f),    FVector(14.f, 3.f, 12.7f) }, // the face sits left of the head bone
+		{ TEXT("SK_Ramil"), FVector(10.7f, -3.8f, 9.4f),    FVector(10.7f, 3.6f, 9.4f) },
+		{ TEXT("SK_Elvin"), FVector(10.2f, -3.6f, 9.2f),    FVector(10.2f, 3.6f, 9.2f) },
+	};
+	const FName MetaHumanEyes[2] = { TEXT("FACIAL_L_Eye"), TEXT("FACIAL_R_Eye") }; // eyeball centres
+	constexpr float EyeballRadius = 1.2f;
 }
 
 UShinobiCastFxComponent::UShinobiCastFxComponent()
@@ -237,7 +258,7 @@ void UShinobiCastFxComponent::BeginPlay()
 	MouthLight->SetVisibility(false);
 	MouthLight->RegisterComponent();
 
-	UMaterialInstanceDynamic* EyeMaterial = ShinobiVfx::MakeGlow(this, EyeRed, 8.f, 1.f);
+	UMaterialInstanceDynamic* EyeMaterial = ShinobiVfx::MakeGlow(this, EyeRed, 4.f, 1.f);
 	UMaterialInstanceDynamic* BloodMaterial = ShinobiVfx::MakeStreak(this, ShinobiVfx::Colors::Blood);
 	for (int32 Side = 0; Side < 2; ++Side)
 	{
@@ -534,21 +555,18 @@ void UShinobiCastFxComponent::UpdateRing(float ChargeScale)
 	RingLight->SetIntensity(3000.f * ChargeScale * FMath::FRandRange(0.6f, 1.4f));
 }
 
-void UShinobiCastFxComponent::UpdateHead(float ChargeScale)
+bool UShinobiCastFxComponent::GetHeadFrame(FVector& Head, FQuat& Facing) const
 {
-	const bool bMouth = MouthFlame->IsVisible();
-	const bool bEyes = Eyes[0]->IsVisible() || Streaks[0]->IsVisible();
 	const AShinobiCharacterBase* OwnerCharacter = Cast<AShinobiCharacterBase>(GetOwner());
-	if ((!bMouth && !bEyes) || !OwnerCharacter)
+	const USkeletalMeshComponent* Body = OwnerCharacter ? OwnerCharacter->GetBodyMesh() : nullptr;
+	if (!Body)
 	{
-		return;
+		return false;
 	}
-	const USkeletalMeshComponent* Body = OwnerCharacter->GetBodyMesh();
-	const FFaceOffsets& Face = Body == OwnerCharacter->GetMesh() ? MannyFace : HeroFace;
 	const FName HeadBone = OwnerCharacter->GetHeadBone();
-	const FVector Head = Body->GetSocketLocation(HeadBone);
+	Head = Body->GetSocketLocation(HeadBone);
 	// The offsets are measured with the head upright and facing the actor's way; turn them with the head, by how far
-	// the head bone has rotated from its reference pose, so the eyes stay on the face when it bows or turns.
+	// the head bone has rotated from its reference pose, so they stay on the face when it bows or turns.
 	FQuat HeadTurn = FQuat::Identity;
 	const int32 HeadIndex = Body->GetBoneIndex(HeadBone);
 	if (HeadIndex != INDEX_NONE && Body->GetSkinnedAsset())
@@ -558,30 +576,92 @@ void UShinobiCastFxComponent::UpdateHead(float ChargeScale)
 		const FQuat ToWorld = Body->GetComponentQuat();
 		HeadTurn = ToWorld * (Current * Reference.Inverse()) * ToWorld.Inverse();
 	}
-	const FQuat FacingQuat = HeadTurn * OwnerCharacter->GetActorQuat();
+	Facing = HeadTurn * OwnerCharacter->GetActorQuat();
+	return true;
+}
+
+bool UShinobiCastFxComponent::GetEyes(FVector& Left, FVector& Right, FQuat& Facing) const
+{
+	FVector Head;
+	if (!GetHeadFrame(Head, Facing))
+	{
+		return false;
+	}
+	const AShinobiCharacterBase* OwnerCharacter = CastChecked<AShinobiCharacterBase>(GetOwner());
+	const USkeletalMeshComponent* Body = OwnerCharacter->GetBodyMesh();
+	// A MetaHuman face (a creator look, RamilMH) follows the body as an attached mesh with its own eye joints.
+	for (const USceneComponent* Child : Body->GetAttachChildren())
+	{
+		const USkeletalMeshComponent* Face = Cast<USkeletalMeshComponent>(Child);
+		if (Face && Face->GetBoneIndex(MetaHumanEyes[0]) != INDEX_NONE && Face->GetBoneIndex(MetaHumanEyes[1]) != INDEX_NONE)
+		{
+			const FVector Front = Facing.GetForwardVector() * EyeballRadius * Face->GetComponentScale().Z;
+			Left = Face->GetSocketLocation(MetaHumanEyes[0]) + Front;
+			Right = Face->GetSocketLocation(MetaHumanEyes[1]) + Front;
+			return true;
+		}
+	}
+	FVector LeftOffset(MannyFace.Eye);
+	FVector RightOffset(MannyFace.Eye.X, -MannyFace.Eye.Y, MannyFace.Eye.Z);
+	if (Body != OwnerCharacter->GetMesh())
+	{
+		LeftOffset = HeroFace.Eye;
+		RightOffset = FVector(HeroFace.Eye.X, -HeroFace.Eye.Y, HeroFace.Eye.Z);
+		const FString MeshName = Body->GetSkinnedAsset() ? Body->GetSkinnedAsset()->GetName() : FString();
+		for (const FBodyEyes& Measured : BodyEyes)
+		{
+			if (MeshName == Measured.Mesh)
+			{
+				LeftOffset = Measured.Left;
+				RightOffset = Measured.Right;
+				break;
+			}
+		}
+	}
+	const float Scale = Body->GetComponentScale().Z;
+	Left = Head + Facing.RotateVector(LeftOffset * Scale);
+	Right = Head + Facing.RotateVector(RightOffset * Scale);
+	return true;
+}
+
+void UShinobiCastFxComponent::UpdateHead(float ChargeScale)
+{
+	const bool bMouth = MouthFlame->IsVisible();
+	const bool bEyes = Eyes[0]->IsVisible() || Streaks[0]->IsVisible();
+	FVector Head;
+	FQuat FacingQuat;
+	if ((!bMouth && !bEyes) || !GetHeadFrame(Head, FacingQuat))
+	{
+		return;
+	}
+	const AShinobiCharacterBase* OwnerCharacter = CastChecked<AShinobiCharacterBase>(GetOwner());
+	const FFaceOffsets& Face = OwnerCharacter->GetBodyMesh() == OwnerCharacter->GetMesh() ? MannyFace : HeroFace;
 	const FRotator Facing = FacingQuat.Rotator();
-	auto At = [&](const FVector& Offset) { return Head + FacingQuat.RotateVector(Offset); };
 
 	if (bMouth)
 	{
 		const float Flicker = FMath::FRandRange(0.85f, 1.15f);
-		MouthFlame->SetWorldLocationAndRotation(At(Face.Mouth), Facing);
+		MouthFlame->SetWorldLocationAndRotation(Head + FacingQuat.RotateVector(Face.Mouth), Facing);
 		MouthFlame->SetWorldScale3D(FVector(0.12f, 0.12f, 0.16f) * ChargeScale * Flicker);
 		MouthLight->SetIntensity(600.f * ChargeScale * Flicker);
 	}
-	if (bEyes)
+	FVector EyeAt[2];
+	if (bEyes && GetEyes(EyeAt[0], EyeAt[1], FacingQuat))
 	{
 		const float Grown = FMath::Clamp(Age / StreakGrowTime, 0.f, 1.f);
+		const FVector Forward = FacingQuat.GetForwardVector();
+		const FVector Up = FacingQuat.GetUpVector();
+		// Down the cheek from under the lower lid, falling back a little with the face's curve.
+		const FVector Run = (-Up - Forward * 0.05f).GetSafeNormal();
 		for (int32 Side = 0; Side < 2; ++Side)
 		{
-			const FVector Eye = At(FVector(Face.Eye.X, Side == 0 ? Face.Eye.Y : -Face.Eye.Y, Face.Eye.Z));
-			const FVector Down = -FacingQuat.GetUpVector();
-			Eyes[Side]->SetWorldLocation(Eye);
-			Eyes[Side]->SetWorldScale3D(FVector(0.03f));
-			// The engine cube is 100 units around its centre: hang it from just under the eye as it grows.
-			const float Length = FMath::Max(9.f * Grown, 0.1f);
-			Streaks[Side]->SetWorldLocationAndRotation(Eye + Down * (1.5f + Length * 0.5f), Facing);
-			Streaks[Side]->SetWorldScale3D(FVector(0.012f, 0.012f, Length / 100.f));
+			Eyes[Side]->SetWorldLocation(EyeAt[Side]);
+			Eyes[Side]->SetWorldScale3D(FVector(0.012f)); // the iris, not the whole eye
+			// The engine cube is 100 units around its centre: a thin strip on the skin, growing down from the lid.
+			const float Length = FMath::Max(8.f * Grown, 0.1f);
+			const FVector Lid = EyeAt[Side] - Up * 0.9f;
+			Streaks[Side]->SetWorldLocationAndRotation(Lid + Run * (Length * 0.5f), FRotationMatrix::MakeFromZX(Run, Forward).ToQuat());
+			Streaks[Side]->SetWorldScale3D(FVector(0.009f, 0.007f, Length / 100.f)); // deep enough to clear a full cheek
 		}
 	}
 }
