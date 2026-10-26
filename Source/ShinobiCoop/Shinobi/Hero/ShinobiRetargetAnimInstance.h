@@ -51,7 +51,13 @@ private:
 	/** Fills Index and Arm ([left, right][upper arm, forearm, hand], component space); false if the rig lacks them. */
 	bool GetArms(const FPoseContext& Output, FCSPose<FCompactPose>& Pose, FCompactPoseBoneIndex (&Index)[2][3], FTransform (&Arm)[2][3]) const;
 
+	/** The body's bone shapes (UShinobiBodyComponent::SetBoneShape) on the retargeted local pose. */
+	void ShapeBones(FPoseContext& Output) const;
+
 	FAnimNode_RetargetPoseFromMesh* RetargetNode = nullptr;
+
+	// UShinobiBodyComponent::GetBoneShapes, copied in PreUpdate.
+	TArray<TPair<FName, FVector>> BoneShapes;
 
 	// Read on the game thread in PreUpdate, used on the anim thread in Evaluate (same frame).
 	float ContactWeight = 0.f;

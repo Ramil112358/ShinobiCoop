@@ -167,6 +167,14 @@ void AShinobiPlayerCharacter::SetCharacterIndex(uint8 Index)
 	ApplyCharacter();
 }
 
+void AShinobiPlayerCharacter::SetAppearance(const FShinobiAppearance& Look)
+{
+	Appearance = Look;
+	Appearance.Sanitize();
+	CharacterIndex = CustomCharacter;
+	ApplyCharacter();
+}
+
 int32 AShinobiPlayerCharacter::FindOutfitIndex(const FString& Name)
 {
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Outfits); ++Index)
@@ -202,15 +210,15 @@ namespace
 	}
 }
 
-FString AShinobiPlayerCharacter::OutfitMeshPath(int32 Outfit, int32 Body)
+FString AShinobiPlayerCharacter::OutfitMeshPath(int32 Outfit, const FString& Body)
 {
-	const FString Name = FString::Printf(TEXT("SK_%s_%s%s"), Outfits[Outfit].Name, Roster[Body].Name, *CVarOutfitCopySuffix.GetValueOnGameThread());
+	const FString Name = FString::Printf(TEXT("SK_%s_%s%s"), Outfits[Outfit].Name, *Body, *CVarOutfitCopySuffix.GetValueOnGameThread());
 	return FString::Printf(TEXT("/Game/Shinobi/Outfits/%s/%s.%s"), Outfits[Outfit].Name, *Name, *Name);
 }
 
-FString AShinobiPlayerCharacter::OutfitHidePath(int32 Outfit, int32 Body)
+FString AShinobiPlayerCharacter::OutfitHidePath(int32 Outfit, const FString& Body)
 {
-	const FString Name = FString::Printf(TEXT("T_%s_%s%s_Hide"), Outfits[Outfit].Name, Roster[Body].Name, *CVarOutfitCopySuffix.GetValueOnGameThread());
+	const FString Name = FString::Printf(TEXT("T_%s_%s%s_Hide"), Outfits[Outfit].Name, *Body, *CVarOutfitCopySuffix.GetValueOnGameThread());
 	return FString::Printf(TEXT("/Game/Shinobi/Outfits/%s/%s.%s"), Outfits[Outfit].Name, *Name, *Name);
 }
 
@@ -227,24 +235,24 @@ bool AShinobiPlayerCharacter::IsOutfitBuilt(int32 Outfit, int32 Body)
 	return FPackageName::DoesPackageExist(FPackageName::ObjectPathToPackageName(OutfitMeshPath(Outfit, Body)));
 }
 
-bool AShinobiPlayerCharacter::DressOutfit(USkeletalMeshComponent& BodyMesh, USkeletalMeshComponent& Outfit, int32 OutfitIndex, int32 BodyIndex)
+bool AShinobiPlayerCharacter::DressOutfit(USkeletalMeshComponent& BodyMesh, USkeletalMeshComponent& Outfit, int32 OutfitIndex, const FString& BodyName)
 {
 	USkeletalMesh* Cloth = nullptr;
 	UTexture* Mask = nullptr;
-	if (OutfitIndex > 0 && OutfitIndex < UE_ARRAY_COUNT(Outfits) && BodyIndex >= 0 && BodyIndex < UE_ARRAY_COUNT(Roster))
+	if (OutfitIndex > 0 && OutfitIndex < UE_ARRAY_COUNT(Outfits))
 	{
 		// Quiet: an outfit that isn't imported yet is expected.
-		Cloth = LoadObject<USkeletalMesh>(nullptr, *OutfitMeshPath(OutfitIndex, BodyIndex), nullptr, LOAD_NoWarn | LOAD_Quiet);
-		Mask = Cloth ? LoadObject<UTexture>(nullptr, *OutfitHidePath(OutfitIndex, BodyIndex), nullptr, LOAD_NoWarn | LOAD_Quiet) : nullptr;
+		Cloth = LoadObject<USkeletalMesh>(nullptr, *OutfitMeshPath(OutfitIndex, BodyName), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		Mask = Cloth ? LoadObject<UTexture>(nullptr, *OutfitHidePath(OutfitIndex, BodyName), nullptr, LOAD_NoWarn | LOAD_Quiet) : nullptr;
 		if (!Cloth)
 		{
 			static TSet<FString> Warned; // once per outfit and body
-			const FString Pair = FString::Printf(TEXT("%s/%s"), Outfits[OutfitIndex].Name, Roster[BodyIndex].Name);
+			const FString Pair = FString::Printf(TEXT("%s/%s"), Outfits[OutfitIndex].Name, *BodyName);
 			if (!Warned.Contains(Pair))
 			{
 				Warned.Add(Pair);
 				UE_LOG(LogShinobiCoop, Warning, TEXT("No %s copy fitted to %s (Scripts/character/build_outfits.ps1): wearing nothing"),
-					Outfits[OutfitIndex].Name, Roster[BodyIndex].Name);
+					Outfits[OutfitIndex].Name, *BodyName);
 			}
 		}
 	}
@@ -283,7 +291,8 @@ void AShinobiPlayerCharacter::ApplyOutfit()
 	{
 		return;
 	}
-	if (!DressOutfit(*HeroMesh, *OutfitMesh, OutfitIndex, WornBodyIndex))
+	const FString& Frame = HeroMesh->GetFittingName();
+	if (!DressOutfit(*HeroMesh, *OutfitMesh, OutfitIndex, Frame.IsEmpty() ? FString(Roster[WornBodyIndex].Name) : Frame))
 	{
 		return;
 	}
@@ -344,6 +353,16 @@ bool AShinobiPlayerCharacter::ApplyCharacter()
 	{
 		return false;
 	}
+	if (CharacterIndex == CustomCharacter)
+	{
+		if (HeroMesh->WearAppearance(Appearance))
+		{
+			UE_LOG(LogShinobiCoop, Log, TEXT("%s plays a made character (%s)"), *GetName(), *Appearance.ToCode());
+			ApplyOutfit();
+			return true;
+		}
+		UE_LOG(LogShinobiCoop, Warning, TEXT("%s: no creator catalog or frame (Scripts/setup_creator.py): shown as the hero"), *GetName());
+	}
 	for (const int32 Index : {int32(CharacterIndex), 0}) // the pick, else the hero
 	{
 		if (Index < UE_ARRAY_COUNT(Roster) && HeroMesh->Wear(Roster[Index].Mesh, Roster[Index].Retargeter, Roster[Index].MetaHuman))
@@ -370,6 +389,7 @@ void AShinobiPlayerCharacter::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AShinobiPlayerCharacter, CharacterIndex);
+	DOREPLIFETIME(AShinobiPlayerCharacter, Appearance);
 	DOREPLIFETIME(AShinobiPlayerCharacter, OutfitIndex);
 	DOREPLIFETIME_CONDITION(AShinobiPlayerCharacter, Loadout, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(AShinobiPlayerCharacter, LastCombatTime, COND_OwnerOnly);

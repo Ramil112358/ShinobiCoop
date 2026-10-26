@@ -4,6 +4,7 @@
 #include "GameFramework/GameUserSettings.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Shinobi/ShinobiLook.h"
+#include "Shinobi/Hero/ShinobiCharacterSave.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiPlayerController.h"
 
@@ -107,6 +108,12 @@ void ShinobiSettings::SetSavedCharacter(const FString& Name)
 	{
 		GConfig->SetString(ConfigSection, CharacterKey, AShinobiPlayerCharacter::Roster[Index].Name, GGameUserSettingsIni);
 		GConfig->Flush(false, GGameUserSettingsIni);
+		UShinobiCharacterSave* Made = UShinobiCharacterSave::Load(); // a roster pick: no made character is played
+		if (Made->Active != INDEX_NONE)
+		{
+			Made->Active = INDEX_NONE;
+			Made->Save();
+		}
 	}
 }
 

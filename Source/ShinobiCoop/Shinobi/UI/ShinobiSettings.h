@@ -21,7 +21,8 @@ namespace ShinobiSettings
 	SHINOBICOOP_API FString GetSavedCharacter();
 	/** The outfit this machine's player wears (saved by the Outfit row; None by default). */
 	SHINOBICOOP_API FString GetSavedOutfit();
-	/** Saves the pick (the main menu's SHINOBI tab); a name not in the roster / outfit list is ignored. */
+	/** Saves the pick (the main menu's SHINOBI tab); a name not in the roster / outfit list is ignored. A roster pick also
+	 * stops playing a made character (UShinobiCharacterSave::Active). */
 	SHINOBICOOP_API void SetSavedCharacter(const FString& Name);
 	SHINOBICOOP_API void SetSavedOutfit(const FString& Name);
 

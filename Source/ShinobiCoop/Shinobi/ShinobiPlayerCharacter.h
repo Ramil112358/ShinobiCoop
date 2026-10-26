@@ -104,6 +104,13 @@ public:
 	void SetCharacterIndex(uint8 Index);
 	uint8 GetCharacterIndex() const { return CharacterIndex; }
 
+	/** CharacterIndex of a creator-made character: it wears GetAppearance() instead of a roster body. */
+	static constexpr uint8 CustomCharacter = 255;
+
+	/** Server: play as a creator-made character with Look (replicated; sanitized here, as it comes from a client). */
+	void SetAppearance(const FShinobiAppearance& Look);
+	const FShinobiAppearance& GetAppearance() const { return Appearance; }
+
 	/** Every outfit a player can wear over any roster character (Scripts/setup_hero.py imports them from
 	 * SourceArt/Character/Outfits; docs/character/outfit-steps.md). Entry 0 is "no outfit" and the fallback. */
 	static constexpr FShinobiOutfitEntry Outfits[] = {
@@ -112,15 +119,18 @@ public:
 		{TEXT("Akatsuki")},
 	};
 
-	/** The copy of Outfits[Outfit] fitted to Roster[Body]: /Game/Shinobi/Outfits/<Outfit>/SK_<Outfit>_<Body>. */
-	static FString OutfitMeshPath(int32 Outfit, int32 Body);
-	/** What of Roster[Body] that copy covers (black = hidden; the body's M_Character HideMask): T_<Outfit>_<Body>_Hide. */
-	static FString OutfitHidePath(int32 Outfit, int32 Body);
+	/** The copy of Outfits[Outfit] fitted to the body named Body (a Roster name, or a creator frame's
+	 * UShinobiCreatorCatalog::FittingName): /Game/Shinobi/Outfits/<Outfit>/SK_<Outfit>_<Body>. */
+	static FString OutfitMeshPath(int32 Outfit, const FString& Body);
+	static FString OutfitMeshPath(int32 Outfit, int32 Body) { return OutfitMeshPath(Outfit, FString(Roster[Body].Name)); }
+	/** What of that body the copy covers (black = hidden; the body's M_Character HideMask): T_<Outfit>_<Body>_Hide. */
+	static FString OutfitHidePath(int32 Outfit, const FString& Body);
+	static FString OutfitHidePath(int32 Outfit, int32 Body) { return OutfitHidePath(Outfit, FString(Roster[Body].Name)); }
 	/** Index 0 (None) is always built; otherwise whether Outfits[Outfit]'s copy fitted to Roster[Body] is imported. */
 	static bool IsOutfitBuilt(int32 Outfit, int32 Body);
-	/** Puts Outfits[OutfitIndex]'s copy fitted to Roster[BodyIndex] on Outfit, following BodyMesh's pose, and hides what it
+	/** Puts Outfits[OutfitIndex]'s copy fitted to the body named BodyName on Outfit, following BodyMesh's pose, and hides what it
 	 * covers of BodyMesh (HideMask). False (outfit hidden, body fully shown) when there's no such copy. Pawn and menu stage. */
-	static bool DressOutfit(USkeletalMeshComponent& BodyMesh, USkeletalMeshComponent& Outfit, int32 OutfitIndex, int32 BodyIndex);
+	static bool DressOutfit(USkeletalMeshComponent& BodyMesh, USkeletalMeshComponent& Outfit, int32 OutfitIndex, const FString& BodyName);
 	/** Cloth further than this from the local camera (or unseen for a second) stops simulating. */
 	static constexpr float OutfitClothRangeCm = 4000.f;
 
@@ -303,6 +313,10 @@ private:
 	/** Roster index of the body shown; the server sets it from the owning controller's pick. */
 	UPROPERTY(ReplicatedUsing = OnRep_CharacterIndex)
 	uint8 CharacterIndex = 0;
+
+	/** The creator-made look worn while CharacterIndex is CustomCharacter. */
+	UPROPERTY(ReplicatedUsing = OnRep_CharacterIndex)
+	FShinobiAppearance Appearance;
 
 	/** Outfits index worn over the body; set from the owning controller's pick like CharacterIndex. */
 	UPROPERTY(ReplicatedUsing = OnRep_OutfitIndex)

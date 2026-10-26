@@ -31,6 +31,9 @@
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
 #include "Shinobi/ShinobiInputConfig.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/Hero/ShinobiBodyComponent.h"
+#include "Shinobi/Hero/ShinobiCharacterSave.h"
+#include "Shinobi/Hero/ShinobiCreatorCatalog.h"
 #include "Shinobi/UI/ShinobiSettings.h"
 #include "Shinobi/UI/ShinobiHUDWidget.h"
 #include "Shinobi/UI/ShinobiMenuWidgets.h"
@@ -45,7 +48,19 @@ void AShinobiPlayerController::BeginPlay()
 	{
 		return;
 	}
-	ShinobiCharacter(ShinobiSettings::GetSavedCharacter());
+	FShinobiAppearance Coded; // -ShinobiLookCode=<code>: that look, whatever is saved (Scripts/smoke_m4.ps1)
+	if (FString Code; FParse::Value(FCommandLine::Get(), TEXT("ShinobiLookCode="), Code) && FShinobiAppearance::FromCode(Code, Coded))
+	{
+		ServerPickAppearance(Coded);
+	}
+	else if (const FShinobiAppearance* Made = UShinobiCharacterSave::Load()->GetActiveLook())
+	{
+		ServerPickAppearance(*Made);
+	}
+	else
+	{
+		ShinobiCharacter(ShinobiSettings::GetSavedCharacter());
+	}
 	ShinobiOutfit(ShinobiSettings::GetSavedOutfit());
 	// The main menu left the viewport in UI-only mode with a cursor (input mode outlives the travel).
 	SetInputMode(FInputModeGameOnly());
@@ -90,6 +105,30 @@ void AShinobiPlayerController::BeginPlay()
 	if (FString ShotCharacter; FApp::CanEverRender() && FParse::Value(FCommandLine::Get(), TEXT("ShinobiPortraitShot="), ShotCharacter))
 	{
 		RunPortraitShotTest(ShotCharacter);
+	}
+	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiCreatorSpike")))
+	{
+		RunCreatorSpikeShot();
+	}
+	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiFaceSliderShot")))
+	{
+		RunFaceSliderShot();
+	}
+	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiFacePresetShot")))
+	{
+		RunFacePresetShot();
+	}
+	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiFaceBlendShot")))
+	{
+		RunFaceBlendShot();
+	}
+	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiBodySliderShot")))
+	{
+		RunBodySliderShot();
+	}
+	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiCreatorOutfitShot")))
+	{
+		RunCreatorOutfitShot();
 	}
 	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiLookShot")))
 	{
@@ -221,8 +260,15 @@ void AShinobiPlayerController::OnPossess(APawn* InPawn)
 	Super::OnPossess(InPawn);
 	if (AShinobiPlayerCharacter* Body = Cast<AShinobiPlayerCharacter>(InPawn))
 	{
-		Body->SetCharacterIndex(PickedCharacter);
 		Body->SetOutfitIndex(PickedOutfit);
+		if (PickedCharacter == AShinobiPlayerCharacter::CustomCharacter)
+		{
+			Body->SetAppearance(PickedAppearance);
+		}
+		else
+		{
+			Body->SetCharacterIndex(PickedCharacter);
+		}
 	}
 }
 
@@ -244,6 +290,85 @@ void AShinobiPlayerController::ServerPickCharacter_Implementation(uint8 Index)
 	{
 		Body->SetCharacterIndex(PickedCharacter);
 	}
+}
+
+void AShinobiPlayerController::ShinobiLook(int32 Sex, int32 Build, int32 Face, int32 Hair, int32 Beard, int32 Mustache, int32 Top, int32 Bottom, int32 Shoes)
+{
+	FShinobiAppearance Look;
+	Look.Sex = Sex == 1 ? EShinobiSex::Female : EShinobiSex::Male;
+	Look.Build = EShinobiBuild(FMath::Clamp(Build, 0, 2));
+	Look.Face = uint8(FMath::Clamp(Face, 0, 255));
+	Look.Hair = uint8(FMath::Clamp(Hair, 0, 255));
+	Look.Beard = uint8(FMath::Clamp(Beard, 0, 255));
+	Look.Mustache = uint8(FMath::Clamp(Mustache, 0, 255));
+	Look.Top = uint8(FMath::Clamp(Top, 0, 255));
+	Look.Bottom = uint8(FMath::Clamp(Bottom, 0, 255));
+	Look.Shoes = uint8(FMath::Clamp(Shoes, 0, 255));
+	ServerPickAppearance(Look);
+}
+
+void AShinobiPlayerController::ShinobiLookCode(const FString& Code)
+{
+	if (Code.IsEmpty())
+	{
+		const AShinobiPlayerCharacter* Shinobi = GetPawn<AShinobiPlayerCharacter>();
+		const UShinobiBodyComponent* Body = Shinobi ? Cast<UShinobiBodyComponent>(Shinobi->GetHeroMesh()) : nullptr;
+		UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiLookCode %s"), Body ? *Body->GetAppearance().ToCode() : TEXT("(no body)"));
+		return;
+	}
+	FShinobiAppearance Look;
+	if (!FShinobiAppearance::FromCode(Code, Look))
+	{
+		UE_LOG(LogShinobiCoop, Warning, TEXT("ShinobiLookCode: '%s' is not a look code"), *Code);
+		return;
+	}
+	ServerPickAppearance(Look);
+}
+
+void AShinobiPlayerController::ServerPickAppearance_Implementation(const FShinobiAppearance& Look)
+{
+	PickedAppearance = Look;
+	PickedAppearance.Sanitize(); // a client's value
+	PickedCharacter = AShinobiPlayerCharacter::CustomCharacter;
+	if (AShinobiPlayerCharacter* Body = GetPawn<AShinobiPlayerCharacter>())
+	{
+		Body->SetAppearance(PickedAppearance);
+	}
+}
+
+void AShinobiPlayerController::ShinobiBodyShape(const FString& Slider, float Value)
+{
+	const AShinobiPlayerCharacter* Shinobi = GetPawn<AShinobiPlayerCharacter>();
+	UShinobiBodyComponent* Body = Shinobi ? Cast<UShinobiBodyComponent>(Shinobi->GetHeroMesh()) : nullptr;
+	const int32 Index = UShinobiBodyComponent::GetBodySliderNames().IndexOfByKey(FName(*Slider));
+	if (!Body || Index == INDEX_NONE)
+	{
+		UE_LOG(LogShinobiCoop, Warning, TEXT("ShinobiBodyShape: no body or no slider '%s'"), *Slider);
+		return;
+	}
+	FShinobiAppearance Look = Body->GetAppearance();
+	Look.BodyShape.SetNumZeroed(FMath::Max(Look.BodyShape.Num(), Index + 1));
+	Look.BodyShape[Index] = int8(FMath::RoundToInt(FMath::Clamp(Value, -1.f, 1.f) * 127.f));
+	Body->UpdateBody(Look);
+}
+
+void AShinobiPlayerController::ShinobiFaceBlend(int32 FaceA, float WeightA, int32 FaceB, float WeightB)
+{
+	const AShinobiPlayerCharacter* Shinobi = GetPawn<AShinobiPlayerCharacter>();
+	UShinobiBodyComponent* Body = Shinobi ? Cast<UShinobiBodyComponent>(Shinobi->GetHeroMesh()) : nullptr;
+	if (!Body)
+	{
+		return;
+	}
+	FShinobiAppearance Look = Body->GetAppearance();
+	const int32 Faces[2] = {FaceA, FaceB};
+	const float Weights[2] = {WeightA, WeightB};
+	for (int32 Slot = 0; Slot < 2; ++Slot)
+	{
+		Look.BlendFace[Slot] = Faces[Slot] < 0 ? FShinobiAppearance::None : uint8(FMath::Clamp(Faces[Slot], 0, 254));
+		Look.BlendWeight[Slot] = uint8(FMath::RoundToInt(FMath::Clamp(Weights[Slot], 0.f, 1.f) * 255.f));
+	}
+	Body->UpdateFace(Look);
 }
 
 void AShinobiPlayerController::ShinobiOutfit(const FString& Name)

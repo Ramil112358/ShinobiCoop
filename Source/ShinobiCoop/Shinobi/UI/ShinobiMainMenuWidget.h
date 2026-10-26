@@ -12,7 +12,7 @@ class UImage;
 class UScrollBox;
 class UWidgetSwitcher;
 
-enum class EShinobiMenuTab : uint8 { Play, Shinobi, Jutsu, Settings, Num };
+enum class EShinobiMenuTab : uint8 { Play, Shinobi, Create, Jutsu, Settings, Num };
 
 /**
  * The main menu (docs/superpowers/specs/2026-10-20-main-menu-polish-design.md): a top tab bar over the live stage
@@ -26,6 +26,9 @@ class SHINOBICOOP_API UShinobiMainMenuWidget : public UShinobiMenuWidget
 
 public:
 	void SelectTab(EShinobiMenuTab Tab);
+	/** The stage wears the character played next match: the made one in play (UShinobiCharacterSave::Active), else
+	 * the roster pick. */
+	void ShowPlayed();
 	EShinobiMenuTab GetTab() const { return Tab; }
 	/** The page widget shown for Tab. */
 	UWidget* GetTabPage(EShinobiMenuTab Tab) const;
@@ -85,6 +88,8 @@ private:
 	TArray<TObjectPtr<UWidget>> FocusTargets;
 	UPROPERTY()
 	TObjectPtr<class UShinobiRosterPage> RosterPage;
+	UPROPERTY()
+	TObjectPtr<class UShinobiCreatorPage> CreatorPage;
 	UPROPERTY()
 	TObjectPtr<UImage> Backdrop;
 	/** Darkens the left of the screen behind the PLAY lists. */

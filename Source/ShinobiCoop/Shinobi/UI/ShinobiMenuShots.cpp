@@ -12,6 +12,7 @@
 #include "UnrealClient.h"
 #include "Shinobi/Online/ShinobiSessionSubsystem.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/UI/ShinobiCreatorPage.h"
 #include "Shinobi/UI/ShinobiMainMenuWidget.h"
 #include "Shinobi/UI/ShinobiMenuArt.h"
 #include "Shinobi/UI/ShinobiMenuStage.h"
@@ -84,8 +85,17 @@ void UShinobiMenuShotSubsystem::OnWorldBeginPlay(UWorld& World)
 	View(EShinobiMenuTab::Play, TEXT("ShinobiMenuTour_2_Arena2v2"), [](UShinobiMainMenuWidget& M) { M.TourSelectHost(TEXT("Arena: Camden"), 1); });
 	View(EShinobiMenuTab::Play, TEXT("ShinobiMenuTour_3_Find"), [](UShinobiMainMenuWidget& M) { M.TourShowFind(); });
 	View(EShinobiMenuTab::Shinobi, TEXT("ShinobiMenuTour_4_Shinobi"), nullptr);
-	View(EShinobiMenuTab::Jutsu, TEXT("ShinobiMenuTour_5_Jutsu"), nullptr);
-	View(EShinobiMenuTab::Settings, TEXT("ShinobiMenuTour_6_Settings"), nullptr);
+	View(EShinobiMenuTab::Create, TEXT("ShinobiMenuTour_5_Create"), nullptr);
+	Steps.Add([] {}); // (the made character's grooms and face finish loading)
+	View(EShinobiMenuTab::Create, TEXT("ShinobiMenuTour_6_CreateFace"), [](UShinobiMainMenuWidget& M)
+	{
+		if (UShinobiCreatorPage* Creator = Cast<UShinobiCreatorPage>(M.GetTabPage(EShinobiMenuTab::Create)))
+		{
+			Creator->ShowCategory(UShinobiCreatorPage::ECategory::Face);
+		}
+	});
+	View(EShinobiMenuTab::Jutsu, TEXT("ShinobiMenuTour_7_Jutsu"), nullptr);
+	View(EShinobiMenuTab::Settings, TEXT("ShinobiMenuTour_8_Settings"), nullptr);
 	RunSteps(MoveTemp(Steps), 1.5f);
 }
 

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Shinobi/Hero/ShinobiCreatorCatalog.h"
 #include "ShinobiMenuStage.generated.h"
 
 class UCameraComponent;
@@ -25,11 +26,16 @@ public:
 
 	/** Wears Roster[RosterIndex] (the hero when it isn't imported) and Outfits[OutfitIndex]. */
 	void Show(int32 RosterIndex, int32 OutfitIndex);
+	/** Wears a creator look (its frame, face, hair and clothes) and Outfits[OutfitIndex] fitted to that frame; the hero
+	 * when the creator catalog isn't built. Live slider edits go to GetBody()->UpdateFace / UpdateBody instead. */
+	void ShowAppearance(const FShinobiAppearance& Look, int32 OutfitIndex);
 	int32 GetShownBody() const { return ShownBody; }
 	/** Head and shoulders of the body worn, for a portrait (a 3:4 view); the character stands centred at once. */
 	void FramePortrait();
 	/** Eases the character sideways to Focus's spot. */
 	void SetFocus(EShinobiMenuStageFocus Focus);
+	/** The camera on the face, following it (the creator's FACE and HAIR rows), or back on the whole character. */
+	void SetCloseUp(bool bHead);
 
 	UCameraComponent* GetCamera() const { return Camera; }
 	UShinobiBodyComponent* GetBody() const { return Body; }
@@ -45,6 +51,11 @@ protected:
 	virtual void BeginPlay() override;
 
 private:
+	/** The hidden Manny idling, which the worn body copies. */
+	void StartDriver();
+	/** The worn body's head bone height above the stage (cm). */
+	float HeadHeight() const;
+
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<USceneComponent> Root;
 	UPROPERTY(VisibleAnywhere)
@@ -58,4 +69,5 @@ private:
 
 	int32 ShownBody = INDEX_NONE;
 	float TargetOffset = 0.f;
+	bool bCloseUp = false;
 };

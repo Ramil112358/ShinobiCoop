@@ -14,9 +14,17 @@
 #             walking, running, mid-jump and settled again (~80 s).
 #   -Portrait RamilMH: -ShinobiPortraitShot=RamilMH (on -Map): that roster character's face up close (front, 3/4, side)
 #             and its whole body from the front (~15 s); -Phone: the face from 38 cm with a 45 degree lens, like a selfie.
+#   -CreatorSpike: -ShinobiCreatorSpike: character creator phase 0 (Scripts/setup_creator.py spike assets): body
+#             shapes (bone scales) in the Akatsuki copy, two heights, then the static Ramil head (~40 s).
+#   -FaceSliders: -ShinobiFaceSliderShot: a creator look's face with each face slider at -1 and +1, front and 3/4 (~2 min).
+#   -FacePresets: -ShinobiFacePresetShot: every character-creator catalog face, front and 3/4 (~5 s per face).
+#   -FaceBlend: -ShinobiFaceBlendShot: a face blended toward another in 25% steps, then the other face (~35 s).
+#   -BodySliders: -ShinobiBodySliderShot: a creator look with each body slider at -1 and +1, front and side (~35 s).
+#   -Extra "<args>": more game arguments, e.g. -Extra "-ShinobiLookCode=AQECAgD__wAAAP__AAAAAA" for any shot as a made character.
+#   -CreatorOutfits: -ShinobiCreatorOutfitShot: each cloak over every creator frame, front and side (~60 s).
 #   -Perf:    the tour at 1920x1080, Epic preset, no vsync, 10 s per point; prints the average frame time at each point.
 #             Keep the game window in the foreground: Windows throttles background windows (about 2x slower).
-param([string]$Outfit = "", [string]$Portrait = "", [switch]$Phone, [switch]$Susanoo, [switch]$Fire, [switch]$Jutsu, [switch]$Look, [switch]$Tour, [switch]$Perf, [int]$TimeoutSec = 300, [string]$Map = "/Game/Shinobi/Maps/Lvl_TrainingGrounds")
+param([string]$Outfit = "", [string]$Portrait = "", [switch]$Phone, [switch]$Susanoo, [switch]$Fire, [switch]$Jutsu, [switch]$Look, [switch]$Tour, [switch]$Perf, [switch]$CreatorSpike, [switch]$FaceSliders, [switch]$FacePresets, [switch]$FaceBlend, [switch]$BodySliders, [switch]$CreatorOutfits, [string]$Extra = "", [int]$TimeoutSec = 300, [string]$Map = "/Game/Shinobi/Maps/Lvl_TrainingGrounds")
 $ErrorActionPreference = "Stop"
 $Editor = "C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe"
 $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
@@ -24,12 +32,13 @@ $Project = Join-Path $Root "ShinobiCoop.uproject"
 $ShotRoot = Join-Path $Root "Saved\Screenshots"
 if ($Perf) { $Tour = $true }
 $Res = if ($Perf) { "-ResX=1920 -ResY=1080 -ExecCmds=`"scalability 3,r.VSync 0,t.MaxFPS 0`" -ShinobiPerf" } else { "-ResX=1280 -ResY=720" }
-$Flag = if ($Portrait) { "ShinobiPortraitShot" } elseif ($Outfit) { "ShinobiOutfitShot" } elseif ($Tour) { "ShinobiWorldTour" } elseif ($Look) { "ShinobiLookShot" } elseif ($Fire) { "ShinobiFireShot" } elseif ($Susanoo) { "ShinobiSusanooShot" } elseif ($Jutsu) { "ShinobiJutsuShot" } else { "ShinobiShot" }
+if ($CreatorSpike -or $FaceSliders -or $FacePresets -or $FaceBlend -or $BodySliders -or $CreatorOutfits) { $Res += " -ExecCmds=`"r.Streaming.FullyLoadUsedTextures 1`"" } # close-ups of fragmented atlases bleed at low mips
+$Flag = if ($CreatorOutfits) { "ShinobiCreatorOutfitShot" } elseif ($BodySliders) { "ShinobiBodySliderShot" } elseif ($FaceBlend) { "ShinobiFaceBlendShot" } elseif ($FacePresets) { "ShinobiFacePresetShot" } elseif ($FaceSliders) { "ShinobiFaceSliderShot" } elseif ($CreatorSpike) { "ShinobiCreatorSpike" } elseif ($Portrait) { "ShinobiPortraitShot" } elseif ($Outfit) { "ShinobiOutfitShot" } elseif ($Tour) { "ShinobiWorldTour" } elseif ($Look) { "ShinobiLookShot" } elseif ($Fire) { "ShinobiFireShot" } elseif ($Susanoo) { "ShinobiSusanooShot" } elseif ($Jutsu) { "ShinobiJutsuShot" } else { "ShinobiShot" }
 $Pattern = "$($Flag)_*.png"
 $Level = if ($Portrait) { $Map } elseif ($Tour) { if ($PSBoundParameters.ContainsKey("Map")) { $Map } else { "/Game/Shinobi/Maps/Lvl_HiddenLeafValley" } } elseif ($Look) { $Map } else { "/Game/ThirdPerson/Lvl_ThirdPerson?game=/Script/ShinobiCoop.ShinobiGameMode" }
 
 Get-ChildItem $ShotRoot -Recurse -Filter $Pattern -ErrorAction SilentlyContinue | Remove-Item
-$game = Start-Process $Editor -PassThru -ArgumentList "`"$Project`" $Level -game -nosteam -windowed $Res -nosound -unattended -nosplash $(if ($Portrait) { "-ShinobiPortraitShot=$Portrait$(if ($Phone) { ' -ShinobiPortraitPhone' })" } elseif ($Outfit) { "-ShinobiOutfitShot=$Outfit" } else { "-$Flag" }) -log=$Flag.log"
+$game = Start-Process $Editor -PassThru -ArgumentList "`"$Project`" $Level -game -nosteam -windowed $Res -nosound -unattended -nosplash $(if ($Portrait) { "-ShinobiPortraitShot=$Portrait$(if ($Phone) { ' -ShinobiPortraitPhone' })" } elseif ($Outfit) { "-ShinobiOutfitShot=$Outfit" } else { "-$Flag" }) $Extra -log=$Flag.log"
 $null = $game.Handle
 if (-not $game.WaitForExit($TimeoutSec * 1000)) { Stop-Process $game -Force; throw "Game did not quit within $TimeoutSec s" }
 

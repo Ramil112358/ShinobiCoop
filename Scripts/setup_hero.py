@@ -512,12 +512,18 @@ def build_characters(ik_manny):
 
 
 ROSTER = ("Hero", "Bika", "Cat", "Misha", "Pabu", "Ramil", "RamilMH")  # AShinobiPlayerCharacter::Roster
+# City Sample frames the character creator wears (setup_creator.py FRAME_BODIES): outfit bodies too, through a local-only
+# fitting proxy (SourceArt/.../<Body>_rigged.fbx, which carries a face scan) that only their cloth collision is built from.
+CREATOR_FRAMES = ("CrowdMUnder", "CrowdMNormal", "CrowdMOver", "CrowdFUnder", "CrowdFNormal", "CrowdFOver")
+FITTING_DIR = "/Game/Shinobi/Characters/Creator/Fitting"  # never committed (.gitignore)
 METAHUMANS = ("RamilMH",)  # built by Scripts/setup_metahuman.py into /Game/Shinobi/MetaHumans/<Body>/Build
 HEM_MAX_DISTANCE_CM, SLEEVE_MAX_DISTANCE_CM = 25.0, 12.0  # how far the hem and sleeve cloth may swing (UShinobiOutfitBuilderLibrary)
 TUNING_BODY = "Hero"  # the copy whose cloth the user tunes; its tuning is kept in Tuning/ across re-imports
 
 
 def body_mesh_path(body):
+    if body in CREATOR_FRAMES:
+        return f"{FITTING_DIR}/SK_{body}"
     if body in METAHUMANS:
         return f"/Game/Shinobi/MetaHumans/{body}/Build/MHC_{body}/Body/SKM_MHC_{body}_BodyMesh"
     return f"{HERO_DIR}/SK_Hero" if body == "Hero" else f"{CHARACTERS_DIR}/{body}/SK_{body}"
@@ -528,11 +534,14 @@ def cloth_collision(body):
     BuildClothCollision; not the ragdoll's physics asset), with the tail capsule from SourceArt/Character/Models/<Body>/
     <Body>_tail.json (build_outfits.ps1; null for a body without a tail)."""
     import json
+    if body in CREATOR_FRAMES:
+        import_outfit_copy(os.path.join(MODELS_DIR, body, f"{body}_rigged.fbx"), FITTING_DIR, f"SK_{body}")
     mesh = unreal.load_asset(body_mesh_path(body))
     if mesh is None:
         return None
-    # (a MetaHuman's next to its Build folder, which its next build remakes)
-    folder = f"/Game/Shinobi/MetaHumans/{body}" if body in METAHUMANS else body_mesh_path(body).rsplit("/", 1)[0]
+    # (a MetaHuman's next to its Build folder, which its next build remakes; a frame's out of the uncommitted Fitting)
+    folder = (f"/Game/Shinobi/MetaHumans/{body}" if body in METAHUMANS else "/Game/Shinobi/Characters/Creator" if body in CREATOR_FRAMES
+              else body_mesh_path(body).rsplit("/", 1)[0])
     physics = unreal.ShinobiOutfitBuilderLibrary.build_cloth_collision(mesh, f"{folder}/PA_{body}_Cloth")
     if physics is None:
         raise RuntimeError(f"could not build {body}'s cloth collision")
@@ -601,7 +610,8 @@ def build_outfits():
     hide mask <Outfit>_<Body>_hide.png -> T_<Outfit>_<Body>_Hide, all copies on one MI of <Outfit>_outfit.png. A tuning
     kept in Tuning/ (copy_cloth_tuning) is put back on every copy."""
     parent = build_character_material()
-    bodies = [b for b in ROSTER if os.environ.get("SETUP_HERO_OUTFIT_BODY") in (None, "", b)]  # =RamilMH: just that body's copies
+    only = os.environ.get("SETUP_HERO_OUTFIT_BODY", "")  # =RamilMH (or RamilMH,CrowdMNormal): just those bodies' copies
+    bodies = [b for b in ROSTER + CREATOR_FRAMES if not only or b in only.split(",")]
     collision = {body: cloth_collision(body) for body in bodies}
     for folder in sorted(glob.glob(os.path.join(OUTFITS_DIR, "*"))):
         outfit = os.path.basename(folder)
@@ -649,7 +659,7 @@ def copy_cloth_tuning(source):
     tuned = unreal.load_asset(f"{dest}/SK_{outfit}_{body}") if outfit and body else None
     if tuned is None:
         raise RuntimeError(f"SETUP_HERO_CLOTH_SOURCE={source!r}: no {dest}/SK_{outfit}_{body} (use <Outfit>_<Body>, e.g. Hokage_Hero)")
-    others = [unreal.load_asset(f"{dest}/SK_{outfit}_{b}") for b in ROSTER if b != body]
+    others = [unreal.load_asset(f"{dest}/SK_{outfit}_{b}") for b in ROSTER + CREATOR_FRAMES if b != body]
     others = [m for m in others if m is not None]
     if not unreal.ShinobiOutfitBuilderLibrary.copy_cloth_tuning(tuned, others):
         raise RuntimeError(f"could not copy {source}'s cloth tuning")
@@ -662,7 +672,9 @@ def copy_cloth_tuning(source):
     log(f"{source}: cloth tuning copied onto {len(others)} copies")
 
 
-if os.environ.get("SETUP_HERO_ONLY") == "outfits":
+if os.environ.get("SETUP_HERO_ONLY") == "library":
+    pass  # imported for its helpers (Scripts/setup_creator.py): build nothing
+elif os.environ.get("SETUP_HERO_ONLY") == "outfits":
     # Re-imports just the outfits (set SETUP_HERO_ONLY=outfits before Scripts/run_python.ps1), leaving every body alone.
     build_outfits()
 elif os.environ.get("SETUP_HERO_ONLY") == "cloth":

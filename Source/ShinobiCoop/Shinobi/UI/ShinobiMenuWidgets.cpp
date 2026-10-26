@@ -30,6 +30,16 @@ void UShinobiIndexButton::HandleClicked()
 	OnIndexClicked.ExecuteIfBound(Index);
 }
 
+void UShinobiIndexSlider::Arm()
+{
+	OnValueChanged.AddUniqueDynamic(this, &UShinobiIndexSlider::HandleValue);
+}
+
+void UShinobiIndexSlider::HandleValue(float NewValue)
+{
+	OnIndexValue.ExecuteIfBound(Index, NewValue);
+}
+
 TSharedRef<SWidget> UShinobiMenuWidget::RebuildWidget()
 {
 	if (WidgetTree && !WidgetTree->RootWidget)
