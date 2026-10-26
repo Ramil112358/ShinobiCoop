@@ -1,6 +1,6 @@
 #pragma once
 
-#if WITH_DEV_AUTOMATION_TESTS
+#if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR
 
 #include "CoreMinimal.h"
 #include "EngineUtils.h"

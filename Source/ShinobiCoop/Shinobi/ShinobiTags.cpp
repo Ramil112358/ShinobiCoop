@@ -77,3 +77,29 @@ namespace ShinobiTags
 
 	UE_DEFINE_GAMEPLAY_TAG(Fail_NoTarget, "Fail.NoTarget");
 }
+
+namespace
+{
+	// The Game Animation Sample's foley tags (Config/Tags/GameAnimationSample.ini), registered natively too: its notifies
+	// load with the Manny anim blueprints during startup, before the tag inis are read, and their tags were dropped as invalid.
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Root, "Foley");
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Event, "Foley.Event");
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Event_Handplant, "Foley.Event.Handplant");
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Event_Jump, "Foley.Event.Jump");
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Event_Kick, "Foley.Event.Kick");
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Event_Land, "Foley.Event.Land");
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Event_Punch, "Foley.Event.Punch");
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Event_Ragdoll, "Foley.Event.Ragdoll");
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Event_Ragdoll_Body, "Foley.Event.Ragdoll.Body");
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Event_Ragdoll_Limb, "Foley.Event.Ragdoll.Limb");
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Event_Run, "Foley.Event.Run");
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Event_RunBackwds, "Foley.Event.RunBackwds");
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Event_RunStrafe, "Foley.Event.RunStrafe");
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Event_Scuff, "Foley.Event.Scuff");
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Event_ScuffPivot, "Foley.Event.ScuffPivot");
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Event_ScuffWall, "Foley.Event.ScuffWall");
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Event_Slide_Loop, "Foley.Event.Slide.Loop");
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Event_Tumble, "Foley.Event.Tumble");
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Event_Walk, "Foley.Event.Walk");
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(Foley_Event_WalkBackwds, "Foley.Event.WalkBackwds");
+}

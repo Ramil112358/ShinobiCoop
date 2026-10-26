@@ -139,7 +139,19 @@ def asset_names(folder):
     return sorted({a.rsplit(".", 1)[-1] for a in EAL.list_assets(folder, recursive=False)})
 
 
+def fix_crowd_materials():
+    """The crowd head material comes flagged for Nanite, whose base pass needs 65 SRVs (64 allowed): the cook then throws
+    the whole material away and every crowd and Creator face renders with the default material in a packaged game. No
+    face mesh uses Nanite, so the usage goes."""
+    head = unreal.load_asset(f"{CROWD}/Shared/Materials/MetaHuman/M_Crowd_Head_v2")
+    if head and head.get_editor_property("used_with_nanite"):
+        head.set_editor_property("used_with_nanite", False)
+        EAL.save_loaded_asset(head)
+        log("M_Crowd_Head_v2: Nanite usage off")
+
+
 def catalog():
+    fix_crowd_materials()
     path = f"{CREATOR_DIR}/DA_CreatorCatalog"
     if EAL.does_asset_exist(path):
         data = unreal.load_asset(path)
@@ -296,7 +308,9 @@ def frames():
             log(f"frame {body}: {[l for l in run.stdout.splitlines() if '[compose_frame]' in l]}")
 
 
-if os.environ.get("SETUP_CREATOR_ONLY") == "frames":
+if os.environ.get("SETUP_CREATOR_ONLY") == "materials":
+    fix_crowd_materials()
+elif os.environ.get("SETUP_CREATOR_ONLY") == "frames":
     frames()
 elif os.environ.get("SETUP_CREATOR_ONLY") == "blendmorphs":
     blend_morphs()

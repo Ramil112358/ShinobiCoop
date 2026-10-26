@@ -1,14 +1,20 @@
 # Main-menu pictures and screenshots. Opens visible game windows; close the GUI editor first.
+#   -Packaged: in the built game (Packaged\Windows, Scripts/package.ps1) instead of the editor.
 #   -Tour:      -ShinobiMenuTour on Lvl_MainMenu: every tab, an arena in 2v2, Find Games (Saved\Screenshots\...\ShinobiMenuTour_*.png).
 #   -Portraits: -ShinobiMenuPortraits in a 3:4 window: each roster character -> Saved\MenuArt\T_Portrait_<Name>.png
 #   -Maps:      -ShinobiMapShot on every Host Game map -> Saved\MenuArt\T_Map_<Id>.png; -Map <Id> shoots just that one.
 # Then import Saved\MenuArt with: powershell -File Scripts/run_python.ps1 -Script Scripts/setup_menu_art.py
-param([switch]$Tour, [switch]$Portraits, [switch]$Maps, [string]$Map = "", [int]$TimeoutSec = 180)
+param([switch]$Tour, [switch]$Portraits, [switch]$Maps, [string]$Map = "", [switch]$Packaged, [int]$TimeoutSec = 180)
 $ErrorActionPreference = "Stop"
 $Editor = "C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe"
 $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $Project = Join-Path $Root "ShinobiCoop.uproject"
 $ShotRoot = Join-Path $Root "Saved\Screenshots"
+$ProjectArg = "`"$Project`""
+if ($Packaged) { # the built game (Scripts/package.ps1) instead of the editor
+    $Editor = Join-Path $Root "Packaged\Windows\ShinobiCoop.exe"; $ProjectArg = ""
+    $ShotRoot = Join-Path $Root "Packaged\Windows\ShinobiCoop\Saved\Screenshots"
+}
 $ArtDir = Join-Path $Root "Saved\MenuArt"
 # Must match UShinobiSessionSubsystem::GetMaps() (the Id is the level name without "Lvl_").
 $MapPaths = @(
@@ -19,7 +25,7 @@ $MapPaths = @(
 
 function Run-Game([string]$Level, [string]$Flags, [string]$Pattern, [string]$LogName, [string]$Res = "-ResX=1280 -ResY=720") {
     Get-ChildItem $ShotRoot -Recurse -Filter $Pattern -ErrorAction SilentlyContinue | Remove-Item
-    $game = Start-Process $Editor -PassThru -ArgumentList "`"$Project`" $Level -game -nosteam -windowed $Res -nosound -unattended -nosplash $Flags -log=$LogName.log"
+    $game = Start-Process $Editor -PassThru -ArgumentList "$ProjectArg $Level -game -nosteam -windowed $Res -nosound -unattended -nosplash $Flags -log=$LogName.log"
     $null = $game.Handle
     if (-not $game.WaitForExit($TimeoutSec * 1000)) { Stop-Process $game -Force; throw "Game did not quit within $TimeoutSec s" }
     $shots = Get-ChildItem $ShotRoot -Recurse -Filter $Pattern -ErrorAction SilentlyContinue | Sort-Object Name
