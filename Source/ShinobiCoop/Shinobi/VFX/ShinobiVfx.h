@@ -18,7 +18,7 @@ namespace ShinobiVfx
 		const FLinearColor Smoke(0.6f, 0.6f, 0.6f);
 		const FLinearColor Ice(0.55f, 0.85f, 1.f);
 		const FLinearColor BlackFlameCore(0.01f, 0.f, 0.015f);
-		const FLinearColor Blood(0.35f, 0.f, 0.f);
+		const FLinearColor Blood(0.1f, 0.004f, 0.004f); // M_Streak is unlit: dark enough to read as blood, not a glow
 	}
 
 	/**

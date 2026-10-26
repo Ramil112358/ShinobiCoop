@@ -33,6 +33,10 @@ struct FShinobiRetargetAnimInstanceProxy : public FAnimInstanceProxy
 	static constexpr float ContactNear = 26.f;
 	static constexpr float ContactFar = 36.f;
 
+	/** Amaterasu's hand is on the face while the source's right wrist is this close to its head (cm), off from FaceFar. */
+	static constexpr float FaceNear = 24.f;
+	static constexpr float FaceFar = 40.f;
+
 private:
 	/**
 	 * The FK retarget copies rotations, so on a hero with other proportions (and the arm spread of setup_hero.py) hands
@@ -47,6 +51,11 @@ private:
 	 * along the line from the orb's centre to its animated place (two-bone IK, the hand keeps its rotation), so the
 	 * animation's stirring still shows, round the surface, and it holds as the orb grows. */
 	void KeepPalmOnOrb(FPoseContext& Output) const;
+
+	/** During Amaterasu, the right hand on this body's own face (its eyes from UShinobiCastFxComponent::GetEyes): the
+	 * wrist moved so the knuckles land FaceKnuckleOffset from the right eye (two-bone IK, the hand keeps its rotation),
+	 * whatever the proportions the retarget carried over. */
+	void KeepHandOnFace(FPoseContext& Output) const;
 
 	/** Fills Index and Arm ([left, right][upper arm, forearm, hand], component space); false if the rig lacks them. */
 	bool GetArms(const FPoseContext& Output, FCSPose<FCompactPose>& Pose, FCompactPoseBoneIndex (&Index)[2][3], FTransform (&Arm)[2][3]) const;
@@ -67,9 +76,14 @@ private:
 	float OrbWeight = 0.f;
 	FVector OrbCentre = FVector::ZeroVector; // world
 	float OrbRadius = 0.f; // world
+	float FaceWeight = 0.f;
+	FVector FaceKnuckles = FVector::ZeroVector; // world
 
 	/** The hero's arms, [left, right][upper arm, forearm, hand], from the retargeter's LeftArm and RightArm chains. */
 	FBoneReference ArmBones[2][3];
+
+	/** The right index and middle knuckles' midpoint in the right hand bone's space (reference pose). */
+	FVector KnuckleLocal = FVector::ZeroVector;
 };
 
 /**

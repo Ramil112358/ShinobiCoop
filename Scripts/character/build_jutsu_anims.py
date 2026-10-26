@@ -193,12 +193,19 @@ RASENGAN_HOLD = merge(NEUTRAL, READY, {
     "R": arm((-32, 118, 40), (-1, -0.4, -0.3), (0.2, 0, 1), UP, (20, 30, 30, 30, 30)),
     "L": arm((-20, 138, 38), ELBOW_L, (-0.2, 0.3, 1), RIGHT, (20, 30, 30, 30, 30)),
 })
-# Amaterasu: two fingers raised beside the right eye, head bowed, then a sharp look up.
+# Kamui and Susanoo: two fingers raised beside the right eye, head bowed.
 EYE_FOCUS = merge(NEUTRAL, READY_BODY, {
     "spine": (4, 9), "neck": (6, 2), "head": (10, 3),
     "R": arm((-12, 148, 14), (-1, -0.5, 0), (0.1, 1, 0.2), (0.3, 0, 1), TWO_UP),
 })
 EYE_BOWED = merge(EYE_FOCUS, {"neck": (10, 2), "head": (16, 3)})
+# Amaterasu: the right hand on the face, palm to the cheek, index and middle spread round the right eye (the blood runs
+# between them), head bowed, then a sharp look up. "face" places the knuckles from the eye (on_face).
+AMA_FOCUS = merge(NEUTRAL, READY_BODY, {
+    "spine": (2, 9), "neck": (2, 2), "head": (2, 3),
+    "R": {**arm((0, 0, 0), (-1, -0.8, 0.2), (0.3, 1, 0.05), BACK, ((15, 10, 5), 0, 0, 85, 85), (0, 12, -12, 0, 0)), "face": (-1.3, -4.3, 0.5)},
+})
+AMA_BOWED = merge(AMA_FOCUS, {"neck": (4, 2), "head": (6, 3)})  # a slight bow: the bleeding eyes stay in view
 STARE = merge(NEUTRAL, READY_BODY, {"spine": (-2, 9), "neck": (-3, 2), "head": (-6, 3),
                                     "R": arm((-16, 138, 45), (-1, -0.5, -0.3), FWD, DOWN, (40, 0, 90, 90, 90))})
 
@@ -312,9 +319,9 @@ def rasengan():
 
 def amaterasu():
     return {  # no seals in canon: the Mangekyo's own
-        "Seal": [(0.0, NEUTRAL, "smooth"), (0.22, EYE_FOCUS, "snap"), (0.42, EYE_FOCUS, "smooth")],
-        "Charge": tremble(EYE_FOCUS, 2.2, 0.4, seed=4, step=0.275, build=lambda u: lerp_pose(EYE_FOCUS, EYE_BOWED, min(u * 2, 1))),
-        "Release": [(0.0, EYE_BOWED, "smooth"), (0.05, merge(EYE_BOWED, {"head": (20, 3)}), "snap"),
+        "Seal": [(0.0, NEUTRAL, "smooth"), (0.22, AMA_FOCUS, "snap"), (0.42, AMA_FOCUS, "smooth")],
+        "Charge": tremble(AMA_FOCUS, 2.2, 0.4, seed=4, step=0.275, build=lambda u: lerp_pose(AMA_FOCUS, AMA_BOWED, min(u * 2, 1))),
+        "Release": [(0.0, AMA_BOWED, "smooth"), (0.05, merge(AMA_BOWED, {"head": (10, 3)}), "snap"),
                     (0.12, STARE, "back"), (0.6, merge(STARE, ARMS_READY), "smooth")],
     }
 
@@ -623,6 +630,27 @@ def grip_spec(arm_obj, spec):
     return {**spec, "wrist": wrist_target, "pole": V(ELBOW_L), "fingers": fingers, "palm": palm}
 
 
+# The right eye (front of the eyeball) from the Head bone at rest, armature axes, cm: measured on the roster heads,
+# scaled to this rig's head (UShinobiCastFxComponent has the per-body ones).
+EYE_R = V((-3.3, 8.6, 9.6))
+
+
+def on_face(arm_obj, side, spec):
+    """spec["face"]: where the index and middle fingers' knuckles rest, from the right eye (cm, armature axes at rest),
+    carried with the head as it bows; the wrist is solved for it (spec["wrist"] is ignored)."""
+    head = arm_obj.pose.bones[P + "Head"]
+    rest = arm_obj.data.bones[P + "Head"].matrix_local
+    target = head.matrix @ rest.inverted() @ (rest.translation + EYE_R + V(spec["face"]))
+    wrist = target.copy()
+    for _ in range(4):
+        pose_arm(arm_obj, side, {**spec, "wrist": wrist})
+        bpy.context.view_layer.update()
+        bones = arm_obj.pose.bones
+        knuckles = (bones[f"{P}{side}HandIndex1"].head + bones[f"{P}{side}HandMiddle1"].head) * 0.5
+        wrist = wrist + (target - knuckles)
+    return {**spec, "wrist": wrist}
+
+
 def pose_torso(arm_obj, pose):
     pitch, yaw = pose.get("spine", (0, 0))
     for name in ("Spine", "Spine1", "Spine2"):
@@ -650,6 +678,8 @@ def apply_pose(arm_obj, pose):
             spec = pose[key]
             if spec.get("grip"):
                 spec = grip_spec(arm_obj, spec)
+            if spec.get("face"):
+                spec = on_face(arm_obj, side, spec)
             pose_arm(arm_obj, side, spec)
     bpy.context.view_layer.update()
 
