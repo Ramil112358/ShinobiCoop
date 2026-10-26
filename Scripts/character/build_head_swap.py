@@ -1,8 +1,9 @@
-"""Ramil: the hero's rigged body (Models/Hero/Hero_rigged.fbx) with Ramil's own head (a Tripo scan from photos,
-Models/Ramil/Ramil_head.glb) in place of the hero's head, glasses and headband. Keeps the hero's Mixamo skeleton and weights,
-so there is no Mixamo step.
+"""<Name>: the hero's rigged body (Models/Hero/Hero_rigged.fbx) with a real head (a Tripo scan from photos,
+Models/<Name>/<Name>_head.glb) in place of the hero's head, glasses and headband. Keeps the hero's Mixamo skeleton and weights,
+so there is no Mixamo step. One entry in SCANS per head (Ramil, Elvin): its landmarks, measured on gridded renders.
 
-Run: blender -b --factory-startup --python-exit-code 1 -P Scripts/character/build_ramil.py
+Run: blender -b --factory-startup --python-exit-code 1 -P Scripts/character/build_head_swap.py -- <Name>
+     (HEAD_CARDS=<n> in the environment overrides the scan's hair-card count)
 
   1. The hero's head goes: everything above HERO_CUT_Z, and the neck skin inside the turtleneck collar.
   2. Tripo's bust is cut back to the head and neck (its white T-shirt goes), scaled and placed on the hero's neck (the
@@ -12,10 +13,11 @@ Run: blender -b --factory-startup --python-exit-code 1 -P Scripts/character/buil
   4. Hair cards: Tripo's hair is one smooth shell, so CARDS strand-textured strips are grown over it along the hair's own
      flow (read from the strands painted in its texture), lifted off it towards their tips.
   5. One texture for the whole body (setup_hero.py gives every slot one PNG): a 4096 x 4096 atlas, the hero's 2k texture
-     top left, the head's (4k, halved) top right, the cards' strand strips (alpha = the strands) along the bottom. The
+     top left, the head's (4k, halved) top right, the cards' strand strips (alpha = the strands) along the bottom (no
+     cards: just the top row, 4096 x 2048). The
      hero's hands and feet are tinted to the head's skin tone.
 
-Writes SourceArt/Character/Models/Ramil/Ramil_rigged.fbx + Ramil_rigged.png (setup_hero.py imports them like any roster
+Writes SourceArt/Character/Models/<Name>/<Name>_rigged.fbx + <Name>_rigged.png (setup_hero.py imports them like any roster
 character) and preview_front.png / preview_side.png. Metres, the hero faces -Y.
 """
 import os
@@ -31,9 +33,10 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 MODELS = os.path.join(ROOT, "SourceArt", "Character", "Models")
 HERO_FBX = os.path.join(MODELS, "Hero", "Hero_rigged.fbx")
 HERO_PNG = os.path.join(MODELS, "Hero", "Hero_rigged.png")
-HEAD_GLB = os.path.join(MODELS, "Ramil", "Ramil_head.glb")
-PHOTO = os.path.join(ROOT, "SourceArt", "Character", "Photos", "Ramil", "front.jpeg")
-OUT = os.path.join(MODELS, "Ramil")
+NAME = sys.argv[sys.argv.index("--") + 1] if "--" in sys.argv else "Ramil"
+HEAD_GLB = os.path.join(MODELS, NAME, f"{NAME}_head.glb")
+PHOTO = os.path.join(ROOT, "SourceArt", "Character", "Photos", NAME, "front.jpeg")
+OUT = os.path.join(MODELS, NAME)
 sys.path.insert(0, os.path.dirname(__file__))
 from clean_rig import export_unit_scale_fbx  # noqa: E402
 
@@ -44,18 +47,23 @@ HERO_NECK_Z = 1.40      # below this nothing of the hero is touched
 HERO_CHIN_Z = 1.525
 COLLAR_CENTRE_Y = 0.015
 COLLAR_RIM_FRONT, COLLAR_RIM_SLOPE = Vector((0.0, -0.05, 1.495)), 0.21  # the rim's plane: through here, rising backwards
-# Tripo's head (its own units, 1.0 tall, faces -Y): chin underside at 0.315, the neck centred at y 0.025 where it meets the
-# shirt. HEAD_SCALE makes eye-to-chin 11 cm, the hero's.
-HEAD_SCALE = 0.42
-HEAD_CHIN_Z = 0.315
-HEAD_NECK_Y = 0.025
-HEAD_SHIRT_BELOW_Z = 1.57  # only this low on the head is anything taken for the white shirt (eye whites, teeth stay)
+# Each Tripo head (its own units, 1.0 tall, faces -Y): scale makes eye-to-chin 11 cm, the hero's; chin_z is the chin's
+# underside, neck_y the neck's centre where it meets the shirt. Only below shirt_below_z (m, placed) is anything taken for
+# the shirt, by its colour ("white": eye whites and teeth stay; "dark": hair at the nape stays). neck_slope: the neck is cut on
+# a plane through the collar's rim in front, rising backwards this steeply (above a shirt neckline higher than the rim behind).
+# cards: hair cards over a smooth hair shell (Ramil's); 0 keeps hair that already has strands (Elvin's) as it is.
+SCANS = {
+    "Ramil": dict(scale=0.42, chin_z=0.315, neck_y=0.025, shirt="white", shirt_below_z=1.57, neck_slope=0.21, cards=3000),
+    "Elvin": dict(scale=0.36, chin_z=0.255, neck_y=0.045, shirt="dark", shirt_below_z=1.545, neck_slope=0.45, cards=0),
+}
+SCAN = SCANS[NAME]
+HEAD_SCALE, HEAD_CHIN_Z, HEAD_NECK_Y, HEAD_SHIRT_BELOW_Z = SCAN["scale"], SCAN["chin_z"], SCAN["neck_y"], SCAN["shirt_below_z"]
 NECK_UNDER_RIM = 0.006     # the head's neck is cut this far under the collar's rim
 HEAD_FACES = 30000
 NECK_BOTTOM_Z = 1.45     # the drawn-down neck ends here, well inside the collar
 NECK_FIT = 0.9           # of the collar's inside, from the neck's centre
-ATLAS_W, ATLAS_H = 4096, 4096  # top: hero | head (2k each); bottom: the hair cards' strand strips
-CARDS = 3000                    # hair cards over the scan's hair (it is one smooth shell: the cards give it strands)
+TILE = 2048  # the atlas: top row hero | head (a TILE each); below them (only with hair cards) a TILE of strand strips
+CARDS = int(os.environ.get("HEAD_CARDS", SCAN["cards"]))
 CARD_LENGTH = (0.035, 0.08)     # m
 CARD_WIDTH = (0.005, 0.010)     # m at the root, tapering to the tip
 CARD_LIFT = (0.0015, 0.007)     # m off the shell at the root and at the tip
@@ -67,7 +75,7 @@ HEAD_TONE = 0.5          # how far the head's skin moves towards the front photo
 
 
 def log(message):
-    print(f"[build_ramil] {message}")
+    print(f"[build_head_swap {NAME}] {message}")
 
 
 def image_array(image):
@@ -194,7 +202,7 @@ bm.free()
 specks = drop_specks(body, 200, lambda p: p.z > HERO_NECK_Z)
 log(f"hero: {int(doomed.sum())} head faces and {specks} loose ones gone, {len(body.data.polygons)} left")
 
-# --- 2. Ramil's head on the hero's neck --------------------------------------------------------------------------------
+# --- 2. The scanned head on the hero's neck ----------------------------------------------------------------------------
 bpy.ops.import_scene.gltf(filepath=HEAD_GLB)
 head = next(o for o in bpy.context.selected_objects if o.type == "MESH")
 head.name = "Head"
@@ -209,13 +217,14 @@ bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
 offset = Vector((0.0, COLLAR_CENTRE_Y - HEAD_NECK_Y * HEAD_SCALE, HERO_CHIN_Z - HEAD_CHIN_Z * HEAD_SCALE))
 bm.transform(Matrix.Translation(offset) @ Matrix.Scale(HEAD_SCALE, 4))
 bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], dist=1e-5, plane_co=COLLAR_RIM_FRONT - Vector((0, 0, NECK_UNDER_RIM)),
-                       plane_no=Vector((0.0, -COLLAR_RIM_SLOPE, 1.0)), clear_inner=True)
+                       plane_no=Vector((0.0, -SCAN["neck_slope"], 1.0)), clear_inner=True)
 bm.to_mesh(head.data)
 bm.free()
 head.matrix_world.identity()
 colours = face_colours(head.data, head_tex)
 top, low = colours.max(1), colours.min(1)
-shirt = (top > 0.38) & ((top - low) / np.maximum(top, 1e-6) < 0.18)
+grey = (top - low) / np.maximum(top, 1e-6) < 0.18
+shirt = (grey & (top > 0.38)) if SCAN["shirt"] == "white" else (top < 0.15)  # (near-black has no reliable hue)
 z = np.array([p.center.z for p in head.data.polygons])
 delete_faces(head, shirt & (z < HEAD_SHIRT_BELOW_Z))
 specks = drop_specks(head, 500, lambda p: True)
@@ -553,16 +562,18 @@ gain = head_skin / hero_skin
 hero_tex[..., :3][hero_skin_px] = np.clip(hero_tex[..., :3][hero_skin_px] * gain, 0, 1)
 log(f"skin: head {np.round(head_skin * 255)}, hero {np.round(hero_skin * 255)} -> hands and feet x {np.round(gain, 2)}")
 
-half_w, half_h = ATLAS_W // 2, ATLAS_H // 2
+ATLAS_W, ATLAS_H = 2 * TILE, (2 if CARDS else 1) * TILE
+top = ATLAS_H - TILE  # first row of the hero | head row
 atlas = np.ones((ATLAS_H, ATLAS_W, 4), dtype=np.float32)  # row 0 is v = 0 (the bottom)
-atlas[half_h:, :half_w] = hero_tex
+atlas[top:, :TILE] = hero_tex
 h, w = head_tex.shape[:2]
-atlas[half_h:, half_w:] = head_tex.reshape(half_h, h // half_h, half_w, w // half_w, 4).mean((1, 3))
-atlas[half_h:, :, 3] = 1.0
-atlas[:half_h] = strand_strips(hair_colour, half_h, ATLAS_W)
-image = bpy.data.images.new("Ramil_rigged", ATLAS_W, ATLAS_H)
+atlas[top:, TILE:] = head_tex.reshape(TILE, h // TILE, TILE, w // TILE, 4).mean((1, 3))
+atlas[top:, :, 3] = 1.0
+if CARDS:
+    atlas[:top] = strand_strips(hair_colour, top, ATLAS_W)
+image = bpy.data.images.new(f"{NAME}_rigged", ATLAS_W, ATLAS_H)
 image.pixels.foreach_set(atlas.ravel())
-image.filepath_raw = os.path.join(OUT, "Ramil_rigged.png")
+image.filepath_raw = os.path.join(OUT, f"{NAME}_rigged.png")
 image.file_format = "PNG"
 image.save()
 for obj, u0 in ((body, 0.0), (head, 0.5)):  # (the cards' UVs are already in the atlas)
@@ -570,10 +581,10 @@ for obj, u0 in ((body, 0.0), (head, 0.5)):  # (the cards' UVs are already in the
     obj.data.uv_layers.active.data.foreach_get("uv", uv)
     uv = uv.reshape(-1, 2)
     uv[:, 0] = u0 + np.clip(uv[:, 0], 0, 1) * 0.5
-    uv[:, 1] = 0.5 + np.clip(uv[:, 1], 0, 1) * 0.5
+    uv[:, 1] = (top + np.clip(uv[:, 1], 0, 1) * TILE) / ATLAS_H
     obj.data.uv_layers.active.data.foreach_set("uv", uv.ravel())
 
-material = bpy.data.materials.new("Ramil")
+material = bpy.data.materials.new(NAME)
 material.use_nodes = True
 tex_node = material.node_tree.nodes.new("ShaderNodeTexImage")
 tex_node.image = image
@@ -586,17 +597,17 @@ for obj in (body, head, cards):
 bpy.data.objects.remove(source)
 select(body, head, cards)
 bpy.ops.object.join()
-body.name = body.data.name = "Ramil"
+body.name = body.data.name = NAME
 bpy.ops.object.shade_smooth()
-export_unit_scale_fbx(os.path.join(OUT, "Ramil_rigged.fbx"), [armature, body])
-log(f"wrote Ramil_rigged.fbx ({len(body.data.polygons)} faces) and Ramil_rigged.png ({ATLAS_W} x {ATLAS_H})")
+export_unit_scale_fbx(os.path.join(OUT, f"{NAME}_rigged.fbx"), [armature, body])
+log(f"wrote {NAME}_rigged.fbx ({len(body.data.polygons)} faces) and {NAME}_rigged.png ({ATLAS_W} x {ATLAS_H})")
 
 bpy.ops.wm.read_factory_settings(use_empty=True)  # previews of what was written, as Unreal will get it
-bpy.ops.import_scene.fbx(filepath=os.path.join(OUT, "Ramil_rigged.fbx"))
+bpy.ops.import_scene.fbx(filepath=os.path.join(OUT, f"{NAME}_rigged.fbx"))
 look = bpy.data.materials.new("Look")
 look.use_nodes = True
 tex_node = look.node_tree.nodes.new("ShaderNodeTexImage")
-tex_node.image = bpy.data.images.load(os.path.join(OUT, "Ramil_rigged.png"))
+tex_node.image = bpy.data.images.load(os.path.join(OUT, f"{NAME}_rigged.png"))
 look.node_tree.links.new(tex_node.outputs["Color"], look.node_tree.nodes["Principled BSDF"].inputs["Base Color"])
 look.node_tree.links.new(tex_node.outputs["Alpha"], look.node_tree.nodes["Principled BSDF"].inputs["Alpha"])
 look.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.8  # M_Character's
@@ -606,6 +617,6 @@ for obj in bpy.data.objects:
         obj.data.materials.append(look)
 render(os.path.join(OUT, "preview"), (0, 0, 0.92), 0.95, size=1024)
 
-if os.environ.get("RAMIL_DEBUG"):
-    render(os.environ["RAMIL_DEBUG"], (0, 0, 1.58), 0.25, (("front", (0, -1, 0)), ("side", (1, 0, 0)), ("back", (0, 1, 0)), ("top", (0.0, 0.5, 1.0))))
-    bpy.ops.wm.save_as_mainfile(filepath=os.environ["RAMIL_DEBUG"] + ".blend")
+if os.environ.get("HEAD_DEBUG"):
+    render(os.environ["HEAD_DEBUG"], (0, 0, 1.58), 0.25, (("front", (0, -1, 0)), ("side", (1, 0, 0)), ("back", (0, 1, 0)), ("top", (0.0, 0.5, 1.0))))
+    bpy.ops.wm.save_as_mainfile(filepath=os.environ["HEAD_DEBUG"] + ".blend")

@@ -130,7 +130,7 @@ def main_island(bm, z, head_top, neck_top):
 
 def skin_start(head, place, head_top, neck_top, axis):
     """Where the donor's neck texture becomes usable, going up: the top of the 1 cm bands near the neck whose texel
-    density (UV area per surface area, median) is under half the head's (build_ramil.py drew Ramil's neck down into a
+    density (UV area per surface area, median) is under half the head's (build_head_swap.py drew Ramil's neck down into a
     collar with collapsed UVs). None when nothing is stretched."""
     bm = bmesh.new()
     bm.from_mesh(head.data)

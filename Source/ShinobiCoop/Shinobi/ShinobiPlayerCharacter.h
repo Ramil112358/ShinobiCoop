@@ -95,6 +95,7 @@ public:
 		{TEXT("RamilMH"), TEXT("/Game/Shinobi/MetaHumans/RamilMH/Build/MHC_RamilMH/Body/SKM_MHC_RamilMH_BodyMesh.SKM_MHC_RamilMH_BodyMesh"),
 			TEXT("/Game/Shinobi/MetaHumans/RamilMH/RTG_MannyToRamilMH.RTG_MannyToRamilMH"),
 			TEXT("/Game/Shinobi/MetaHumans/RamilMH/Build/MHC_RamilMH/BP_MHC_RamilMH.BP_MHC_RamilMH_C")},
+		{TEXT("Elvin"), TEXT("/Game/Shinobi/Characters/Elvin/SK_Elvin.SK_Elvin"), TEXT("/Game/Shinobi/Characters/Elvin/RTG_MannyToElvin.RTG_MannyToElvin")},
 	};
 
 	/** Roster index of Name (case-insensitive), or INDEX_NONE. */

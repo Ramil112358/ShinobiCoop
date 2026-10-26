@@ -346,7 +346,7 @@ def build_character_material():
     if _character_material is not None:
         return _character_material
     path = f"{CHARACTERS_DIR}/M_Character"
-    if os.environ.get("SETUP_HERO_ONLY") in ("outfits", "cloth") and unreal.EditorAssetLibrary.does_asset_exist(path):
+    if os.environ.get("SETUP_HERO_ONLY") in ("outfits", "cloth", "character") and unreal.EditorAssetLibrary.does_asset_exist(path):
         _character_material = unreal.load_asset(path)  # the bodies' instances stay on it
         add_hide_mask(_character_material)
         return _character_material
@@ -464,7 +464,7 @@ def mixamo_texture(fbx_path):
 
 
 # Bodies whose FBX normals are authored, not just smooth: Ramil's hair cards carry the hair shell's normals
-# (Scripts/character/build_ramil.py), which the default recompute throws away (each card then lights as a dark flake).
+# (Scripts/character/build_head_swap.py), which the default recompute throws away (each card then lights as a dark flake).
 KEEP_NORMALS = ("Ramil",)
 
 
@@ -478,15 +478,19 @@ def keep_normals(mesh):
 
 
 def build_characters(ik_manny):
-    convert_vrms()
+    only = os.environ.get("SETUP_HERO_CHARACTER", "")  # =Elvin: just that Mixamo-rigged one, no VRoid (SETUP_HERO_ONLY=character)
+    if not only:
+        convert_vrms()
     # (character, fbx, slot -> base-colour PNG): VRoid conversions, then Mixamo-rigged models (Rodin meshes etc.).
     found = []
     for fbx_path in sorted(glob.glob(os.path.join(VROID_DIR, "*", "*.fbx"))):
         character = os.path.basename(os.path.dirname(fbx_path))
-        if os.path.splitext(os.path.basename(fbx_path))[0] == character:
+        if os.path.splitext(os.path.basename(fbx_path))[0] == character and not only:
             found.append((character, fbx_path, lambda slot, d=os.path.dirname(fbx_path): os.path.join(d, f"{slot}.png")))
     for fbx_path in sorted(glob.glob(os.path.join(MODELS_DIR, "*", "*_rigged.fbx"))):
         character = os.path.basename(os.path.dirname(fbx_path))
+        if only and character != only:
+            continue
         # Models/Hero/Hero_rigged.fbx is the hero itself (imported above), not a second roster character.
         if os.path.basename(fbx_path) == f"{character}_rigged.fbx" and os.path.abspath(fbx_path) != os.path.abspath(HERO_FBX):
             png = mixamo_texture(fbx_path)
@@ -511,7 +515,7 @@ def build_characters(ik_manny):
         build_retargeter(ik_manny, build_ik_rig(mesh, dest, f"IK_{character}"), dest, f"RTG_MannyTo{character}")
 
 
-ROSTER = ("Hero", "Bika", "Cat", "Misha", "Pabu", "Ramil", "RamilMH")  # AShinobiPlayerCharacter::Roster
+ROSTER = ("Hero", "Bika", "Cat", "Misha", "Pabu", "Ramil", "RamilMH", "Elvin")  # AShinobiPlayerCharacter::Roster
 # City Sample frames the character creator wears (setup_creator.py FRAME_BODIES): outfit bodies too, through a local-only
 # fitting proxy (SourceArt/.../<Body>_rigged.fbx, which carries a face scan) that only their cloth collision is built from.
 CREATOR_FRAMES = ("CrowdMUnder", "CrowdMNormal", "CrowdMOver", "CrowdFUnder", "CrowdFNormal", "CrowdFOver")
@@ -681,6 +685,11 @@ elif os.environ.get("SETUP_HERO_ONLY") == "cloth":
     # After tuning one copy's cloth in the Skeletal Mesh editor: SETUP_HERO_CLOTH_SOURCE=<Outfit>_<Body> copies it onto
     # that outfit's other copies (docs/character/outfit-steps.md, "Tuning the cloth").
     copy_cloth_tuning(os.environ.get("SETUP_HERO_CLOTH_SOURCE", ""))
+elif os.environ.get("SETUP_HERO_ONLY") == "character":
+    # SETUP_HERO_CHARACTER=<Name>: imports just that roster body and its outfit copies, leaving the others alone.
+    os.environ["SETUP_HERO_OUTFIT_BODY"] = os.environ["SETUP_HERO_CHARACTER"]
+    build_characters(unreal.load_asset(IK_MANNY_PATH))
+    build_outfits()
 elif os.environ.get("SETUP_HERO_ONLY") == "retargeters":
     # Re-configures every RTG_MannyTo<Id> in place on its existing IK rigs (e.g. after changing ARM_SPREAD_DEGREES).
     for path in unreal.EditorAssetLibrary.list_assets("/Game/Shinobi", recursive=True):
