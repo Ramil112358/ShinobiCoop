@@ -96,6 +96,9 @@ public:
 			TEXT("/Game/Shinobi/MetaHumans/RamilMH/RTG_MannyToRamilMH.RTG_MannyToRamilMH"),
 			TEXT("/Game/Shinobi/MetaHumans/RamilMH/Build/MHC_RamilMH/BP_MHC_RamilMH.BP_MHC_RamilMH_C")},
 		{TEXT("Elvin"), TEXT("/Game/Shinobi/Characters/Elvin/SK_Elvin.SK_Elvin"), TEXT("/Game/Shinobi/Characters/Elvin/RTG_MannyToElvin.RTG_MannyToElvin")},
+		{TEXT("BikaMH"), TEXT("/Game/Shinobi/MetaHumans/BikaMH/Build/MHC_BikaMH/Body/SKM_MHC_BikaMH_BodyMesh.SKM_MHC_BikaMH_BodyMesh"),
+			TEXT("/Game/Shinobi/MetaHumans/BikaMH/RTG_MannyToBikaMH.RTG_MannyToBikaMH"),
+			TEXT("/Game/Shinobi/MetaHumans/BikaMH/Build/MHC_BikaMH/BP_MHC_BikaMH.BP_MHC_BikaMH_C")},
 	};
 
 	/** Roster index of Name (case-insensitive), or INDEX_NONE. */

@@ -382,6 +382,12 @@ void UShinobiBodyComponent::WearMetaHumanParts(const TCHAR* ClassPath)
 				if (Placed->ComponentHasTag(TEXT("ShinobiStrands")))
 				{
 					StrandsFace = Cast<USkinnedMeshComponent>(Parent);
+					// A bundled groom's LODs alternate strands and cards (cards at LODs 1 and 3 only): with strands drawn, the
+					// distance LODs of cards drew nothing and the hair vanished from a few metres.
+					if (UGroomComponent* StrandsGroom = Cast<UGroomComponent>(Placed))
+					{
+						StrandsGroom->SetForcedLOD(0);
+					}
 				}
 				else if (Var == TEXT("Hair") || Var == TEXT("Eyebrows"))
 				{
