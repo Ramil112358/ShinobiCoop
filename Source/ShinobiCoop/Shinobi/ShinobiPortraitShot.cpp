@@ -1,5 +1,7 @@
 #include "Shinobi/ShinobiPlayerController.h"
 
+#include "Shinobi/ShinobiPlayerCharacter.h"
+
 #include "AssetCompilingManager.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
@@ -67,7 +69,8 @@ void AShinobiPlayerController::RunPortraitShotTest(const FString& Who)
 	const struct { const TCHAR* Name; float Yaw; float Distance; bool bFace; } Views[] = {
 		{TEXT("Warmup"), 0.f, FaceDistance, true}, // the first switch to a portrait camera catches the LODs and grooms mid-update
 		{TEXT("Face_Front"), 0.f, FaceDistance, true}, {TEXT("Face_ThreeQuarter"), 35.f, FaceDistance, true}, {TEXT("Face_Side"), 90.f, FaceDistance, true},
-		{TEXT("Body_Front"), 0.f, 330.f, false},
+		{TEXT("Body_Front"), 0.f, 330.f, false}, {TEXT("Body_Side"), 90.f, 330.f, false}, {TEXT("Body_ThreeQuarter"), 40.f, 200.f, false},
+		{TEXT("Body_Far"), 0.f, 700.f, false}, {TEXT("Body_Farther"), 0.f, 1400.f, false}, // the groom's distance LODs
 	};
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Views); ++Index)
 	{
@@ -82,6 +85,10 @@ void AShinobiPlayerController::RunPortraitShotTest(const FString& Who)
 				return;
 			}
 			const USkeletalMeshComponent* HeadMesh = Shinobi->GetMesh();
+			if (const AShinobiPlayerCharacter* Player = Cast<AShinobiPlayerCharacter>(Shinobi))
+			{
+				HeadMesh = Player->GetHeroMesh() ? Player->GetHeroMesh() : HeadMesh; // the worn body: Manny's head is at 180 cm whatever its height
+			}
 			if (const AActor* Shown = Doll->Get())
 			{
 				TInlineComponentArray<USkeletalMeshComponent*> Meshes(Shown);

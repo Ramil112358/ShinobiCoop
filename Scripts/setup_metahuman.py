@@ -14,6 +14,7 @@ Scripts/character/prep_mh_head.py). SETUP_MH_ONLY=<stage>[,<stage>] runs only th
   bodyhide the built body's skin material takes outfit hide masks (build runs it too).
   bakeinputs the built face mesh + base colour for Scripts/character/bake_face_video.py (run_python.ps1 -Render).
   photoskin the baked video face (face_basecolor) as the face base colour override.
+  clearskin the face base colour override off (before a build whose base colour bakeinputs exports for a re-bake).
   body     only the body's measurements (keeps a face made in the Creator, e.g. Import > From Identity).
   look     skin tone, eye colour and grooms (hair, brows, stubble, lashes).
   cloud    face rig + high-res skin textures from Epic's MetaHuman service (the editor must be signed in to Epic).
@@ -69,8 +70,33 @@ CHARACTERS = {
         "groom_redness": 0.1,
         "groom_lightness": 0.3,
     },
+    # No head scan: the face comes only from the Live Link Face take (footage stage, once Live Link Hub has ingested it:
+    # Take Archive Ingest on SourceArt/.../Bika/LiveLinkFace). The character starts as a copy of a female Creator preset.
+    "BikaMH": {
+        "base_preset": "Ada",  # Masculine/Feminine 0.6; its face is replaced by the footage's
+        "footage": os.path.join(ROOT, "SourceArt", "Character", "Models", "Bika", "LiveLinkFace"),
+        "neutral_frame": 480,  # front, eyes most open (MediaPipe blendshapes over the take), relaxed (the take: 634 frames at 60 fps, 1080x1920)
+        "side_frames": [100, 444],  # turns of 35-40 degrees to each side, eyes open
+        "capture_data": "/Game/CaptureManager/Imports/Take_Archive_Ingest/MySlate_6/CD_MySlate_6",
+        # 160 cm, 50 kg, lean and athletic: the waist/hip/chest are estimates for that build (Ada: 173.5 cm, 87/67/99).
+        "body": {"height": 160.0, "chest": 84.0, "waist": 64.0, "hip": 91.0, "fat": -0.5, "muscularity": 0.25},
+        # Photos (SourceArt/Character/Photos/Bika): medium olive skin, dark brown eyes, long dark-brown wavy hair, full natural brows.
+        "skin": {"u": 0.42, "v": 0.48},
+        "iris": {"primary_color_u": 0.86, "primary_color_v": 0.10, "secondary_color_u": 0.96, "secondary_color_v": 0.0, "global_tint": 0.15},
+        # The face base colour baked from the take (Scripts/character/bake_face_video.py, BAKE_* env: see its docstring).
+        "face_basecolor": os.path.join(ROOT, "SourceArt", "Character", "Models", "Bika", "MetaHuman", "Bika_face_bc_video.png"),
+        "grooms": {
+            "Hair": ("Hair/WI_Hair_L_Straight", 1.0),
+            "Eyebrows": ("Eyebrows/WI_Eyebrows_M_Full", 1.0),
+            "Eyelashes": ("Eyelashes/WI_Eyelashes_L_Curl", 1.0),
+        },
+        "hair_strands": True,
+        "no_outfit": True,
+        "groom_redness": 0.0,
+        "groom_lightness": 0.3,
+    },
 }
-CFG = CHARACTERS[NAME]
+CFG =CHARACTERS[NAME]
 DEST = f"/Game/Shinobi/MetaHumans/{NAME}"
 # SETUP_MH_QUALITY=LOW|MEDIUM|HIGH (Optimized pipeline); a non-default quality builds into Build_<Quality> beside Build.
 # HIGH by default: a player is seen up close, and MEDIUM keeps only a 4k-vertex face (HIGH 19k) and bakes the brows and
@@ -138,6 +164,13 @@ def character_asset():
     path = f"{DEST}/MHC_{NAME}"
     if EAL.does_asset_exist(path):
         return unreal.load_asset(path)
+    if CFG.get("base_preset"):  # a preset carries its sex's body and defaults; a blank character is male
+        EAL.make_directory(DEST)
+        preset = unreal.load_asset(f"/MetaHumanCharacter/Optional/Presets/{CFG['base_preset']}")
+        copy = TOOLS.duplicate_asset(f"MHC_{NAME}", DEST, preset)
+        if not copy:
+            raise RuntimeError(f"could not copy preset {CFG['base_preset']}")
+        return copy
     character = TOOLS.create_asset(asset_name=f"MHC_{NAME}", package_path=DEST, asset_class=unreal.MetaHumanCharacter,
                                    factory=unreal.new_object(type=unreal.MetaHumanCharacterFactoryNew))
     if character is None:
@@ -286,7 +319,8 @@ def look():
         eyes = character.get_editor_property("eyes_settings")
         for eye in (eyes.eye_left, eyes.eye_right):
             for key, value in CFG["iris"].items():
-                setattr(eye.iris, key, value)
+                # global_tint is the iris brightness (a preset's dark brown eye has ~0.1-0.2, a hazel one 1.0)
+                setattr(eye.iris, key, unreal.LinearColor(value, value, value, 1.0) if key == "global_tint" else value)
         MH.commit_eyes_settings(character, eyes)
         collection = character.internal_collection
         instance = collection.default_instance
@@ -300,6 +334,11 @@ def look():
             keys[slot] = existing[0] if existing else collection.try_add_item_from_wardrobe_item(slot, wardrobe)
             instance.set_single_slot_selection(slot, keys[slot])  # replaces an earlier pick
             log(f"{slot}: {item.rsplit('/', 1)[1]}")
+        if CFG.get("no_outfit"):
+            # A preset comes dressed (default T-shirt and shorts, sized to its own body: they don't fit a re-measured one).
+            # Without them the body's own underwear shows, as on a blank character (RamilMH).
+            instance.set_single_slot_selection("Outfits", unreal.MetaHumanPaletteItemKey())
+            log("Outfits: " + ", ".join(str(d.selection.slot_name) for d in instance.get_slot_selection_data() if str(d.selection.slot_name) == "Outfits" and d.selection.selected_item.references_external_wardrobe_item) + " (empty = cleared)")
     EAL.save_loaded_asset(character, only_if_is_dirty=False)
     log(f"look saved on {character.get_name()}")
 
@@ -720,6 +759,30 @@ def fab_hair():
     log(f"Hair: {groom.get_name()} bound to {face.get_name()} (section {skin}), out of the LODSync: {[str(e.get_editor_property('name')) for e in entries]}")
 
 
+def strand_hair():
+    """CFG["hair_strands"]: a bundled Hair and Eyebrows drawn as strands. The Optimized build keeps their cards for LODs 1 and 3
+    only, so UShinobiBodyComponent's cards-everywhere (bUseCards) leaves the face LOD0 close-ups bald and browless; the
+    ShinobiStrands tag keeps strands (and pins the face to LOD0, as for a Fab hair)."""
+    if not CFG.get("hair_strands"):
+        return
+    bp = unreal.load_asset(f"{DEST}/{BUILD_DIR}/MHC_{NAME}/BP_MHC_{NAME}")
+    sds = unreal.get_engine_subsystem(unreal.SubobjectDataSubsystem)
+    lib = unreal.SubobjectDataBlueprintFunctionLibrary
+    templates = {str(lib.get_variable_name(lib.get_data(h))): lib.get_associated_object(lib.get_data(h)) for h in sds.k2_gather_subobject_data_for_blueprint(bp)}
+    names = [n for n in ("Hair", "Eyebrows") if n in templates]
+    for name in names:
+        templates[name].set_editor_property("component_tags", ["ShinobiStrands"])
+    sync = next(t for t in templates.values() if isinstance(t, unreal.LODSyncComponent))  # their card LODs follow the body's
+    entries = list(sync.get_editor_property("components_to_sync"))
+    for entry in entries:
+        if str(entry.get_editor_property("name")) in names:
+            entry.set_editor_property("sync_option", unreal.SyncOption.DISABLED)
+    sync.set_editor_property("components_to_sync", entries)
+    unreal.BlueprintEditorLibrary.compile_blueprint(bp)
+    EAL.save_loaded_asset(bp, only_if_is_dirty=False)
+    log(f"{', '.join(names)} tagged ShinobiStrands")
+
+
 def body_hide():
     """The built body's skin material takes a HideMask (white by default): wearing an outfit, the game sets it to the
     outfit's hide mask for this body (AShinobiPlayerCharacter::DressOutfit), so the skin under the cloak isn't drawn.
@@ -801,6 +864,19 @@ def photo_skin():
     log(f"face base colour override: {tex.get_path_name()}")
 
 
+def clear_skin():
+    """The face base-colour override off, so the next build's base colour (bakeinputs) is the Creator's own, not the last bake."""
+    character = character_asset()
+    with Editing(character):
+        skin = character.get_editor_property("skin_settings")
+        over = skin.get_editor_property("texture_material_overrides")
+        over.set_editor_property("enable_texture_overrides", False)
+        skin.set_editor_property("texture_material_overrides", over)
+        MH.commit_skin_settings(character, skin)
+    EAL.save_loaded_asset(character, only_if_is_dirty=False)
+    log("face texture overrides off")
+
+
 PENDING = []  # a GUI build finishing over editor ticks: the editor quits when it is done
 
 
@@ -846,6 +922,7 @@ def finish_build(character):
     if SCRIPT_GROOM_COLOURS:
         groom_colours()  # the hair's own material instances
     fab_hair()
+    strand_hair()
     body_hide()
 
 
@@ -889,7 +966,7 @@ def build():
     PENDING.append(handle)
 
 
-STAGES = {"scan": import_head_scan, "conform": conform, "body": body, "look": look, "cloud": cloud, "build": build, "colours": groom_colours, "retarget": retarget, "preview": preview, "fitcheck": fitcheck, "identity": identity, "measure": measure, "footage": footage, "fromidentity": from_identity, "photoskin": photo_skin, "hair": hair, "fabhair": fab_hair, "bakeinputs": bake_inputs, "bodyhide": body_hide}
+STAGES = {"scan": import_head_scan, "conform": conform, "body": body, "look": look, "cloud": cloud, "build": build, "colours": groom_colours, "retarget": retarget, "preview": preview, "fitcheck": fitcheck, "identity": identity, "measure": measure, "footage": footage, "fromidentity": from_identity, "photoskin": photo_skin, "clearskin": clear_skin, "hair": hair, "fabhair": fab_hair, "strandhair": strand_hair, "bakeinputs": bake_inputs, "bodyhide": body_hide}
 try:
     for stage in ONLY or list(STAGES):
         STAGES[stage]()

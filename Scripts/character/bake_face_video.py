@@ -8,6 +8,7 @@ Run from the repo root, after the MetaHuman's High build (Scripts/setup_metahuma
   SETUP_MH_ONLY=photoskin (run_python.ps1)   -> set as the face's base colour override, then build.
 <bake> is BAKE_DIR (default SourceArt/Character/Models/Ramil/MetaHuman/bake, git-ignored like the scan); BAKE_MOV is the
 Live Link Face take's video, BAKE_FRAMES its frames (front first). Needs opencv-python, mediapipe, numpy.
+Opt-in: BAKE_FEATHER (px; 0 = the original blurred mask), BAKE_SHINE (highlights kept, 1 = no clamp), BAKE_EYE_GROW (px; 0 = eyes not masked), BAKE_MOLE (json), BAKE_MATCH (0.7).
   1. A software render of the head (front) -> MediaPipe -> the 478 landmarks' 3D positions on the head (depth lookup).
   2. Each video frame: MediaPipe 2D -> solvePnP with the TrueDepth intrinsics -> head pose in that frame.
   3. Every skin texel: its 3D point and normal (UV rasterisation), projected into each frame; colour sampled where visible
@@ -31,11 +32,15 @@ MOV = os.environ.get("BAKE_MOV", os.path.join(RAMIL, "LiveLinkFace", "20261022_M
 OUT = os.environ.get("BAKE_OUT", os.path.join(RAMIL, "MetaHuman", "Ramil_face_bc_video.png"))  # setup_metahuman.py's face_basecolor
 FRAMES = [int(x) for x in os.environ.get("BAKE_FRAMES", "180,270,900,360,720").split(",")]
 VW, VH = 1080, 1920
-FX = 2728.3477 * VW / 2260.0
+FX = float(os.environ.get("BAKE_FX", 2728.3477)) * VW / 2260.0  # the take's depth_metadata.mhaical IntrinsicMatrix[0] (per take)
 K = np.array([[FX, 0, 1129 * VW / 2260.0], [0, FX, 2008 * VH / 4016.0], [0, 0, 1]])
 TEX = 2048
 OVAL = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136,
         172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109]
+
+EYE_RINGS = [[33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246],
+             [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]]
+EYE_GROW = int(os.environ.get("BAKE_EYE_GROW", "0"))  # 0 = eyes not masked  # px (video is 1080 wide): the lids and a little skin around them
 
 d = np.load(os.path.join(B, "face.npz"), allow_pickle=True)
 V, F, UV, M, mats = d["V"], d["F"], d["UV"], d["M"], list(d["mats"])
@@ -172,6 +177,11 @@ for fno, img, R, t, L in views:
     brow_y = min(L[105, 1], L[334, 1], L[70, 1], L[300, 1]) - 0.03 * abs(L[152, 1] - L[10, 1])
     hair = (hsv[..., 2] < 70) & (np.arange(VH)[:, None] < brow_y)
     oval[cv2.dilate(hair.astype(np.uint8), np.ones((15, 15), np.uint8)) > 0] = 0
+    # The eyes: open in the video, so their lids, lashes and whites land on the mesh's lids and read as heavy dark sockets.
+    # They keep the base's (the eye meshes and lash grooms draw the rest).
+    for ring in EYE_RINGS if EYE_GROW else []:
+        eye = cv2.fillPoly(np.zeros((VH, VW), np.uint8), [L[ring, :2].astype(np.int32)], 1)
+        oval[cv2.dilate(eye, np.ones((EYE_GROW, EYE_GROW), np.uint8)) > 0] = 0
     inside = oval[yi, xi] > 0
     view_dir = -((R @ Pt.T).T + t)
     view_dir /= np.linalg.norm(view_dir, axis=1, keepdims=True)
@@ -191,10 +201,20 @@ video[tm] = acc / np.maximum(wsum, 1e-6)[:, None]; wmap[tm] = wsum
 # 4. blend into the base
 base = cv2.imread(os.path.join(B, "base_bc.png"), cv2.IMREAD_UNCHANGED)
 base = cv2.resize(base[..., :3], (TEX, TEX)).astype(np.float32)
-alpha = np.clip(wmap / 0.02, 0, 1)
-alpha = cv2.erode(alpha, np.ones((31, 31), np.uint8))
-alpha = cv2.GaussianBlur(alpha, (0, 0), 40)  # a wide, soft edge: the video's light falls off where the base's doesn't
-alpha = np.clip(alpha / max(alpha.max(), 1e-6), 0, 1) ** 1.5
+valid = (wmap > 0.02).astype(np.uint8)
+valid = cv2.erode(valid, np.ones((9, 9), np.uint8))
+# Feather inside the patch only (distance from its edge), never into texels the video didn't cover: a blurred mask used to
+# spread over them and drag the video's empty (black) fill in, leaving a hard, lighter or darker rim around the patch.
+FEATHER = float(os.environ.get("BAKE_FEATHER", "0"))  # 0 = the original blurred mask
+if FEATHER > 0:
+    dist = cv2.distanceTransform(valid, cv2.DIST_L2, 5)
+    alpha = np.clip(dist / FEATHER, 0, 1)
+    alpha = alpha * alpha * (3 - 2 * alpha)  # smoothstep
+else:  # the original: a wide, soft edge ("the video's light falls off where the base's doesn't")
+    alpha = np.clip(wmap / 0.02, 0, 1)
+    alpha = cv2.erode(alpha, np.ones((31, 31), np.uint8))
+    alpha = cv2.GaussianBlur(alpha, (0, 0), 40)
+    alpha = np.clip(alpha / max(alpha.max(), 1e-6), 0, 1) ** 1.5
 # Colour: the video's skin in Lab moved MATCH of the way to the base's over the same patch (mean and spread), so the patch
 # sits in the character's skin tone without losing its own detail.
 MATCH = float(os.environ.get("BAKE_MATCH", "0.7"))
@@ -206,7 +226,14 @@ bm, bs = bl[core].mean(0), bl[core].std(0) + 1e-3
 tm_, ts_ = vm + MATCH * (bm - vm), vs + MATCH * (bs - vs)
 vl = (vl - vm) / vs * ts_ + tm_
 print("Lab video mean", np.round(vm, 1), "base", np.round(bm, 1), "->", np.round(tm_, 1))
+# The face in the video is oily and shines (forehead, nose bridge, cheeks): soft-clip lightness above the mean so the
+# highlights aren't painted into the base colour (the skin shader adds its own).
+SHINE = float(os.environ.get("BAKE_SHINE", "1"))  # 1 = no clamp
+top = tm_[0] + 0.4 * ts_[0]
+vl[..., 0] = np.where(vl[..., 0] > top, top + (vl[..., 0] - top) * SHINE, vl[..., 0])
 video = cv2.cvtColor(np.clip(vl, 0, 255).astype(np.uint8), cv2.COLOR_LAB2BGR).astype(np.float32)
+if FEATHER > 0:
+    video = np.where(valid[..., None] > 0, video, base)  # texels the video didn't cover take the base
 # Near the patch's edge the photo's broad light (darker temples, a brighter forehead) is swapped for the base's, so no band
 # shows where they meet; the middle keeps the photo's own.
 low_v = cv2.GaussianBlur(video, (0, 0), 60)
@@ -215,6 +242,24 @@ edge = (1 - np.clip((alpha - 0.05) / 0.35, 0, 1))[..., None]  # only the outer r
 print("alpha > 0.9 covers", round(float((alpha > 0.9).mean() * 100), 1), "% of the texture; ring", round(float(((alpha > 0.05) & (alpha < 0.4)).mean() * 100), 1), "%")
 video = video + (low_b - low_v) * edge
 out = base * (1 - alpha[..., None]) + video * alpha[..., None]
+# A mole (BAKE_MOLE json: a MediaPipe landmark triangle + barycentric weights + size in outer-eye-corner distances, as
+# measured on a photo): placed on the head through this head's landmarks, so it follows any sculpting.
+MOLE = os.environ.get("BAKE_MOLE")
+if MOLE and os.path.exists(MOLE):
+    m = json.load(open(MOLE))
+    if all(ok[i] for i in m["tri"]):
+        pm = (P3[m["tri"]] * np.array(m["w"])[:, None]).sum(0)
+        ipd3 = np.linalg.norm(P3[33] - P3[263])
+        sigma = m["diameter_px"] / m["ipd_px"] * ipd3 / 2.5 * float(os.environ.get("BAKE_MOLE_SCALE", "1"))
+        ys, xs = np.nonzero(tm)
+        d = np.linalg.norm(Pt - pm, axis=1)
+        sel = d < 3.5 * sigma
+        wgt = (0.85 * np.exp(-0.5 * (d[sel] / sigma) ** 2))[:, None]
+        mole_bgr = np.array(m["color_rgb"][::-1], np.float32)
+        out[ys[sel], xs[sel]] = out[ys[sel], xs[sel]] * (1 - wgt) + mole_bgr * wgt
+        print(f"mole at {np.round(pm * 100, 2)} cm, sigma {sigma * 1000:.2f} mm, {int(sel.sum())} texels")
+    else:
+        print("mole: its landmarks aren't on the head render")
 cv2.imwrite(os.path.join(B, "face_bc_video.png"), np.clip(out, 0, 255).astype(np.uint8))
 cv2.imwrite(OUT, np.clip(out, 0, 255).astype(np.uint8))
 cv2.imwrite(os.path.join(B, "face_bc_alpha.png"), (alpha * 255).astype(np.uint8))
