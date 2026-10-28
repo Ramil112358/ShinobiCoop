@@ -143,6 +143,10 @@ private:
 
 	void RunShotTest();
 
+	/** -ShinobiHitProbe: a hit reaction at several times after launch, logging how far the head moves on the driver and on
+	 * the worn body ("ShinobiHitProbe" lines), then quits. */
+	void RunHitProbe();
+
 	/** With -ShinobiJutsuShot: casts each jutsu at the dummy ahead and screenshots every effect, then quits.
 	 * Used by `Scripts/shot_chakra.ps1 -Jutsu`. */
 	void RunJutsuShotTest();

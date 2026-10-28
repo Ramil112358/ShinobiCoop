@@ -76,7 +76,7 @@ void UShinobiPhysicalReactionComponent::BeginPlay()
 	Super::BeginPlay();
 	ACharacter* Character = CastChecked<ACharacter>(GetOwner());
 	USkeletalMeshComponent* Mesh = Character->GetMesh();
-	UPhysicsControlAsset* ControlAsset = IsNetMode(NM_DedicatedServer) || !CVarPhysicalReactions.GetValueOnGameThread() ? nullptr
+	ControlAsset = IsNetMode(NM_DedicatedServer) || !CVarPhysicalReactions.GetValueOnGameThread() ? nullptr
 		: LoadObject<UPhysicsControlAsset>(nullptr, ControlAssetPath);
 	if (!ControlAsset || !Mesh || !Mesh->GetPhysicsAsset())
 	{
@@ -174,7 +174,7 @@ void UShinobiPhysicalReactionComponent::MulticastKnockdown_Implementation(FVecto
 	{
 		if (UAbilitySystemComponent* ASC = CastChecked<AShinobiCharacterBase>(GetOwner())->GetAbilitySystemComponent())
 		{
-			ASC->AddLooseGameplayTag(ShinobiTags::State_Staggered);
+			ASC->AddLooseGameplayTag(ShinobiTags::State_Staggered_Knockdown);
 		}
 	}
 	GetWorld()->GetTimerManager().SetTimer(HoldTimer, this, &UShinobiPhysicalReactionComponent::EndKnockdown, KnockdownHoldSeconds, false);
@@ -337,7 +337,7 @@ void UShinobiPhysicalReactionComponent::EndKnockdown()
 	{
 		if (UAbilitySystemComponent* ASC = CastChecked<AShinobiCharacterBase>(GetOwner())->GetAbilitySystemComponent())
 		{
-			ASC->RemoveLooseGameplayTag(ShinobiTags::State_Staggered);
+			ASC->RemoveLooseGameplayTag(ShinobiTags::State_Staggered_Knockdown);
 		}
 	}
 	bKnockedDown = false;
