@@ -18,6 +18,7 @@ namespace
 	const TCHAR* ConfigSection = TEXT("/Script/ShinobiCoop.ShinobiSettings");
 	const TCHAR* CharacterKey = TEXT("Character");
 	const TCHAR* OutfitKey = TEXT("Outfit");
+	const TCHAR* FaceKey = TEXT("Face");
 
 	UGameUserSettings* Settings()
 	{
@@ -53,6 +54,19 @@ FString ShinobiSettings::GetSavedOutfit()
 	return AShinobiPlayerCharacter::FindOutfitIndex(Name) == INDEX_NONE ? FString(AShinobiPlayerCharacter::Outfits[0].Name) : Name;
 }
 
+FString ShinobiSettings::GetSavedFace()
+{
+	FString Name;
+	GConfig->GetString(ConfigSection, FaceKey, Name, GGameUserSettingsIni);
+	return Name;
+}
+
+void ShinobiSettings::SetSavedFace(const FString& Name)
+{
+	GConfig->SetString(ConfigSection, FaceKey, *Name, GGameUserSettingsIni);
+	GConfig->Flush(false, GGameUserSettingsIni);
+}
+
 float ShinobiSettings::GetRenderScale()
 {
 	float Current = 100.f, Min = 0.f, Max = 0.f, Default = 100.f;
@@ -72,6 +86,12 @@ FString ShinobiSettings::Label(ERow Row)
 	{
 	case ERow::Character:
 		return FString::Printf(TEXT("Character: %s"), *GetSavedCharacter());
+	case ERow::Face:
+	{
+		const int32 Body = AShinobiPlayerCharacter::FindRosterIndex(GetSavedCharacter());
+		const FShinobiFaceEntry* Face = AShinobiPlayerCharacter::FindFace(Body, FMath::Max(0, AShinobiPlayerCharacter::FindFaceIndex(Body, GetSavedFace())));
+		return FString::Printf(TEXT("Face: %s"), Face ? Face->Name : TEXT("Default"));
+	}
 	case ERow::Outfit:
 		return FString::Printf(TEXT("Outfit: %s"), *GetSavedOutfit());
 	case ERow::Quality:
@@ -132,7 +152,7 @@ TArray<ShinobiSettings::ERow> ShinobiSettings::RowsFor(bool bMainMenu)
 	TArray<ERow> Rows;
 	for (uint8 Row = 0; Row < uint8(ERow::Num); ++Row)
 	{
-		if (!bMainMenu || (ERow(Row) != ERow::Character && ERow(Row) != ERow::Outfit))
+		if (!bMainMenu || (ERow(Row) != ERow::Character && ERow(Row) != ERow::Face && ERow(Row) != ERow::Outfit))
 		{
 			Rows.Add(ERow(Row));
 		}
@@ -155,6 +175,22 @@ void ShinobiSettings::Cycle(ERow Row, UWorld* World)
 		if (AShinobiPlayerController* PC = World ? World->GetFirstPlayerController<AShinobiPlayerController>() : nullptr)
 		{
 			PC->ShinobiCharacter(Name);
+		}
+		return;
+	}
+	case ERow::Face:
+	{
+		const int32 Body = AShinobiPlayerCharacter::FindRosterIndex(GetSavedCharacter());
+		const int32 Next = (FMath::Max(0, AShinobiPlayerCharacter::FindFaceIndex(Body, GetSavedFace())) + 1) % AShinobiPlayerCharacter::NumFaces(Body);
+		const FShinobiFaceEntry* Face = AShinobiPlayerCharacter::FindFace(Body, Next);
+		if (!Face)
+		{
+			return; // one face only
+		}
+		SetSavedFace(Face->Name);
+		if (AShinobiPlayerController* PC = World ? World->GetFirstPlayerController<AShinobiPlayerController>() : nullptr)
+		{
+			PC->ShinobiFace(Face->Name);
 		}
 		return;
 	}

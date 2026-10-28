@@ -48,6 +48,11 @@ public:
 	UFUNCTION(Exec)
 	void ShinobiCharacter(const FString& Name);
 
+	/** Console: ShinobiFace RealityScan -- the played roster character's face of that name (AShinobiPlayerCharacter::Faces).
+	 * The settings menu's Face row calls this after saving the pick; on its own it lasts for this session only. */
+	UFUNCTION(Exec)
+	void ShinobiFace(const FString& Name);
+
 	/** Console: ShinobiOutfit Hokage -- wear that outfit (AShinobiPlayerCharacter::Outfits; None takes it off). The settings
 	 * menu's Outfit row calls this after saving the pick; on its own it lasts for this session only. */
 	UFUNCTION(Exec)
@@ -116,13 +121,15 @@ private:
 	void ServerDrainChakra(float Amount);
 
 	UFUNCTION(Server, Reliable)
-	void ServerPickCharacter(uint8 Index);
+	void ServerPickCharacter(uint8 Index, uint8 Face);
 
 	UFUNCTION(Server, Reliable)
 	void ServerPickOutfit(uint8 Index);
 
 	/** Server: this player's roster pick, given to every pawn it possesses. */
 	uint8 PickedCharacter = 0;
+	/** Server: which of that character's faces. */
+	uint8 PickedFace = 0;
 
 	/** Server: this player's outfit pick, likewise. */
 	uint8 PickedOutfit = 0;

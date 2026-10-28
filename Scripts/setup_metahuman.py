@@ -9,6 +9,7 @@ Scripts/character/prep_mh_head.py). SETUP_MH_ONLY=<stage>[,<stage>] runs only th
   conform  the scan head (SM_<Name>_HeadScan) becomes MHC_<Name>'s face: landmarks tracked on the prep's portrait from
            the prep's camera, rigid align, then the Creator's "head_only" auto solve; then the body's measurements.
   footage  the face from a Live Link Face take through a MetaHuman Identity (GUI editor), replacing the character's face.
+  template the face from a head already in MetaHuman topology (CFG template, e.g. KeenFace's head.fbx; GUI editor).
   hair     only the Hair slot, to CHARACTERS' pick (then build with SETUP_MH_GROOM_COLOURS=1 to colour it).
   fabhair  a Fab Hair pick put into the built blueprint (the build drops single-LOD grooms); build runs it too.
   bodyhide the built body's skin material takes outfit hide masks (build runs it too).
@@ -96,7 +97,26 @@ CHARACTERS = {
         "groom_lightness": 0.3,
     },
 }
-CFG =CHARACTERS[NAME]
+# A second face for RamilMH (AShinobiPlayerCharacter::Faces): the later RealityScan (Ramil_head_RealityScan1, prepped into
+# MetaHumanScan1). A copy of MHC_RamilMH (its Creator skin, eyes, grooms and colours) whose face conform replaces; the game
+# keeps RamilMH's body and wears only this build's face and grooms. Stages: conform, cloud, build (GUI); then the scan's
+# photo texture: bakeinputs (-Render), bake_face_video.py with BAKE_SCAN, photoskin, build.
+CHARACTERS["RamilMHScan"] = {**{k: v for k, v in CHARACTERS["RamilMH"].items() if k not in ("footage", "capture_data", "face_basecolor")},
+                             "scan": os.path.join(ROOT, "SourceArt", "Character", "Models", "Ramil", "MetaHumanScan1"),
+                             # the scan's photo texture baked onto this face (bake_face_video.py with BAKE_SCAN)
+                             "face_basecolor": os.path.join(ROOT, "SourceArt", "Character", "Models", "Ramil", "MetaHumanScan1", "Ramil_face_bc_scan.png"),
+                             "copy_of": "RamilMH"}
+# A second face for BikaMH (AShinobiPlayerCharacter::Faces): KeenFace's head from photos (Bika_keenface.zip unzipped to
+# Bika/KeenFace: head.fbx already in MetaHuman head topology, 4K colour/normal/SRMF maps). A copy of MHC_BikaMH whose face the
+# template stage replaces. Stages: template, cloud, photoskin, build (GUI).
+KEENFACE_BIKA = os.path.join(ROOT, "SourceArt", "Character", "Models", "Bika", "KeenFace")
+CHARACTERS["BikaMHKeenFace"] = {**{k: v for k, v in CHARACTERS["BikaMH"].items() if k not in ("footage", "capture_data", "face_basecolor")},
+                                "template": os.path.join(KEENFACE_BIKA, "head.fbx"),
+                                # The Creator overrides only base colour, normal and cavity: KeenFace's SRMF has no slot.
+                                "face_textures": {"BASECOLOR": os.path.join(KEENFACE_BIKA, "texture", "Head_Color.jpg"),
+                                                  "NORMAL": os.path.join(KEENFACE_BIKA, "texture", "Head_Normal.jpg")},
+                                "copy_of": "BikaMH"}
+CFG = CHARACTERS[NAME]
 DEST = f"/Game/Shinobi/MetaHumans/{NAME}"
 # SETUP_MH_QUALITY=LOW|MEDIUM|HIGH (Optimized pipeline); a non-default quality builds into Build_<Quality> beside Build.
 # HIGH by default: a player is seen up close, and MEDIUM keeps only a 4k-vertex face (HIGH 19k) and bakes the brows and
@@ -116,6 +136,12 @@ def import_head_scan():
     fbx = os.path.join(CFG["scan"], f"{CFG['scan_name']}_head_mh.fbx")
     if not os.path.exists(fbx):
         raise RuntimeError(f"{fbx} missing: run Scripts/character/prep_mh_head.py")
+    mesh = import_static_mesh(fbx, f"SM_{NAME}_HeadScan")
+    texture_scan(mesh, fbx.replace(".fbx", "_diffuse.jpg"))
+    return mesh
+
+
+def import_static_mesh(fbx, name):
     options = unreal.FbxImportUI()
     options.import_mesh = True
     options.import_as_skeletal = False
@@ -125,14 +151,13 @@ def import_head_scan():
     options.static_mesh_import_data.set_editor_property("combine_meshes", True)
     options.static_mesh_import_data.set_editor_property("auto_generate_collision", False)
     task = unreal.AssetImportTask()
-    task.filename, task.destination_path, task.destination_name = fbx, DEST, f"SM_{NAME}_HeadScan"
+    task.filename, task.destination_path, task.destination_name = fbx, DEST, name
     task.automated = task.save = task.replace_existing = True
     task.options = options
     TOOLS.import_asset_tasks([task])
-    mesh = unreal.load_asset(f"{DEST}/SM_{NAME}_HeadScan")
+    mesh = unreal.load_asset(f"{DEST}/{name}")
     if not isinstance(mesh, unreal.StaticMesh):
         raise RuntimeError(f"could not import {fbx}")
-    texture_scan(mesh, fbx.replace(".fbx", "_diffuse.jpg"))
     return mesh
 
 
@@ -164,6 +189,13 @@ def character_asset():
     path = f"{DEST}/MHC_{NAME}"
     if EAL.does_asset_exist(path):
         return unreal.load_asset(path)
+    if CFG.get("copy_of"):
+        EAL.make_directory(DEST)
+        other = CFG["copy_of"]
+        copy = EAL.duplicate_asset(f"/Game/Shinobi/MetaHumans/{other}/MHC_{other}", path)
+        if not copy:
+            raise RuntimeError(f"could not copy MHC_{other}")
+        return copy
     if CFG.get("base_preset"):  # a preset carries its sex's body and defaults; a blank character is male
         EAL.make_directory(DEST)
         preset = unreal.load_asset(f"/MetaHumanCharacter/Optional/Presets/{CFG['base_preset']}")
@@ -230,12 +262,45 @@ def set_body(character):
     log("body now: " + ", ".join(f"{k}={after[k].target_measurement:.1f}" for k in CFG["body"] if k in after))
 
 
+def drop_copied_face(character):
+    """The copied face's rig and its photo texture (baked for that face's shape) don't fit the new one: cloud re-rigs."""
+    MH.remove_face_rig(character)
+    skin = character.get_editor_property("skin_settings")
+    over = skin.get_editor_property("texture_material_overrides")
+    over.set_editor_property("enable_texture_overrides", False)
+    skin.set_editor_property("texture_material_overrides", over)
+    MH.commit_skin_settings(character, skin)
+
+
+def template():
+    """CFG["template"] (an FBX head in MetaHuman head topology, e.g. KeenFace's) as the character's face: Import > From Template
+    (vertices matched by UV, scaling alignment, so the head keeps the character's size: a photo-made head has no real scale).
+    GUI editor: the head goes to Saved/MetaHumanFit for the distance check. KeenFace Bika: 0.39 mm median from the FBX; a
+    second fit keeping the high-frequency delta (as from_identity_detailed does) came out identical, so there is none."""
+    head = import_static_mesh(CFG["template"], f"SM_{NAME}_Template")
+    character = character_asset()
+    with Editing(character):
+        if CFG.get("copy_of"):
+            drop_copied_face(character)
+        else:
+            MH.remove_face_rig(character)
+        result = MH.import_from_template(character, head, None, None, None, unreal.ImportFromTemplateParams())
+        log(f"import_from_template: {result}")
+        if result != unreal.ImportErrorCode.SUCCESS:
+            raise RuntimeError(f"import_from_template failed: {result}")
+        export_head_fbx(character, "template")
+    EAL.save_loaded_asset(character, only_if_is_dirty=False)
+    log(f"saved {character.get_path_name()}")
+
+
 def conform():
     head = import_head_scan()
     with open(os.path.join(CFG["scan"], f"{CFG['scan_name']}_head_mh.json")) as f:
         meta = json.load(f)
     character = character_asset()
     with Editing(character):
+        if CFG.get("copy_of"):
+            drop_copied_face(character)
         curves, view, size = track_portrait(meta)
         verts, indices, *_ = MH.get_mesh_data_for_conforming(head)
         log(f"head scan: {len(verts)} verts, {len(indices) // 3} tris")
@@ -839,15 +904,22 @@ def bake_inputs():
 
 
 def photo_skin():
-    """The baked video face as the character's face base colour (skin settings > texture overrides)."""
-    png = CFG["face_basecolor"]
-    task = unreal.AssetImportTask()
-    task.filename, task.destination_path, task.destination_name = png, DEST, f"T_{NAME}_Face_BC"
-    task.automated = task.save = task.replace_existing = True
-    TOOLS.import_asset_tasks([task])
-    tex = unreal.load_asset(f"{DEST}/T_{NAME}_Face_BC")
-    tex.set_editor_property("srgb", True)
-    EAL.save_loaded_asset(tex)
+    """The face's texture overrides (skin settings): CFG face_textures (FaceTextureType name -> image), else the baked video
+    face (face_basecolor) as the base colour."""
+    sources = CFG.get("face_textures") or {"BASECOLOR": CFG["face_basecolor"]}
+    imported = {}
+    for kind, image in sources.items():
+        name = f"T_{NAME}_Face_{'BC' if kind == 'BASECOLOR' else kind.title()}"
+        task = unreal.AssetImportTask()
+        task.filename, task.destination_path, task.destination_name = image, DEST, name
+        task.automated = task.save = task.replace_existing = True
+        TOOLS.import_asset_tasks([task])
+        tex = unreal.load_asset(f"{DEST}/{name}")
+        tex.set_editor_property("srgb", kind == "BASECOLOR")
+        if kind == "NORMAL":
+            tex.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_NORMALMAP)
+        EAL.save_loaded_asset(tex)
+        imported[getattr(unreal.FaceTextureType, kind)] = tex
     character = character_asset()
     with Editing(character):
         skin = character.get_editor_property("skin_settings")
@@ -855,13 +927,13 @@ def photo_skin():
         over.set_editor_property("enable_texture_overrides", True)
         textures = over.get_editor_property("texture_overrides")
         face = dict(textures.get_editor_property("face"))
-        face[unreal.FaceTextureType.BASECOLOR] = tex
+        face.update(imported)
         textures.set_editor_property("face", face)
         over.set_editor_property("texture_overrides", textures)
         skin.set_editor_property("texture_material_overrides", over)
         MH.commit_skin_settings(character, skin)
     EAL.save_loaded_asset(character, only_if_is_dirty=False)
-    log(f"face base colour override: {tex.get_path_name()}")
+    log("face texture overrides: " + ", ".join(t.get_path_name() for t in imported.values()))
 
 
 def clear_skin():
@@ -966,7 +1038,7 @@ def build():
     PENDING.append(handle)
 
 
-STAGES = {"scan": import_head_scan, "conform": conform, "body": body, "look": look, "cloud": cloud, "build": build, "colours": groom_colours, "retarget": retarget, "preview": preview, "fitcheck": fitcheck, "identity": identity, "measure": measure, "footage": footage, "fromidentity": from_identity, "photoskin": photo_skin, "clearskin": clear_skin, "hair": hair, "fabhair": fab_hair, "strandhair": strand_hair, "bakeinputs": bake_inputs, "bodyhide": body_hide}
+STAGES = {"scan": import_head_scan, "conform": conform, "body": body, "look": look, "cloud": cloud, "build": build, "colours": groom_colours, "retarget": retarget, "preview": preview, "fitcheck": fitcheck, "identity": identity, "measure": measure, "footage": footage, "template": template, "fromidentity": from_identity, "photoskin": photo_skin, "clearskin": clear_skin, "hair": hair, "fabhair": fab_hair, "strandhair": strand_hair, "bakeinputs": bake_inputs, "bodyhide": body_hide}
 try:
     for stage in ONLY or list(STAGES):
         STAGES[stage]()

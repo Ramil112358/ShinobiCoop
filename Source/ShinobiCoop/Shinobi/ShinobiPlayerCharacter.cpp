@@ -161,9 +161,59 @@ int32 AShinobiPlayerCharacter::FindRosterIndex(const FString& Name)
 	return INDEX_NONE;
 }
 
-void AShinobiPlayerCharacter::SetCharacterIndex(uint8 Index)
+int32 AShinobiPlayerCharacter::NumFaces(int32 Body)
+{
+	int32 Count = 0;
+	while (FindFace(Body, Count))
+	{
+		++Count;
+	}
+	return FMath::Max(1, Count);
+}
+
+const FShinobiFaceEntry* AShinobiPlayerCharacter::FindFace(int32 Body, int32 Face)
+{
+	if (Body < 0 || Body >= UE_ARRAY_COUNT(Roster))
+	{
+		return nullptr;
+	}
+	for (const FShinobiFaceEntry& Entry : Faces)
+	{
+		if (FCString::Stricmp(Entry.Character, Roster[Body].Name) == 0 && Face-- == 0)
+		{
+			return &Entry;
+		}
+	}
+	return nullptr;
+}
+
+int32 AShinobiPlayerCharacter::FindFaceIndex(int32 Body, const FString& Name)
+{
+	for (int32 Face = 0; const FShinobiFaceEntry* Entry = FindFace(Body, Face); ++Face)
+	{
+		if (Name.Equals(Entry->Name, ESearchCase::IgnoreCase))
+		{
+			return Face;
+		}
+	}
+	return INDEX_NONE;
+}
+
+bool AShinobiPlayerCharacter::IsFaceBuilt(int32 Body, int32 Face)
+{
+	const FShinobiFaceEntry* Entry = Face > 0 ? FindFace(Body, Face) : nullptr;
+	return Face == 0 || (Entry && LoadObject<UClass>(nullptr, Entry->MetaHuman, nullptr, LOAD_NoWarn | LOAD_Quiet));
+}
+
+const TCHAR* AShinobiPlayerCharacter::FaceMetaHuman(int32 Body, int32 Face)
+{
+	return Face > 0 && IsFaceBuilt(Body, Face) ? FindFace(Body, Face)->MetaHuman : Roster[Body].MetaHuman;
+}
+
+void AShinobiPlayerCharacter::SetCharacterIndex(uint8 Index, uint8 Face)
 {
 	CharacterIndex = Index;
+	FaceIndex = Face;
 	ApplyCharacter();
 }
 
@@ -365,12 +415,16 @@ bool AShinobiPlayerCharacter::ApplyCharacter()
 	}
 	for (const int32 Index : {int32(CharacterIndex), 0}) // the pick, else the hero
 	{
-		if (Index < UE_ARRAY_COUNT(Roster) && HeroMesh->Wear(Roster[Index].Mesh, Roster[Index].Retargeter, Roster[Index].MetaHuman))
+		// Another face: its own blueprint's face and grooms on this body (its own face when that isn't built).
+		const int32 Face = Index == CharacterIndex && IsFaceBuilt(Index, FaceIndex) ? FaceIndex : 0;
+		const FShinobiFaceEntry* Worn = Face > 0 ? FindFace(Index, Face) : nullptr;
+		if (Index < UE_ARRAY_COUNT(Roster) && HeroMesh->Wear(Roster[Index].Mesh, Roster[Index].Retargeter, FaceMetaHuman(Index, Face)))
 		{
 			WornBodyIndex = uint8(Index);
 			// Scripts/smoke_m4.ps1 reads this on both machines to check the picks replicate.
-			UE_LOG(LogShinobiCoop, Log, TEXT("%s plays %s%s"), *GetName(),
+			UE_LOG(LogShinobiCoop, Log, TEXT("%s plays %s%s%s"), *GetName(),
 				CharacterIndex < UE_ARRAY_COUNT(Roster) ? Roster[CharacterIndex].Name : TEXT("an unknown pick"),
+				Worn ? *FString::Printf(TEXT(" (%s face)"), Worn->Name) : TEXT(""),
 				Index == CharacterIndex ? TEXT("") : TEXT(" (not imported: shown as the hero)"));
 			ApplyOutfit(); // the new body's skeleton: re-bind the outfit to it
 			return true;
@@ -389,6 +443,7 @@ void AShinobiPlayerCharacter::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AShinobiPlayerCharacter, CharacterIndex);
+	DOREPLIFETIME(AShinobiPlayerCharacter, FaceIndex);
 	DOREPLIFETIME(AShinobiPlayerCharacter, Appearance);
 	DOREPLIFETIME(AShinobiPlayerCharacter, OutfitIndex);
 	DOREPLIFETIME_CONDITION(AShinobiPlayerCharacter, Loadout, COND_OwnerOnly);

@@ -24,8 +24,8 @@ class SHINOBICOOP_API AShinobiMenuStage : public AActor
 public:
 	AShinobiMenuStage();
 
-	/** Wears Roster[RosterIndex] (the hero when it isn't imported) and Outfits[OutfitIndex]. */
-	void Show(int32 RosterIndex, int32 OutfitIndex);
+	/** Wears Roster[RosterIndex] (the hero when it isn't imported) with its Face-th face, and Outfits[OutfitIndex]. */
+	void Show(int32 RosterIndex, int32 OutfitIndex, int32 Face = 0);
 	/** Wears a creator look (its frame, face, hair and clothes) and Outfits[OutfitIndex] fitted to that frame; the hero
 	 * when the creator catalog isn't built. Live slider edits go to GetBody()->UpdateFace / UpdateBody instead. */
 	void ShowAppearance(const FShinobiAppearance& Look, int32 OutfitIndex);
