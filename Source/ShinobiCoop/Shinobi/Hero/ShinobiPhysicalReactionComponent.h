@@ -5,6 +5,7 @@
 #include "ShinobiPhysicalReactionComponent.generated.h"
 
 class UChooserTable;
+class UPhysicsControlAsset;
 class UPhysicsControlComponent;
 
 /**
@@ -111,6 +112,10 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UPhysicsControlComponent> Physics;
+
+	/** Held here: the physics control component keeps only a soft pointer, and a collected asset fails every profile switch. */
+	UPROPERTY(Transient)
+	TObjectPtr<UPhysicsControlAsset> ControlAsset;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UChooserTable> GetUpChooser;

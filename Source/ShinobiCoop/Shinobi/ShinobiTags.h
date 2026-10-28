@@ -28,6 +28,8 @@ namespace ShinobiTags
 	// Not "State.Shocked.Bonus": a child tag matches its parent, so it would count as a stun.
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_ShockBonus);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Staggered);
+	// A knockdown's hold, a child so it counts as a stagger: the effect's State.Staggered replicates, this loose one doesn't (one tag can't be both).
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Staggered_Knockdown);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Downed);        // players at 0 HP, waiting for a revive
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Reviving);      // holding a revive on a downed ally
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Dead);          // enemies at 0 HP; players after bleeding out

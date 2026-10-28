@@ -33,6 +33,7 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "Shinobi/Hero/ShinobiCharacterSave.h"
+#include "Shinobi/Hero/ShinobiPhysicalReactionComponent.h"
 #include "Shinobi/Hero/ShinobiCreatorCatalog.h"
 #include "Shinobi/UI/ShinobiSettings.h"
 #include "Shinobi/UI/ShinobiHUDWidget.h"
@@ -85,6 +86,10 @@ void AShinobiPlayerController::BeginPlay()
 	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiShot")))
 	{
 		RunShotTest();
+	}
+	if (FParse::Param(FCommandLine::Get(), TEXT("ShinobiHitProbe")))
+	{
+		RunHitProbe();
 	}
 	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiJutsuShot")))
 	{
@@ -814,6 +819,46 @@ void AShinobiPlayerController::RunWorldTourTest()
 	FTimerHandle Quit;
 	GetWorldTimerManager().SetTimer(Quit, FTimerDelegate::CreateWeakLambda(this, [this]() { ConsoleCommand(TEXT("quit")); }),
 		FirstAt + Points.Num() * Step + 1.f, false);
+}
+
+void AShinobiPlayerController::RunHitProbe()
+{
+	for (const float When : {1.f, 3.f, 6.f, 15.f, 40.f, 75.f})
+	{
+		FTimerHandle Start;
+		GetWorldTimerManager().SetTimer(Start, FTimerDelegate::CreateWeakLambda(this, [this, When]()
+		{
+			AShinobiPlayerCharacter* Player = GetPawn<AShinobiPlayerCharacter>();
+			if (!Player || !Player->GetPhysicalReactions() || !Player->GetHeroMesh())
+			{
+				UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiHitProbe t=%.0f: no player, reactions or body"), When);
+				return;
+			}
+			// Head offsets from each mesh's own origin: the capsule's drift aside.
+			const auto Head = [](const USkeletalMeshComponent* Mesh) { return Mesh->GetBoneLocation(TEXT("head")) - Mesh->GetComponentLocation(); };
+			const FVector DriverRest = Head(Player->GetMesh()), BodyRest = Head(Player->GetHeroMesh());
+			const TSharedRef<float, ESPMode::NotThreadSafe> DriverPeak = MakeShared<float, ESPMode::NotThreadSafe>(0.f), BodyPeak = MakeShared<float, ESPMode::NotThreadSafe>(0.f);
+			const TSharedRef<int32, ESPMode::NotThreadSafe> Samples = MakeShared<int32, ESPMode::NotThreadSafe>(0);
+			Player->GetPhysicalReactions()->Hit(FVector(1.f, 0.f, 0.f), 25.f);
+			const TSharedRef<FTimerHandle> Sample = MakeShared<FTimerHandle>();
+			GetWorldTimerManager().SetTimer(*Sample, FTimerDelegate::CreateWeakLambda(this, [this, When, Head, DriverRest, BodyRest, DriverPeak, BodyPeak, Samples, Sample]()
+			{
+				const AShinobiPlayerCharacter* Now = GetPawn<AShinobiPlayerCharacter>();
+				if (Now && Now->GetHeroMesh())
+				{
+					*DriverPeak = FMath::Max(*DriverPeak, static_cast<float>((Head(Now->GetMesh()) - DriverRest).Size()));
+					*BodyPeak = FMath::Max(*BodyPeak, static_cast<float>((Head(Now->GetHeroMesh()) - BodyRest).Size()));
+				}
+				if (++*Samples >= 20)
+				{
+					UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiHitProbe t=%.0f: head moved %.1f cm on the driver, %.1f cm on the body"), When, *DriverPeak, *BodyPeak);
+					GetWorldTimerManager().ClearTimer(*Sample); // last: it frees this lambda
+				}
+			}), 0.05f, true);
+		}), When, false);
+	}
+	FTimerHandle Quit;
+	GetWorldTimerManager().SetTimer(Quit, FTimerDelegate::CreateWeakLambda(this, []() { FPlatformMisc::RequestExit(false); }), 80.f, false);
 }
 
 void AShinobiPlayerController::RunFireShotTest()
