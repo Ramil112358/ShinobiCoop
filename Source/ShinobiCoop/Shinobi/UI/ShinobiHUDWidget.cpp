@@ -1,6 +1,7 @@
 #include "Shinobi/UI/ShinobiHUDWidget.h"
 #include "Shinobi/ShinobiPlayerController.h"
 #include "Shinobi/UI/ShinobiKeyBindings.h"
+#include "Shinobi/UI/ShinobiMenuArt.h"
 #include "AbilitySystemComponent.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
@@ -207,6 +208,7 @@ void UShinobiHUDWidget::BuildUnitFrame(UCanvasPanel* Root)
 	UImage* Photo = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("Portrait"));
 	UTexture2D* PhotoTexture = LoadObject<UTexture2D>(nullptr, PortraitPath, nullptr, LOAD_NoWarn);
 	Photo->SetBrush(RoundedBrush(PhotoTexture ? FLinearColor::White : PortraitBackColor, -1.f, PortraitRimColor, 2.f, PhotoTexture));
+	PortraitImage = Photo;
 	UOverlaySlot* PhotoSlot = Face->AddChildToOverlay(Photo);
 	PhotoSlot->SetHorizontalAlignment(HAlign_Fill);
 	PhotoSlot->SetVerticalAlignment(VAlign_Fill);
@@ -575,6 +577,41 @@ UTextBlock* UShinobiHUDWidget::AddLabel(UOverlay* Layers, int32 FontSize, EHoriz
 	return Label;
 }
 
+void UShinobiHUDWidget::UpdatePortrait(const AShinobiPlayerCharacter* Player)
+{
+	const uint8 Index = Player && Player->GetCharacterIndex() < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster) ? Player->GetCharacterIndex() : 253;
+	if (!PortraitImage || Index == ShownPortrait)
+	{
+		return;
+	}
+	ShownPortrait = Index;
+	// The menu card art (3:4, head and shoulders) cropped to its top square; creator-made characters keep the generic picture.
+	UTexture2D* Art = Index < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster) ? ShinobiMenuArt::LoadArt(ShinobiMenuArt::PortraitPath(Index)) : nullptr;
+	FSlateBrush Brush = RoundedBrush(FLinearColor::White, -1.f, PortraitRimColor, 2.f, Art);
+	if (Art)
+	{
+		// Centred on the head: where it sits in the 3:4 card (measured per portrait; the MetaHuman bodies frame lower).
+		float HeadV = 0.39f;
+		const FString Who = AShinobiPlayerCharacter::Roster[Index].Name;
+		if (Who == TEXT("BikaMH"))
+		{
+			HeadV = 0.49f;
+		}
+		else if (Who == TEXT("RamilMH"))
+		{
+			HeadV = 0.44f;
+		}
+		const float Span = FMath::Min(1.f, (float)Art->GetSizeX() / FMath::Max(Art->GetSizeY(), 1));
+		const float Top = FMath::Clamp(HeadV - Span * 0.5f, 0.f, 1.f - Span);
+		Brush.SetUVRegion(FBox2f(FVector2f(0.f, Top), FVector2f(1.f, Top + Span)));
+	}
+	else if (UTexture2D* Generic = LoadObject<UTexture2D>(nullptr, PortraitPath, nullptr, LOAD_NoWarn))
+	{
+		Brush.SetResourceObject(Generic);
+	}
+	PortraitImage->SetBrush(Brush);
+}
+
 void UShinobiHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
@@ -589,9 +626,13 @@ void UShinobiHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 		UpdateDragonCrosshair(nullptr);
 		return;
 	}
+	UpdatePortrait(Player);
 	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	const APlayerState* Me = GetOwningPlayerState();
-	NameText->SetText(Me ? FText::FromString(Me->GetPlayerName()) : FText::GetEmpty());
+	// The character's name; a creator-made one has none, so it shows the player's.
+	const bool bRoster = Player && Player->GetCharacterIndex() < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster);
+	NameText->SetText(bRoster ? FText::FromString(AShinobiPlayerCharacter::Roster[Player->GetCharacterIndex()].Name)
+		: Me ? FText::FromString(Me->GetPlayerName()) : FText::GetEmpty());
 
 	const float HealthRatio = Stats->GetHealth() / FMath::Max(Stats->GetMaxHealth(), 1.f);
 	HealthBar->SetPercent(HealthRatio);

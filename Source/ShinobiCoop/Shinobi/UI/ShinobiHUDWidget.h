@@ -69,6 +69,7 @@ private:
 	void UpdateDragonCrosshair(const class AShinobiPlayerCharacter* Player);
 	void BuildAimCrosshair(UCanvasPanel* Root);
 	void UpdateAimCrosshair(const class AShinobiPlayerCharacter* Player, const FVector2D& ViewSize);
+	void UpdatePortrait(const class AShinobiPlayerCharacter* Player);
 	UTextBlock* AddCanvasText(UCanvasPanel* Root, FName Name, const FAnchors& Anchors, const FVector2D& Alignment, const FVector2D& Position, int32 FontSize, ETextJustify::Type Justify);
 	void UpdateArena(const class AShinobiPlayerCharacter* Player);
 	/** PvP: the opposing side, one "name  hp / max" line each (players and bots, never summons). */
@@ -170,6 +171,13 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UTextBlock> NameText;
+
+	/** The unit frame's round picture; shows the played roster character's portrait (UpdatePortrait). */
+	UPROPERTY()
+	TObjectPtr<UImage> PortraitImage;
+
+	/** Roster index PortraitImage shows (CustomCharacter or beyond: the generic portrait); 254 until first set. */
+	uint8 ShownPortrait = 254;
 
 	UPROPERTY()
 	TObjectPtr<UProgressBar> HealthBar;
