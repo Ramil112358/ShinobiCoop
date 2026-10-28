@@ -25,6 +25,8 @@ public:
 	void Pick(int32 RosterIndex);
 	/** The next (+1) or previous (-1) outfit, wrapping. */
 	void StepOutfit(int32 Direction);
+	/** The picked character's next (+1) or previous (-1) face, wrapping (a character with one face keeps it). */
+	void StepFace(int32 Direction);
 	/** The picked character's card. */
 	UWidget* GetFocusTarget() const;
 	/** Card looks, name and outfit line from the saved picks; the stage wears them. */
@@ -44,4 +46,9 @@ private:
 	TObjectPtr<UTextBlock> NameText;
 	UPROPERTY()
 	TObjectPtr<UTextBlock> OutfitText;
+	/** The FACE label and row: shown for a character with several faces. */
+	UPROPERTY()
+	TArray<TObjectPtr<UWidget>> FaceRow;
+	UPROPERTY()
+	TObjectPtr<UTextBlock> FaceText;
 };

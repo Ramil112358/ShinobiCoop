@@ -22,6 +22,7 @@
 // front, three-quarter and side, then its whole body from the front, standing idle. Shots: ShinobiPortraitShot_<Character>_<View>.
 // With -ShinobiPortraitBP=<blueprint class path> (a MetaHuman's built BP_MHC_*), that actor is filmed instead, standing where
 // the character stands (hidden): Epic's own assembly, to compare with the parts UShinobiBodyComponent wears.
+// With -ShinobiFace=<Face> (AShinobiPlayerCharacter::Faces), that face of the character instead of the saved one.
 
 void AShinobiPlayerController::RunPortraitShotTest(const FString& Who)
 {
@@ -30,7 +31,14 @@ void AShinobiPlayerController::RunPortraitShotTest(const FString& Who)
 		FTimerHandle Handle;
 		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
 	};
-	At(0.5f, [this, Who]() { ShinobiCharacter(Who); });
+	At(0.5f, [this, Who]()
+	{
+		ShinobiCharacter(Who);
+		if (FString Face; FParse::Value(FCommandLine::Get(), TEXT("ShinobiFace="), Face))
+		{
+			ShinobiFace(Face); // standalone: the pick above is already on the pawn
+		}
+	});
 	FString BlueprintPath;
 	const bool bBlueprint = FParse::Value(FCommandLine::Get(), TEXT("ShinobiPortraitBP="), BlueprintPath);
 	const TSharedRef<TWeakObjectPtr<AActor>> Doll = MakeShared<TWeakObjectPtr<AActor>>();

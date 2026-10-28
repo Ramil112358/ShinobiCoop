@@ -35,6 +35,11 @@ namespace
 	{
 		return FMath::Max(0, AShinobiPlayerCharacter::FindOutfitIndex(ShinobiSettings::GetSavedOutfit()));
 	}
+
+	int32 RosterSavedFace(int32 Body)
+	{
+		return FMath::Max(0, AShinobiPlayerCharacter::FindFaceIndex(Body, ShinobiSettings::GetSavedFace()));
+	}
 }
 
 TSharedRef<SWidget> UShinobiRosterPage::RebuildWidget()
@@ -102,27 +107,35 @@ TSharedRef<SWidget> UShinobiRosterPage::RebuildWidget()
 		Column->AddChildToVerticalBox(ShinobiMenuStyle::Text(*WidgetTree, INVTEXT("SHINOBI"), 12, ShinobiMenuStyle::Accent));
 		NameText = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 44, FLinearColor::White, true);
 		Column->AddChildToVerticalBox(NameText);
-		Column->AddChildToVerticalBox(ShinobiMenuStyle::Text(*WidgetTree, INVTEXT("OUTFIT"), 12, ShinobiMenuStyle::TextDim))->SetPadding(FMargin(0.f, 14.f, 0.f, 4.f));
-		UHorizontalBox* OutfitRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-		Column->AddChildToVerticalBox(OutfitRow);
-		const auto Arrow = [this](const TCHAR* Label, int32 Direction)
+		// "< value >" under a label: the arrows step it by -1 / +1.
+		const auto Stepper = [this, Column](const FText& Label, void (UShinobiRosterPage::*Step)(int32), TObjectPtr<UTextBlock>& Value)
 		{
-			UShinobiIndexButton* Button = WidgetTree->ConstructWidget<UShinobiIndexButton>(UShinobiIndexButton::StaticClass());
-			Button->Index = Direction;
-			Button->OnIndexClicked = FShinobiIndexClicked::CreateUObject(this, &UShinobiRosterPage::StepOutfit);
-			Button->Arm();
-			Button->AddChild(ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Label), 16, FLinearColor::White));
-			ShinobiMenuStyle::StyleButton(*Button, false);
-			return Button;
+			UTextBlock* Heading = ShinobiMenuStyle::Text(*WidgetTree, Label, 12, ShinobiMenuStyle::TextDim);
+			Column->AddChildToVerticalBox(Heading)->SetPadding(FMargin(0.f, 14.f, 0.f, 4.f));
+			UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+			Column->AddChildToVerticalBox(Row);
+			const auto Arrow = [this, Step](const TCHAR* Glyph, int32 Direction)
+			{
+				UShinobiIndexButton* Button = WidgetTree->ConstructWidget<UShinobiIndexButton>(UShinobiIndexButton::StaticClass());
+				Button->Index = Direction;
+				Button->OnIndexClicked = FShinobiIndexClicked::CreateUObject(this, Step);
+				Button->Arm();
+				Button->AddChild(ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Glyph), 16, FLinearColor::White));
+				ShinobiMenuStyle::StyleButton(*Button, false);
+				return Button;
+			};
+			Row->AddChildToHorizontalBox(Arrow(TEXT("<"), -1));
+			Value = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 20, FLinearColor::White);
+			Value->SetMinDesiredWidth(200.f);
+			Value->SetJustification(ETextJustify::Center);
+			UHorizontalBoxSlot* ValueSlot = Row->AddChildToHorizontalBox(Value);
+			ValueSlot->SetVerticalAlignment(VAlign_Center);
+			ValueSlot->SetPadding(FMargin(10.f, 0.f));
+			Row->AddChildToHorizontalBox(Arrow(TEXT(">"), +1));
+			return TArray<TObjectPtr<UWidget>>{Heading, Row};
 		};
-		OutfitRow->AddChildToHorizontalBox(Arrow(TEXT("<"), -1));
-		OutfitText = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 20, FLinearColor::White);
-		OutfitText->SetMinDesiredWidth(200.f);
-		OutfitText->SetJustification(ETextJustify::Center);
-		UHorizontalBoxSlot* OutfitSlot = OutfitRow->AddChildToHorizontalBox(OutfitText);
-		OutfitSlot->SetVerticalAlignment(VAlign_Center);
-		OutfitSlot->SetPadding(FMargin(10.f, 0.f));
-		OutfitRow->AddChildToHorizontalBox(Arrow(TEXT(">"), +1));
+		FaceRow = Stepper(INVTEXT("FACE"), &UShinobiRosterPage::StepFace, FaceText);
+		Stepper(INVTEXT("OUTFIT"), &UShinobiRosterPage::StepOutfit, OutfitText);
 		Column->AddChildToVerticalBox(ShinobiMenuStyle::Text(*WidgetTree, INVTEXT("LT / RT  change outfit"), 11, ShinobiMenuStyle::TextDim))->SetPadding(FMargin(0.f, 10.f, 0.f, 0.f));
 		Show();
 	}
@@ -140,6 +153,17 @@ void UShinobiRosterPage::StepOutfit(int32 Direction)
 	const int32 Next = ((RosterSavedOutfit() + Direction) % RosterOutfitCount + RosterOutfitCount) % RosterOutfitCount;
 	ShinobiSettings::SetSavedOutfit(AShinobiPlayerCharacter::Outfits[Next].Name);
 	Show();
+}
+
+void UShinobiRosterPage::StepFace(int32 Direction)
+{
+	const int32 Picked = RosterSavedPick();
+	const int32 Count = AShinobiPlayerCharacter::NumFaces(Picked);
+	if (const FShinobiFaceEntry* Face = AShinobiPlayerCharacter::FindFace(Picked, ((RosterSavedFace(Picked) + Direction) % Count + Count) % Count))
+	{
+		ShinobiSettings::SetSavedFace(Face->Name);
+		Show();
+	}
 }
 
 UWidget* UShinobiRosterPage::GetFocusTarget() const
@@ -164,6 +188,20 @@ void UShinobiRosterPage::Show()
 	{
 		NameText->SetText(FText::FromString(FString(AShinobiPlayerCharacter::Roster[Picked].Name).ToUpper()));
 	}
+	const int32 Face = RosterSavedFace(Picked);
+	for (UWidget* Part : FaceRow)
+	{
+		Part->SetVisibility(AShinobiPlayerCharacter::NumFaces(Picked) > 1 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
+	if (const FShinobiFaceEntry* Entry = FaceText ? AShinobiPlayerCharacter::FindFace(Picked, Face) : nullptr)
+	{
+		FString Line = Entry->Name;
+		if (!AShinobiPlayerCharacter::IsFaceBuilt(Picked, Face))
+		{
+			Line += TEXT(" (not built)");
+		}
+		FaceText->SetText(FText::FromString(Line));
+	}
 	if (OutfitText)
 	{
 		FString Line = AShinobiPlayerCharacter::Outfits[Outfit].Name;
@@ -175,7 +213,7 @@ void UShinobiRosterPage::Show()
 	}
 	if (AShinobiMenuStage* Shown = Stage.Get())
 	{
-		Shown->Show(Picked, Outfit);
+		Shown->Show(Picked, Outfit, Face);
 	}
 }
 

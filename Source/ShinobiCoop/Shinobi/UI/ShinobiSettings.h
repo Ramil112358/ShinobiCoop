@@ -10,7 +10,7 @@ class UWorld;
  */
 namespace ShinobiSettings
 {
-	enum class ERow : uint8 { Character, Outfit, Quality, RenderScale, WindowMode, FrameCap, VSync, Outline, Num };
+	enum class ERow : uint8 { Character, Face, Outfit, Quality, RenderScale, WindowMode, FrameCap, VSync, Outline, Num };
 
 	/** "Graphics quality: High" etc. */
 	SHINOBICOOP_API FString Label(ERow Row);
@@ -21,12 +21,15 @@ namespace ShinobiSettings
 	SHINOBICOOP_API FString GetSavedCharacter();
 	/** The outfit this machine's player wears (saved by the Outfit row; None by default). */
 	SHINOBICOOP_API FString GetSavedOutfit();
+	/** The face this machine's player wears on a character with several (saved by the Face row; empty = each one's own). */
+	SHINOBICOOP_API FString GetSavedFace();
+	SHINOBICOOP_API void SetSavedFace(const FString& Name);
 	/** Saves the pick (the main menu's SHINOBI tab); a name not in the roster / outfit list is ignored. A roster pick also
 	 * stops playing a made character (UShinobiCharacterSave::Active). */
 	SHINOBICOOP_API void SetSavedCharacter(const FString& Name);
 	SHINOBICOOP_API void SetSavedOutfit(const FString& Name);
 
-	/** The rows the settings panel shows: the main menu leaves out Character and Outfit (its SHINOBI tab has them). */
+	/** The rows the settings panel shows: the main menu leaves out Character, Face and Outfit (its SHINOBI tab has them). */
 	SHINOBICOOP_API TArray<ERow> RowsFor(bool bMainMenu);
 
 	SHINOBICOOP_API float GetRenderScale();

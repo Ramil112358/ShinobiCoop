@@ -94,8 +94,9 @@ bool FShinobiMenuSettingsRowsTest::RunTest(const FString& Parameters)
 	using ShinobiSettings::ERow;
 	const TArray<ERow> Menu = ShinobiSettings::RowsFor(true);
 	TestFalse(TEXT("main menu: no Character row"), Menu.Contains(ERow::Character));
+	TestFalse(TEXT("main menu: no Face row"), Menu.Contains(ERow::Face));
 	TestFalse(TEXT("main menu: no Outfit row"), Menu.Contains(ERow::Outfit));
-	TestEqual(TEXT("main menu rows"), Menu.Num(), int32(ERow::Num) - 2);
+	TestEqual(TEXT("main menu rows"), Menu.Num(), int32(ERow::Num) - 3);
 	TestEqual(TEXT("pause menu rows"), ShinobiSettings::RowsFor(false).Num(), int32(ERow::Num));
 	return true;
 }

@@ -72,14 +72,15 @@ void AShinobiMenuStage::ShowAppearance(const FShinobiAppearance& Look, int32 Out
 	AShinobiPlayerCharacter::DressOutfit(*Body, *Outfit, OutfitIndex, Body->GetFittingName());
 }
 
-void AShinobiMenuStage::Show(int32 RosterIndex, int32 OutfitIndex)
+void AShinobiMenuStage::Show(int32 RosterIndex, int32 OutfitIndex, int32 Face)
 {
 	StartDriver();
 	ShownBody = INDEX_NONE;
 	for (const int32 Index : { RosterIndex, 0 }) // the pick, else the hero
 	{
 		if (Index >= 0 && Index < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster)
-			&& Body->Wear(AShinobiPlayerCharacter::Roster[Index].Mesh, AShinobiPlayerCharacter::Roster[Index].Retargeter, AShinobiPlayerCharacter::Roster[Index].MetaHuman)) // a MetaHuman's face and hair too
+			&& Body->Wear(AShinobiPlayerCharacter::Roster[Index].Mesh, AShinobiPlayerCharacter::Roster[Index].Retargeter,
+				AShinobiPlayerCharacter::FaceMetaHuman(Index, Index == RosterIndex ? Face : 0))) // a MetaHuman's face and hair too
 		{
 			ShownBody = Index;
 			break;

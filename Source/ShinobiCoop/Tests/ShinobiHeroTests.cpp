@@ -232,6 +232,25 @@ bool FShinobiBadPickTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiFacePickTest, "ShinobiCoop.Hero.FacePick", ShinobiTestFlags)
+bool FShinobiFacePickTest::RunTest(const FString& Parameters)
+{
+	const int32 RamilMH = AShinobiPlayerCharacter::FindRosterIndex(TEXT("RamilMH"));
+	TestEqual(TEXT("RamilMH has two faces"), AShinobiPlayerCharacter::NumFaces(RamilMH), 2);
+	TestEqual(TEXT("its first face is its roster MetaHuman"), FString(AShinobiPlayerCharacter::FaceMetaHuman(RamilMH, 0)),
+		FString(AShinobiPlayerCharacter::Roster[RamilMH].MetaHuman));
+	TestEqual(TEXT("face by name"), AShinobiPlayerCharacter::FindFaceIndex(RamilMH, TEXT("realityscan")), 1);
+	TestEqual(TEXT("the hero has one face"), AShinobiPlayerCharacter::NumFaces(0), 1);
+	TestEqual(TEXT("no RealityScan face on the hero"), AShinobiPlayerCharacter::FindFaceIndex(0, TEXT("RealityScan")), INDEX_NONE);
+	TestNull(TEXT("no face past the end"), AShinobiPlayerCharacter::FindFace(RamilMH, 2));
+	const int32 BikaMH = AShinobiPlayerCharacter::FindRosterIndex(TEXT("BikaMH"));
+	TestEqual(TEXT("BikaMH has two faces"), AShinobiPlayerCharacter::NumFaces(BikaMH), 2);
+	TestTrue(TEXT("its KeenFace face is built"), AShinobiPlayerCharacter::IsFaceBuilt(BikaMH, AShinobiPlayerCharacter::FindFaceIndex(BikaMH, TEXT("KeenFace"))));
+	TestEqual(TEXT("an unbuilt or unknown face wears the roster's own"), FString(AShinobiPlayerCharacter::FaceMetaHuman(0, 5)),
+		FString(AShinobiPlayerCharacter::Roster[0].MetaHuman ? AShinobiPlayerCharacter::Roster[0].MetaHuman : TEXT("")));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPickSurvivesRespawnTest, "ShinobiCoop.Hero.PickSurvivesRespawn", ShinobiTestFlags)
 bool FShinobiPickSurvivesRespawnTest::RunTest(const FString& Parameters)
 {

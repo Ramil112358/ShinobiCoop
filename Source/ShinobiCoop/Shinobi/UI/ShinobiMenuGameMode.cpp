@@ -25,8 +25,9 @@ void AShinobiMenuPlayerController::BeginPlay()
 	}
 	for (TActorIterator<AShinobiMenuStage> Stage(GetWorld()); Stage; ++Stage)
 	{
-		Stage->Show(AShinobiPlayerCharacter::FindRosterIndex(ShinobiSettings::GetSavedCharacter()),
-			AShinobiPlayerCharacter::FindOutfitIndex(ShinobiSettings::GetSavedOutfit()));
+		const int32 Picked = AShinobiPlayerCharacter::FindRosterIndex(ShinobiSettings::GetSavedCharacter());
+		Stage->Show(Picked, AShinobiPlayerCharacter::FindOutfitIndex(ShinobiSettings::GetSavedOutfit()),
+			FMath::Max(0, AShinobiPlayerCharacter::FindFaceIndex(Picked, ShinobiSettings::GetSavedFace())));
 	}
 	UShinobiMainMenuWidget* Menu = CreateWidget<UShinobiMainMenuWidget>(this, UShinobiMainMenuWidget::StaticClass());
 	Menu->AddToViewport();

@@ -272,7 +272,7 @@ void AShinobiPlayerController::OnPossess(APawn* InPawn)
 		}
 		else
 		{
-			Body->SetCharacterIndex(PickedCharacter);
+			Body->SetCharacterIndex(PickedCharacter, PickedFace);
 		}
 	}
 }
@@ -285,15 +285,29 @@ void AShinobiPlayerController::ShinobiCharacter(const FString& Name)
 		UE_LOG(LogShinobiCoop, Warning, TEXT("ShinobiCharacter: no roster character named '%s'"), *Name);
 		return;
 	}
-	ServerPickCharacter(uint8(Index));
+	ServerPickCharacter(uint8(Index), uint8(FMath::Max(0, AShinobiPlayerCharacter::FindFaceIndex(Index, ShinobiSettings::GetSavedFace()))));
 }
 
-void AShinobiPlayerController::ServerPickCharacter_Implementation(uint8 Index)
+void AShinobiPlayerController::ShinobiFace(const FString& Name)
+{
+	const AShinobiPlayerCharacter* Shinobi = GetPawn<AShinobiPlayerCharacter>();
+	const int32 Body = Shinobi ? Shinobi->GetCharacterIndex() : INDEX_NONE;
+	const int32 Face = AShinobiPlayerCharacter::FindFaceIndex(Body, Name);
+	if (Face == INDEX_NONE)
+	{
+		UE_LOG(LogShinobiCoop, Warning, TEXT("ShinobiFace: the played character has no face named '%s'"), *Name);
+		return;
+	}
+	ServerPickCharacter(uint8(Body), uint8(Face));
+}
+
+void AShinobiPlayerController::ServerPickCharacter_Implementation(uint8 Index, uint8 Face)
 {
 	PickedCharacter = Index < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster) ? Index : 0; // a client's value: clamp it
+	PickedFace = Face < AShinobiPlayerCharacter::NumFaces(PickedCharacter) ? Face : 0;
 	if (AShinobiPlayerCharacter* Body = GetPawn<AShinobiPlayerCharacter>())
 	{
-		Body->SetCharacterIndex(PickedCharacter);
+		Body->SetCharacterIndex(PickedCharacter, PickedFace);
 	}
 }
 

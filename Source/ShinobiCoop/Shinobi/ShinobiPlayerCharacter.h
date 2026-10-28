@@ -27,6 +27,15 @@ struct FShinobiRosterEntry
 	const TCHAR* MetaHuman = nullptr;
 };
 
+/** One of a MetaHuman roster character's faces (AShinobiPlayerCharacter::Faces): its built blueprint (Scripts/setup_metahuman.py)
+ * gives the face and grooms, worn on the roster entry's body. */
+struct FShinobiFaceEntry
+{
+	const TCHAR* Character;
+	const TCHAR* Name;
+	const TCHAR* MetaHuman;
+};
+
 /** A wearable outfit: a garment fitted to each roster body by Scripts/character/build_outfits.ps1, one copy per body
  * (AShinobiPlayerCharacter::OutfitMeshPath), whose hem and sleeves are Chaos cloth. Entry 0, "None", is no outfit. */
 struct FShinobiOutfitEntry
@@ -104,8 +113,30 @@ public:
 	/** Roster index of Name (case-insensitive), or INDEX_NONE. */
 	static int32 FindRosterIndex(const FString& Name);
 
-	/** Server: play as Roster[Index] (replicated; out of range or not imported = the hero). */
-	void SetCharacterIndex(uint8 Index);
+	/** The faces of the roster characters that have more than one, in pick order (the first is the roster entry's own).
+	 * A character not listed has one face: its roster MetaHuman (or none). */
+	static constexpr FShinobiFaceEntry Faces[] = {
+		{TEXT("RamilMH"), TEXT("Live Link"), TEXT("/Game/Shinobi/MetaHumans/RamilMH/Build/MHC_RamilMH/BP_MHC_RamilMH.BP_MHC_RamilMH_C")},
+		{TEXT("RamilMH"), TEXT("RealityScan"), TEXT("/Game/Shinobi/MetaHumans/RamilMHScan/Build/MHC_RamilMHScan/BP_MHC_RamilMHScan.BP_MHC_RamilMHScan_C")},
+		{TEXT("BikaMH"), TEXT("Live Link"), TEXT("/Game/Shinobi/MetaHumans/BikaMH/Build/MHC_BikaMH/BP_MHC_BikaMH.BP_MHC_BikaMH_C")},
+		{TEXT("BikaMH"), TEXT("KeenFace"), TEXT("/Game/Shinobi/MetaHumans/BikaMHKeenFace/Build/MHC_BikaMHKeenFace/BP_MHC_BikaMHKeenFace.BP_MHC_BikaMHKeenFace_C")},
+	};
+
+	/** How many faces Roster[Body] has (at least 1). */
+	static int32 NumFaces(int32 Body);
+	/** The Face-th of Roster[Body]'s faces, or null for a character with just its own. */
+	static const FShinobiFaceEntry* FindFace(int32 Body, int32 Face);
+	/** Index among Roster[Body]'s faces of Name (case-insensitive), or INDEX_NONE. */
+	static int32 FindFaceIndex(int32 Body, const FString& Name);
+	/** Face 0 always; another face when its blueprint is built. */
+	static bool IsFaceBuilt(int32 Body, int32 Face);
+	/** The MetaHuman blueprint Roster[Body] wears with that face: the face's when built, else the roster entry's own. */
+	static const TCHAR* FaceMetaHuman(int32 Body, int32 Face);
+
+	/** Server: play as Roster[Index] (replicated; out of range or not imported = the hero) with its Face-th face (out of
+	 * range or not built = its own). */
+	void SetCharacterIndex(uint8 Index, uint8 Face = 0);
+	uint8 GetFaceIndex() const { return FaceIndex; }
 	uint8 GetCharacterIndex() const { return CharacterIndex; }
 
 	/** CharacterIndex of a creator-made character: it wears GetAppearance() instead of a roster body. */
@@ -317,6 +348,10 @@ private:
 	/** Roster index of the body shown; the server sets it from the owning controller's pick. */
 	UPROPERTY(ReplicatedUsing = OnRep_CharacterIndex)
 	uint8 CharacterIndex = 0;
+
+	/** Which of that character's faces (NumFaces), set with it. */
+	UPROPERTY(ReplicatedUsing = OnRep_CharacterIndex)
+	uint8 FaceIndex = 0;
 
 	/** The creator-made look worn while CharacterIndex is CustomCharacter. */
 	UPROPERTY(ReplicatedUsing = OnRep_CharacterIndex)

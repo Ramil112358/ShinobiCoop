@@ -1,6 +1,6 @@
 """A RealityScan head (OBJ + diffuse) made ready for the MetaHuman Creator's custom-mesh conform (setup_metahuman.py).
 
-Run: blender -b --factory-startup --python-exit-code 1 -P Scripts/character/prep_mh_head.py -- <Name> [<scan folder>]
+Run: blender -b --factory-startup --python-exit-code 1 -P Scripts/character/prep_mh_head.py -- <Name> [<scan folder> [<out folder>]]
 
   1. The scan (RealityScan: metres, Y up, face +X once Blender has made it Z up) is turned to face -Y (UE +Y, where the
      Creator's tracking camera looks from) and moved so the eyes' height is at EYE_Z and the head is centred on x 0.
@@ -12,7 +12,7 @@ Run: blender -b --factory-startup --python-exit-code 1 -P Scripts/character/prep
   4. A front portrait (flat albedo, so the tracker sees a photo) from where the Creator's auto-framing puts its camera, and
      <Name>_head_mh.json with that camera in UE space, for TrackFaceLandmarksFromImage. Plus preview renders.
 
-Writes into SourceArt/Character/Models/<Name>/MetaHuman/.
+Writes into SourceArt/Character/Models/<Name>/MetaHuman/ (or <out folder>: a second scan of the same person, e.g. MetaHumanScan1).
 """
 import json
 import math
@@ -29,7 +29,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 NAME = args[0] if args else "Ramil"
 SCAN = args[1] if len(args) > 1 else os.path.join(ROOT, "SourceArt", "Character", "Models", NAME, f"{NAME}_head_RealityScan")
-OUT = os.path.join(ROOT, "SourceArt", "Character", "Models", NAME, "MetaHuman")
+OUT = args[2] if len(args) > 2 else os.path.join(ROOT, "SourceArt", "Character", "Models", NAME, "MetaHuman")
 sys.path.insert(0, os.path.dirname(__file__))
 from clean_rig import export_unit_scale_fbx  # noqa: E402
 
