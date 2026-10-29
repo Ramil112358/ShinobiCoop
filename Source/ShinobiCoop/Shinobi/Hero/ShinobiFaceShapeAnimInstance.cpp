@@ -52,7 +52,7 @@ namespace
 	static_assert(SliderCount == UE_ARRAY_COUNT(SliderNames), "one name per slider");
 
 	/** Every region's Move and Spread at value 1 are this many times the table's (tuned by eye on crowd faces at 1.2 m). */
-	constexpr float Reach = 2.f;
+	constexpr float FaceMoveReach = 2.f;
 
 	const FFaceRegion Regions[] = {
 		{JawWidth, TEXT("FACIAL_L_JawBulge"), 4.5f, FVector(1.2, 0.0, 0.0), FVector::ZeroVector, 0.f, 1.5f},
@@ -180,8 +180,8 @@ void FShinobiFaceShapeAnimInstanceProxy::CacheBones()
 			{
 				continue;
 			}
-			const FVector Move = (Side ? FVector(-Region.Move.X, Region.Move.Y, Region.Move.Z) : Region.Move) * Reach;
-			Placed.Add({Region.Slider, FAnimationRuntime::GetComponentSpaceTransformRefPose(Ref, Anchor).GetLocation(), Region.Radius, Move, Region.Spread * Reach, Region.Grow * Reach, Region.Core});
+			const FVector Move = (Side ? FVector(-Region.Move.X, Region.Move.Y, Region.Move.Z) : Region.Move) * FaceMoveReach;
+			Placed.Add({Region.Slider, FAnimationRuntime::GetComponentSpaceTransformRefPose(Ref, Anchor).GetLocation(), Region.Radius, Move, Region.Spread * FaceMoveReach, Region.Grow * FaceMoveReach, Region.Core});
 		}
 	}
 	static const FName FacialRoot(TEXT("FACIAL_C_FacialRoot"));
