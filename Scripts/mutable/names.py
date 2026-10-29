@@ -42,3 +42,7 @@ HIDES_SUFFIX = " Hides"
 ON, OFF = "ON", "OFF"
 WARDROBE_TABLE = f"{MUTABLE_ROOT}/DT_Wardrobe_{{slot}}"  # .format(slot="Top")
 MAX_TATTOOS = 3
+
+# Roster characters with a grafted static head, and their base sex (catalog Heads order = this order).
+HEADS = {"Hero": "Male", "Bika": "Female", "Cat": "Female", "Misha": "Male", "Pabu": "Male", "Ramil": "Male", "Elvin": "Male"}
+HEADS_DIR = f"{MUTABLE_ROOT}/Heads"

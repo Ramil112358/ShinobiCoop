@@ -2,6 +2,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR // (run in the editor only: Mutable graphs and compiles are editor-only)
 
+#include "Algo/Count.h"
 #include "AnimationRuntime.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
@@ -459,6 +460,68 @@ bool FShinobiMutablePendingKeepsRosterTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableCatalogPresetsTest, "ShinobiCoop.Mutable.CatalogPresets", ShinobiTestFlags)
+bool FShinobiMutableCatalogPresetsTest::RunTest(const FString& Parameters)
+{
+	const UShinobiCreatorCatalog* Catalog = LoadObject<UShinobiCreatorCatalog>(nullptr, UShinobiCreatorCatalog::Path);
+	if (!TestNotNull(TEXT("catalog"), Catalog))
+	{
+		return false;
+	}
+	for (const FShinobiRosterEntry& Entry : AShinobiPlayerCharacter::Roster)
+	{
+		const FShinobiAppearance* Look = Catalog->FindPreset(Entry.Name);
+		if (!TestNotNull(FString::Printf(TEXT("a preset for %s"), Entry.Name), Look))
+		{
+			continue;
+		}
+		if (Entry.MetaHuman)
+		{
+			// RamilMH and BikaMH: their own MetaHuman face on their own body.
+			const FShinobiCreatorFace* Face = Catalog->FindFace(Look->Sex, Look->Face);
+			TestEqual(FString::Printf(TEXT("%s has no static head"), Entry.Name), Look->Head, FShinobiAppearance::None);
+			TestEqual(FString::Printf(TEXT("%s wears its own body"), Entry.Name), Look->Build, EShinobiBuild::Own);
+			TestTrue(FString::Printf(TEXT("%s wears its own face"), Entry.Name), Face && Face->Id == FName(Entry.Name));
+			continue;
+		}
+		const FShinobiCreatorHead* Head = Catalog->FindHead(Look->Head);
+		if (TestNotNull(FString::Printf(TEXT("%s's head"), Entry.Name), Head))
+		{
+			TestEqual(FString::Printf(TEXT("%s's head is its own"), Entry.Name), Head->Id, FName(Entry.Name));
+			TestEqual(FString::Printf(TEXT("%s's head on its sex's base"), Entry.Name), Head->Sex, Look->Sex);
+			for (int32 Channel = 0; Channel < 3; ++Channel)
+			{
+				const float Value = Head->SkinTint.Component(Channel);
+				TestTrue(FString::Printf(TEXT("%s's skin tint channel %d (%.2f) is plausible"), Entry.Name, Channel, Value), Value >= 0.25f && Value <= 4.f);
+			}
+		}
+	}
+	TestNull(TEXT("no head for None"), Catalog->FindHead(FShinobiAppearance::None));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableHeadsImportedTest, "ShinobiCoop.Mutable.HeadsImported", ShinobiTestFlags)
+bool FShinobiMutableHeadsImportedTest::RunTest(const FString& Parameters)
+{
+	// The roster heads grafted onto the Mutable bases (Scripts/setup_mutable.py heads), on the base skeleton of their sex.
+	const TPair<const TCHAR*, const TCHAR*> Heads[] = {{TEXT("Hero"), TEXT("Male")}, {TEXT("Bika"), TEXT("Female")}, {TEXT("Cat"), TEXT("Female")},
+		{TEXT("Misha"), TEXT("Male")}, {TEXT("Pabu"), TEXT("Male")}, {TEXT("Ramil"), TEXT("Male")}, {TEXT("Elvin"), TEXT("Male")}};
+	for (const TPair<const TCHAR*, const TCHAR*>& Head : Heads)
+	{
+		const USkeletalMesh* Mesh = LoadObject<USkeletalMesh>(nullptr, *FString::Printf(TEXT("/Game/Shinobi/Mutable/Heads/SK_Head_%s.SK_Head_%s"), Head.Key, Head.Key));
+		const USkeletalMesh* Base = LoadObject<USkeletalMesh>(nullptr, *ShinobiMutable::BasePath(Head.Value));
+		if (!TestNotNull(FString::Printf(TEXT("SK_Head_%s"), Head.Key), Mesh) || !Base)
+		{
+			continue;
+		}
+		TestTrue(FString::Printf(TEXT("%s on the %s base's skeleton"), Head.Key, Head.Value), Mesh->GetSkeleton() == Base->GetSkeleton());
+		TestTrue(FString::Printf(TEXT("%s has a head bone"), Head.Key), Mesh->GetRefSkeleton().FindBoneIndex(TEXT("head")) != INDEX_NONE);
+		const int32 Necks = Algo::CountIf(Mesh->GetMaterials(), [](const FSkeletalMaterial& Slot) { return Slot.MaterialSlotName.ToString().EndsWith(TEXT("_Neck")); });
+		TestEqual(FString::Printf(TEXT("%s has one neck slot"), Head.Key), Necks, 1);
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableAddBoneSkinningTest, "ShinobiCoop.Mutable.AddBoneSkinning", ShinobiTestFlags)
 bool FShinobiMutableAddBoneSkinningTest::RunTest(const FString& Parameters)
 {
@@ -556,3 +619,4 @@ bool FShinobiMutableBuildMorphBakeTest::RunTest(const FString& Parameters)
 }
 
 #endif
+

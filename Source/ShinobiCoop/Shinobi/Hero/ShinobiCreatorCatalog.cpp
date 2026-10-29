@@ -60,6 +60,29 @@ const FShinobiCreatorStyle* UShinobiCreatorCatalog::FindStyle(EShinobiSex Sex, E
 	return NthWhere(Styles, Index, [&](const FShinobiCreatorStyle& S) { return S.Sex == Sex && S.Slot == Slot; });
 }
 
+const FShinobiCreatorHead* UShinobiCreatorCatalog::FindHead(uint8 Index) const
+{
+	return Heads.IsValidIndex(Index) ? &Heads[Index] : nullptr; // (None = 255 is past the end)
+}
+
+const FShinobiAppearance* UShinobiCreatorCatalog::FindPreset(FName Roster) const
+{
+	const FShinobiRosterPreset* Found = Presets.FindByPredicate([&](const FShinobiRosterPreset& P) { return P.Roster == Roster; });
+	return Found ? &Found->Look : nullptr;
+}
+
+void UShinobiCreatorCatalog::SetPreset(FName Roster, EShinobiSex Sex, uint8 Head, uint8 Face, EShinobiBuild Build)
+{
+	FShinobiAppearance Look;
+	Look.Sex = Sex;
+	Look.Head = Head;
+	Look.Face = Face;
+	Look.Build = Build;
+	Look.Hair = Look.Beard = Look.Mustache = FShinobiAppearance::None;
+	Presets.RemoveAll([&](const FShinobiRosterPreset& P) { return P.Roster == Roster; });
+	Presets.Add({Roster, Look});
+}
+
 UGroomBindingAsset* UShinobiCreatorCatalog::LoadBinding(FName Face, FName Groom) const
 {
 	const FShinobiCreatorBinding* Found = NthWhere(Bindings, 0, [&](const FShinobiCreatorBinding& B) { return B.Face == Face && B.Groom == Groom; });

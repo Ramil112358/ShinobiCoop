@@ -8,7 +8,7 @@ class USkeletalMesh;
 class UGroomAsset;
 class UGroomBindingAsset;
 
-UENUM()
+UENUM(BlueprintType)
 enum class EShinobiSex : uint8
 {
 	Male,
@@ -16,7 +16,7 @@ enum class EShinobiSex : uint8
 };
 
 /** A body frame's build within its sex. Own is a roster character's own MetaHuman body (Mutable looks only). */
-UENUM()
+UENUM(BlueprintType)
 enum class EShinobiBuild : uint8
 {
 	Under,
@@ -83,6 +83,26 @@ struct FShinobiCreatorFace
 	TArray<TSoftObjectPtr<UGroomBindingAsset>> OwnGrooms;
 };
 
+/** A roster character's static head grafted onto the Mutable base of its sex (Scripts/setup_mutable.py heads). */
+USTRUCT()
+struct FShinobiCreatorHead
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, Category = Creator)
+	FName Id;
+
+	UPROPERTY(EditAnywhere, Category = Creator)
+	EShinobiSex Sex = EShinobiSex::Male;
+
+	UPROPERTY(EditAnywhere, Category = Creator)
+	TSoftObjectPtr<USkeletalMesh> Mesh;
+
+	/** The body skin tint that matches this head's skin (the base body material's "Basecolor Global Multiply Post-Bake"). */
+	UPROPERTY(EditAnywhere, Category = Creator)
+	FLinearColor SkinTint = FLinearColor::White;
+};
+
 USTRUCT()
 struct FShinobiCreatorGroom
 {
@@ -134,48 +154,6 @@ struct FShinobiCreatorStyle
 
 	UPROPERTY(EditAnywhere, Category = Creator)
 	TArray<TSoftObjectPtr<USkeletalMesh>> ByBuild;
-};
-
-/**
- * Everything the character creator offers (Scripts/setup_creator.py writes it from the City Sample crowd and the
- * creator's own faces). Indices in FShinobiAppearance count within the player's sex (and slot), in this order.
- */
-UCLASS()
-class SHINOBICOOP_API UShinobiCreatorCatalog : public UPrimaryDataAsset
-{
-	GENERATED_BODY()
-
-public:
-	static constexpr const TCHAR* Path = TEXT("/Game/Shinobi/Characters/Creator/DA_CreatorCatalog.DA_CreatorCatalog");
-
-	UPROPERTY(EditAnywhere, Category = Creator)
-	TArray<FShinobiCreatorFrame> Frames;
-
-	UPROPERTY(EditAnywhere, Category = Creator)
-	TArray<FShinobiCreatorFace> Faces;
-
-	UPROPERTY(EditAnywhere, Category = Creator)
-	TArray<FShinobiCreatorGroom> Grooms;
-
-	UPROPERTY(EditAnywhere, Category = Creator)
-	TArray<FShinobiCreatorBinding> Bindings;
-
-	UPROPERTY(EditAnywhere, Category = Creator)
-	TArray<FShinobiCreatorStyle> Styles;
-
-	const FShinobiCreatorFrame* FindFrame(EShinobiSex Sex, EShinobiBuild Build) const;
-	/** The frame's name as a fitting body (outfit copies SK_<Outfit>_<Name>): CrowdMNormal, CrowdFOver, ... as
-	 * Scripts/setup_creator.py FRAME_BODIES names them. */
-	static FString FittingName(EShinobiSex Sex, EShinobiBuild Build);
-	/** The Index-th face / groom / style of that sex (and slot); null past the end. */
-	const FShinobiCreatorFace* FindFace(EShinobiSex Sex, int32 Index) const;
-	const FShinobiCreatorGroom* FindGroom(EShinobiSex Sex, EShinobiGroomSlot Slot, int32 Index) const;
-	const FShinobiCreatorStyle* FindStyle(EShinobiSex Sex, EShinobiWardrobeSlot Slot, int32 Index) const;
-	UGroomBindingAsset* LoadBinding(FName Face, FName Groom) const;
-
-	int32 CountFaces(EShinobiSex Sex) const;
-	int32 CountGrooms(EShinobiSex Sex, EShinobiGroomSlot Slot) const;
-	int32 CountStyles(EShinobiSex Sex, EShinobiWardrobeSlot Slot) const;
 };
 
 /** A tattoo on a Mutable look: a DT_Tattoos design placed on a body region (offset, rotation and scale as small integers;
@@ -312,4 +290,75 @@ struct FShinobiAppearance
 	static bool FromCode(const FString& Code, FShinobiAppearance& Out);
 
 	bool operator==(const FShinobiAppearance& Other) const = default;
+};
+
+/** A roster character's look in the creator catalog. */
+USTRUCT()
+struct FShinobiRosterPreset
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, Category = Creator)
+	FName Roster;
+
+	UPROPERTY(EditAnywhere, Category = Creator)
+	FShinobiAppearance Look;
+};
+
+/**
+ * Everything the character creator offers (Scripts/setup_creator.py writes it from the City Sample crowd and the
+ * creator's own faces). Indices in FShinobiAppearance count within the player's sex (and slot), in this order.
+ */
+UCLASS()
+class SHINOBICOOP_API UShinobiCreatorCatalog : public UPrimaryDataAsset
+{
+	GENERATED_BODY()
+
+public:
+	static constexpr const TCHAR* Path = TEXT("/Game/Shinobi/Characters/Creator/DA_CreatorCatalog.DA_CreatorCatalog");
+
+	UPROPERTY(EditAnywhere, Category = Creator)
+	TArray<FShinobiCreatorFrame> Frames;
+
+	UPROPERTY(EditAnywhere, Category = Creator)
+	TArray<FShinobiCreatorFace> Faces;
+
+	UPROPERTY(EditAnywhere, Category = Creator)
+	TArray<FShinobiCreatorGroom> Grooms;
+
+	UPROPERTY(EditAnywhere, Category = Creator)
+	TArray<FShinobiCreatorBinding> Bindings;
+
+	UPROPERTY(EditAnywhere, Category = Creator)
+	TArray<FShinobiCreatorStyle> Styles;
+
+	/** Static roster heads (FShinobiAppearance::Head indexes this, across both sexes). */
+	UPROPERTY(EditAnywhere, Category = Creator)
+	TArray<FShinobiCreatorHead> Heads;
+
+	/** Each roster character's look (Scripts/setup_mutable.py catalog). */
+	UPROPERTY(EditAnywhere, Category = Creator)
+	TArray<FShinobiRosterPreset> Presets;
+
+	const FShinobiCreatorFrame* FindFrame(EShinobiSex Sex, EShinobiBuild Build) const;
+	/** The frame's name as a fitting body (outfit copies SK_<Outfit>_<Name>): CrowdMNormal, CrowdFOver, ... as
+	 * Scripts/setup_creator.py FRAME_BODIES names them. */
+	static FString FittingName(EShinobiSex Sex, EShinobiBuild Build);
+	/** The Index-th face / groom / style of that sex (and slot); null past the end. */
+	const FShinobiCreatorFace* FindFace(EShinobiSex Sex, int32 Index) const;
+	const FShinobiCreatorGroom* FindGroom(EShinobiSex Sex, EShinobiGroomSlot Slot, int32 Index) const;
+	const FShinobiCreatorStyle* FindStyle(EShinobiSex Sex, EShinobiWardrobeSlot Slot, int32 Index) const;
+	/** Heads[Index]; null for None or past the end. */
+	const FShinobiCreatorHead* FindHead(uint8 Index) const;
+	/** The preset of the roster character named Roster, or null. */
+	const FShinobiAppearance* FindPreset(FName Roster) const;
+	/** Editor (Scripts/setup_mutable.py catalog; FShinobiAppearance's fields aren't visible to Python): Roster's preset is a
+	 * default look with these fields and no hair, beard or mustache (a MetaHuman face's OwnGrooms carry its hair). */
+	UFUNCTION(BlueprintCallable, Category = Creator)
+	void SetPreset(FName Roster, EShinobiSex Sex, uint8 Head, uint8 Face, EShinobiBuild Build);
+	UGroomBindingAsset* LoadBinding(FName Face, FName Groom) const;
+
+	int32 CountFaces(EShinobiSex Sex) const;
+	int32 CountGrooms(EShinobiSex Sex, EShinobiGroomSlot Slot) const;
+	int32 CountStyles(EShinobiSex Sex, EShinobiWardrobeSlot Slot) const;
 };

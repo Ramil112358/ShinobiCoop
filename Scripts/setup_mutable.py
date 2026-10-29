@@ -10,6 +10,13 @@ bases: each sex's base body (/Game/Shinobi/Mutable/Bases/SK_MutableBase_<Sex>) =
   Scripts/mutable/base_bodies.py, with morphs Build_Under and Build_Over (the slim and heavy builds) baked in by
   UShinobiFaceBlendLibrary (same vertex layout, aligned at the root); and SK_MutableOwn_<Sex>, RamilMH's or BikaMH's own
   body (the Own build). Both skin "head" a little (UShinobiMutableMeshLibrary::add_bone_skinning).
+heads (needs run_python.ps1 -Render: FBX export): each roster character's head (names.HEADS) grafted onto its sex's base
+  by Scripts/character/graft_head.py (donor SourceArt/Character/Models/<Name>/<Name>_rigged.fbx/.png, the base and its
+  average build's MetaHuman face for the neck) and imported as /Game/Shinobi/Mutable/Heads/SK_Head_<Name> with the
+  donor's material and a neck material; Saved/MutableHeads/<Name>_tint.json is the body tint that matches its skin
+  (the neck texture's mean colour over the base body's).
+catalog: DA_CreatorCatalog's Heads (with their tints), the roster MetaHuman faces and a preset per roster character
+  (run after setup_creator.py catalog, which rewrites Faces).
 palette: DT_Palette, the wardrobe colours (FShinobiPaletteRow).
 wardrobe: DT_Wardrobe_<Slot> per slot (FShinobiWardrobeRow): data the game passes to CO_Shinobi at runtime, so rows can be
   added without recompiling. Top, Bottom and Shoes hold every City Sample catalog style, index-aligned per sex.
@@ -23,8 +30,8 @@ import sys
 
 import unreal
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "mutable"))
-from names import (BASE, BUILDS, CATALOG, CLIP_SUFFIX, HIDES_SUFFIX, MESH_SUFFIX, MUTABLE_ROOT, OBJECT, OFF, ON, OWN, OWN_BODIES,  # noqa: E402
+sys.path += [os.path.dirname(os.path.abspath(__file__)), os.path.join(os.path.dirname(__file__), "mutable")]
+from names import (BASE, BUILDS, CATALOG, HEADS, HEADS_DIR, CLIP_SUFFIX, HIDES_SUFFIX, MESH_SUFFIX, MUTABLE_ROOT, OBJECT, OFF, ON, OWN, OWN_BODIES,  # noqa: E402
                    PALETTE, PARAM_BODY, PARAM_BUILD, PARAM_BUILD_BLEND, PARAM_FIT_BASE, SLOTS, WARDROBE_TABLE)
 
 ONLY = [s for s in os.environ.get("SETUP_MUTABLE_ONLY", "").split(",") if s]
@@ -87,6 +94,114 @@ def bases():
         if os.path.exists(blueprint):
             os.remove(blueprint)
             log(f"removed {blueprint}")
+
+
+def heads():
+    import subprocess
+
+    os.environ["SETUP_HERO_ONLY"] = "library"
+    import setup_creator as creator  # (as a library: it runs nothing without SETUP_CREATOR_*)
+    hero = creator.hero
+    work = os.path.join(hero.PROJECT, "Saved", "MutableHeads")
+    os.makedirs(work, exist_ok=True)
+
+    def export(asset, path, exporter):
+        task = unreal.AssetExportTask()
+        task.object, task.filename, task.automated, task.prompt, task.replace_identical = asset, path, True, False, True
+        task.exporter = exporter
+        if isinstance(exporter, unreal.SkeletalMeshExporterFBX):
+            task.options = unreal.FbxExportOption()
+            task.options.level_of_detail = False
+            task.options.export_morph_targets = False
+        if not unreal.Exporter.run_asset_export_task(task):
+            raise RuntimeError(f"could not export {asset.get_path_name()}")
+        return path
+
+    parent = unreal.load_asset(f"{hero.CHARACTERS_DIR}/M_Character")
+    exported = {}
+    for name, sex in HEADS.items():
+        if sex not in exported:
+            build = f"{BASES}/Build/MHC_MB_{sex}_Normal"
+            exported[sex] = (
+                export(unreal.load_asset(BASE.format(sex=sex)), os.path.join(work, f"Base_{sex}.fbx"), unreal.SkeletalMeshExporterFBX()),
+                export(unreal.load_asset(f"{build}/Face/SKM_MHC_MB_{sex}_Normal_FaceMesh"), os.path.join(work, f"Face_{sex}.fbx"), unreal.SkeletalMeshExporterFBX()),
+                export(unreal.load_asset(f"{build}/Body/Baked/T_Body_BC_VT"), os.path.join(work, f"Body_{sex}.png"), unreal.TextureExporterPNG()))
+        body_fbx, face_fbx, body_png = exported[sex]
+        donor = os.path.join(hero.MODELS_DIR, name, f"{name}_rigged")
+        out = os.path.join(work, f"Head_{name}.fbx")
+        run = subprocess.run([hero.BLENDER, "-b", "--factory-startup", "--python-exit-code", "1", "-P",
+                              os.path.join(hero.PROJECT, "Scripts", "character", "graft_head.py"), "--", body_fbx, face_fbx,
+                              donor + ".fbx", out, "--texture", donor + ".png", "--body-texture", body_png,
+                              "--render", os.path.join(work, name)], capture_output=True, text=True)
+        if run.returncode != 0:
+            raise RuntimeError(f"graft_head failed for {name}: {run.stdout[-1500:]} {run.stderr[-800:]}")
+        log(f"head {name}: {[l for l in run.stdout.splitlines() if '[graft_head]' in l][-3:]}")
+
+        skeleton = unreal.load_asset(BASE.format(sex=sex)).get_editor_property("skeleton")
+        head = creator.import_skeletal(out, HEADS_DIR, f"SK_Head_{name}", skeleton, morphs=False)
+        neck_png = os.path.splitext(out)[0] + "_neck.png"
+        neck = hero.import_texture_file(neck_png, HEADS_DIR, f"T_Head_{name}_Neck")
+        face = unreal.load_asset(f"{hero.CHARACTERS_DIR}/{name}/MI_{name}_{name}_rigged")
+        slots = []
+        for slot in head.get_editor_property("materials"):
+            slot_name = str(slot.get_editor_property("material_slot_name"))
+            material = creator.material_instance(f"MI_Head_{name}_Neck", HEADS_DIR, neck, parent) if slot_name.endswith("_Neck") else face
+            slots.append(unreal.SkeletalMaterial(material_interface=material, material_slot_name=slot_name))
+        head.set_editor_property("materials", slots)
+        EAL.save_loaded_asset(head)
+
+        # The body tint: the head's neck skin over the base body's (Scripts/mutable/skin_tint.py, system Python + Pillow).
+        tint = subprocess.run(["python", os.path.join(hero.PROJECT, "Scripts", "mutable", "skin_tint.py"), neck_png, body_png],
+                              capture_output=True, text=True)
+        if tint.returncode != 0:
+            raise RuntimeError(f"tint for {name}: {tint.stderr[-500:]}")
+        with open(os.path.join(work, f"{name}_tint.json"), "w", encoding="utf-8") as f:
+            f.write(tint.stdout.strip())
+        log(f"head {name}: SK_Head_{name}, slots {[str(s.material_slot_name) for s in slots]}, tint {tint.stdout.strip()}")
+
+
+# Every roster MetaHuman face (AShinobiPlayerCharacter::Faces): its catalog Faces entry. The first of each is its roster pick.
+MH_FACES = {"RamilMH": "Male", "RamilMHScan": "Male", "BikaMH": "Female", "BikaMHKeenFace": "Female"}
+
+
+def catalog():
+    """After setup_creator.py catalog (which rewrites Faces) and heads: the static heads, the roster MetaHuman faces and a
+    preset per roster character in DA_CreatorCatalog."""
+    data = unreal.load_asset(CATALOG)
+    heads_list = []
+    for name, sex in HEADS.items():
+        with open(os.path.join(unreal.Paths.project_saved_dir(), "MutableHeads", f"{name}_tint.json"), encoding="utf-8") as f:
+            tint = json.load(f)
+        heads_list.append(make(unreal.ShinobiCreatorHead, id=name, sex=getattr(unreal.ShinobiSex, sex.upper()),
+                               mesh=unreal.load_asset(f"{HEADS_DIR}/SK_Head_{name}"), skin_tint=unreal.LinearColor(*tint, 1.0)))
+    data.set_editor_property("heads", heads_list)
+
+    faces = [f for f in data.get_editor_property("faces") if str(f.get_editor_property("id")) not in MH_FACES]
+    for face_id, sex in MH_FACES.items():
+        build = f"/Game/Shinobi/MetaHumans/{face_id}/Build/MHC_{face_id}"
+        grooms = [unreal.load_asset(a) for a in EAL.list_assets(f"{build}/Grooms", recursive=False) if a.endswith("_Binding")]
+        faces.append(make(unreal.ShinobiCreatorFace, id=face_id, sex=getattr(unreal.ShinobiSex, sex.upper()),
+                          mesh=unreal.load_asset(f"{build}/Face/SKM_MHC_{face_id}_FaceMesh"), own_grooms=grooms))
+    data.set_editor_property("faces", faces)
+
+    def face_index(face_id):
+        sex = getattr(unreal.ShinobiSex, MH_FACES[face_id].upper())
+        return [f for f in faces if f.get_editor_property("sex") == sex].index(next(f for f in faces if str(f.get_editor_property("id")) == face_id))
+
+    data.set_editor_property("presets", [])
+    for i, (name, sex) in enumerate(HEADS.items()):
+        data.set_preset(name, getattr(unreal.ShinobiSex, sex.upper()), i, 0, unreal.ShinobiBuild.NORMAL)
+    for name in ("RamilMH", "BikaMH"):
+        data.set_preset(name, getattr(unreal.ShinobiSex, MH_FACES[name].upper()), 255, face_index(name), unreal.ShinobiBuild.OWN)
+    EAL.save_loaded_asset(data)
+    log(f"catalog: {len(heads_list)} heads, faces {list(MH_FACES)}, {len(data.get_editor_property('presets'))} presets")
+
+
+def make(struct, **values):
+    item = struct()
+    for name, value in values.items():
+        item.set_editor_property(name, value)
+    return item
 
 
 def new_table(path, struct, rows):
@@ -264,6 +379,6 @@ def graph():
         raise RuntimeError("CO_Shinobi did not compile")
 
 
-STAGES = {"bases": bases, "palette": palette, "wardrobe": wardrobe, "graph": graph}
+STAGES = {"bases": bases, "heads": heads, "catalog": catalog, "palette": palette, "wardrobe": wardrobe, "graph": graph}
 for stage in ONLY or list(STAGES):
     STAGES[stage]()
