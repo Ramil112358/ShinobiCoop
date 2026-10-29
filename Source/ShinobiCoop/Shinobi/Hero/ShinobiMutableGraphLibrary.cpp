@@ -42,6 +42,24 @@ UEdGraphNode* UShinobiMutableGraphLibrary::AddNode(UCustomizableObject* Object, 
 #endif
 }
 
+void UShinobiMutableGraphLibrary::ClearGraph(UCustomizableObject* Object)
+{
+#if WITH_EDITOR
+	if (UEdGraph* Graph = GetGraph(Object))
+	{
+		Graph->Modify();
+		for (UEdGraphNode* Node : TArray<UEdGraphNode*>(Graph->Nodes))
+		{
+			if (Node && Node->GetClass()->GetName() != TEXT("CustomizableObjectNodeObject"))
+			{
+				Node->BreakAllNodeLinks();
+				Graph->RemoveNode(Node);
+			}
+		}
+	}
+#endif
+}
+
 UEdGraphNode* UShinobiMutableGraphLibrary::FindNode(UCustomizableObject* Object, const FString& NodeClass, int32 Index)
 {
 #if WITH_EDITOR

@@ -405,13 +405,15 @@ bool AShinobiPlayerCharacter::ApplyCharacter()
 	}
 	if (CharacterIndex == CustomCharacter)
 	{
+		// The made body lands later (Mutable builds it): re-bind the outfit to its skeleton then.
+		HeroMesh->OnBodyBuilt.RemoveAll(this);
+		HeroMesh->OnBodyBuilt.AddUObject(this, &AShinobiPlayerCharacter::ApplyOutfit);
 		if (HeroMesh->WearAppearance(Appearance))
 		{
 			UE_LOG(LogShinobiCoop, Log, TEXT("%s plays a made character (%s)"), *GetName(), *Appearance.ToCode());
-			ApplyOutfit();
 			return true;
 		}
-		UE_LOG(LogShinobiCoop, Warning, TEXT("%s: no creator catalog or frame (Scripts/setup_creator.py): shown as the hero"), *GetName());
+		UE_LOG(LogShinobiCoop, Warning, TEXT("%s: no creator catalog or CO_Shinobi (Scripts/setup_creator.py, Scripts/setup_mutable.py): shown as the hero"), *GetName());
 	}
 	for (const int32 Index : {int32(CharacterIndex), 0}) // the pick, else the hero
 	{

@@ -11,7 +11,7 @@ bases: each sex's base body (/Game/Shinobi/Mutable/Bases/SK_MutableBase_<Sex>) =
   or BikaMH's own body) baked in by UShinobiFaceBlendLibrary (same vertex layout, aligned at the root).
 palette: DT_Palette, the wardrobe colours (FShinobiPaletteRow).
 wardrobe: DT_Wardrobe_<Slot> per slot (FShinobiWardrobeRow): data the game passes to CO_Shinobi at runtime, so rows can be
-  added without recompiling. For now one City Sample piece per Top, Bottom and Shoes (a sex's first style of the slot).
+  added without recompiling. Top, Bottom and Shoes hold every City Sample catalog style, index-aligned per sex.
 graph: CO_Shinobi, built with UShinobiMutableGraphLibrary. Body parameter -> Build switch over the build morphs (scaled by
   Build Blend) -> each slot's clip (when "<Slot> Hides" is ON) -> each slot's piece merged in (when "<Slot>" is ON), its
   "<Slot> Mesh" reshaped from the base to the built body -> the Body component.
@@ -72,13 +72,24 @@ def bases():
 
 
 def new_table(path, struct, rows):
-    """A Data Table of struct at path with rows ({column: value} keyed "Name"), replacing any old one."""
-    replace(path)
-    factory = unreal.DataTableFactory()
-    factory.set_editor_property("struct", struct.static_struct())
-    folder, name = path.rsplit("/", 1)
-    table = unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, folder, unreal.DataTable, factory)
-    if rows and not unreal.DataTableFunctionLibrary.fill_data_table_from_json_string(table, json.dumps(rows)):
+    """The Data Table of struct at path, made if missing, holding exactly rows ({column: value} keyed "Name"). An existing
+    table is refilled rather than replaced (deleting and re-creating it in one editor session leaves it unusable)."""
+    table = unreal.load_asset(path) if EAL.does_asset_exist(path) else None
+    if table and table.get_editor_property("row_struct") != struct.static_struct():
+        replace(path)
+        table = None
+    if not table:
+        factory = unreal.DataTableFactory()
+        factory.set_editor_property("struct", struct.static_struct())
+        folder, name = path.rsplit("/", 1)
+        table = unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, folder, unreal.DataTable, factory)
+    if not table:
+        raise RuntimeError(f"could not make {path}")
+    if not rows:
+        if unreal.DataTableFunctionLibrary.get_data_table_row_names(table):  # JSON can't fill a table with no rows
+            replace(path)
+            return new_table(path, struct, rows)
+    elif not unreal.DataTableFunctionLibrary.fill_data_table_from_json_string(table, json.dumps(rows)):
         raise RuntimeError(f"could not fill {path}")
     EAL.save_loaded_asset(table, only_if_is_dirty=False)
     return table
@@ -91,18 +102,26 @@ def palette():
 
 
 def wardrobe_rows(slot):
-    """The slot's rows: for now one City Sample piece (each sex's first catalog style of the slot, average build)."""
+    """The slot's rows: every City Sample catalog style, index-aligned per sex (row N holds each sex's Nth style of the slot,
+    average build), so a version-1 look's Top/Bottom/Shoes index (a style within its sex) wears the same piece. A sex with
+    fewer styles has no piece in the last rows (as in version 1)."""
     styles = unreal.load_asset(CATALOG).get_editor_property("styles")
     enum_slot = getattr(unreal.ShinobiWardrobeSlot, slot.upper())
 
-    def first(sex):
-        for style in styles:
-            if style.get_editor_property("sex") == sex and style.get_editor_property("slot") == enum_slot:
-                return style.get_editor_property("by_build")[1].get_path_name()
-        return None
+    def of(sex):
+        return [s.get_editor_property("by_build")[1].get_path_name() for s in styles
+                if s.get_editor_property("sex") == sex and s.get_editor_property("slot") == enum_slot]
 
-    male, female = first(unreal.ShinobiSex.MALE), first(unreal.ShinobiSex.FEMALE)
-    return [{"Name": "CitySample1", "MaleMesh": male, "FemaleMesh": female, "bHasWear": False}] if male and female else []
+    male, female = of(unreal.ShinobiSex.MALE), of(unreal.ShinobiSex.FEMALE)
+    rows = []
+    for index in range(max(len(male), len(female))):
+        row = {"Name": f"CitySample{index + 1:02d}", "bHasWear": False}
+        if index < len(male):
+            row["MaleMesh"] = male[index]
+        if index < len(female):
+            row["FemaleMesh"] = female[index]
+        rows.append(row)
+    return rows
 
 
 def wardrobe():
@@ -145,11 +164,15 @@ def mesh_parameter(co, name, default, x, y):
 
 
 def graph():
-    replace(OBJECT)
-    params = unreal.NewCustomizableObjectParameters()
-    params.set_editor_property("package_path", OBJECT.rsplit("/", 1)[0])
-    params.set_editor_property("asset_name", OBJECT.rsplit("/", 1)[1])
-    co = unreal.CustomizableObjectEditorFunctionLibrary.new_customizable_object(params)
+    # An existing object is cleared and rebuilt (deleting and re-creating one in the same editor session fails).
+    co = unreal.load_asset(OBJECT) if EAL.does_asset_exist(OBJECT) else None
+    if co:
+        G.clear_graph(co)
+    else:
+        params = unreal.NewCustomizableObjectParameters()
+        params.set_editor_property("package_path", OBJECT.rsplit("/", 1)[0])
+        params.set_editor_property("asset_name", OBJECT.rsplit("/", 1)[1])
+        co = unreal.CustomizableObjectEditorFunctionLibrary.new_customizable_object(params)
     if not co:
         raise RuntimeError(f"could not create {OBJECT}")
     root = G.find_node(co, "CustomizableObjectNodeObject", 0)
@@ -175,7 +198,7 @@ def graph():
     for i, slot in enumerate(SLOTS):
         y = 800 + 700 * i
         rows = wardrobe_rows(slot)
-        default = rows[0]["MaleMesh"] if rows else None  # a parameter's default: any piece (it is passed at runtime)
+        default = next((r.get("MaleMesh") or r.get("FemaleMesh") for r in rows), None)  # any piece: it is passed at runtime
         piece = mesh_parameter(co, slot + MESH_SUFFIX, default or base, -3000, y)
         reshape = node(co, "CONodeSkeletalMeshReshape", -2400, y)
         link(piece, "Skeletal Mesh", reshape, "Base Skeletal Mesh")

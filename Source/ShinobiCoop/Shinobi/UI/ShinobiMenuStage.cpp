@@ -62,14 +62,20 @@ void AShinobiMenuStage::StartDriver()
 void AShinobiMenuStage::ShowAppearance(const FShinobiAppearance& Look, int32 OutfitIndex)
 {
 	StartDriver();
+	// The made body lands later (Mutable builds it): dress the outfit on its skeleton then.
+	Body->OnBodyBuilt.RemoveAll(this);
+	Body->OnBodyBuilt.AddWeakLambda(this, [this, OutfitIndex]()
+	{
+		AShinobiPlayerCharacter::DressOutfit(*Body, *Outfit, OutfitIndex, Body->GetFittingName());
+	});
 	if (!Body->WearAppearance(Look))
 	{
+		Body->OnBodyBuilt.RemoveAll(this);
 		Show(0, OutfitIndex);
 		return;
 	}
 	ShownBody = 0; // (no roster body: a portrait of it would be the hero's)
 	Body->HideDriver();
-	AShinobiPlayerCharacter::DressOutfit(*Body, *Outfit, OutfitIndex, Body->GetFittingName());
 }
 
 void AShinobiMenuStage::Show(int32 RosterIndex, int32 OutfitIndex, int32 Face)

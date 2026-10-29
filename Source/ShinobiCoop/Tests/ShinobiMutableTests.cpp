@@ -11,6 +11,7 @@
 #include "MuCOE/CustomizableObjectEditorFunctionLibrary.h"
 #include "MuCOE/CustomizableObjectFactory.h"
 #include "Rendering/SkeletalMeshRenderData.h"
+#include "Retargeter/IKRetargeter.h"
 #include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "Shinobi/Hero/ShinobiCreatorCatalog.h"
 #include "Shinobi/Hero/ShinobiMutableLook.h"
@@ -130,6 +131,19 @@ bool FShinobiMutableNodePropertyPathTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableClearGraphTest, "ShinobiCoop.Mutable.ClearGraph", ShinobiTestFlags)
+bool FShinobiMutableClearGraphTest::RunTest(const FString& Parameters)
+{
+	UCustomizableObject* Object = NewTransientObject();
+	UShinobiMutableGraphLibrary::AddNode(Object, TEXT("CONodeSkeletalMeshMerge"), 0, 0);
+	UShinobiMutableGraphLibrary::AddNode(Object, TEXT("CustomizableObjectNodeFloatParameter"), 0, 100);
+	UShinobiMutableGraphLibrary::ClearGraph(Object);
+	TestNotNull(TEXT("the root object node stays"), UShinobiMutableGraphLibrary::FindNode(Object, TEXT("CustomizableObjectNodeObject"), 0));
+	TestNull(TEXT("other nodes go"), UShinobiMutableGraphLibrary::FindNode(Object, TEXT("CONodeSkeletalMeshMerge"), 0));
+	TestNull(TEXT("all of them"), UShinobiMutableGraphLibrary::FindNode(Object, TEXT("CustomizableObjectNodeFloatParameter"), 0));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutablePinDefaultTest, "ShinobiCoop.Mutable.PinDefault", ShinobiTestFlags)
 bool FShinobiMutablePinDefaultTest::RunTest(const FString& Parameters)
 {
@@ -231,7 +245,7 @@ bool FShinobiMutableObjectCompilesTest::RunTest(const FString& Parameters)
 		}
 		Table->ForeachRow<FShinobiWardrobeRow>(TEXT("ObjectCompiles"), [&](const FName& Row, const FShinobiWardrobeRow& Piece)
 		{
-			TestFalse(FString::Printf(TEXT("%s.%s has both sexes' meshes"), Slot, *Row.ToString()), Piece.MaleMesh.IsNull() || Piece.FemaleMesh.IsNull());
+			TestFalse(FString::Printf(TEXT("%s.%s has a mesh for a sex"), Slot, *Row.ToString()), Piece.MaleMesh.IsNull() && Piece.FemaleMesh.IsNull());
 		});
 	}
 	const UDataTable* Palette = LoadObject<UDataTable>(nullptr, ShinobiMutable::PalettePath);
@@ -365,6 +379,77 @@ bool FShinobiMutableRosterAfterMutableTest::RunTest(const FString& Parameters)
 	WaitThen(*this, [Until]() { return FPlatformTime::Seconds() > Until; }, [this, Wearer, Hero]()
 	{
 		TestEqual(TEXT("still the hero"), GetPathNameSafe(Wearer->Body->GetSkeletalMeshAsset()), FString(Hero.Mesh));
+	});
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableV1ClothesKeptTest, "ShinobiCoop.Mutable.V1ClothesKept", ShinobiTestFlags)
+bool FShinobiMutableV1ClothesKeptTest::RunTest(const FString& Parameters)
+{
+	// A version-1 look's Top/Bottom/Shoes index the catalog's styles within its sex: row N of each table is that piece.
+	const UShinobiCreatorCatalog* Catalog = LoadObject<UShinobiCreatorCatalog>(nullptr, UShinobiCreatorCatalog::Path);
+	if (!TestNotNull(TEXT("catalog"), Catalog))
+	{
+		return false;
+	}
+	for (const EShinobiWardrobeSlot Slot : {EShinobiWardrobeSlot::Top, EShinobiWardrobeSlot::Bottom, EShinobiWardrobeSlot::Shoes})
+	{
+		const TCHAR* SlotName = ShinobiMutable::SlotNames[int32(Slot)];
+		const UDataTable* Table = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(SlotName));
+		const TArray<FName> Rows = Table ? Table->GetRowNames() : TArray<FName>();
+		for (const EShinobiSex Sex : {EShinobiSex::Male, EShinobiSex::Female})
+		{
+			for (int32 Index = 0; Index < Catalog->CountStyles(Sex, Slot); ++Index)
+			{
+				const FShinobiCreatorStyle* Style = Catalog->FindStyle(Sex, Slot, uint8(Index));
+				const FShinobiWardrobeRow* Row = Rows.IsValidIndex(Index) ? Table->FindRow<FShinobiWardrobeRow>(Rows[Index], TEXT("V1ClothesKept")) : nullptr;
+				const TSoftObjectPtr<USkeletalMesh>* Worn = Row ? &(Sex == EShinobiSex::Female ? Row->FemaleMesh : Row->MaleMesh) : nullptr;
+				TestTrue(FString::Printf(TEXT("%s %s %d is the same piece"), SlotName, Sex == EShinobiSex::Female ? TEXT("female") : TEXT("male"), Index),
+					Worn && Style && Style->ByBuild.IsValidIndex(1) && Worn->ToSoftObjectPath() == Style->ByBuild[1].ToSoftObjectPath());
+			}
+		}
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableMissingObjectFallsBackTest, "ShinobiCoop.Mutable.MissingObjectFallsBack", ShinobiTestFlags)
+bool FShinobiMutableMissingObjectFallsBackTest::RunTest(const FString& Parameters)
+{
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	const FShinobiRosterEntry& Hero = AShinobiPlayerCharacter::Roster[0];
+	Wearer->Body->Wear(Hero.Mesh, Hero.Retargeter);
+	UIKRetargeter* HeroRetargeter = Wearer->Body->GetRetargeter();
+	UShinobiMutableLook::ObjectPathOverride = TEXT("/Game/Shinobi/Mutable/CO_Missing.CO_Missing");
+	AddExpectedError(TEXT("CO_Missing"), EAutomationExpectedErrorFlags::Contains, 1);
+	TestFalse(TEXT("a made look can't be worn without CO_Shinobi (the caller falls back to the hero)"),
+		Wearer->Body->WearAppearance(MutableLook(EShinobiSex::Male, EShinobiBuild::Normal)));
+	UShinobiMutableLook::ObjectPathOverride.Reset();
+	TestEqual(TEXT("the hero's body stays"), GetPathNameSafe(Wearer->Body->GetSkeletalMeshAsset()), FString(Hero.Mesh));
+	TestTrue(TEXT("with the hero's retargeter"), Wearer->Body->GetRetargeter() == HeroRetargeter);
+	TestEqual(TEXT("and no MetaHuman face on it"), Wearer->Body->GetMetaHumanParts().Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutablePendingKeepsRosterTest, "ShinobiCoop.Mutable.PendingKeepsRoster", ShinobiTestFlags)
+bool FShinobiMutablePendingKeepsRosterTest::RunTest(const FString& Parameters)
+{
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	const FShinobiRosterEntry& Hero = AShinobiPlayerCharacter::Roster[0];
+	Wearer->Body->Wear(Hero.Mesh, Hero.Retargeter);
+	UIKRetargeter* HeroRetargeter = Wearer->Body->GetRetargeter();
+	TSharedRef<int32> Built = MakeShared<int32>(0);
+	Wearer->Body->OnBodyBuilt.AddLambda([Built]() { ++*Built; });
+	TestTrue(TEXT("a made look is accepted"), Wearer->Body->WearAppearance(MutableLook(EShinobiSex::Male, EShinobiBuild::Normal)));
+	// Until the build lands, the roster body is worn as it was: its retargeter, no second (MetaHuman) head.
+	TestEqual(TEXT("pending: the hero's body"), GetPathNameSafe(Wearer->Body->GetSkeletalMeshAsset()), FString(Hero.Mesh));
+	TestTrue(TEXT("pending: the hero's retargeter"), Wearer->Body->GetRetargeter() == HeroRetargeter);
+	TestEqual(TEXT("pending: no MetaHuman face yet"), Wearer->Body->GetMetaHumanParts().Num(), 0);
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer, HeroRetargeter, Built]()
+	{
+		TestTrue(TEXT("built: the generated body"), Wearer->Body->GetSkeletalMeshAsset() && Wearer->Body->GetSkeletalMeshAsset()->HasAnyFlags(RF_Transient));
+		TestTrue(TEXT("built: the crowd retargeter"), Wearer->Body->GetRetargeter() && Wearer->Body->GetRetargeter() != HeroRetargeter);
+		TestTrue(TEXT("built: its MetaHuman face"), Wearer->Body->GetMetaHumanParts().ContainsByPredicate([](const UActorComponent* Part) { return Part && Part->GetName().StartsWith(TEXT("Face")); }));
+		TestEqual(TEXT("built: OnBodyBuilt once (the character re-dresses its outfit then)"), *Built, 1);
 	});
 	return true;
 }

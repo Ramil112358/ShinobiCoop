@@ -52,31 +52,47 @@ bool UShinobiBodyComponent::IsMutableBuildPending() const
 	return MutableLook && MutableLook->IsPending();
 }
 
+namespace
+{
+	/** The City Sample crowd's retargeter (made for the AnimGen Londoners): the Mutable bodies share metahuman_base_skel. */
+	UIKRetargeter* LoadCrowdRetargeter()
+	{
+		return LoadObject<UIKRetargeter>(nullptr, TEXT("/Game/Shinobi/AnimGen/RTG_MannyToCrowd.RTG_MannyToCrowd"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+	}
+}
+
 bool UShinobiBodyComponent::WearAppearance(const FShinobiAppearance& Look)
 {
 	const UShinobiCreatorCatalog* Catalog = LoadObject<UShinobiCreatorCatalog>(nullptr, UShinobiCreatorCatalog::Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
-	// The City Sample crowd's retargeter (made for the AnimGen Londoners): the Mutable bodies share metahuman_base_skel.
-	UIKRetargeter* Found = Catalog ? LoadObject<UIKRetargeter>(nullptr, TEXT("/Game/Shinobi/AnimGen/RTG_MannyToCrowd.RTG_MannyToCrowd"), nullptr, LOAD_NoWarn | LOAD_Quiet) : nullptr;
-	if (!Found || !GetOwner())
+	if (!Catalog || !LoadCrowdRetargeter() || !GetOwner())
 	{
 		return false;
 	}
-	Retargeter = Found;
-	SetAnimInstanceClass(UShinobiRetargetAnimInstance::StaticClass());
-	FittingName = UShinobiCreatorCatalog::FittingName(Look.Sex, FMath::Min(Look.Build, EShinobiBuild::Over));
-	// The body and its wardrobe come from one Mutable build (CO_Shinobi); what is worn stays until it is ready.
+	// The body and its wardrobe come from one Mutable build (CO_Shinobi). Nothing changes until it lands (DressBuilt), so
+	// a roster body keeps its own retargeter and head meanwhile, and stays if the build can't be made.
 	if (!MutableLook)
 	{
 		MutableLook = NewObject<UShinobiMutableLook>(this);
-		MutableLook->OnBuilt.BindWeakLambda(this, [this](USkeletalMesh* Built)
-		{
-			if (Built)
-			{
-				SetSkeletalMeshAsset(Built);
-			}
-		});
+		MutableLook->OnBuilt.BindWeakLambda(this, [this](USkeletalMesh* Built) { DressBuilt(Built); });
 	}
-	MutableLook->Request(Look);
+	PendingLook = Look;
+	return MutableLook->Request(Look);
+}
+
+void UShinobiBodyComponent::DressBuilt(USkeletalMesh* Built)
+{
+	const UShinobiCreatorCatalog* Catalog = LoadObject<UShinobiCreatorCatalog>(nullptr, UShinobiCreatorCatalog::Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
+	UIKRetargeter* Found = LoadCrowdRetargeter();
+	if (!Built || !Catalog || !Found || !GetOwner())
+	{
+		return; // what is worn stays
+	}
+	const FShinobiAppearance& Look = PendingLook;
+	// Retargeter first: a new mesh re-initialises the anim instance, which reads it.
+	Retargeter = Found;
+	SetSkeletalMeshAsset(Built);
+	SetAnimInstanceClass(UShinobiRetargetAnimInstance::StaticClass());
+	FittingName = UShinobiCreatorCatalog::FittingName(Look.Sex, FMath::Min(Look.Build, EShinobiBuild::Over));
 	WearStaticHead(nullptr);
 	WearMetaHumanParts(nullptr);
 	// A part on the owner under a fresh name (the last look's parts may still hold theirs until garbage collection).
@@ -131,7 +147,7 @@ bool UShinobiBodyComponent::WearAppearance(const FShinobiAppearance& Look)
 			Strands->RegisterComponent();
 		}
 	}
-	return true;
+	OnBodyBuilt.Broadcast();
 }
 
 namespace

@@ -25,10 +25,14 @@ public:
 	 * MetaHuman blueprint class (its body is MeshPath), its other skeletal meshes and grooms are worn too (WearMetaHumanParts). */
 	bool Wear(const TCHAR* MeshPath, const TCHAR* RetargeterPath, const TCHAR* MetaHumanClassPath = nullptr);
 
-	/** Wears a creator look: its face (UShinobiCreatorCatalog, on UShinobiFaceShapeAnimInstance, so SetFaceShape works)
-	 * and the grooms bound to it now, and the body with its wardrobe once Mutable has built them (UShinobiMutableLook;
-	 * the mesh worn until then stays). False (nothing changes) when the catalog or the retargeter isn't there. */
+	/** Wears a creator look once Mutable has built its body and wardrobe (UShinobiMutableLook): then the body, the crowd
+	 * retargeter, its face (UShinobiCreatorCatalog, on UShinobiFaceShapeAnimInstance, so SetFaceShape works) and the
+	 * grooms bound to it go on together, and OnBodyBuilt fires. Until then (or if the build fails) what is worn stays.
+	 * False (nothing changes or is pending) when the catalog, the retargeter or CO_Shinobi isn't there. */
 	bool WearAppearance(const FShinobiAppearance& Look);
+
+	/** After WearAppearance's body is on (the character re-dresses its outfit to the new skeleton then). */
+	FSimpleMulticastDelegate OnBodyBuilt;
 
 	/** Whether a Mutable body build for the last WearAppearance is still on its way. */
 	bool IsMutableBuildPending() const;
@@ -89,6 +93,9 @@ private:
 	 */
 	void WearMetaHumanParts(const TCHAR* ClassPath);
 
+	/** Puts PendingLook on with Built, its Mutable body (null: nothing changes). */
+	void DressBuilt(USkeletalMesh* Built);
+
 	UPROPERTY(Transient)
 	TObjectPtr<UIKRetargeter> Retargeter;
 
@@ -104,6 +111,9 @@ private:
 	TMap<FName, FVector> BoneShapes;
 
 	FShinobiAppearance Worn;
+
+	/** The look whose Mutable body is being built. */
+	FShinobiAppearance PendingLook;
 
 	FString FittingName;
 };

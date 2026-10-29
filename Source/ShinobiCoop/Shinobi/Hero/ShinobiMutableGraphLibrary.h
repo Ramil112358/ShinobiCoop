@@ -52,6 +52,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")
 	static UEdGraphNode* AddNode(UCustomizableObject* Object, const FString& NodeClass, int32 X, int32 Y);
 
+	/** Removes every node but the root Object node (rebuilding an existing object: deleting and re-creating one in the same
+	 * editor session fails). */
+	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")
+	static void ClearGraph(UCustomizableObject* Object);
+
 	/** The Index-th node of NodeClass in the object's graph, or null. */
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")
 	static UEdGraphNode* FindNode(UCustomizableObject* Object, const FString& NodeClass, int32 Index = 0);
