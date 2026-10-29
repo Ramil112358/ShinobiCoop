@@ -45,7 +45,8 @@ public class ShinobiCoop : ModuleRules
 			"PhysicsControl",
 			"ClothingSystemRuntimeInterface", // outfit cloth: simulation data and interactors
 			"ClothingSystemRuntimeCommon", // ...and the clothing assets (tests read their painted maps)
-			"ChaosCloth" // ...and each cloth's own gravity (wall-runs)
+			"ChaosCloth", // ...and each cloth's own gravity (wall-runs)
+			"CustomizableObject" // Mutable: made characters' generated bodies (CO_Shinobi)
 		});
 
 		if (Target.bBuildEditor)
@@ -53,6 +54,7 @@ public class ShinobiCoop : ModuleRules
 			PrivateDependencyModuleNames.Add("MeshUtilities"); // world builder: skeletal to static mesh (editor only)
 			// outfit builder: Chaos cloth on the fitted copies (editor only)
 			PrivateDependencyModuleNames.AddRange(new string[] { "ClothingSystemEditorInterface", "SkeletalMeshEditor", "PhysicsUtilities", "AssetRegistry" });
+			PrivateDependencyModuleNames.Add("CustomizableObjectEditor"); // Mutable graph builder (ShinobiMutableGraphLibrary)
 		}
 
 		PublicIncludePaths.AddRange(new string[] {

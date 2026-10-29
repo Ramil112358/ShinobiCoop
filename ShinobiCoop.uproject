@@ -156,6 +156,10 @@
 		{
 			"Name": "MetaHumanGenerator",
 			"Enabled": true
+		},
+		{
+			"Name": "Mutable",
+			"Enabled": true
 		}
 	]
 }
