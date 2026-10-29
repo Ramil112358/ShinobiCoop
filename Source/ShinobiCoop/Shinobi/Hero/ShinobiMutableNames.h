@@ -26,6 +26,8 @@ namespace ShinobiMutable
 	inline constexpr const TCHAR* Aged = TEXT("Aged");
 	inline constexpr const TCHAR* MakeUp = TEXT("Make Up");
 	inline constexpr const TCHAR* Freckles = TEXT("Freckles");
+	/** The MetaHuman body material's skin multiplier: a static head's FShinobiCreatorHead::SkinTint goes here. */
+	inline constexpr const TCHAR* SkinTintParameter = TEXT("Basecolor Global Multiply Post-Bake");
 
 	/**
 	 * Wardrobe slots, in EShinobiWardrobeSlot order. Each is dataless (meshes are given at runtime, so new pieces need no

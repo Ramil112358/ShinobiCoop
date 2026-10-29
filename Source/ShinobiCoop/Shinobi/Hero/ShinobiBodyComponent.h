@@ -61,6 +61,8 @@ public:
 
 	/** A MetaHuman's face, grooms and LODSync worn with this body (WearMetaHumanParts); empty otherwise. */
 	const TArray<TObjectPtr<UActorComponent>>& GetMetaHumanParts() const { return MetaHumanParts; }
+	/** The static head worn with this body (WearStaticHead), or null. */
+	USkeletalMeshComponent* GetStaticHead() const { return StaticHead; }
 
 	/** Wears Head, a static (rig-less) head on this body's skeleton (Scripts/character/graft_head.py), following this
 	 * body's pose; a MetaHuman's face and grooms come off. Null takes the head off. */

@@ -12,6 +12,8 @@
 #include "Retargeter/IKRetargeter.h"
 #include "Shinobi/Hero/ShinobiCreatorCatalog.h"
 #include "Shinobi/Hero/ShinobiMutableLook.h"
+#include "Shinobi/Hero/ShinobiMutableNames.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/Character.h"
 #include "Shinobi/Hero/ShinobiFaceShapeAnimInstance.h"
@@ -95,6 +97,25 @@ void UShinobiBodyComponent::DressBuilt(USkeletalMesh* Built)
 	FittingName = UShinobiCreatorCatalog::FittingName(Look.Sex, FMath::Min(Look.Build, EShinobiBuild::Over));
 	WearStaticHead(nullptr);
 	WearMetaHumanParts(nullptr);
+	EmptyOverrideMaterials(); // the last look's skin tint
+	if (const FShinobiCreatorHead* Head = Catalog->FindHead(Look.Head))
+	{
+		// A roster head: its own mesh, no MetaHuman face or grooms, and the body's skin tinted to its neck.
+		WearStaticHead(Head->Mesh.LoadSynchronous());
+		for (int32 Index = 0; Index < GetNumMaterials(); ++Index)
+		{
+			FLinearColor Unused;
+			const UMaterialInterface* Material = GetMaterial(Index);
+			if (Material && Material->GetVectorParameterValue(FHashedMaterialParameterInfo(ShinobiMutable::SkinTintParameter), Unused))
+			{
+				CreateDynamicMaterialInstance(Index)->SetVectorParameterValue(ShinobiMutable::SkinTintParameter, Head->SkinTint);
+			}
+		}
+		Worn = Look;
+		UpdateBody(Look);
+		OnBodyBuilt.Broadcast();
+		return;
+	}
 	// A part on the owner under a fresh name (the last look's parts may still hold theirs until garbage collection).
 	auto Place = [this](UClass* Class, const TCHAR* Name, USceneComponent* Parent) -> USceneComponent*
 	{

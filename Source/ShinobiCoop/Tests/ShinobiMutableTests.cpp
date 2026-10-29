@@ -7,6 +7,7 @@
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "Engine/SkeletalMesh.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "MuCO/CustomizableObject.h"
 #include "MuCO/CustomizableObjectInstance.h"
 #include "MuCOE/CustomizableObjectEditorFunctionLibrary.h"
@@ -620,3 +621,85 @@ bool FShinobiMutableBuildMorphBakeTest::RunTest(const FString& Parameters)
 
 #endif
 
+namespace
+{
+	/** The roster preset of Name from the catalog (a copy; asserts it exists). */
+	TOptional<FShinobiAppearance> Preset(FAutomationTestBase& Test, const TCHAR* Name)
+	{
+		const UShinobiCreatorCatalog* Catalog = LoadObject<UShinobiCreatorCatalog>(nullptr, UShinobiCreatorCatalog::Path);
+		const FShinobiAppearance* Look = Catalog ? Catalog->FindPreset(Name) : nullptr;
+		Test.TestNotNull(FString::Printf(TEXT("%s's preset"), Name), Look);
+		return Look ? TOptional<FShinobiAppearance>(*Look) : TOptional<FShinobiAppearance>();
+	}
+
+	/** Whether any body material slot carries the skin tint Tint. */
+	bool BodyTinted(const UShinobiBodyComponent* Body, const FLinearColor& Tint)
+	{
+		for (int32 Index = 0; Index < Body->GetNumMaterials(); ++Index)
+		{
+			const UMaterialInstanceDynamic* Material = Cast<UMaterialInstanceDynamic>(Body->GetMaterial(Index));
+			FLinearColor Value;
+			if (Material && Material->GetVectorParameterValue(FHashedMaterialParameterInfo(ShinobiMutable::SkinTintParameter), Value) && Value.Equals(Tint, 0.001f))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool WearsMetaHumanFace(const UShinobiBodyComponent* Body)
+	{
+		return Body->GetMetaHumanParts().ContainsByPredicate([](const UActorComponent* Part) { return Part && Part->GetName().StartsWith(TEXT("Face")); });
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableStaticHeadWornTest, "ShinobiCoop.Mutable.StaticHeadWorn", ShinobiTestFlags)
+bool FShinobiMutableStaticHeadWornTest::RunTest(const FString& Parameters)
+{
+	const TOptional<FShinobiAppearance> Cat = Preset(*this, TEXT("Cat"));
+	const UShinobiCreatorCatalog* Catalog = LoadObject<UShinobiCreatorCatalog>(nullptr, UShinobiCreatorCatalog::Path);
+	const FShinobiCreatorHead* Head = Cat && Catalog ? Catalog->FindHead(Cat->Head) : nullptr;
+	if (!TestNotNull(TEXT("Cat's head"), Head))
+	{
+		return false;
+	}
+	const FLinearColor Tint = Head->SkinTint;
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	TestTrue(TEXT("Cat's preset is accepted"), Wearer->Body->WearAppearance(*Cat));
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer, Tint]()
+	{
+		const USkeletalMeshComponent* Static = Wearer->Body->GetStaticHead();
+		TestTrue(TEXT("wears SK_Head_Cat"), Static && Static->GetSkeletalMeshAsset() && Static->GetSkeletalMeshAsset()->GetName() == TEXT("SK_Head_Cat"));
+		TestEqual(TEXT("no MetaHuman parts"), Wearer->Body->GetMetaHumanParts().Num(), 0);
+		TestTrue(FString::Printf(TEXT("the body is tinted %s"), *Tint.ToString()), BodyTinted(Wearer->Body, Tint));
+	});
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableOneHeadAtATimeTest, "ShinobiCoop.Mutable.OneHeadAtATime", ShinobiTestFlags)
+bool FShinobiMutableOneHeadAtATimeTest::RunTest(const FString& Parameters)
+{
+	const TOptional<FShinobiAppearance> Cat = Preset(*this, TEXT("Cat"));
+	const TOptional<FShinobiAppearance> RamilMH = Preset(*this, TEXT("RamilMH"));
+	if (!Cat || !RamilMH)
+	{
+		return false;
+	}
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	auto Check = [this, Wearer](const TCHAR* Step)
+	{
+		const USkeletalMeshComponent* Static = Wearer->Body->GetStaticHead();
+		const bool bStatic = Static && Static->GetSkeletalMeshAsset();
+		TestTrue(FString::Printf(TEXT("%s: exactly one head (static %d, MetaHuman face %d)"), Step, bStatic, WearsMetaHumanFace(Wearer->Body)), bStatic != WearsMetaHumanFace(Wearer->Body));
+	};
+	const FShinobiAppearance Looks[] = {*Cat, *RamilMH, *Cat};
+	const TCHAR* Steps[] = {TEXT("Cat"), TEXT("then RamilMH"), TEXT("then Cat")};
+	for (int32 Step = 0; Step < 3; ++Step)
+	{
+		const FShinobiAppearance Look = Looks[Step];
+		const TCHAR* Name = Steps[Step];
+		ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([Wearer, Look]() { Wearer->Body->WearAppearance(Look); return true; }));
+		WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [Check, Name]() { Check(Name); });
+	}
+	return true;
+}
