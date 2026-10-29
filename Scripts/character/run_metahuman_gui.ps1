@@ -23,5 +23,5 @@ $ArgLine = "`"$Root\ShinobiCoop.uproject`" -ExecCmds=`"py $Script`" -nosplash -u
 $p = Start-Process -FilePath "$UE\Engine\Binaries\Win64\UnrealEditor.exe" -ArgumentList $ArgLine -PassThru
 $null = $p.Handle
 if (-not $p.WaitForExit($TimeoutSec * 1000)) { taskkill /PID $p.Id /T /F | Out-Null; Write-Host "TIMEOUT" }
-Select-String -Path $Log -Pattern "\[setup_metahuman\]|\[creator_faces\]|LogPython: Error|LogMetaHuman\w*: Error|MetaHuman: Error" | ForEach-Object { Write-Host $_.Line }
+Select-String -Path $Log -Pattern "\[setup_metahuman\]|\[creator_faces\]|\[setup_bases\]|LogPython: Error|LogMetaHuman\w*: Error|MetaHuman: Error" | ForEach-Object { Write-Host $_.Line }
 Write-Host "Log: $Log"

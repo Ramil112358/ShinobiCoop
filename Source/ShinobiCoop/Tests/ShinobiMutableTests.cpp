@@ -177,6 +177,26 @@ bool FShinobiMutableAppearanceV2Test::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableBasesTest, "ShinobiCoop.Mutable.Bases", ShinobiTestFlags)
+bool FShinobiMutableBasesTest::RunTest(const FString& Parameters)
+{
+	for (const TCHAR* Sex : {TEXT("Male"), TEXT("Female")})
+	{
+		const FString Path = FString::Printf(TEXT("/Game/Shinobi/Mutable/Bases/SK_MutableBase_%s.SK_MutableBase_%s"), Sex, Sex);
+		const USkeletalMesh* Base = LoadObject<USkeletalMesh>(nullptr, *Path);
+		if (!TestNotNull(FString::Printf(TEXT("%s base"), Sex), Base))
+		{
+			continue;
+		}
+		TestEqual(FString::Printf(TEXT("%s base skeleton"), Sex), GetNameSafe(Base->GetSkeleton()), FString(TEXT("metahuman_base_skel")));
+		for (const TCHAR* Morph : {TEXT("Build_Under"), TEXT("Build_Over"), TEXT("Build_Own")})
+		{
+			TestNotNull(FString::Printf(TEXT("%s base has %s"), Sex, Morph), Base->FindMorphTarget(Morph));
+		}
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableBuildMorphBakeTest, "ShinobiCoop.Mutable.BuildMorphBake", ShinobiTestFlags)
 bool FShinobiMutableBuildMorphBakeTest::RunTest(const FString& Parameters)
 {
