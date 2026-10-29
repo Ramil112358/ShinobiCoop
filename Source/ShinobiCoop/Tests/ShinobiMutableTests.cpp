@@ -6,6 +6,7 @@
 #include "AnimationRuntime.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
+#include "Components/LODSyncComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "MuCO/CustomizableObject.h"
@@ -774,6 +775,27 @@ bool FShinobiMutableSameBodyNewHeadTest::RunTest(const FString& Parameters)
 	{
 		const USkeletalMeshComponent* Head = Wearer->Body->GetStaticHead();
 		TestTrue(TEXT("Cat's head after Bika's"), Head && Head->GetSkeletalMeshAsset() && Head->GetSkeletalMeshAsset()->GetName() == TEXT("SK_Head_Cat"));
+	});
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableMetaHumanPresetPartsTest, "ShinobiCoop.Mutable.MetaHumanPresetParts", ShinobiTestFlags)
+bool FShinobiMutableMetaHumanPresetPartsTest::RunTest(const FString& Parameters)
+{
+	// RamilMH's preset wears his blueprint's own parts, as his roster body does: the Fab hair (strands, ShinobiStrands)
+	// and the LODSync that keeps the grooms on the face's LODs.
+	const TOptional<FShinobiAppearance> RamilMH = Preset(*this, TEXT("RamilMH"));
+	if (!RamilMH)
+	{
+		return false;
+	}
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	Wearer->Body->WearAppearance(*RamilMH);
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer]()
+	{
+		const TArray<TObjectPtr<UActorComponent>>& Parts = Wearer->Body->GetMetaHumanParts();
+		TestTrue(TEXT("the Fab hair"), Parts.ContainsByPredicate([](const UActorComponent* Part) { return Part && Part->ComponentHasTag(TEXT("ShinobiStrands")); }));
+		TestTrue(TEXT("the LODSync"), Parts.ContainsByPredicate([](const UActorComponent* Part) { return Part && Part->IsA<ULODSyncComponent>(); }));
 	});
 	return true;
 }

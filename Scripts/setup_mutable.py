@@ -141,7 +141,9 @@ def heads():
         head = creator.import_skeletal(out, HEADS_DIR, f"SK_Head_{name}", skeleton, morphs=False)
         neck_png = os.path.splitext(out)[0] + "_neck.png"
         neck = hero.import_texture_file(neck_png, HEADS_DIR, f"T_Head_{name}_Neck")
-        face = unreal.load_asset(f"{hero.CHARACTERS_DIR}/{name}/MI_{name}_{name}_rigged")
+        # The donor's material: its MI_<Name>_<Name>_rigged, or (the hero, imported apart) its roster mesh's.
+        face = f"{hero.CHARACTERS_DIR}/{name}/MI_{name}_{name}_rigged"
+        face = unreal.load_asset(face) if EAL.does_asset_exist(face) else             unreal.load_asset(f"{hero.HERO_DIR}/SK_{name}").get_editor_property("materials")[0].get_editor_property("material_interface")
         slots = []
         for slot in head.get_editor_property("materials"):
             slot_name = str(slot.get_editor_property("material_slot_name"))
@@ -179,9 +181,10 @@ def catalog():
     faces = [f for f in data.get_editor_property("faces") if str(f.get_editor_property("id")) not in MH_FACES]
     for face_id, sex in MH_FACES.items():
         build = f"/Game/Shinobi/MetaHumans/{face_id}/Build/MHC_{face_id}"
-        grooms = [unreal.load_asset(a) for a in EAL.list_assets(f"{build}/Grooms", recursive=False) if a.endswith("_Binding")]
+        # Worn through its blueprint (its Fab hair, groom materials and LODSync are set there), as on its roster body.
         faces.append(make(unreal.ShinobiCreatorFace, id=face_id, sex=getattr(unreal.ShinobiSex, sex.upper()),
-                          mesh=unreal.load_asset(f"{build}/Face/SKM_MHC_{face_id}_FaceMesh"), own_grooms=grooms))
+                          mesh=unreal.load_asset(f"{build}/Face/SKM_MHC_{face_id}_FaceMesh"),
+                          meta_human=EAL.load_blueprint_class(f"{build}/BP_MHC_{face_id}")))
     data.set_editor_property("faces", faces)
 
     def face_index(face_id):

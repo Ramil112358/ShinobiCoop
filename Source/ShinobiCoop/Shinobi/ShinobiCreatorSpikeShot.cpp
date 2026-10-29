@@ -602,16 +602,19 @@ void AShinobiPlayerController::RunRosterPresetShot()
 		FTimerHandle Handle;
 		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
 	};
-	auto Film = [this, At](float When, const FString& Name, float Distance, float Height)
+	// Height: above the actor, or (bHead) above the head bone (heights differ).
+	auto Film = [this, At](float When, const FString& Name, float Distance, float Height, bool bHead)
 	{
-		At(When, [this, Distance, Height]()
+		At(When, [this, Distance, Height, bHead]()
 		{
-			const APawn* Shinobi = GetPawn();
+			const AShinobiPlayerCharacter* Shinobi = GetPawn<AShinobiPlayerCharacter>();
 			if (!Shinobi)
 			{
 				return;
 			}
-			const FVector Target = Shinobi->GetActorLocation() + FVector(0.f, 0.f, Height);
+			const USkeletalMeshComponent* Body = Shinobi->GetHeroMesh();
+			const FName Bone = Body && Body->GetBoneIndex(TEXT("head")) != INDEX_NONE ? FName(TEXT("head")) : FName(TEXT("Head"));
+			const FVector Target = (bHead && Body && Body->GetBoneIndex(Bone) != INDEX_NONE ? Body->GetBoneLocation(Bone) : Shinobi->GetActorLocation()) + FVector(0.f, 0.f, Height);
 			const FVector Eye = Target + Shinobi->GetActorForwardVector() * Distance;
 			ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Target - Eye).Rotation());
 			Camera->GetCameraComponent()->SetFieldOfView(40.f);
@@ -641,8 +644,8 @@ void AShinobiPlayerController::RunRosterPresetShot()
 			At(T + 4.f, []() { FAssetCompilingManager::Get().FinishAllCompilation(); if (GShaderCompilingManager) { GShaderCompilingManager->FinishAllCompilation(); } });
 #endif
 			const FString Name = FString::Printf(TEXT("%s_%s_"), AShinobiPlayerCharacter::Roster[Index].Name, Preset ? TEXT("Preset") : TEXT("Legacy"));
-			Film(T + 5.f, Name + TEXT("Body"), 420.f, -5.f);
-			Film(T + 5.4f, Name + TEXT("Head"), 110.f, 70.f);
+			Film(T + 5.f, Name + TEXT("Body"), 420.f, -5.f, false);
+			Film(T + 5.4f, Name + TEXT("Head"), 110.f, 8.f, true);
 			T += 6.f;
 		}
 	}

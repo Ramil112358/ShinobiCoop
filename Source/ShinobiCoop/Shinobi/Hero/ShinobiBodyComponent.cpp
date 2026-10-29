@@ -129,7 +129,15 @@ void UShinobiBodyComponent::DressBuilt(USkeletalMesh* Built)
 		MetaHumanParts.Add(Part);
 		return Part;
 	};
-	if (const FShinobiCreatorFace* FacePick = Catalog->FindFace(Look.Sex, Look.Face))
+	const FShinobiCreatorFace* FacePick = Catalog->FindFace(Look.Sex, Look.Face);
+	if (FacePick && !FacePick->MetaHuman.IsNull())
+	{
+		// A roster MetaHuman's face: its blueprint's parts, as on its roster body (its Fab hair needs their settings).
+		WearMetaHumanParts(*FacePick->MetaHuman.ToString());
+		Worn = Look;
+		UpdateBody(Look);
+	}
+	else if (FacePick)
 	{
 		USkeletalMeshComponent* Face = CastChecked<USkeletalMeshComponent>(Place(USkeletalMeshComponent::StaticClass(), TEXT("Face"), this));
 		Face->SkinCacheUsage.Init(ESkinCacheUsage::Enabled, 8); // grooms follow it through the skin cache (WearMetaHumanParts)

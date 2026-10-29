@@ -81,6 +81,11 @@ struct FShinobiCreatorFace
 	 * have theirs in the skin). */
 	UPROPERTY(EditAnywhere, Category = Creator)
 	TArray<TSoftObjectPtr<UGroomBindingAsset>> OwnGrooms;
+
+	/** A roster MetaHuman's built blueprint: its face, grooms and LODSync are worn as on its roster body
+	 * (UShinobiBodyComponent::WearMetaHumanParts) instead of Mesh with OwnGrooms. */
+	UPROPERTY(EditAnywhere, Category = Creator)
+	TSoftClassPtr<AActor> MetaHuman;
 };
 
 /** A roster character's static head grafted onto the Mutable base of its sex (Scripts/setup_mutable.py heads). */
