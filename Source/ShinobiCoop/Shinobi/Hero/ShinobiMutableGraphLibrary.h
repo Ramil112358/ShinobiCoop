@@ -27,6 +27,8 @@ class UEdGraphNode;
  *   CustomizableObjectNodeObject: in "Components", "Children"
  *   CustomizableObjectNodeMeshMorph: in "Mesh", "Factor", "Morph Target Name" (a StaticString node's "Value"); out "Mesh"
  *   CustomizableObjectNodeMeshReshape: in "Base Mesh", "Base Shape", "Target Shape"; out "Mesh"
+ *   CONodeSkeletalMeshReshape: in "Base Skeletal Mesh", "Base Shape", "Target Shape"; out "Skeletal Mesh"; joints follow with
+ *     bReshapePose=True and SelectionMethod=ALL_BUT_SELECTED (an empty BonesToDeform list: every bone)
  *   CONodeModifierMutableSkeletalMeshMerge: in "Added", "Skeletal Mesh Name"; out "Modifier"
  *   CustomizableObjectNodeModifierClipWithMesh: in "Clip Mesh"; out "Modifier"
  *   CustomizableObjectNodeObjectGroup: out "Group" (into Object "Children"), in "Objects"

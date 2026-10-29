@@ -7,13 +7,14 @@
 these stages rebuild it.
 
 bases: each sex's base body (/Game/Shinobi/Mutable/Bases/SK_MutableBase_<Sex>) = the average MetaHuman body built by
-  Scripts/mutable/base_bodies.py, with morphs Build_Under, Build_Over (the slim and heavy builds) and Build_Own (RamilMH's
-  or BikaMH's own body) baked in by UShinobiFaceBlendLibrary (same vertex layout, aligned at the root).
+  Scripts/mutable/base_bodies.py, with morphs Build_Under and Build_Over (the slim and heavy builds) baked in by
+  UShinobiFaceBlendLibrary (same vertex layout, aligned at the root); and SK_MutableOwn_<Sex>, RamilMH's or BikaMH's own
+  body (the Own build). Both skin "head" a little (UShinobiMutableMeshLibrary::add_bone_skinning).
 palette: DT_Palette, the wardrobe colours (FShinobiPaletteRow).
 wardrobe: DT_Wardrobe_<Slot> per slot (FShinobiWardrobeRow): data the game passes to CO_Shinobi at runtime, so rows can be
   added without recompiling. Top, Bottom and Shoes hold every City Sample catalog style, index-aligned per sex.
 graph: CO_Shinobi, built with UShinobiMutableGraphLibrary. Body parameter -> Build switch over the build morphs (scaled by
-  Build Blend) -> each slot's clip (when "<Slot> Hides" is ON) -> each slot's piece merged in (when "<Slot>" is ON), its
+  Build Blend) -> pose reshape (the skeleton follows the build) -> each slot's clip (when "<Slot> Hides" is ON) -> each slot's piece merged in (when "<Slot>" is ON), its
   "<Slot> Mesh" reshaped from the base to the built body -> the Body component.
 """
 import json
@@ -23,8 +24,8 @@ import sys
 import unreal
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "mutable"))
-from names import (BASE, BUILDS, CATALOG, CLIP_SUFFIX, HIDES_SUFFIX, MESH_SUFFIX, MUTABLE_ROOT, OBJECT, OFF, ON, OWN_BODIES,  # noqa: E402
-                   PALETTE, PARAM_BODY, PARAM_BUILD, PARAM_BUILD_BLEND, SLOTS, WARDROBE_TABLE)
+from names import (BASE, BUILDS, CATALOG, CLIP_SUFFIX, HIDES_SUFFIX, MESH_SUFFIX, MUTABLE_ROOT, OBJECT, OFF, ON, OWN, OWN_BODIES,  # noqa: E402
+                   PALETTE, PARAM_BODY, PARAM_BUILD, PARAM_BUILD_BLEND, PARAM_FIT_BASE, SLOTS, WARDROBE_TABLE)
 
 ONLY = [s for s in os.environ.get("SETUP_MUTABLE_ONLY", "").split(",") if s]
 EAL = unreal.EditorAssetLibrary
@@ -66,9 +67,18 @@ def bases():
             raise RuntimeError(f"no built MB_{sex}_Normal body: run Scripts/mutable/base_bodies.py first")
         others = [unreal.load_asset(built_body(f"MB_{sex}_Under")), unreal.load_asset(built_body(f"MB_{sex}_Over")),
                   unreal.load_asset(OWN_BODIES[sex])]
-        report = unreal.ShinobiFaceBlendLibrary.bake_face_blend_morphs(base, others, ["Under", "Over", "Own"], 4, "root", "Build_", 60.0)
+        report = unreal.ShinobiFaceBlendLibrary.bake_face_blend_morphs(base, others[:2], ["Under", "Over"], 4, "root", "Build_", 60.0)
+        # Bodies skin the head a little, so a merged piece skinned to it can't put its own body's head pose on the skeleton.
+        headed = unreal.ShinobiMutableMeshLibrary.add_bone_skinning(base, "head")
         EAL.save_loaded_asset(base, only_if_is_dirty=False)
-        log(f"{sex} base {path}: {report}")
+        log(f"{sex} base {path}: {report}; head skinned on {headed} vertices")
+        # The Own build: RamilMH's or BikaMH's own body (exact joints), worn as the Body with the pieces reshaped onto it.
+        own = OWN.format(sex=sex)
+        replace(own)
+        copy = EAL.duplicate_asset(OWN_BODIES[sex], own)
+        headed = unreal.ShinobiMutableMeshLibrary.add_bone_skinning(copy, "head")
+        EAL.save_loaded_asset(copy, only_if_is_dirty=False)
+        log(f"{sex} own body {own}: head skinned on {headed} vertices")
         # The average build's character blueprint isn't used (the bases take only its body) and references its face and
         # grooms, which aren't cooked (Config/DefaultGame.ini DirectoriesToNeverCook): remove it so the cook doesn't fail.
         # (the file itself: the commandlet's asset registry doesn't list it)
@@ -186,13 +196,15 @@ def graph():
     root = G.find_node(co, "CustomizableObjectNodeObject", 0)
     base = asset_path(BASE.format(sex="Male"))
 
-    # Body: the sex's base (given at runtime), morphed toward the chosen build.
+    # Body: the sex's base (or the Own build's own body), given at runtime, morphed toward the chosen build. Fit Base: the
+    # sex's base, which the pieces were authored on.
     body = mesh_parameter(co, PARAM_BODY, base, -3000, 0)
+    fit_base = mesh_parameter(co, PARAM_FIT_BASE, base, -3000, -300)
     blend = node(co, "CustomizableObjectNodeFloatParameter", -3000, 300, ParameterName=PARAM_BUILD_BLEND, DefaultValue="1.0")
     build = enum(co, PARAM_BUILD, BUILDS, "Normal", -3000, 450)
     built = switch(co, build, -2400, 0)
     for i, value in enumerate(BUILDS):
-        if value == "Normal":
+        if value in ("Normal", "Own"):  # (Own: the Body is the own body itself)
             link(body, "Skeletal Mesh", built, value)
             continue
         morph = node(co, "CONodeSkeletalMeshMorph", -2700, 150 * i, MorphTargetName=f"Build_{value}")
@@ -200,8 +212,17 @@ def graph():
         link(blend, "Float", morph, "Factor")
         link(morph, "Skeletal Mesh", built, value)
 
+    # The skeleton follows the slim and heavy morphs. (A merged piece can't move a bone the body skins: Mutable keeps the
+    # pose of the mesh that skins or reshapes a bone, OpMeshMerge.cpp ComputeBoneMergePriority, ties to the body; the
+    # bodies skin "head" for that, see bases.)
+    posed = node(co, "CONodeSkeletalMeshReshape", -2100, 0, bReshapeVertices="False", bReshapePose="True",
+                 SelectionMethod="ALL_BUT_SELECTED")
+    link(built, "Skeletal Mesh", posed, "Base Skeletal Mesh")
+    link(body, "Skeletal Mesh", posed, "Base Shape")
+    link(built, "Skeletal Mesh", posed, "Target Shape")
+
     # Each slot: its clip hides body skin (Hides ON), its piece is reshaped to the build and merged in (slot ON).
-    current, current_pin = built, "Skeletal Mesh"
+    current, current_pin = posed, "Skeletal Mesh"
     pieces = []
     for i, slot in enumerate(SLOTS):
         y = 800 + 700 * i
@@ -210,7 +231,7 @@ def graph():
         piece = mesh_parameter(co, slot + MESH_SUFFIX, default or base, -3000, y)
         reshape = node(co, "CONodeSkeletalMeshReshape", -2400, y)
         link(piece, "Skeletal Mesh", reshape, "Base Skeletal Mesh")
-        link(body, "Skeletal Mesh", reshape, "Base Shape")
+        link(fit_base, "Skeletal Mesh", reshape, "Base Shape")
         link(built, "Skeletal Mesh", reshape, "Target Shape")
         worn = switch(co, enum(co, slot, [ON, OFF], OFF, -2400, y + 200), -2100, y)
         link(reshape, "Skeletal Mesh", worn, ON)

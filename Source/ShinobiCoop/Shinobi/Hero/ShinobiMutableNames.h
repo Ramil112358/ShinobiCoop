@@ -11,8 +11,12 @@ namespace ShinobiMutable
 	inline constexpr const TCHAR* ObjectPath = TEXT("/Game/Shinobi/Mutable/CO_Shinobi.CO_Shinobi");
 	inline constexpr const TCHAR* PalettePath = TEXT("/Game/Shinobi/Mutable/DT_Palette.DT_Palette");
 
-	/** The body: a Skeletal Mesh Parameter given the sex's base (SK_MutableBase_<Sex>), so the sex needs no parameter. */
+	/** The body: a Skeletal Mesh Parameter given the sex's base (SK_MutableBase_<Sex>), or for the Own build that roster
+	 * character's own body (SK_MutableOwn_<Sex>), so the sex needs no parameter. "Fit Base" is always the sex's base: the
+	 * body the wardrobe pieces were authored on, which they are reshaped from. */
 	inline constexpr const TCHAR* Body = TEXT("Body");
+	inline constexpr const TCHAR* FitBase = TEXT("Fit Base");
+	inline FString OwnPath(const TCHAR* Sex) { return FString::Printf(TEXT("/Game/Shinobi/Mutable/Bases/SK_MutableOwn_%s.SK_MutableOwn_%s"), Sex, Sex); }
 	inline FString BasePath(const TCHAR* Sex) { return FString::Printf(TEXT("/Game/Shinobi/Mutable/Bases/SK_MutableBase_%s.SK_MutableBase_%s"), Sex, Sex); }
 	/** Build enum (EShinobiBuild names; Normal has no morph) and the morph's weight 0..1. */
 	inline constexpr const TCHAR* Build = TEXT("Build");

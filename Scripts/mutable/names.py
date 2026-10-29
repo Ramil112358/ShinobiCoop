@@ -25,6 +25,8 @@ OWN_BODIES = {"Male": FULL_BODIES["RamilMH"], "Female": FULL_BODIES["BikaMH"]}
 OBJECT = f"{MUTABLE_ROOT}/CO_Shinobi"
 PALETTE = f"{MUTABLE_ROOT}/DT_Palette"
 PARAM_BODY = "Body"
+PARAM_FIT_BASE = "Fit Base"
+OWN = f"{MUTABLE_ROOT}/Bases/SK_MutableOwn_{{sex}}"  # .format(sex="Male"): RamilMH's / BikaMH's body, the Own build
 BASE = f"{MUTABLE_ROOT}/Bases/SK_MutableBase_{{sex}}"  # .format(sex="Male")
 PARAM_BUILD = "Build"
 BUILDS = ["Under", "Normal", "Over", "Own"]  # EShinobiBuild order; Normal has no morph

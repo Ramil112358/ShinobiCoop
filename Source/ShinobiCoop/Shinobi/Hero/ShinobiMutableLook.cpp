@@ -58,7 +58,11 @@ void UShinobiMutableLook::SetParameters(const FShinobiAppearance& Look)
 {
 	const bool bFemale = Look.Sex == EShinobiSex::Female;
 	const TCHAR* Sex = bFemale ? TEXT("Female") : TEXT("Male");
-	Instance->SetSkeletalMeshParameterSelectedOption(ShinobiMutable::Body, LoadObject<USkeletalMesh>(nullptr, *ShinobiMutable::BasePath(Sex)));
+	USkeletalMesh* Base = LoadObject<USkeletalMesh>(nullptr, *ShinobiMutable::BasePath(Sex));
+	// The Own build wears the roster character's own body (its joints), the pieces reshaped onto it from the base.
+	USkeletalMesh* Own = Look.Build == EShinobiBuild::Own ? LoadObject<USkeletalMesh>(nullptr, *ShinobiMutable::OwnPath(Sex), nullptr, LOAD_NoWarn | LOAD_Quiet) : nullptr;
+	Instance->SetSkeletalMeshParameterSelectedOption(ShinobiMutable::Body, Own ? Own : Base);
+	Instance->SetSkeletalMeshParameterSelectedOption(ShinobiMutable::FitBase, Base);
 	Instance->SetEnumParameterSelectedOption(ShinobiMutable::Build, StaticEnum<EShinobiBuild>()->GetNameStringByValue(int64(Look.Build)));
 	Instance->SetFloatParameterSelectedOption(ShinobiMutable::BuildBlend, Look.BuildBlend / 255.f);
 	for (int32 Index = 0; Index < ShinobiWardrobeSlotCount; ++Index)

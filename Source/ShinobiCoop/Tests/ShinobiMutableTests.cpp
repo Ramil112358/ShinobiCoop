@@ -15,6 +15,8 @@
 #include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "Shinobi/Hero/ShinobiCreatorCatalog.h"
 #include "Shinobi/Hero/ShinobiMutableLook.h"
+#include "Shinobi/Hero/ShinobiMutableMeshLibrary.h"
+#include "SkeletalMeshAttributes.h"
 #include "Shinobi/Hero/ShinobiFaceBlendLibrary.h"
 #include "Shinobi/Hero/ShinobiMutableGraphLibrary.h"
 #include "Shinobi/Hero/ShinobiMutableNames.h"
@@ -208,10 +210,13 @@ bool FShinobiMutableBasesTest::RunTest(const FString& Parameters)
 			continue;
 		}
 		TestEqual(FString::Printf(TEXT("%s base skeleton"), Sex), GetNameSafe(Base->GetSkeleton()), FString(TEXT("metahuman_base_skel")));
-		for (const TCHAR* Morph : {TEXT("Build_Under"), TEXT("Build_Over"), TEXT("Build_Own")})
+		for (const TCHAR* Morph : {TEXT("Build_Under"), TEXT("Build_Over")})
 		{
 			TestNotNull(FString::Printf(TEXT("%s base has %s"), Sex, Morph), Base->FindMorphTarget(Morph));
 		}
+		// The Own build is the roster character's own body, on the same skeleton.
+		const USkeletalMesh* Own = LoadObject<USkeletalMesh>(nullptr, *ShinobiMutable::OwnPath(Sex));
+		TestTrue(FString::Printf(TEXT("%s own body on the base's skeleton"), Sex), Own && GetNameSafe(Own->GetSkeleton()) == GetNameSafe(Base->GetSkeleton()));
 	}
 	return true;
 }
@@ -226,7 +231,7 @@ bool FShinobiMutableObjectCompilesTest::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("compiles"), UCustomizableObjectEditorFunctionLibrary::CompileCustomizableObjectSynchronously(Object),
 		ECustomizableObjectCompilationState::Completed);
-	TArray<FString> Expected = {ShinobiMutable::Body, ShinobiMutable::Build, ShinobiMutable::BuildBlend};
+	TArray<FString> Expected = {ShinobiMutable::Body, ShinobiMutable::FitBase, ShinobiMutable::Build, ShinobiMutable::BuildBlend};
 	for (const TCHAR* Slot : ShinobiMutable::SlotNames)
 	{
 		Expected.Append({Slot, FString(Slot) + ShinobiMutable::MeshSuffix, FString(Slot) + ShinobiMutable::ClipSuffix,
@@ -451,6 +456,82 @@ bool FShinobiMutablePendingKeepsRosterTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("built: its MetaHuman face"), Wearer->Body->GetMetaHumanParts().ContainsByPredicate([](const UActorComponent* Part) { return Part && Part->GetName().StartsWith(TEXT("Face")); }));
 		TestEqual(TEXT("built: OnBodyBuilt once (the character re-dresses its outfit then)"), *Built, 1);
 	});
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableAddBoneSkinningTest, "ShinobiCoop.Mutable.AddBoneSkinning", ShinobiTestFlags)
+bool FShinobiMutableAddBoneSkinningTest::RunTest(const FString& Parameters)
+{
+	USkeletalMesh* Base = DuplicateObject<USkeletalMesh>(LoadObject<USkeletalMesh>(nullptr, *ShinobiMutable::BasePath(TEXT("Male"))), GetTransientPackage());
+	if (!TestNotNull(TEXT("a copy of the male base"), Base))
+	{
+		return false;
+	}
+	const int32 Added = UShinobiMutableMeshLibrary::AddBoneSkinning(Base, TEXT("head"), 8, 1.f / 255.f);
+	TestEqual(TEXT("eight vertices take the head"), Added, 8);
+	FMeshDescription Mesh;
+	TestTrue(TEXT("LOD 0 description"), Base->CloneMeshDescription(0, Mesh));
+	FSkeletalMeshConstAttributes Attributes(Mesh);
+	const int32 HeadIndex = Base->GetRefSkeleton().FindBoneIndex(TEXT("head"));
+	int32 Skinned = 0;
+	for (const FVertexID Vertex : Mesh.Vertices().GetElementIDs())
+	{
+		for (const UE::AnimationCore::FBoneWeight& Weight : Attributes.GetVertexSkinWeights().Get(Vertex))
+		{
+			Skinned += Weight.GetBoneIndex() == HeadIndex ? 1 : 0;
+		}
+	}
+	TestEqual(TEXT("the LOD 0 description skins head on those vertices"), Skinned, 8);
+	TestEqual(TEXT("an unknown bone adds nothing"), UShinobiMutableMeshLibrary::AddBoneSkinning(Base, TEXT("no_such_bone"), 8, 0.01f), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableBodyKeepsSkeletonTest, "ShinobiCoop.Mutable.BodyKeepsSkeleton", ShinobiTestFlags)
+bool FShinobiMutableBodyKeepsSkeletonTest::RunTest(const FString& Parameters)
+{
+	// Merged clothes must not move the body's bones: a City Sample shirt (skinned to the head) once put the male head at
+	// its own legacy body's height, 7 cm below the base's.
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	const USkeletalMesh* Base = LoadObject<USkeletalMesh>(nullptr, *ShinobiMutable::BasePath(TEXT("Male")));
+	const int32 Head = Base ? Base->GetRefSkeleton().FindBoneIndex(TEXT("head")) : INDEX_NONE;
+	const float BaseHead = Head == INDEX_NONE ? 0.f : float(FAnimationRuntime::GetComponentSpaceTransformRefPose(Base->GetRefSkeleton(), Head).GetLocation().Z);
+	Wearer->Body->WearAppearance(MutableLook(EShinobiSex::Male, EShinobiBuild::Normal)); // first pieces of every slot
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer, BaseHead]()
+	{
+		TestTrue(FString::Printf(TEXT("clothed head %.1f cm is the base's %.1f cm"), Wearer->Height(), BaseHead), FMath::Abs(Wearer->Height() - BaseHead) < 0.5f);
+	});
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableOwnMovesHeadTest, "ShinobiCoop.Mutable.OwnMovesHead", ShinobiTestFlags)
+bool FShinobiMutableOwnMovesHeadTest::RunTest(const FString& Parameters)
+{
+	// The Own build is RamilMH's or BikaMH's own body: its skeleton must follow, or the face floats off the neck.
+	auto HeadHeight = [](const USkeletalMesh* Mesh)
+	{
+		const int32 Head = Mesh ? Mesh->GetRefSkeleton().FindBoneIndex(TEXT("head")) : INDEX_NONE;
+		return Head == INDEX_NONE ? 0.f : float(FAnimationRuntime::GetComponentSpaceTransformRefPose(Mesh->GetRefSkeleton(), Head).GetLocation().Z);
+	};
+	struct FCase { EShinobiSex Sex; const TCHAR* Sexes; const TCHAR* Own; };
+	const FCase Cases[] = {
+		{EShinobiSex::Male, TEXT("Male"), TEXT("/Game/Shinobi/MetaHumans/RamilMH/Build/MHC_RamilMH/Body/SKM_MHC_RamilMH_BodyMesh.SKM_MHC_RamilMH_BodyMesh")},
+		{EShinobiSex::Female, TEXT("Female"), TEXT("/Game/Shinobi/MetaHumans/BikaMH/Build/MHC_BikaMH/Body/SKM_MHC_BikaMH_BodyMesh.SKM_MHC_BikaMH_BodyMesh")}};
+	for (const FCase& Case : Cases)
+	{
+		const float OwnHead = HeadHeight(LoadObject<USkeletalMesh>(nullptr, Case.Own));
+		const float BaseHead = HeadHeight(LoadObject<USkeletalMesh>(nullptr, *ShinobiMutable::BasePath(Case.Sexes)));
+		TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+		FShinobiAppearance Look = MutableLook(Case.Sex, EShinobiBuild::Own);
+		Look.BuildBlend = 255;
+		Wearer->Body->WearAppearance(Look);
+		const FString Name = Case.Sexes;
+		WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer, OwnHead, BaseHead, Name]()
+		{
+			const float Built = Wearer->Height();
+			TestTrue(FString::Printf(TEXT("%s own head differs from the base's (%.1f vs %.1f cm)"), *Name, OwnHead, BaseHead), FMath::Abs(OwnHead - BaseHead) > 1.5f);
+			TestTrue(FString::Printf(TEXT("%s Own build's head %.1f cm is the own body's %.1f cm"), *Name, Built, OwnHead), FMath::Abs(Built - OwnHead) < 1.f);
+		});
+	}
 	return true;
 }
 
