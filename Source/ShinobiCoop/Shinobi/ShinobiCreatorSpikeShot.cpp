@@ -593,6 +593,62 @@ void AShinobiPlayerController::RunCreatorMutableShot()
 	At(T + 6.5f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
 
+// -ShinobiRosterPresetShot (shot_chakra.ps1 -RosterPresets): each roster character as it was (Shinobi.RosterPresets 0),
+// then as its Mutable preset (1), full body and head close-up. Shots: ShinobiRosterPresetShot_<Name>_<Legacy|Preset>_<Body|Head>.
+void AShinobiPlayerController::RunRosterPresetShot()
+{
+	auto At = [this](float Seconds, TFunction<void()> Fn)
+	{
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
+	};
+	auto Film = [this, At](float When, const FString& Name, float Distance, float Height)
+	{
+		At(When, [this, Distance, Height]()
+		{
+			const APawn* Shinobi = GetPawn();
+			if (!Shinobi)
+			{
+				return;
+			}
+			const FVector Target = Shinobi->GetActorLocation() + FVector(0.f, 0.f, Height);
+			const FVector Eye = Target + Shinobi->GetActorForwardVector() * Distance;
+			ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Target - Eye).Rotation());
+			Camera->GetCameraComponent()->SetFieldOfView(40.f);
+			Camera->SetLifeSpan(0.5f);
+			SetViewTarget(Camera);
+		});
+		At(When + 0.15f, [Name]()
+		{
+			FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / (TEXT("ShinobiRosterPresetShot_") + Name)), false, false);
+		});
+	};
+	IConsoleVariable* Switch = IConsoleManager::Get().FindConsoleVariable(TEXT("Shinobi.RosterPresets"));
+	float T = 0.5f;
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster); ++Index)
+	{
+		for (const int32 Preset : {0, 1})
+		{
+			At(T, [this, Switch, Index, Preset]()
+			{
+				Switch->Set(Preset, ECVF_SetByCode);
+				if (AShinobiPlayerCharacter* Shinobi = GetPawn<AShinobiPlayerCharacter>())
+				{
+					Shinobi->SetCharacterIndex(uint8(Index));
+				}
+			});
+#if WITH_EDITOR
+			At(T + 4.f, []() { FAssetCompilingManager::Get().FinishAllCompilation(); if (GShaderCompilingManager) { GShaderCompilingManager->FinishAllCompilation(); } });
+#endif
+			const FString Name = FString::Printf(TEXT("%s_%s_"), AShinobiPlayerCharacter::Roster[Index].Name, Preset ? TEXT("Preset") : TEXT("Legacy"));
+			Film(T + 5.f, Name + TEXT("Body"), 420.f, -5.f);
+			Film(T + 5.4f, Name + TEXT("Head"), 110.f, 70.f);
+			T += 6.f;
+		}
+	}
+	At(T, [this, Switch]() { Switch->Set(0, ECVF_SetByCode); ConsoleCommand(TEXT("quit")); });
+}
+
 void AShinobiPlayerController::RunCreatorOutfitShot()
 {
 	auto At = [this](float Seconds, TFunction<void()> Fn)
