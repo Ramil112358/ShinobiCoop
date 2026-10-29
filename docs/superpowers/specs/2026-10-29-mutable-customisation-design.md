@@ -1,0 +1,172 @@
+# Mutable character customisation: design
+
+Date: 2026-10-29. Status: approved in conversation, awaiting spec review.
+
+## Goal
+
+In-game customisation for every roster character (Hero, Bika, Cat, Misha, Pabu, Ramil, Elvin, RamilMH, BikaMH) with a shared wardrobe, in the style of the Mutable Sample's Cyborg character: clothing slots with colours and wear, skin tone, age, make-up, freckles, placeable tattoos, body build, face sliders, and a preview the player can rotate and zoom in a studio-lit set. Works in co-op multiplayer and the packaged build.
+
+## Decisions
+
+| Topic | Decision |
+|---|---|
+| Base body | MetaHuman body, male and female. The six City Sample crowd frames (slim, average, heavy per sex) become build morphs on each base. |
+| Roster characters | Editable presets: a head plus a default look. Grafted static heads for Hero, Bika, Cat, Misha, Pabu, Ramil, Elvin; RamilMH and BikaMH keep their MetaHuman faces. |
+| Base sex per grafted head | Female: Bika, Cat. Male: Hero, Misha, Pabu, Ramil, Elvin. |
+| RamilMH and BikaMH bodies | Their own MetaHuman bodies become an extra build morph on the male and female base ("Own" build in their presets), so they keep their proportions and still share the wardrobe. Their alternate faces (RealityScan, KeenFace) join the catalog's faces. |
+| Mutable structure | One data-driven Customizable Object, `CO_Shinobi`. Wardrobe and tattoos are Data Table rows read by Table nodes (the sample's "dataless" pattern), not one child object per garment. |
+| Wardrobe sources | City Sample crowd clothes, Mutable Sample Cyborg clothes (refitted), MetaHuman wardrobe from Fab. Akatsuki and Hokage cloaks: timeboxed attempt only. |
+| Body shape | Mutable build type + blend (morphs with garment reshape). Today's bone-scale sliders stay as instant tweaks on top. |
+| Heads | Outside Mutable, as separate components (Epic's advice for MetaHuman heads; avoids Mutable's experimental groom support). |
+| Preview | Rotate and zoom on the menu stage; CREATE uses a neutral studio set with a Studio/Day/Dusk light preset. |
+
+Known limit, measured on 2026-10-29 in `E:\MutableSample`: Mutable reshapes a garment's render mesh but not its cloth simulation mesh, so simulated cloth never follows the build blend. Cloaks therefore use one fitted copy per build (see Cloaks).
+
+## Architecture
+
+### `CO_Shinobi` (content, `/Game/Shinobi/Mutable/`)
+
+- **Body component.** `Sex` enum picks the male or female base body. `Build Type` enum plus `Build Blend` float morph it between slim, average and heavy. The morphs are the City Sample frames expressed as morph targets on each base (requires shared vertex layout; verified in P0).
+- **Skin.** On the body material: `Skin Tone` and `Aged` floats, `Make Up` and `Freckles` enums, up to three tattoo projectors (planar and cylindrical) driven by `DT_Tattoos`.
+- **Wardrobe slots.** `Top`, `Bottom`, `Shoes`, `Outer`, `Accessory`, `Cloak`. Each slot is a Table node over `DT_Wardrobe_<Slot>`. Row columns:
+  - `MaleMesh`, `FemaleMesh` (skeletal meshes on `metahuman_base_skel`, authored on the average build);
+  - `Hides` (MetaHuman body UV blocks to remove, filled by the coverage script);
+  - `Palette` (row in `DT_Palette`) and `HasWear` (whether the Wear slider applies);
+  - `Thumbnail` (texture for the UI).
+- **Reshape.** Every non-cloth garment goes through a Mesh Reshape node from the average base to the selected build.
+- **Cloak slot.** Rows hold three fitted copies per sex (one per build); the nearest build is selected, no reshape.
+- **Built by script.** `Scripts/setup_mutable.py` builds the graph through an editor C++ helper (below). Fallback: the graph is wired once by hand from written steps.
+
+### Heads (outside Mutable)
+
+- MetaHuman faces keep RigLogic, groom bindings, `UShinobiFaceShapeAnimInstance` face sliders and preset blending.
+- Roster heads are static heads grafted onto the base of their sex with `Scripts/character/graft_head.py` and worn with `UShinobiBodyComponent::WearStaticHead`.
+- Each head has a natural skin tone; selecting the head sets the body's default `Skin Tone`. Static head materials get a tint parameter so skin changes apply to head and body together.
+
+### Runtime (C++)
+
+- `UShinobiBodyComponent::WearAppearance` gains the Mutable path: appearance to instance parameters (row index to Mutable option name through the catalog), async `UpdateSkeletalMeshAsyncResult`, then the generated mesh goes on the body component; head, grooms and face sliders are re-applied.
+- The Manny driver retarget, ragdoll and bone-scale shaping are unchanged: the output is an ordinary skeletal mesh on `metahuman_base_skel`.
+- Each pawn owns one `UCustomizableObjectInstance`; the menu stage owns its own. An unchanged look does not rebuild.
+
+### Catalog
+
+`UShinobiCreatorCatalog` gains roster presets (name, head, default `FShinobiAppearance`) and wardrobe display data (names, thumbnails, palette names) so the UI never reads Mutable internals.
+
+### Editor helper
+
+A `ShinobiCoopEditor` C++ function library exposed to Python: create a Customizable Object node by class name, set properties by reflection, link pins by name through the engine's public `UEdGraphPin` API, compile. Mutable's node classes are private to its plugin, so the helper uses reflection (`FindObject<UClass>` + `NewObject`) rather than including their headers.
+
+## Data flow, replication and saves
+
+`FShinobiAppearance` version 2 (compact, server-sanitised, shareable code):
+
+| Field | Type | Notes |
+|---|---|---|
+| `Head` | uint8 | Roster head index, or None for a MetaHuman face |
+| `Sex`, `BuildType` | enums | `BuildType` replaces `Build` |
+| `BuildBlend` | uint8 | 0..255 |
+| `Top`, `Bottom`, `Shoes`, `Outer`, `Accessory`, `Cloak` | uint8 | Table row, None = empty |
+| `SlotColour[6]` | uint8 | `DT_Palette` index per slot |
+| `SlotWear[6]` | uint8 | 0..255, used where `HasWear` |
+| `SkinTone`, `Aged` | uint8 | 0..255 |
+| `MakeUp`, `Freckles` | uint8 | Option index |
+| `Tattoos` | up to 3 × {Design, Region, OffsetU, OffsetV, Rotation, Scale} | Small integers; clients rebuild the projector from the region's anchor |
+| Face, hair, beard, moustache, face sliders, blend faces, body sliders | unchanged | |
+
+- Version-1 codes and save slots load and map onto version 2.
+- Picking a roster character copies its preset look into the editor; SAVE & PLAY stores it in one of the 4 save slots (`UShinobiCharacterSave`).
+- On any change (replication or menu edit): parameters set, async build, previous mesh stays visible until the build finishes. A failed build logs and keeps the previous look.
+- Bandwidth: roughly 40 to 60 bytes, only on change. Generated textures capped at 2K.
+
+## Content pipeline
+
+All asset work runs in a separate editor process, never in the user's open editor.
+
+- **P0 spike** (throwaway) answers four questions before anything else:
+  1. Can the editor helper build Mutable graph nodes and link pins?
+  2. Do the male and female MetaHuman bodies, the six City Sample frames and the RamilMH and BikaMH bodies share one vertex layout?
+  3. Does a Table node with a skeletal-mesh column plus Mesh Reshape work on a MetaHuman body?
+  4. Does a static head beside a Mutable body match in skin tone and at the neck?
+- **`Scripts/setup_mutable.py`**, stages selected by `SETUP_MUTABLE_ONLY`:
+  - `bases`: male and female base bodies with build morphs from the City Sample frames;
+  - `graph`: builds `CO_Shinobi` through the editor helper;
+  - `wardrobe`: imports pieces into `/Game/Shinobi/Mutable/Wardrobe/<Source>/` and fills the table rows;
+  - `heads`: grafts and imports the roster heads.
+- **`Scripts/character/refit_garment.py`** (Blender): wraps a Cyborg piece onto the average MetaHuman build of each sex, then re-skins it with `skin_outfit.py`.
+- **Coverage:** rays cast outward from each body vertex record which body UV blocks a garment covers; the result fills the row's `Hides`.
+- **Sources:**
+  - City Sample: the average-build piece only, reshaped to the other builds.
+  - MetaHuman Fab wardrobe: the user downloads the chosen items; they are imported as rows.
+  - Cyborg pieces: refitted as above; their colour, pattern, wear and sticker options carried into rows.
+- Only pieces actually used are copied under `/Game/Shinobi/Mutable/` and committed. The local-only City Sample crowd folder (6.2 GB) is never a dependency of committed content.
+
+### Cloaks (timeboxed)
+
+Rows hold the existing per-frame cloth copies (`SK_Akatsuki_Crowd*`, `SK_Hokage_Crowd*`) for each sex and build; the nearest build is chosen. If they look poor, cloaks drop out until they are remade for the MetaHuman base.
+
+## CREATE tab UI and preview
+
+Left panel with category tabs, character on the stage to the right, built with `UShinobiCreatorPage`'s existing picker and slider rows.
+
+- **Character:** roster preset strip, 4 save slots, Sex, Head.
+- **Clothes:** one row per slot with a thumbnail strip, palette swatch and Wear slider where supported.
+- **Body & Skin:** Build Type and Blend, the existing body sliders, Skin Tone as a gradient bar, Aged, Make Up, Freckles, Tattoos list (add, design, region, offset, rotation, scale, delete).
+- **Face:** face picker, blend faces and face sliders for MetaHuman faces; colour options only for static heads.
+- **Thumbnails:** rendered by script (each piece on the average base, each tattoo design) and imported like `setup_menu_art` portraits.
+- **Pending build:** a small spinner on the stage, previous look visible; slider drags rebuild once after about 150 ms of no change.
+
+### Preview camera (CREATE and the SHINOBI roster page)
+
+- **Rotate:** mouse drag (left or right button) or gamepad right stick X turns the character (not the camera), easing to a stop.
+- **Zoom:** mouse wheel or gamepad right stick Y, continuous from full body to head close-up, aim point sliding from chest to face. Replaces `AShinobiMenuStage::SetCloseUp`.
+- **Auto-framing:** the Face tab and head-region tattoo editing ease into close-up; Clothes and Body ease back out; manual zoom overrides.
+- **Reset:** double-click or R3.
+- **Hints:** "Zoom in/out" and "Rotate Camera" bottom right with mouse or gamepad icons, following the last device used.
+
+### Studio set (CREATE only; SHINOBI keeps the rooftop)
+
+- Cross-fade from the rooftop to a separate studio area on entering CREATE.
+- Curved seamless backdrop, unlit material: charcoal-to-slate radial gradient, lighter halo behind the character, darker edges.
+- Floor shadow catcher and a faint ring in the UI orange.
+- Lights on their own lighting channel: neutral white key light front-left and above; soft fill from the right at about 35%; slightly cool rim light from behind.
+- Post-process volume with fixed exposure, neutral tone-mapping, no colour grading.
+- Light preset picker: Studio (default), Day, Dusk. It retunes the same lights and backdrop tint.
+
+## Error handling
+
+- Server clamps out-of-range indices; clients skip and log once for unknown rows.
+- Failed Mutable build or uncompiled object: previous mesh stays; a roster character's legacy body remains the fallback until its preset is approved.
+- Packaged builds use the cooked compiled object; editor game runs compile on demand.
+- The Mutable Sample lost the GPU (DX12 device removed) with Mutable materials in game mode; DX12 is tested early in our packaged build. A reproduction is investigated, not worked around by defaulting to DX11.
+
+## Testing
+
+Per phase, only what changed; the full suite once at the end.
+
+- Automation `ShinobiCoop.Mutable.*`: version-2 code round-trip and version-1 loading; sanitising; every table row has both meshes, coverage and a thumbnail; every roster preset builds on both sexes and every build; the generated skeleton keeps the bones retargeting needs.
+- Visual: `shot_chakra.ps1 -CreatorMutable` contact sheets (each slot on each build, each roster preset), camera rotate/zoom shots, studio lighting shots.
+- Multiplayer: `smoke_m4.ps1` with a client wearing a version-2 code.
+- Packaged build check at the end.
+
+## Phases (each ends with a user review)
+
+1. **P0 Spike:** the four questions above.
+2. **P1 Foundation:** base bodies with build morphs, `CO_Shinobi` with body and skin, runtime path in `UShinobiBodyComponent`, appearance version 2, one City Sample piece per slot.
+3. **P2 Roster:** graft the seven heads, presets, skin matching, side-by-side checks against the legacy bodies, then retire them.
+4. **P3 Wardrobe:** City Sample, MetaHuman Fab and refitted Cyborg pieces, coverage, palettes, thumbnails, tattoos.
+5. **P4 UI:** CREATE tabs, preview camera, studio set, light preset.
+6. **P5 Finish:** cloaks (timeboxed), packaged and multiplayer checks, merge.
+
+## Out of scope
+
+Mutable for NPCs; a 3D tattoo gizmo; new ninja outfits; face shaping for static heads; Mutable-driven grooms.
+
+## Risks and fallbacks
+
+| Risk | Fallback |
+|---|---|
+| Male and female bases don't share a vertex layout | Reshape within each sex only; rows already carry both meshes |
+| Editor helper can't build the graph | The graph is wired by hand once from written steps |
+| MetaHuman skin material doesn't accept Mutable texture layers | Skin Tone and Aged become material parameters; tattoos stay as texture layers on the body texture |
+| Cat's fur needs more than a tint | A separate body material row for fur |
