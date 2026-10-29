@@ -22,7 +22,10 @@ public:
 	 * Adds (or replaces) morph "Blend_<Names[i]>" toward Others[i] on every LOD of Face up to MaxLods whose mesh
 	 * description has the same vertex count as that face's; other LODs and mismatched faces are skipped and reported.
 	 * Returns a one-line report per face ("" outside the editor).
+	 * Bodies use it too (Scripts/setup_mutable.py build morphs): AlignBone is the bone both meshes are aligned at, Prefix
+	 * names the morphs, and Reach (cm) is how far a matched vertex may be from ours before the pair counts as a mismatch.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|Creator")
-	static FString BakeFaceBlendMorphs(USkeletalMesh* Face, const TArray<USkeletalMesh*>& Others, const TArray<FName>& Names, int32 MaxLods = 4);
+	static FString BakeFaceBlendMorphs(USkeletalMesh* Face, const TArray<USkeletalMesh*>& Others, const TArray<FName>& Names, int32 MaxLods = 4,
+		FName AlignBone = TEXT("FACIAL_C_FacialRoot"), const FString& Prefix = TEXT("Blend_"), float Reach = 6.f);
 };

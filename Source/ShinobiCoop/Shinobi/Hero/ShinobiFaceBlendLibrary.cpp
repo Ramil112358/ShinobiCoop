@@ -9,7 +9,8 @@
 #include "SkeletalMeshAttributes.h"
 #endif
 
-FString UShinobiFaceBlendLibrary::BakeFaceBlendMorphs(USkeletalMesh* Face, const TArray<USkeletalMesh*>& Others, const TArray<FName>& Names, int32 MaxLods)
+FString UShinobiFaceBlendLibrary::BakeFaceBlendMorphs(USkeletalMesh* Face, const TArray<USkeletalMesh*>& Others, const TArray<FName>& Names, int32 MaxLods,
+	FName AlignBone, const FString& Prefix, float Reach)
 {
 	FString Report;
 #if WITH_EDITOR
@@ -17,10 +18,10 @@ FString UShinobiFaceBlendLibrary::BakeFaceBlendMorphs(USkeletalMesh* Face, const
 	{
 		return TEXT("BakeFaceBlendMorphs: no face, or Others and Names differ in length");
 	}
-	auto RootOf = [](const USkeletalMesh* Mesh) -> FVector3f
+	auto RootOf = [AlignBone](const USkeletalMesh* Mesh) -> FVector3f
 	{
 		const FReferenceSkeleton& Ref = Mesh->GetRefSkeleton();
-		const int32 Root = Ref.FindBoneIndex(TEXT("FACIAL_C_FacialRoot"));
+		const int32 Root = Ref.FindBoneIndex(AlignBone);
 		return Root == INDEX_NONE ? FVector3f::ZeroVector : FVector3f(FAnimationRuntime::GetComponentSpaceTransformRefPose(Ref, Root).GetLocation());
 	};
 	const FVector3f OwnRoot = RootOf(Face);
@@ -50,7 +51,6 @@ FString UShinobiFaceBlendLibrary::BakeFaceBlendMorphs(USkeletalMesh* Face, const
 			// Which of their vertices each of ours is: the same vertex ID when both meshes have the same vertices, else
 			// the nearest (root-aligned) of theirs sharing one of its UVs (MetaHuman faces share a UV layout, not always
 			// a vertex count: City Sample and Creator builds differ).
-			constexpr float Reach = 6.f; // cm: no face differs more; farther is a different part sharing UV space
 			TArray<FVertexID> Match;
 			auto MatchByUV = [&]()
 			{
@@ -131,7 +131,7 @@ FString UShinobiFaceBlendLibrary::BakeFaceBlendMorphs(USkeletalMesh* Face, const
 				Report += FString::Printf(TEXT(" LOD%d %s: rejected (matched %.0f%%, %d far);"), Lod, *Names[Index].ToString(), MatchedShare * 100.f, Far);
 				continue;
 			}
-			const FName Morph(*(TEXT("Blend_") + Names[Index].ToString()));
+			const FName Morph(*(Prefix + Names[Index].ToString()));
 			Attributes.UnregisterMorphTargetAttribute(Morph);
 			Attributes.RegisterMorphTargetAttribute(Morph, false);
 			TVertexAttributesRef<FVector3f> Delta = Attributes.GetVertexMorphPositionDelta(Morph);

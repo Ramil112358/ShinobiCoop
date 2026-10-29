@@ -10,6 +10,7 @@
 #include "MuCOE/CustomizableObjectEditorFunctionLibrary.h"
 #include "MuCOE/CustomizableObjectFactory.h"
 #include "Shinobi/Hero/ShinobiCreatorCatalog.h"
+#include "Shinobi/Hero/ShinobiFaceBlendLibrary.h"
 #include "Shinobi/Hero/ShinobiMutableGraphLibrary.h"
 #include "Tests/AutomationCommon.h"
 #include "UObject/StrongObjectPtr.h"
@@ -102,6 +103,26 @@ bool FShinobiMutableGraphHelperTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("the instance builds"), Result->IsSet() && Result->GetValue() == EUpdateResult::Success);
 		return true;
 	}));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableBuildMorphBakeTest, "ShinobiCoop.Mutable.BuildMorphBake", ShinobiTestFlags)
+bool FShinobiMutableBuildMorphBakeTest::RunTest(const FString& Parameters)
+{
+	const UShinobiCreatorCatalog* Catalog = LoadObject<UShinobiCreatorCatalog>(nullptr, UShinobiCreatorCatalog::Path);
+	const FShinobiCreatorFrame* Normal = Catalog ? Catalog->FindFrame(EShinobiSex::Male, EShinobiBuild::Normal) : nullptr;
+	const FShinobiCreatorFrame* Over = Catalog ? Catalog->FindFrame(EShinobiSex::Male, EShinobiBuild::Over) : nullptr;
+	if (!TestTrue(TEXT("the male normal and over frames"), Normal && Over))
+	{
+		return false;
+	}
+	// A transient copy: the frame itself stays untouched.
+	USkeletalMesh* Base = DuplicateObject<USkeletalMesh>(Normal->Body.LoadSynchronous(), GetTransientPackage());
+	const FString Report = UShinobiFaceBlendLibrary::BakeFaceBlendMorphs(Base, {Over->Body.LoadSynchronous()}, {TEXT("Over")}, 1,
+		TEXT("root"), TEXT("Build_"), 50.f);
+	AddInfo(Report);
+	TestNotNull(TEXT("the base gets a Build_Over morph"), Base->FindMorphTarget(TEXT("Build_Over")));
+	TestNull(TEXT("and no face-style Blend_ morph"), Base->FindMorphTarget(TEXT("Blend_Over")));
 	return true;
 }
 
