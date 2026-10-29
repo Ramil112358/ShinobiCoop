@@ -358,9 +358,10 @@ public:
 	/** The preset of the roster character named Roster, or null. */
 	const FShinobiAppearance* FindPreset(FName Roster) const;
 	/** Editor (Scripts/setup_mutable.py catalog; FShinobiAppearance's fields aren't visible to Python): Roster's preset is a
-	 * default look with these fields and no hair, beard or mustache (a MetaHuman face's OwnGrooms carry its hair). */
+	 * default look with these fields, Pieces as its Top, Bottom and Shoes, and no hair, beard or mustache (a MetaHuman
+	 * face's blueprint carries its hair). */
 	UFUNCTION(BlueprintCallable, Category = Creator)
-	void SetPreset(FName Roster, EShinobiSex Sex, uint8 Head, uint8 Face, EShinobiBuild Build);
+	void SetPreset(FName Roster, EShinobiSex Sex, uint8 Head, uint8 Face, EShinobiBuild Build, uint8 Pieces);
 	UGroomBindingAsset* LoadBinding(FName Face, FName Groom) const;
 
 	int32 CountFaces(EShinobiSex Sex) const;

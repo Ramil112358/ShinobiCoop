@@ -484,6 +484,9 @@ bool FShinobiMutableCatalogPresetsTest::RunTest(const FString& Parameters)
 			TestEqual(FString::Printf(TEXT("%s has no static head"), Entry.Name), Look->Head, FShinobiAppearance::None);
 			TestEqual(FString::Printf(TEXT("%s wears its own body"), Entry.Name), Look->Build, EShinobiBuild::Own);
 			TestTrue(FString::Printf(TEXT("%s wears its own face"), Entry.Name), Face && Face->Id == FName(Entry.Name));
+			// (Its blueprint's underwear, not City Sample pieces: those spike when reshaped onto an own body until P3 refits them.)
+			TestTrue(FString::Printf(TEXT("%s wears no Mutable pieces"), Entry.Name),
+				Look->Top == FShinobiAppearance::None && Look->Bottom == FShinobiAppearance::None && Look->Shoes == FShinobiAppearance::None);
 			continue;
 		}
 		const FShinobiCreatorHead* Head = Catalog->FindHead(Look->Head);
@@ -796,6 +799,56 @@ bool FShinobiMutableMetaHumanPresetPartsTest::RunTest(const FString& Parameters)
 		const TArray<TObjectPtr<UActorComponent>>& Parts = Wearer->Body->GetMetaHumanParts();
 		TestTrue(TEXT("the Fab hair"), Parts.ContainsByPredicate([](const UActorComponent* Part) { return Part && Part->ComponentHasTag(TEXT("ShinobiStrands")); }));
 		TestTrue(TEXT("the LODSync"), Parts.ContainsByPredicate([](const UActorComponent* Part) { return Part && Part->IsA<ULODSyncComponent>(); }));
+		// Every groom stays on the head (a groom bound wrong stretches its strands across the scene).
+		for (const UActorComponent* Part : Parts)
+		{
+			if (const UPrimitiveComponent* Groom = Cast<UPrimitiveComponent>(Part); Groom && Part->GetClass()->GetName() == TEXT("GroomComponent"))
+			{
+				TestTrue(FString::Printf(TEXT("%s stays on the head (bounds radius %.0f cm)"), *Part->GetName(), Groom->Bounds.SphereRadius), Groom->Bounds.SphereRadius < 60.f);
+			}
+		}
 	});
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableOwnHeadUndistortedTest, "ShinobiCoop.Mutable.OwnHeadUndistorted", ShinobiTestFlags)
+bool FShinobiMutableOwnHeadUndistortedTest::RunTest(const FString& Parameters)
+{
+	// The Own build's face bones must sit as on the own body: grooms ride the face's skin, so a turned or scaled head
+	// bone flings the hair across the scene.
+	struct FCase { EShinobiSex Sex; const TCHAR* Own; };
+	const FCase Cases[] = {
+		{EShinobiSex::Male, TEXT("/Game/Shinobi/MetaHumans/RamilMH/Build/MHC_RamilMH/Body/SKM_MHC_RamilMH_BodyMesh.SKM_MHC_RamilMH_BodyMesh")},
+		{EShinobiSex::Female, TEXT("/Game/Shinobi/MetaHumans/BikaMH/Build/MHC_BikaMH/Body/SKM_MHC_BikaMH_BodyMesh.SKM_MHC_BikaMH_BodyMesh")}};
+	for (const FCase& Case : Cases)
+	{
+		const USkeletalMesh* Own = LoadObject<USkeletalMesh>(nullptr, Case.Own);
+		TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+		FShinobiAppearance Look = MutableLook(Case.Sex, EShinobiBuild::Own);
+		Look.BuildBlend = 255;
+		Wearer->Body->WearAppearance(Look);
+		WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer, Own]()
+		{
+			const USkeletalMesh* Built = Wearer->Body->GetSkeletalMeshAsset();
+			if (!TestTrue(TEXT("built"), Built && Own))
+			{
+				return;
+			}
+			for (const TCHAR* Bone : {TEXT("spine_05"), TEXT("neck_01"), TEXT("neck_02"), TEXT("head")})
+			{
+				const int32 A = Own->GetRefSkeleton().FindBoneIndex(Bone), B = Built->GetRefSkeleton().FindBoneIndex(Bone);
+				if (!TestTrue(FString::Printf(TEXT("%s in both"), Bone), A != INDEX_NONE && B != INDEX_NONE))
+				{
+					continue;
+				}
+				const FTransform Want = FAnimationRuntime::GetComponentSpaceTransformRefPose(Own->GetRefSkeleton(), A);
+				const FTransform Got = FAnimationRuntime::GetComponentSpaceTransformRefPose(Built->GetRefSkeleton(), B);
+				const float Degrees = FMath::RadiansToDegrees(Want.GetRotation().AngularDistance(Got.GetRotation()));
+				TestTrue(FString::Printf(TEXT("%s %s turned %.1f deg"), *Own->GetName(), Bone, Degrees), Degrees < 3.f);
+				TestTrue(FString::Printf(TEXT("%s %s scale %s"), *Own->GetName(), Bone, *Got.GetScale3D().ToString()), Got.GetScale3D().Equals(Want.GetScale3D(), 0.02f));
+				TestTrue(FString::Printf(TEXT("%s %s moved %.1f cm"), *Own->GetName(), Bone, FVector::Dist(Want.GetLocation(), Got.GetLocation())), FVector::Dist(Want.GetLocation(), Got.GetLocation()) < 1.5f);
+			}
+		});
+	}
 	return true;
 }

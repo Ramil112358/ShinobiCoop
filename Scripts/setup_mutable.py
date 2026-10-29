@@ -9,7 +9,8 @@ these stages rebuild it.
 bases: each sex's base body (/Game/Shinobi/Mutable/Bases/SK_MutableBase_<Sex>) = the average MetaHuman body built by
   Scripts/mutable/base_bodies.py, with morphs Build_Under and Build_Over (the slim and heavy builds) baked in by
   UShinobiFaceBlendLibrary (same vertex layout, aligned at the root); and SK_MutableOwn_<Sex>, RamilMH's or BikaMH's own
-  body (the Own build). Both skin "head" a little (UShinobiMutableMeshLibrary::add_bone_skinning).
+  body (the Own build). Both skin the neck and "head" a little (UShinobiMutableMeshLibrary::add_bone_skinning).
+faceskin (not in the default run): the neck and head skinning alone, on the existing bases.
 heads (needs run_python.ps1 -Render: FBX export): each roster character's head (names.HEADS) grafted onto its sex's base
   by Scripts/character/graft_head.py (donor SourceArt/Character/Models/<Name>/<Name>_rigged.fbx/.png, the base and its
   average build's MetaHuman face for the neck) and imported as /Game/Shinobi/Mutable/Heads/SK_Head_<Name> with the
@@ -65,6 +66,19 @@ def replace(path):
         raise RuntimeError(f"could not delete {path} (open in an editor?)")
 
 
+def skin_face_bones(mesh):
+    return {bone: unreal.ShinobiMutableMeshLibrary.add_bone_skinning(mesh, bone) for bone in ("neck_01", "neck_02", "head")}
+
+
+def face_skin():
+    """skin_face_bones on the existing bases (bases re-creates them, which fails in an editor that has CO_Shinobi loaded)."""
+    for sex in SEXES:
+        for path in (BASE.format(sex=sex), OWN.format(sex=sex)):
+            mesh = unreal.load_asset(path)
+            log(f"{path}: {skin_face_bones(mesh)}")
+            EAL.save_loaded_asset(mesh, only_if_is_dirty=False)
+
+
 def bases():
     for sex in SEXES:
         path = BASE.format(sex=sex)
@@ -75,15 +89,16 @@ def bases():
         others = [unreal.load_asset(built_body(f"MB_{sex}_Under")), unreal.load_asset(built_body(f"MB_{sex}_Over")),
                   unreal.load_asset(OWN_BODIES[sex])]
         report = unreal.ShinobiFaceBlendLibrary.bake_face_blend_morphs(base, others[:2], ["Under", "Over"], 4, "root", "Build_", 60.0)
-        # Bodies skin the head a little, so a merged piece skinned to it can't put its own body's head pose on the skeleton.
-        headed = unreal.ShinobiMutableMeshLibrary.add_bone_skinning(base, "head")
+        # Bodies skin the neck and head a little (the face mesh skins them, not the body), so a merged piece skinned to them
+        # can't put its own body's pose of them on the skeleton: the face would ride it, and its grooms be flung off it.
+        headed = skin_face_bones(base)
         EAL.save_loaded_asset(base, only_if_is_dirty=False)
         log(f"{sex} base {path}: {report}; head skinned on {headed} vertices")
         # The Own build: RamilMH's or BikaMH's own body (exact joints), worn as the Body with the pieces reshaped onto it.
         own = OWN.format(sex=sex)
         replace(own)
         copy = EAL.duplicate_asset(OWN_BODIES[sex], own)
-        headed = unreal.ShinobiMutableMeshLibrary.add_bone_skinning(copy, "head")
+        headed = skin_face_bones(copy)
         EAL.save_loaded_asset(copy, only_if_is_dirty=False)
         log(f"{sex} own body {own}: head skinned on {headed} vertices")
         # The average build's character blueprint isn't used (the bases take only its body) and references its face and
@@ -193,9 +208,11 @@ def catalog():
 
     data.set_editor_property("presets", [])
     for i, (name, sex) in enumerate(HEADS.items()):
-        data.set_preset(name, getattr(unreal.ShinobiSex, sex.upper()), i, 0, unreal.ShinobiBuild.NORMAL)
+        data.set_preset(name, getattr(unreal.ShinobiSex, sex.upper()), i, 0, unreal.ShinobiBuild.NORMAL, 0)
+    # ponytail: no Mutable pieces on the own bodies (their blueprint's underwear comes with the face): unfitted City Sample
+    # pieces spike when reshaped onto them. P3's wardrobe refit dresses them.
     for name in ("RamilMH", "BikaMH"):
-        data.set_preset(name, getattr(unreal.ShinobiSex, MH_FACES[name].upper()), 255, face_index(name), unreal.ShinobiBuild.OWN)
+        data.set_preset(name, getattr(unreal.ShinobiSex, MH_FACES[name].upper()), 255, face_index(name), unreal.ShinobiBuild.OWN, 255)
     EAL.save_loaded_asset(data)
     log(f"catalog: {len(heads_list)} heads, faces {list(MH_FACES)}, {len(data.get_editor_property('presets'))} presets")
 
@@ -382,6 +399,6 @@ def graph():
         raise RuntimeError("CO_Shinobi did not compile")
 
 
-STAGES = {"bases": bases, "heads": heads, "catalog": catalog, "palette": palette, "wardrobe": wardrobe, "graph": graph}
-for stage in ONLY or list(STAGES):
+STAGES = {"bases": bases, "faceskin": face_skin, "heads": heads, "catalog": catalog, "palette": palette, "wardrobe": wardrobe, "graph": graph}
+for stage in ONLY or [s for s in STAGES if s != "faceskin"]:
     STAGES[stage]()

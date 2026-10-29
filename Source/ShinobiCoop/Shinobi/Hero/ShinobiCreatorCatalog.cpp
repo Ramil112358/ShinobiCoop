@@ -71,13 +71,14 @@ const FShinobiAppearance* UShinobiCreatorCatalog::FindPreset(FName Roster) const
 	return Found ? &Found->Look : nullptr;
 }
 
-void UShinobiCreatorCatalog::SetPreset(FName Roster, EShinobiSex Sex, uint8 Head, uint8 Face, EShinobiBuild Build)
+void UShinobiCreatorCatalog::SetPreset(FName Roster, EShinobiSex Sex, uint8 Head, uint8 Face, EShinobiBuild Build, uint8 Pieces)
 {
 	FShinobiAppearance Look;
 	Look.Sex = Sex;
 	Look.Head = Head;
 	Look.Face = Face;
 	Look.Build = Build;
+	Look.Top = Look.Bottom = Look.Shoes = Pieces;
 	Look.Hair = Look.Beard = Look.Mustache = FShinobiAppearance::None;
 	Presets.RemoveAll([&](const FShinobiRosterPreset& P) { return P.Roster == Roster; });
 	Presets.Add({Roster, Look});
