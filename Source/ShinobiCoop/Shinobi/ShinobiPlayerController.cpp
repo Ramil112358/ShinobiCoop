@@ -135,6 +135,10 @@ void AShinobiPlayerController::BeginPlay()
 	{
 		RunCreatorOutfitShot();
 	}
+	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiCreatorMutableShot")))
+	{
+		RunCreatorMutableShot();
+	}
 	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiLookShot")))
 	{
 		RunLookShotTest();

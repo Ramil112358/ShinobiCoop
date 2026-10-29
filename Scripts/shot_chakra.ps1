@@ -23,9 +23,11 @@
 #   -Packaged: run the shot in the built game (Packaged\Windows, Scripts/package.ps1) instead of the editor.
 #   -Extra "<args>": more game arguments, e.g. -Extra "-ShinobiLookCode=AQECAgD__wAAAP__AAAAAA" for any shot as a made character.
 #   -CreatorOutfits: -ShinobiCreatorOutfitShot: each cloak over every creator frame, front and side (~60 s).
+#   -CreatorMutable: -ShinobiCreatorMutableShot: every sex and build of the Mutable body with its first pieces, then a
+#                    static head on it close up (~60 s).
 #   -Perf:    the tour at 1920x1080, Epic preset, no vsync, 10 s per point; prints the average frame time at each point.
 #             Keep the game window in the foreground: Windows throttles background windows (about 2x slower).
-param([string]$Outfit = "", [string]$Portrait = "", [switch]$Phone, [switch]$Susanoo, [switch]$Fire, [switch]$Jutsu, [switch]$Look, [switch]$Tour, [switch]$Perf, [switch]$CreatorSpike, [switch]$FaceSliders, [switch]$FacePresets, [switch]$FaceBlend, [switch]$BodySliders, [switch]$CreatorOutfits, [string]$Extra = "", [switch]$Packaged, [int]$TimeoutSec = 300, [string]$Map = "/Game/Shinobi/Maps/Lvl_TrainingGrounds")
+param([string]$Outfit = "", [string]$Portrait = "", [switch]$Phone, [switch]$Susanoo, [switch]$Fire, [switch]$Jutsu, [switch]$Look, [switch]$Tour, [switch]$Perf, [switch]$CreatorSpike, [switch]$FaceSliders, [switch]$FacePresets, [switch]$FaceBlend, [switch]$BodySliders, [switch]$CreatorOutfits, [switch]$CreatorMutable, [string]$Extra = "", [switch]$Packaged, [int]$TimeoutSec = 300, [string]$Map = "/Game/Shinobi/Maps/Lvl_TrainingGrounds")
 $ErrorActionPreference = "Stop"
 $Editor = "C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe"
 $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
@@ -38,8 +40,8 @@ if ($Packaged) { # the built game (Scripts/package.ps1) instead of the editor
 }
 if ($Perf) { $Tour = $true }
 $Res = if ($Perf) { "-ResX=1920 -ResY=1080 -ExecCmds=`"scalability 3,r.VSync 0,t.MaxFPS 0`" -ShinobiPerf" } else { "-ResX=1280 -ResY=720" }
-if ($CreatorSpike -or $FaceSliders -or $FacePresets -or $FaceBlend -or $BodySliders -or $CreatorOutfits) { $Res += " -ExecCmds=`"r.Streaming.FullyLoadUsedTextures 1`"" } # close-ups of fragmented atlases bleed at low mips
-$Flag = if ($CreatorOutfits) { "ShinobiCreatorOutfitShot" } elseif ($BodySliders) { "ShinobiBodySliderShot" } elseif ($FaceBlend) { "ShinobiFaceBlendShot" } elseif ($FacePresets) { "ShinobiFacePresetShot" } elseif ($FaceSliders) { "ShinobiFaceSliderShot" } elseif ($CreatorSpike) { "ShinobiCreatorSpike" } elseif ($Portrait) { "ShinobiPortraitShot" } elseif ($Outfit) { "ShinobiOutfitShot" } elseif ($Tour) { "ShinobiWorldTour" } elseif ($Look) { "ShinobiLookShot" } elseif ($Fire) { "ShinobiFireShot" } elseif ($Susanoo) { "ShinobiSusanooShot" } elseif ($Jutsu) { "ShinobiJutsuShot" } else { "ShinobiShot" }
+if ($CreatorSpike -or $FaceSliders -or $FacePresets -or $FaceBlend -or $BodySliders -or $CreatorOutfits -or $CreatorMutable) { $Res += " -ExecCmds=`"r.Streaming.FullyLoadUsedTextures 1`"" } # close-ups of fragmented atlases bleed at low mips
+$Flag = if ($CreatorMutable) { "ShinobiCreatorMutableShot" } elseif ($CreatorOutfits) { "ShinobiCreatorOutfitShot" } elseif ($BodySliders) { "ShinobiBodySliderShot" } elseif ($FaceBlend) { "ShinobiFaceBlendShot" } elseif ($FacePresets) { "ShinobiFacePresetShot" } elseif ($FaceSliders) { "ShinobiFaceSliderShot" } elseif ($CreatorSpike) { "ShinobiCreatorSpike" } elseif ($Portrait) { "ShinobiPortraitShot" } elseif ($Outfit) { "ShinobiOutfitShot" } elseif ($Tour) { "ShinobiWorldTour" } elseif ($Look) { "ShinobiLookShot" } elseif ($Fire) { "ShinobiFireShot" } elseif ($Susanoo) { "ShinobiSusanooShot" } elseif ($Jutsu) { "ShinobiJutsuShot" } else { "ShinobiShot" }
 $Pattern = "$($Flag)_*.png"
 $Level = if ($Portrait) { $Map } elseif ($Tour) { if ($PSBoundParameters.ContainsKey("Map")) { $Map } else { "/Game/Shinobi/Maps/Lvl_HiddenLeafValley" } } elseif ($Look) { $Map } else { "/Game/ThirdPerson/Lvl_ThirdPerson?game=/Script/ShinobiCoop.ShinobiGameMode" }
 

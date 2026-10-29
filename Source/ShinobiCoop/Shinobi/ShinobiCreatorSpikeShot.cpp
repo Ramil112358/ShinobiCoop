@@ -521,6 +521,78 @@ void AShinobiPlayerController::RunBodySliderShot()
 	At(8.f + Sliders.Num() * 2.4f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
 
+// -ShinobiCreatorMutableShot (shot_chakra.ps1 -CreatorMutable): every sex and build of the Mutable body (CO_Shinobi) with
+// each wardrobe table's first piece, front and side, then the static Ramil head on the male body, close up (neck and skin
+// tone). Shots: ShinobiCreatorMutableShot_<Sex><Build>_<View>, ShinobiCreatorMutableShot_StaticHead_<View>.
+void AShinobiPlayerController::RunCreatorMutableShot()
+{
+	auto At = [this](float Seconds, TFunction<void()> Fn)
+	{
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
+	};
+	auto Film = [this, At](float When, const FString& Name, float Yaw, float Distance, float Height)
+	{
+		At(When, [this, Yaw, Distance, Height]()
+		{
+			const APawn* Shinobi = GetPawn();
+			if (!Shinobi)
+			{
+				return;
+			}
+			const FVector Target = Shinobi->GetActorLocation() + FVector(0.f, 0.f, Height);
+			const FVector Eye = Target + Shinobi->GetActorForwardVector().RotateAngleAxis(Yaw, FVector::UpVector) * Distance;
+			ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Target - Eye).Rotation());
+			Camera->GetCameraComponent()->SetFieldOfView(40.f);
+			Camera->SetLifeSpan(0.5f);
+			SetViewTarget(Camera);
+		});
+		At(When + 0.15f, [Name]()
+		{
+			FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / (TEXT("ShinobiCreatorMutableShot_") + Name)), false, false);
+		});
+	};
+	auto Wear = [this](EShinobiSex Sex, EShinobiBuild Build)
+	{
+		FShinobiAppearance Look;
+		Look.Sex = Sex;
+		Look.Build = Build;
+		ServerPickAppearance(Look);
+	};
+	auto Settle = [At](float When)
+	{
+#if WITH_EDITOR
+		At(When, []() { FAssetCompilingManager::Get().FinishAllCompilation(); if (GShaderCompilingManager) { GShaderCompilingManager->FinishAllCompilation(); } });
+#endif
+	};
+	float T = 0.5f;
+	for (const EShinobiSex Sex : {EShinobiSex::Male, EShinobiSex::Female})
+	{
+		for (const EShinobiBuild Build : {EShinobiBuild::Under, EShinobiBuild::Normal, EShinobiBuild::Over, EShinobiBuild::Own})
+		{
+			At(T, [Wear, Sex, Build]() { Wear(Sex, Build); });
+			Settle(T + 4.f); // the Mutable build (async) is in by then; its textures and shaders next
+			const FString Name = StaticEnum<EShinobiSex>()->GetNameStringByValue(int64(Sex)) + StaticEnum<EShinobiBuild>()->GetNameStringByValue(int64(Build));
+			Film(T + 5.f, Name + TEXT("_Front"), 0.f, 420.f, -5.f);
+			Film(T + 5.4f, Name + TEXT("_Side"), 90.f, 420.f, -5.f);
+			T += 6.f;
+		}
+	}
+	At(T, [Wear]() { Wear(EShinobiSex::Male, EShinobiBuild::Normal); });
+	At(T + 4.f, [this]()
+	{
+		const AShinobiPlayerCharacter* Shinobi = GetPawn<AShinobiPlayerCharacter>();
+		if (UShinobiBodyComponent* Body = Shinobi ? Cast<UShinobiBodyComponent>(Shinobi->GetHeroMesh()) : nullptr)
+		{
+			Body->WearStaticHead(LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Shinobi/Characters/Creator/SK_Head_Ramil.SK_Head_Ramil")));
+		}
+	});
+	Settle(T + 4.5f);
+	Film(T + 5.5f, TEXT("StaticHead_Front"), 0.f, 110.f, 70.f);
+	Film(T + 5.9f, TEXT("StaticHead_Side"), 60.f, 110.f, 70.f);
+	At(T + 6.5f, [this]() { ConsoleCommand(TEXT("quit")); });
+}
+
 void AShinobiPlayerController::RunCreatorOutfitShot()
 {
 	auto At = [this](float Seconds, TFunction<void()> Fn)
