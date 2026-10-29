@@ -195,11 +195,13 @@ def catalog():
 
     faces = [f for f in data.get_editor_property("faces") if str(f.get_editor_property("id")) not in MH_FACES]
     for face_id, sex in MH_FACES.items():
+        roster = "RamilMH" if face_id.startswith("RamilMH") else "BikaMH"  # the body its Own build is
         build = f"/Game/Shinobi/MetaHumans/{face_id}/Build/MHC_{face_id}"
         # Worn through its blueprint (its Fab hair, groom materials and LODSync are set there), as on its roster body.
         faces.append(make(unreal.ShinobiCreatorFace, id=face_id, sex=getattr(unreal.ShinobiSex, sex.upper()),
                           mesh=unreal.load_asset(f"{build}/Face/SKM_MHC_{face_id}_FaceMesh"),
-                          meta_human=EAL.load_blueprint_class(f"{build}/BP_MHC_{face_id}")))
+                          meta_human=EAL.load_blueprint_class(f"{build}/BP_MHC_{face_id}"),
+                          retargeter=unreal.load_asset(f"/Game/Shinobi/MetaHumans/{roster}/RTG_MannyTo{roster}")))
     data.set_editor_property("faces", faces)
 
     def face_index(face_id):

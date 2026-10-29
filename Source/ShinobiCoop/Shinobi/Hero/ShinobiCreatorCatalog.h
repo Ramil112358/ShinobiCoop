@@ -7,6 +7,7 @@
 class USkeletalMesh;
 class UGroomAsset;
 class UGroomBindingAsset;
+class UIKRetargeter;
 
 UENUM(BlueprintType)
 enum class EShinobiSex : uint8
@@ -86,6 +87,10 @@ struct FShinobiCreatorFace
 	 * (UShinobiBodyComponent::WearMetaHumanParts) instead of Mesh with OwnGrooms. */
 	UPROPERTY(EditAnywhere, Category = Creator)
 	TSoftClassPtr<AActor> MetaHuman;
+
+	/** Its roster body's retargeter, worn with the Own build (that body) instead of the crowd's. */
+	UPROPERTY(EditAnywhere, Category = Creator)
+	TSoftObjectPtr<UIKRetargeter> Retargeter;
 };
 
 /** A roster character's static head grafted onto the Mutable base of its sex (Scripts/setup_mutable.py heads). */

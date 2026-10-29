@@ -799,6 +799,8 @@ bool FShinobiMutableMetaHumanPresetPartsTest::RunTest(const FString& Parameters)
 		const TArray<TObjectPtr<UActorComponent>>& Parts = Wearer->Body->GetMetaHumanParts();
 		TestTrue(TEXT("the Fab hair"), Parts.ContainsByPredicate([](const UActorComponent* Part) { return Part && Part->ComponentHasTag(TEXT("ShinobiStrands")); }));
 		TestTrue(TEXT("the LODSync"), Parts.ContainsByPredicate([](const UActorComponent* Part) { return Part && Part->IsA<ULODSyncComponent>(); }));
+		// On his own body, his own retargeter (the crowd's pitched his head differently from his roster look).
+		TestEqual(TEXT("RamilMH's retargeter"), GetPathNameSafe(Wearer->Body->GetRetargeter()), FString(AShinobiPlayerCharacter::Roster[AShinobiPlayerCharacter::FindRosterIndex(TEXT("RamilMH"))].Retargeter));
 		// Every groom stays on the head (a groom bound wrong stretches its strands across the scene).
 		for (const UActorComponent* Part : Parts)
 		{
@@ -850,5 +852,91 @@ bool FShinobiMutableOwnHeadUndistortedTest::RunTest(const FString& Parameters)
 			}
 		});
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableOwnFaceBonesTest, "ShinobiCoop.Mutable.OwnFaceBones", ShinobiTestFlags)
+bool FShinobiMutableOwnFaceBonesTest::RunTest(const FString& Parameters)
+{
+	// The face copies every bone it shares with the body: on the Own build those sit as on RamilMH's roster body.
+	const USkeletalMesh* Face = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Shinobi/MetaHumans/RamilMH/Build/MHC_RamilMH/Face/SKM_MHC_RamilMH_FaceMesh.SKM_MHC_RamilMH_FaceMesh"));
+	const USkeletalMesh* Legacy = LoadObject<USkeletalMesh>(nullptr, AShinobiPlayerCharacter::Roster[AShinobiPlayerCharacter::FindRosterIndex(TEXT("RamilMH"))].Mesh);
+	const TOptional<FShinobiAppearance> RamilMH = Preset(*this, TEXT("RamilMH"));
+	if (!TestTrue(TEXT("RamilMH's face and body"), Face && Legacy) || !RamilMH)
+	{
+		return false;
+	}
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	Wearer->Body->WearAppearance(*RamilMH);
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer, Face, Legacy]()
+	{
+		const USkeletalMesh* Built = Wearer->Body->GetSkeletalMeshAsset();
+		if (!TestNotNull(TEXT("built"), Built))
+		{
+			return;
+		}
+		const FReferenceSkeleton& Bones = Built->GetRefSkeleton();
+		for (int32 Bone = 0; Bone < Bones.GetNum(); ++Bone)
+		{
+			const FName Name = Bones.GetBoneName(Bone);
+			const int32 InLegacy = Legacy->GetRefSkeleton().FindBoneIndex(Name);
+			if (Face->GetRefSkeleton().FindBoneIndex(Name) == INDEX_NONE || InLegacy == INDEX_NONE)
+			{
+				continue;
+			}
+			const float Distance = FVector::Dist(FAnimationRuntime::GetComponentSpaceTransformRefPose(Bones, Bone).GetLocation(),
+				FAnimationRuntime::GetComponentSpaceTransformRefPose(Legacy->GetRefSkeleton(), InLegacy).GetLocation());
+			TestTrue(FString::Printf(TEXT("%s %.1f cm from the roster body's"), *Name.ToString(), Distance), Distance < 0.5f);
+		}
+	});
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableLODSyncFindsPartsTest, "ShinobiCoop.Mutable.LODSyncFindsParts", ShinobiTestFlags)
+bool FShinobiMutableLODSyncFindsPartsTest::RunTest(const FString& Parameters)
+{
+	// RamilMH's roster look, then his preset: the preset's parts are made while the last ones (destroyed, not yet
+	// collected) still hold their names, and the LODSync must still find them (it drives the brows onto their cards).
+	const TOptional<FShinobiAppearance> RamilMH = Preset(*this, TEXT("RamilMH"));
+	if (!RamilMH)
+	{
+		return false;
+	}
+	const FShinobiRosterEntry& Roster = AShinobiPlayerCharacter::Roster[AShinobiPlayerCharacter::FindRosterIndex(TEXT("RamilMH"))];
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	Wearer->Body->Wear(Roster.Mesh, Roster.Retargeter, Roster.MetaHuman);
+	Wearer->Body->WearAppearance(*RamilMH);
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer]()
+	{
+		const TArray<TObjectPtr<UActorComponent>>& Parts = Wearer->Body->GetMetaHumanParts();
+		const TObjectPtr<UActorComponent>* Sync = Parts.FindByPredicate([](const UActorComponent* Part) { return Part && Part->IsA<ULODSyncComponent>(); });
+		if (!TestNotNull(TEXT("the LODSync"), Sync))
+		{
+			return;
+		}
+		// Every worn part the LODSync names (by its blueprint name) is named as it was placed, here and in the LOD mappings.
+		const ULODSyncComponent* LODSync = CastChecked<ULODSyncComponent>(*Sync);
+		int32 Checked = 0;
+		for (const UActorComponent* Part : Parts)
+		{
+			const FString Plain = Part ? Part->GetFName().GetPlainNameString() : FString();
+			for (const FComponentSync& Entry : LODSync->ComponentsToSync)
+			{
+				if (Part && Part != LODSync && Entry.Name.GetPlainNameString() == Plain)
+				{
+					++Checked;
+					TestEqual(FString::Printf(TEXT("the LODSync's %s"), *Plain), Entry.Name, Part->GetFName());
+				}
+			}
+			for (const TPair<FName, FLODMappingData>& Mapping : LODSync->CustomLODMapping)
+			{
+				if (Part && Mapping.Key.GetPlainNameString() == Plain)
+				{
+					TestEqual(FString::Printf(TEXT("the LOD mapping of %s"), *Plain), Mapping.Key, Part->GetFName());
+				}
+			}
+		}
+		TestTrue(TEXT("the face and grooms are synced"), Checked >= 5);
+	});
 	return true;
 }

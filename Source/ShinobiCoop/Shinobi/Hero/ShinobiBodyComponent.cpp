@@ -90,8 +90,11 @@ void UShinobiBodyComponent::DressBuilt(USkeletalMesh* Built)
 		return; // what is worn stays
 	}
 	const FShinobiAppearance& Look = PendingLook;
-	// Retargeter first: a new mesh re-initialises the anim instance, which reads it.
-	Retargeter = Found;
+	const FShinobiCreatorFace* FacePick = Catalog->FindFace(Look.Sex, Look.Face);
+	// Retargeter first: a new mesh re-initialises the anim instance, which reads it. The Own build is a roster MetaHuman's
+	// body: its own retargeter.
+	UIKRetargeter* OwnRetargeter = Look.Build == EShinobiBuild::Own && FacePick ? FacePick->Retargeter.LoadSynchronous() : nullptr;
+	Retargeter = OwnRetargeter ? OwnRetargeter : Found;
 	SetSkeletalMeshAsset(Built);
 	SetAnimInstanceClass(UShinobiRetargetAnimInstance::StaticClass());
 	FittingName = UShinobiCreatorCatalog::FittingName(Look.Sex, FMath::Min(Look.Build, EShinobiBuild::Over));
@@ -129,7 +132,6 @@ void UShinobiBodyComponent::DressBuilt(USkeletalMesh* Built)
 		MetaHumanParts.Add(Part);
 		return Part;
 	};
-	const FShinobiCreatorFace* FacePick = Catalog->FindFace(Look.Sex, Look.Face);
 	if (FacePick && !FacePick->MetaHuman.IsNull())
 	{
 		// A roster MetaHuman's face: its blueprint's parts, as on its roster body (its Fab hair needs their settings).
@@ -400,12 +402,15 @@ void UShinobiBodyComponent::WearMetaHumanParts(const TCHAR* ClassPath)
 	}
 	static const FName Body(TEXT("Body")), GroomAsset(TEXT("GroomAsset"));
 	UBlueprintGeneratedClass* MutableClass = const_cast<UBlueprintGeneratedClass*>(Class);
-	// A copy of the blueprint's component, under its blueprint name (LODSync finds its components by name), not registered yet.
-	auto Copy = [this](const UActorComponent* Template, FName Var) -> UActorComponent*
+	// A copy of the blueprint's component, under its blueprint name where free (the last look's parts hold theirs until
+	// garbage collection), not registered yet. Named: what each blueprint name became (LODSync finds components by name).
+	TMap<FName, FName> Named;
+	auto Copy = [this, &Named](const UActorComponent* Template, FName Var) -> UActorComponent*
 	{
 		const FName Name = FindObjectFast<UObject>(GetOwner(), Var) ? MakeUniqueObjectName(GetOwner(), Template->GetClass(), Var) : Var;
 		UActorComponent* Part = NewObject<UActorComponent>(GetOwner(), Template->GetClass(), Name, RF_Transient, const_cast<UActorComponent*>(Template));
 		MetaHumanParts.Add(Part);
+		Named.Add(Var, Name);
 		return Part;
 	};
 	USkinnedMeshComponent* StrandsFace = nullptr; // what a ShinobiStrands groom is bound to (see below)
@@ -489,10 +494,11 @@ void UShinobiBodyComponent::WearMetaHumanParts(const TCHAR* ClassPath)
 		ULODSyncComponent* Sync = CastChecked<ULODSyncComponent>(Copy(LODSyncNode->GetActualComponentTemplate(MutableClass), LODSyncNode->GetVariableName()));
 		for (FComponentSync& Entry : Sync->ComponentsToSync)
 		{
-			Entry.Name = Entry.Name == Body ? GetFName() : Entry.Name;
+			const FName* Placed = Named.Find(Entry.Name);
+			Entry.Name = Entry.Name == Body ? GetFName() : Placed ? *Placed : Entry.Name;
 			// A Fab strands hair is bound to the face's LOD0 only: its binding matches the head skin by material, and the
 			// face's lower LODs skin the head with other materials, so the hair vanished whenever the face dropped a LOD.
-			if (StrandsFace && Entry.Name == FName(*StrandsFace->GetFName().GetPlainNameString()))
+			if (StrandsFace && Entry.Name == StrandsFace->GetFName())
 			{
 				Entry.SyncOption = ESyncOption::Disabled;
 			}
@@ -501,12 +507,14 @@ void UShinobiBodyComponent::WearMetaHumanParts(const TCHAR* ClassPath)
 		{
 			StrandsFace->SetForcedLOD(1); // (1 = LOD0)
 		}
-		if (FLODMappingData* Mapping = Sync->CustomLODMapping.Find(Body))
+		// (the custom LOD mappings, e.g. the grooms' cards LODs, are keyed by the same names)
+		TMap<FName, FLODMappingData> Mappings;
+		for (const TPair<FName, FLODMappingData>& Mapping : Sync->CustomLODMapping)
 		{
-			const FLODMappingData Moved = *Mapping;
-			Sync->CustomLODMapping.Remove(Body);
-			Sync->CustomLODMapping.Add(GetFName(), Moved);
+			const FName* Placed = Named.Find(Mapping.Key);
+			Mappings.Add(Mapping.Key == Body ? GetFName() : Placed ? *Placed : Mapping.Key, Mapping.Value);
 		}
+		Sync->CustomLODMapping = MoveTemp(Mappings);
 		Sync->RegisterComponent();
 	}
 }
