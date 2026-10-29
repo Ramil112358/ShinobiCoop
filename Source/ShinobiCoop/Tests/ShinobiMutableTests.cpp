@@ -12,6 +12,7 @@
 #include "Shinobi/Hero/ShinobiCreatorCatalog.h"
 #include "Shinobi/Hero/ShinobiFaceBlendLibrary.h"
 #include "Shinobi/Hero/ShinobiMutableGraphLibrary.h"
+#include "Shinobi/Hero/ShinobiMutableNames.h"
 #include "Tests/AutomationCommon.h"
 #include "UObject/StrongObjectPtr.h"
 
@@ -135,6 +136,44 @@ bool FShinobiMutablePinDefaultTest::RunTest(const FString& Parameters)
 	}
 	TestTrue(TEXT("its target name pin takes a typed value"), UShinobiMutableGraphLibrary::SetPinDefault(Merge, TEXT("Skeletal Mesh Name"), TEXT("Body")));
 	TestTrue(TEXT("the description shows it"), UShinobiMutableGraphLibrary::DescribeGraph(Object).Contains(TEXT("Skeletal Mesh Name='Body'")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableAppearanceV2Test, "ShinobiCoop.Mutable.AppearanceV2", ShinobiTestFlags)
+bool FShinobiMutableAppearanceV2Test::RunTest(const FString& Parameters)
+{
+	FShinobiAppearance Look;
+	Look.Sex = EShinobiSex::Female;
+	Look.Build = EShinobiBuild::Own;
+	Look.BuildBlend = 77;
+	Look.Head = 4;
+	Look.Slot(EShinobiWardrobeSlot::Top) = 2;
+	Look.Slot(EShinobiWardrobeSlot::Outer) = 1;
+	Look.Slot(EShinobiWardrobeSlot::Accessory) = 0;
+	Look.Slot(EShinobiWardrobeSlot::Cloak) = 3;
+	Look.SlotColour[0] = 5;
+	Look.SlotColour[5] = 11;
+	Look.SlotWear[1] = 200;
+	Look.SkinTone = 40;
+	Look.Aged = 90;
+	Look.MakeUp = 2;
+	Look.Freckles = 1;
+	Look.Tattoos = {{1, 2, -30, 40, 128, 200}, {3, 0, 0, 0, 0, 128}};
+	Look.FaceShape = {12};
+	Look.BodyShape = {-5, 5};
+	FShinobiAppearance Back;
+	TestTrue(TEXT("a version-2 code reads back"), FShinobiAppearance::FromCode(Look.ToCode(), Back));
+	TestTrue(TEXT("to the same look"), Back == Look);
+	TestEqual(TEXT("Slot() is the named field"), Look.Outer, uint8(1));
+
+	FShinobiAppearance Wild = Look;
+	Wild.Build = EShinobiBuild(uint8(EShinobiBuild::Own) + 1);
+	Wild.Tattoos.SetNum(5);
+	Wild.Tattoos[4].Region = 250;
+	Wild.Sanitize();
+	TestEqual(TEXT("a build past Own is the normal one"), Wild.Build, EShinobiBuild::Normal);
+	TestEqual(TEXT("at most three tattoos"), Wild.Tattoos.Num(), ShinobiMutable::MaxTattoos);
+	TestEqual(TEXT("wear untouched"), Wild.SlotWear[1], uint8(200));
 	return true;
 }
 

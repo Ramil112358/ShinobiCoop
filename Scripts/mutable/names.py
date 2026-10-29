@@ -20,3 +20,18 @@ FULL_BODIES = {
 
 # Their own MetaHuman bodies (AShinobiPlayerCharacter::Roster): the "Own" build of each sex's base.
 OWN_BODIES = {"Male": FULL_BODIES["RamilMH"], "Female": FULL_BODIES["BikaMH"]}
+
+# Mutable parameter names: mirror Source/ShinobiCoop/Shinobi/Hero/ShinobiMutableNames.h exactly.
+OBJECT = f"{MUTABLE_ROOT}/CO_Shinobi"
+PALETTE = f"{MUTABLE_ROOT}/DT_Palette"
+PARAM_SEX = "Sex"
+PARAM_BUILD = "Build"
+PARAM_BUILD_BLEND = "Build Blend"
+PARAM_SKIN_TONE = "Skin Tone"
+PARAM_AGED = "Aged"
+PARAM_MAKE_UP = "Make Up"
+PARAM_FRECKLES = "Freckles"
+SLOTS = ["Top", "Bottom", "Shoes", "Outer", "Accessory", "Cloak"]  # EShinobiWardrobeSlot order
+COLOUR_SUFFIX = " Colour"
+WEAR_SUFFIX = " Wear"
+MAX_TATTOOS = 3

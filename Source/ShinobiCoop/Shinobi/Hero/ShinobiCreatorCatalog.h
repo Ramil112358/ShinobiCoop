@@ -15,13 +15,14 @@ enum class EShinobiSex : uint8
 	Female,
 };
 
-/** A body frame's build within its sex. */
+/** A body frame's build within its sex. Own is a roster character's own MetaHuman body (Mutable looks only). */
 UENUM()
 enum class EShinobiBuild : uint8
 {
 	Under,
 	Normal,
 	Over,
+	Own,
 };
 
 UENUM()
@@ -38,7 +39,12 @@ enum class EShinobiWardrobeSlot : uint8
 	Top,
 	Bottom,
 	Shoes,
+	Outer,
+	Accessory,
+	Cloak,
 };
+
+constexpr int32 ShinobiWardrobeSlotCount = 6;
 
 /** A base body: one of each sex's builds. */
 USTRUCT()
@@ -172,6 +178,34 @@ public:
 	int32 CountStyles(EShinobiSex Sex, EShinobiWardrobeSlot Slot) const;
 };
 
+/** A tattoo on a Mutable look: a DT_Tattoos design placed on a body region (offset, rotation and scale as small integers;
+ * clients rebuild the Mutable projector from the region's anchor). */
+USTRUCT()
+struct FShinobiTattoo
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	uint8 Design = 0;
+
+	UPROPERTY()
+	uint8 Region = 0;
+
+	UPROPERTY()
+	int8 OffsetU = 0;
+
+	UPROPERTY()
+	int8 OffsetV = 0;
+
+	UPROPERTY()
+	uint8 Rotation = 0;
+
+	UPROPERTY()
+	uint8 Scale = 128;
+
+	bool operator==(const FShinobiTattoo& Other) const = default;
+};
+
 /** A player's look: indices into UShinobiCreatorCatalog within the sex (None = nothing in that slot). */
 USTRUCT(BlueprintType)
 struct FShinobiAppearance
@@ -222,8 +256,54 @@ struct FShinobiAppearance
 	UPROPERTY()
 	uint8 BlendWeight[2] = {0, 0};
 
-	/** A client's look made safe for the server: known sex and build, slider lists no longer than the sliders. (Catalog
-	 * indices past the end are left: wearing skips what the catalog doesn't have.) */
+	/** Mutable looks (version 2): a roster head instead of a MetaHuman face (None = the face above). */
+	UPROPERTY()
+	uint8 Head = None;
+
+	/** How far toward Build's morph the body goes, 0..255 (Normal has none). */
+	UPROPERTY()
+	uint8 BuildBlend = 255;
+
+	UPROPERTY()
+	uint8 Outer = None;
+
+	UPROPERTY()
+	uint8 Accessory = None;
+
+	UPROPERTY()
+	uint8 Cloak = None;
+
+	/** Per wardrobe slot (EShinobiWardrobeSlot order): DT_Palette row of the piece's colour, and its wear 0..255. */
+	UPROPERTY()
+	uint8 SlotColour[ShinobiWardrobeSlotCount] = {};
+
+	UPROPERTY()
+	uint8 SlotWear[ShinobiWardrobeSlotCount] = {};
+
+	/** Skin: tone and age 0..255, make-up and freckles option indices (0 = none). */
+	UPROPERTY()
+	uint8 SkinTone = 128;
+
+	UPROPERTY()
+	uint8 Aged = 0;
+
+	UPROPERTY()
+	uint8 MakeUp = 0;
+
+	UPROPERTY()
+	uint8 Freckles = 0;
+
+	/** Up to ShinobiMutable::MaxTattoos placed tattoos. */
+	UPROPERTY()
+	TArray<FShinobiTattoo> Tattoos;
+
+	/** The row field of a wardrobe slot. */
+	uint8& Slot(EShinobiWardrobeSlot S);
+	uint8 Slot(EShinobiWardrobeSlot S) const { return const_cast<FShinobiAppearance*>(this)->Slot(S); }
+
+	/** A client's look made safe for the server: known sex and build, slider lists no longer than the sliders, at most
+	 * ShinobiMutable::MaxTattoos tattoos. (Catalog and table indices past the end are left: wearing skips what isn't
+	 * there.) */
 	void Sanitize();
 
 	/** The look as a short shareable code (versioned bytes, URL-safe base64), and back (false, Out untouched, if it isn't
