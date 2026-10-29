@@ -25,10 +25,13 @@ public:
 	 * MetaHuman blueprint class (its body is MeshPath), its other skeletal meshes and grooms are worn too (WearMetaHumanParts). */
 	bool Wear(const TCHAR* MeshPath, const TCHAR* RetargeterPath, const TCHAR* MetaHumanClassPath = nullptr);
 
-	/** Wears a creator look (UShinobiCreatorCatalog): the frame's body, its face (on UShinobiFaceShapeAnimInstance, so
-	 * SetFaceShape works), the grooms bound to that face and the wardrobe pieces fitted to the frame. False (nothing
-	 * changes) when the catalog or the frame isn't there. */
+	/** Wears a creator look: its face (UShinobiCreatorCatalog, on UShinobiFaceShapeAnimInstance, so SetFaceShape works)
+	 * and the grooms bound to it now, and the body with its wardrobe once Mutable has built them (UShinobiMutableLook;
+	 * the mesh worn until then stays). False (nothing changes) when the catalog or the retargeter isn't there. */
 	bool WearAppearance(const FShinobiAppearance& Look);
+
+	/** Whether a Mutable body build for the last WearAppearance is still on its way. */
+	bool IsMutableBuildPending() const;
 
 	/** The face sliders and preset blends of Look on the face already worn (no rebuild: the creator's live edits). */
 	void UpdateFace(const FShinobiAppearance& Look);
@@ -94,6 +97,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<USkeletalMeshComponent> StaticHead;
+
+	UPROPERTY(Transient)
+	TObjectPtr<class UShinobiMutableLook> MutableLook;
 
 	TMap<FName, FVector> BoneShapes;
 

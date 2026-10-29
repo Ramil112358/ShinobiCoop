@@ -2,6 +2,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR // (run in the editor only: Mutable graphs and compiles are editor-only)
 
+#include "AnimationRuntime.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "Engine/SkeletalMesh.h"
@@ -9,7 +10,10 @@
 #include "MuCO/CustomizableObjectInstance.h"
 #include "MuCOE/CustomizableObjectEditorFunctionLibrary.h"
 #include "MuCOE/CustomizableObjectFactory.h"
+#include "Rendering/SkeletalMeshRenderData.h"
+#include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "Shinobi/Hero/ShinobiCreatorCatalog.h"
+#include "Shinobi/Hero/ShinobiMutableLook.h"
 #include "Shinobi/Hero/ShinobiFaceBlendLibrary.h"
 #include "Shinobi/Hero/ShinobiMutableGraphLibrary.h"
 #include "Shinobi/Hero/ShinobiMutableNames.h"
@@ -232,6 +236,136 @@ bool FShinobiMutableObjectCompilesTest::RunTest(const FString& Parameters)
 	}
 	const UDataTable* Palette = LoadObject<UDataTable>(nullptr, ShinobiMutable::PalettePath);
 	TestTrue(TEXT("a 12-colour palette"), Palette && Palette->GetRowMap().Num() == 12);
+	return true;
+}
+
+namespace
+{
+	/** A test world with an actor wearing a body component (driver mesh as root), kept alive across latent commands. */
+	struct FMutableWearer
+	{
+		FShinobiTestWorld World;
+		AActor* Actor = nullptr;
+		UShinobiBodyComponent* Body = nullptr;
+
+		FMutableWearer()
+		{
+			Actor = World.Spawn<AActor>();
+			USkeletalMeshComponent* Driver = NewObject<USkeletalMeshComponent>(Actor, TEXT("Driver"));
+			Actor->SetRootComponent(Driver);
+			Driver->RegisterComponent();
+			Body = NewObject<UShinobiBodyComponent>(Actor, TEXT("Body"));
+			Body->SetupAttachment(Driver);
+			Body->RegisterComponent();
+		}
+
+		/** The worn mesh's head height in its reference pose (a generated mesh's bounds are the object's reference mesh's,
+		 * but its skeleton is the base's that was built), or 0. */
+		float Height() const
+		{
+			const USkeletalMesh* Mesh = Body->GetSkeletalMeshAsset();
+			const int32 Head = Mesh ? Mesh->GetRefSkeleton().FindBoneIndex(TEXT("head")) : INDEX_NONE;
+			return Head == INDEX_NONE ? 0.f : float(FAnimationRuntime::GetComponentSpaceTransformRefPose(Mesh->GetRefSkeleton(), Head).GetLocation().Z);
+		}
+	};
+
+	/** Waits (up to 60 s) until Done is true, then runs Then. */
+	void WaitThen(FAutomationTestBase& Test, TFunction<bool()> Done, TFunction<void()> Then)
+	{
+		const double Deadline = FPlatformTime::Seconds() + 60.0;
+		ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([&Test, Done, Then, Deadline]()
+		{
+			if (!Done() && FPlatformTime::Seconds() < Deadline)
+			{
+				return false;
+			}
+			Then();
+			return true;
+		}));
+	}
+
+	FShinobiAppearance MutableLook(EShinobiSex Sex, EShinobiBuild Build)
+	{
+		FShinobiAppearance Look;
+		Look.Sex = Sex;
+		Look.Build = Build;
+		return Look; // Top, Bottom and Shoes 0: each table's first piece
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableWearBuildsTest, "ShinobiCoop.Mutable.WearBuilds", ShinobiTestFlags)
+bool FShinobiMutableWearBuildsTest::RunTest(const FString& Parameters)
+{
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	TestTrue(TEXT("a Mutable look is accepted"), Wearer->Body->WearAppearance(MutableLook(EShinobiSex::Female, EShinobiBuild::Over)));
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer]()
+	{
+		const USkeletalMesh* Mesh = Wearer->Body->GetSkeletalMeshAsset();
+		if (TestNotNull(TEXT("a generated body"), Mesh))
+		{
+			TestTrue(TEXT("made by Mutable (transient)"), Mesh->HasAnyFlags(RF_Transient));
+			for (const TCHAR* Bone : {TEXT("pelvis"), TEXT("spine_05"), TEXT("head"), TEXT("hand_r"), TEXT("foot_l")})
+			{
+				TestTrue(FString::Printf(TEXT("keeps %s for retargeting"), Bone), Mesh->GetRefSkeleton().FindBoneIndex(Bone) != INDEX_NONE);
+			}
+			TestTrue(TEXT("with its pieces merged in (more than the bare body's one section)"), Mesh->GetResourceForRendering()->LODRenderData[0].RenderSections.Num() > 1);
+		}
+	});
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableLastRequestWinsTest, "ShinobiCoop.Mutable.LastRequestWins", ShinobiTestFlags)
+bool FShinobiMutableLastRequestWinsTest::RunTest(const FString& Parameters)
+{
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	TSharedRef<float> MaleHeight = MakeShared<float>(0.f);
+	Wearer->Body->WearAppearance(MutableLook(EShinobiSex::Male, EShinobiBuild::Normal));
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [Wearer, MaleHeight]()
+	{
+		*MaleHeight = Wearer->Height();
+		// Two changes before either builds: the second (female, shorter) must be the one that ends up worn.
+		Wearer->Body->WearAppearance(MutableLook(EShinobiSex::Male, EShinobiBuild::Over));
+		Wearer->Body->WearAppearance(MutableLook(EShinobiSex::Female, EShinobiBuild::Normal));
+	});
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer, MaleHeight]()
+	{
+		TestTrue(TEXT("the male body was built first"), *MaleHeight > 100.f);
+		TestTrue(FString::Printf(TEXT("the female body is worn last (%.0f cm vs male %.0f cm)"), Wearer->Height(), *MaleHeight),
+			Wearer->Height() > 100.f && Wearer->Height() < *MaleHeight - 5.f);
+	});
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableFailureKeepsMeshTest, "ShinobiCoop.Mutable.FailureKeepsMesh", ShinobiTestFlags)
+bool FShinobiMutableFailureKeepsMeshTest::RunTest(const FString& Parameters)
+{
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	USkeletalMesh* Before = LoadObject<USkeletalMesh>(nullptr, *ShinobiMutable::BasePath(TEXT("Male")));
+	Wearer->Body->SetSkeletalMeshAsset(Before);
+	UShinobiMutableLook::ObjectPathOverride = TEXT("/Game/Shinobi/Mutable/CO_Missing.CO_Missing");
+	AddExpectedError(TEXT("CO_Missing"), EAutomationExpectedErrorFlags::Contains, 1);
+	Wearer->Body->WearAppearance(MutableLook(EShinobiSex::Male, EShinobiBuild::Normal));
+	Wearer->Body->WearAppearance(MutableLook(EShinobiSex::Female, EShinobiBuild::Normal)); // logged once, not twice
+	UShinobiMutableLook::ObjectPathOverride.Reset();
+	TestFalse(TEXT("nothing pending"), Wearer->Body->IsMutableBuildPending());
+	TestTrue(TEXT("the previous mesh stays"), Wearer->Body->GetSkeletalMeshAsset() == Before);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableRosterAfterMutableTest, "ShinobiCoop.Mutable.RosterAfterMutable", ShinobiTestFlags)
+bool FShinobiMutableRosterAfterMutableTest::RunTest(const FString& Parameters)
+{
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	Wearer->Body->WearAppearance(MutableLook(EShinobiSex::Male, EShinobiBuild::Normal));
+	// The roster pick comes before the build finishes: the build must not land on the roster body.
+	const FShinobiRosterEntry& Hero = AShinobiPlayerCharacter::Roster[0];
+	TestTrue(TEXT("the hero is worn"), Wearer->Body->Wear(Hero.Mesh, Hero.Retargeter));
+	TestFalse(TEXT("the Mutable build is dropped"), Wearer->Body->IsMutableBuildPending());
+	const double Until = FPlatformTime::Seconds() + 5.0;
+	WaitThen(*this, [Until]() { return FPlatformTime::Seconds() > Until; }, [this, Wearer, Hero]()
+	{
+		TestEqual(TEXT("still the hero"), GetPathNameSafe(Wearer->Body->GetSkeletalMeshAsset()), FString(Hero.Mesh));
+	});
 	return true;
 }
 
