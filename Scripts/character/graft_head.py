@@ -1,7 +1,8 @@
 """Blender (5.2) headless: a roster character's head grafted onto the MetaHuman body as a static (rig-less) head.
 
   blender -b --factory-startup -P Scripts/character/graft_head.py -- <mh_body.fbx> <mh_face.fbx> <donor_rigged.fbx>
-      <out.fbx> [--join <z m>] [--scale auto|<s>] [--texture <donor.png>] [--body-texture <mh_body_bc.png>] [--render <dir>]
+      <out.fbx> [--join <z m>] [--scale auto|<s>] [--pin shoulder|head] [--texture <donor.png>]
+      [--body-texture <mh_body_bc.png>] [--render <dir>]
 
 The MetaHuman body ends at a wide open seam at the base of the neck (its face mesh carries the neck and trapezius), so
 the head is two pieces welded at a horizontal join (--join; default the lowest height where the
@@ -11,7 +12,9 @@ donor's neck still closes a ring, between the body seam and the head bone, above
     <donor>.png), shading down to the body's own skin colour at the seam (--body-texture: the MetaHuman body's base
     colour); the donor's throat below where its texture is usable (skin_start) takes that slot too;
   - above: the donor's head and neck (plus ears and hair cards: every piece reaching up to the head), scaled by stature
-    (Head bone heights; --scale overrides) with its Head bone pinned on the MetaHuman's; its bottom JOIN_BAND is bent
+    (Head bone heights; --scale overrides) above the MetaHuman's head bone, at the height that keeps the donor's own
+    shoulder-to-head length (--pin shoulder: its LeftShoulder on clavicle_l; the MetaHuman neck is longer, and pinning
+    head on head (--pin head) stretched the stylised necks); its bottom JOIN_BAND is bent
     radially onto the MetaHuman neck's outline, with a short lip tucked inside it.
 Weights: the neck keeps the face's (facial joints folded onto their nearest body-bone ancestor); the donor goes
 neck_02 -> head by height, taking the neck's weights near the join so both sides move together. Output: the head alone on
@@ -446,7 +449,15 @@ def main():
     d_head = bone_head(donor_rig, "Head")
     scale = float(np.clip(mh_head[2] / d_head[2], *SCALE_RANGE)) if opts.get("--scale", "auto") == "auto" \
         else float(opts["--scale"])
-    place = lambda co: mh_head + scale * (co - d_head)
+    # Only the height moves (the MetaHuman's head joint stays the head's pivot).
+    if opts.get("--pin", "shoulder") == "head":
+        dz = 0.0
+    else:
+        dz = bone_head(rig, "clavicle_l")[2] + scale * (d_head[2] - bone_head(donor_rig, "LeftShoulder")[2]) - mh_head[2]
+    lift = np.array([0.0, 0.0, dz])
+    mh_head, mh_neck2 = mh_head + lift, mh_neck2 + lift  # from here on: where the donor's head and neck land
+    place = lambda co, pin=mh_head.copy(): pin + scale * (co - d_head)
+    log(f"pin {opts.get('--pin', 'shoulder')}: head {dz * 100:+.1f} cm from the MetaHuman's head joint")
     seam_top = max((body.matrix_world @ v.co).z for v in body.data.vertices)
     z_join = float(opts["--join"]) if "--join" in opts else find_join(head, place, mh_head[2], mh_neck2[2], seam_top + 0.012, mh_neck2[2], axis)
     z_skin = max(z_join, skin_start(head, place, mh_head[2], mh_neck2[2], axis) or z_join)
