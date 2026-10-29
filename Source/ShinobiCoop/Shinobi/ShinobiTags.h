@@ -40,6 +40,8 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Casting_Amaterasu);
 	// A jutsu's charge phase (button held after the seals); the charge visuals grow while it's on.
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Casting_Charging);
+	// A jutsu's hand-seal wind-up; with Charging, it plants the caster (CanMove).
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Casting_Sealing);
 	// Kamui: untouchable and unseen by the AI; the Teleport window: kunai thrown, a re-press jumps to one.
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Phased);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_SummonAttacking); // a summon is mid-attack (its attack animation plays on every machine)

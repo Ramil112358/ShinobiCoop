@@ -470,6 +470,8 @@ bool AShinobiPlayerCharacter::CanMove() const
 	{
 		FGameplayTagContainer Tags;
 		Tags.AddTag(ShinobiTags::State_ChakraCharging);
+			Tags.AddTag(ShinobiTags::State_Casting_Sealing); // seals and charge: planted until release
+			Tags.AddTag(ShinobiTags::State_Casting_Charging);
 		Tags.AddTag(ShinobiTags::State_Shocked);
 		Tags.AddTag(ShinobiTags::State_Staggered);
 		Tags.AddTag(ShinobiTags::State_Reviving);

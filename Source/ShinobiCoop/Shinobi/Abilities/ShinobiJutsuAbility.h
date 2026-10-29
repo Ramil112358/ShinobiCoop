@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
+#include "Shinobi/ShinobiTags.h"
 #include "ShinobiJutsuAbility.generated.h"
 
 class UAbilitySystemComponent;
@@ -166,7 +167,9 @@ private:
 
 	float GetChargeTime() const;
 	void PlayPhaseMontage(const TSoftObjectPtr<UAnimMontage>& Montage, float Rate);
-	void SetChargingTag(bool bOn);
+	void SetChargingTag(bool bOn) { SetCastTag(ShinobiTags::State_Casting_Charging, bChargingTagAdded, bOn); }
+	void SetSealingTag(bool bOn) { SetCastTag(ShinobiTags::State_Casting_Sealing, bSealingTagAdded, bOn); }
+	void SetCastTag(const FGameplayTag& Tag, bool& bAdded, bool bOn);
 
 	UPROPERTY()
 	TObjectPtr<UAbilityTask_WaitGameplayEvent> InterruptTask;
@@ -192,6 +195,7 @@ private:
 	EPhase Phase = EPhase::Seal;
 	bool bReleaseRequested = false;
 	bool bChargingTagAdded = false;
+	bool bSealingTagAdded = false;
 	float ChargeStartTime = 0.f;
 	float LastDrainTime = 0.f;
 	float ChargeLevel = 0.f;

@@ -107,6 +107,12 @@ void UShinobiJutsuAbility::StartJutsuCast()
 	}
 	bCostPaid = true;
 	FaceAim(nullptr);
+	if (ACharacter* Body = Cast<ACharacter>(GetAvatarActorFromActorInfo()); Body && Cast<AShinobiPlayerCharacter>(Body))
+	{
+		// CanMove() blocks input from the seals to the release; kill the momentum too so a sprint doesn't glide through.
+		SetSealingTag(true);
+		Body->GetCharacterMovement()->Velocity = FVector::ZeroVector;
+	}
 
 	// The ability object is instanced per actor and reused: reset the previous cast's state.
 	Phase = EPhase::Seal;
@@ -201,12 +207,14 @@ void UShinobiJutsuAbility::OnSealsFinished()
 {
 	if (bReleaseRequested)
 	{
+		SetSealingTag(false);
 		Release();
 		return;
 	}
+	SetChargingTag(true); // before the seal tag drops: no frame where the caster can move
+	SetSealingTag(false);
 	Phase = EPhase::Charge;
 	ChargeStartTime = LastDrainTime = GetWorld()->GetTimeSeconds();
-	SetChargingTag(true);
 	PlayPhaseMontage(ChargeMontage, 1.f);
 	if (!HasAuthority(&CurrentActivationInfo))
 	{
@@ -332,24 +340,24 @@ void UShinobiJutsuAbility::PlayPhaseMontage(const TSoftObjectPtr<UAnimMontage>& 
 	}
 }
 
-void UShinobiJutsuAbility::SetChargingTag(bool bOn)
+void UShinobiJutsuAbility::SetCastTag(const FGameplayTag& Tag, bool& bAdded, bool bOn)
 {
-	if (bOn == bChargingTagAdded)
+	if (bOn == bAdded)
 	{
 		return;
 	}
-	bChargingTagAdded = bOn;
+	bAdded = bOn;
 	// Same as GAS does for ActivationOwnedTags: every machine running the ability adds it, and the replicated count
 	// reaches the other clients.
 	UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
 	const EGameplayTagReplicationState Rep = UAbilitySystemGlobals::Get().ShouldReplicateActivationOwnedTags() ? EGameplayTagReplicationState::CountToOwner : EGameplayTagReplicationState::None;
 	if (bOn)
 	{
-		ASC->AddLooseGameplayTag(ShinobiTags::State_Casting_Charging, 1, Rep);
+		ASC->AddLooseGameplayTag(Tag, 1, Rep);
 	}
 	else
 	{
-		ASC->RemoveLooseGameplayTag(ShinobiTags::State_Casting_Charging, 1, Rep);
+		ASC->RemoveLooseGameplayTag(Tag, 1, Rep);
 	}
 }
 
@@ -358,7 +366,8 @@ void UShinobiJutsuAbility::EndAbility(const FGameplayAbilitySpecHandle Handle, c
 	ClearTargetPreview();
 	if (IsActive())
 	{
-		SetChargingTag(false); // cancelled mid-charge (interrupt, dodge)
+		SetSealingTag(false); // cancelled mid-cast (interrupt, dodge)
+		SetChargingTag(false);
 		if (ServerReleaseHandle.IsValid())
 		{
 			GetAbilitySystemComponentFromActorInfo()->AbilityReplicatedEventDelegate(EAbilityGenericReplicatedEvent::GenericSignalFromServer, CurrentSpecHandle, CurrentActivationInfo.GetActivationPredictionKey())
