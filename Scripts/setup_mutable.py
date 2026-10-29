@@ -69,6 +69,14 @@ def bases():
         report = unreal.ShinobiFaceBlendLibrary.bake_face_blend_morphs(base, others, ["Under", "Over", "Own"], 4, "root", "Build_", 60.0)
         EAL.save_loaded_asset(base, only_if_is_dirty=False)
         log(f"{sex} base {path}: {report}")
+        # The average build's character blueprint isn't used (the bases take only its body) and references its face and
+        # grooms, which aren't cooked (Config/DefaultGame.ini DirectoriesToNeverCook): remove it so the cook doesn't fail.
+        # (the file itself: the commandlet's asset registry doesn't list it)
+        blueprint = os.path.join(unreal.Paths.project_content_dir(), "Shinobi", "Mutable", "Bases", "Build",
+                                 f"MHC_MB_{sex}_Normal", f"BP_MHC_MB_{sex}_Normal.uasset")
+        if os.path.exists(blueprint):
+            os.remove(blueprint)
+            log(f"removed {blueprint}")
 
 
 def new_table(path, struct, rows):
