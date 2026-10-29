@@ -14,7 +14,9 @@ Scripts/character/prep_mh_head.py). SETUP_MH_ONLY=<stage>[,<stage>] runs only th
   fabhair  a Fab Hair pick put into the built blueprint (the build drops single-LOD grooms); build runs it too.
   bodyhide the built body's skin material takes outfit hide masks (build runs it too).
   bakeinputs the built face mesh + base colour for Scripts/character/bake_face_video.py (run_python.ps1 -Render).
-  photoskin the baked video face (face_basecolor) as the face base colour override.
+  photoskin the baked video face (face_basecolor) as the face base colour override (CFG blend_bake_edge: its forehead
+            edge feathered first, Scripts/character/blend_bake_edge.py).
+  bakeedge  that feathering on the built face's base colours in place (a build made without it).
   clearskin the face base colour override off (before a build whose base colour bakeinputs exports for a re-bake).
   body     only the body's measurements (keeps a face made in the Creator, e.g. Import > From Identity).
   look     skin tone, eye colour and grooms (hair, brows, stubble, lashes).
@@ -86,6 +88,7 @@ CHARACTERS = {
         "iris": {"primary_color_u": 0.86, "primary_color_v": 0.10, "secondary_color_u": 0.96, "secondary_color_v": 0.0, "global_tint": 0.15},
         # The face base colour baked from the take (Scripts/character/bake_face_video.py, BAKE_* env: see its docstring).
         "face_basecolor": os.path.join(ROOT, "SourceArt", "Character", "Models", "Bika", "MetaHuman", "Bika_face_bc_video.png"),
+        "blend_bake_edge": True,  # its top edge drew a line across the forehead (Scripts/character/blend_bake_edge.py)
         "grooms": {
             "Hair": ("Hair/WI_Hair_L_Straight", 1.0),
             "Eyebrows": ("Eyebrows/WI_Eyebrows_M_Full", 1.0),
@@ -903,10 +906,53 @@ def bake_inputs():
         log(f"{name}: {unreal.Exporter.run_asset_export_task(task)}")
 
 
+def blend_bake_edge(png, out=None):
+    """Scripts/character/blend_bake_edge.py (system Python) on png: the bake's forehead edge feathered. Returns the copy."""
+    import subprocess
+    out = out or os.path.join(ROOT, "Saved", "BakeEdge", NAME, os.path.basename(png))
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    run = subprocess.run(["python", os.path.join(ROOT, "Scripts", "character", "blend_bake_edge.py"), png, out, "--check"],
+                         capture_output=True, text=True)
+    if run.returncode != 0:
+        raise RuntimeError(f"blend_bake_edge failed on {png}: {run.stderr[-800:]}")
+    log(f"bake edge {os.path.basename(png)}: {run.stdout.strip()}")
+    return out
+
+
+def bake_edge():
+    """blend_bake_edge on the built face's base colours in place (photoskin does it to the bake before a build; this
+    fixes a build already made without one). Each texture keeps its settings."""
+    folder = f"{DEST}/{BUILD_DIR}/MHC_{NAME}/Face/Baked"
+    work = os.path.join(ROOT, "Saved", "BakeEdge", NAME)
+    os.makedirs(work, exist_ok=True)
+    keep = ("srgb", "compression_settings", "virtual_texture_streaming", "lod_group", "mip_gen_settings", "never_stream")
+    # (not T_Head_LOD5to7: its distance texture has the hair baked over the forehead; the line doesn't show that far)
+    for name in ("T_Head_LOD1_BC_VT", "T_Head_LOD3_BC_VT"):
+        tex = unreal.load_asset(f"{folder}/{name}")
+        settings = {k: tex.get_editor_property(k) for k in keep}
+        png = os.path.join(work, f"{name}.png")
+        task = unreal.AssetExportTask()
+        task.object, task.filename, task.automated, task.prompt, task.replace_identical = tex, png, True, False, True
+        task.exporter = unreal.TextureExporterPNG()
+        if not unreal.Exporter.run_asset_export_task(task):
+            raise RuntimeError(f"could not export {name}")
+        fixed = blend_bake_edge(png, os.path.join(work, f"{name}_edge.png"))
+        task = unreal.AssetImportTask()
+        task.filename, task.destination_path, task.destination_name = fixed, folder, name
+        task.automated = task.replace_existing = True
+        TOOLS.import_asset_tasks([task])
+        tex = unreal.load_asset(f"{folder}/{name}")
+        for k, v in settings.items():
+            tex.set_editor_property(k, v)
+        EAL.save_loaded_asset(tex, only_if_is_dirty=False)
+
+
 def photo_skin():
     """The face's texture overrides (skin settings): CFG face_textures (FaceTextureType name -> image), else the baked video
     face (face_basecolor) as the base colour."""
     sources = CFG.get("face_textures") or {"BASECOLOR": CFG["face_basecolor"]}
+    if CFG.get("blend_bake_edge"):
+        sources["BASECOLOR"] = blend_bake_edge(sources["BASECOLOR"])
     imported = {}
     for kind, image in sources.items():
         name = f"T_{NAME}_Face_{'BC' if kind == 'BASECOLOR' else kind.title()}"
@@ -1038,7 +1084,7 @@ def build():
     PENDING.append(handle)
 
 
-STAGES = {"scan": import_head_scan, "conform": conform, "body": body, "look": look, "cloud": cloud, "build": build, "colours": groom_colours, "retarget": retarget, "preview": preview, "fitcheck": fitcheck, "identity": identity, "measure": measure, "footage": footage, "template": template, "fromidentity": from_identity, "photoskin": photo_skin, "clearskin": clear_skin, "hair": hair, "fabhair": fab_hair, "strandhair": strand_hair, "bakeinputs": bake_inputs, "bodyhide": body_hide}
+STAGES = {"scan": import_head_scan, "conform": conform, "body": body, "look": look, "cloud": cloud, "build": build, "colours": groom_colours, "retarget": retarget, "preview": preview, "fitcheck": fitcheck, "identity": identity, "measure": measure, "footage": footage, "template": template, "fromidentity": from_identity, "photoskin": photo_skin, "bakeedge": bake_edge, "clearskin": clear_skin, "hair": hair, "fabhair": fab_hair, "strandhair": strand_hair, "bakeinputs": bake_inputs, "bodyhide": body_hide}
 try:
     for stage in ONLY or list(STAGES):
         STAGES[stage]()
