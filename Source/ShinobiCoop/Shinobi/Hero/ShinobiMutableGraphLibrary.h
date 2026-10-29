@@ -25,6 +25,17 @@ class UEdGraphNode;
  *   CONodeSkeletalMeshObjectMake: in "Skeletal Mesh", out "Passthrough Skeletal Mesh"
  *   CONodeComponentSkeletalMesh (set ReferenceSkeletalMesh): in "Passthrough Skeletal Mesh", out "Component"
  *   CustomizableObjectNodeObject: in "Components", "Children"
+ *   CustomizableObjectNodeMeshMorph: in "Mesh", "Factor", "Morph Target Name" (a StaticString node's "Value"); out "Mesh"
+ *   CustomizableObjectNodeMeshReshape: in "Base Mesh", "Base Shape", "Target Shape"; out "Mesh"
+ *   CONodeModifierMutableSkeletalMeshMerge: in "Added", "Skeletal Mesh Name"; out "Modifier"
+ *   CustomizableObjectNodeModifierClipWithMesh: in "Clip Mesh"; out "Modifier"
+ *   CustomizableObjectNodeObjectGroup: out "Group" (into Object "Children"), in "Objects"
+ *   CustomizableObjectNodeObjectChild: out "Object", in "Modifiers"
+ * Gotchas (ShinobiCoop.MutableSpike, 2026-10-29): a section node fed through a morph or reshape needs its Material set;
+ * a merge modifier only merges into the object-make whose SkeletalMeshName equals its ParentSkeletalMeshName (hidden
+ * property); a group is a set of toggles unless GroupType is COGT_ONE (then one Int parameter named GroupName whose
+ * options are the children's ObjectName); Remove Mesh Blocks removed nothing on a script-built body (no layouts), Clip
+ * With Mesh works. Creating a Customizable Object needs Slate: run scripts with Scripts/run_python.ps1 -Editor.
  * DescribeGraph prints any existing object's wiring (Scripts/mutable/describe_graphs.py).
  */
 UCLASS()
@@ -45,15 +56,26 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")
 	static UEdGraphNode* FindNode(UCustomizableObject* Object, const FString& NodeClass, int32 Index = 0);
 
-	/** Sets a node property from its text form (as the Details panel would), then rebuilds the node's pins. */
+	/**
+	 * Sets a node property from its text form (as the Details panel would), then rebuilds the node's pins. Property may be
+	 * a dotted path into subobjects ("Layout.Blocks" for a remove-blocks node's layout).
+	 */
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")
 	static bool SetNodeProperty(UEdGraphNode* Node, const FString& Property, const FString& Value);
+
+	/** A node property (or dotted path, as SetNodeProperty) in its text form; empty if there is none. */
+	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")
+	static FString GetNodeProperty(UEdGraphNode* Node, const FString& Property);
+
+	/** Types Value into the node's unlinked input Pin (as in the graph editor); false if there is no such pin. */
+	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")
+	static bool SetPinDefault(UEdGraphNode* Node, const FString& Pin, const FString& Value);
 
 	/** The node's pins as "<In|Out>|<PinName>|<PinCategory>". */
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")
 	static TArray<FString> ListPins(UEdGraphNode* Node);
 
-	/** Every node ("[i] Class key=value…") and every link ("Class.Pin -> Class.Pin"), one per line: how a graph is wired. */
+	/** Every node ("[i] Class key=value… Pin='typed value'…") and every link ("Class.Pin -> Class.Pin"), one per line: how a graph is wired. */
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")
 	static FString DescribeGraph(UCustomizableObject* Object);
 

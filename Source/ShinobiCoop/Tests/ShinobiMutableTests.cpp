@@ -106,6 +106,38 @@ bool FShinobiMutableGraphHelperTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableNodePropertyPathTest, "ShinobiCoop.Mutable.NodePropertyPath", ShinobiTestFlags)
+bool FShinobiMutableNodePropertyPathTest::RunTest(const FString& Parameters)
+{
+	UCustomizableObject* Object = NewTransientObject();
+	UEdGraphNode* Remove = UShinobiMutableGraphLibrary::AddNode(Object, TEXT("CustomizableObjectNodeModifierRemoveMeshBlocks"), 0, 0);
+	if (!TestNotNull(TEXT("a remove-blocks node"), Remove))
+	{
+		return false;
+	}
+	// The blocks live on the node's layout subobject, which the Details panel edits through its own widget.
+	TestTrue(TEXT("a block set through the layout"), UShinobiMutableGraphLibrary::SetNodeProperty(Remove, TEXT("Layout.Blocks"),
+		TEXT("((Min=(X=1,Y=2),Max=(X=3,Y=4)))")));
+	TestTrue(TEXT("reads back"), UShinobiMutableGraphLibrary::GetNodeProperty(Remove, TEXT("Layout.Blocks")).Contains(TEXT("Min=(X=1,Y=2),Max=(X=3,Y=4)")));
+	AddExpectedError(TEXT("SetNodeProperty: no property"), EAutomationExpectedErrorFlags::Contains, 1);
+	TestFalse(TEXT("a missing path fails"), UShinobiMutableGraphLibrary::SetNodeProperty(Remove, TEXT("Layout.NoSuchProperty"), TEXT("1")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutablePinDefaultTest, "ShinobiCoop.Mutable.PinDefault", ShinobiTestFlags)
+bool FShinobiMutablePinDefaultTest::RunTest(const FString& Parameters)
+{
+	UCustomizableObject* Object = NewTransientObject();
+	UEdGraphNode* Merge = UShinobiMutableGraphLibrary::AddNode(Object, TEXT("CONodeModifierMutableSkeletalMeshMerge"), 0, 0);
+	if (!TestNotNull(TEXT("a merge modifier"), Merge))
+	{
+		return false;
+	}
+	TestTrue(TEXT("its target name pin takes a typed value"), UShinobiMutableGraphLibrary::SetPinDefault(Merge, TEXT("Skeletal Mesh Name"), TEXT("Body")));
+	TestTrue(TEXT("the description shows it"), UShinobiMutableGraphLibrary::DescribeGraph(Object).Contains(TEXT("Skeletal Mesh Name='Body'")));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableBuildMorphBakeTest, "ShinobiCoop.Mutable.BuildMorphBake", ShinobiTestFlags)
 bool FShinobiMutableBuildMorphBakeTest::RunTest(const FString& Parameters)
 {

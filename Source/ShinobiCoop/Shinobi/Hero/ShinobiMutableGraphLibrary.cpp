@@ -59,11 +59,40 @@ UEdGraphNode* UShinobiMutableGraphLibrary::FindNode(UCustomizableObject* Object,
 	return nullptr;
 }
 
+#if WITH_EDITOR
+namespace
+{
+	/** The object and property a dotted path names from Root ("Layout.Blocks": Root's Layout subobject, its Blocks). */
+	bool ResolvePath(UObject* Root, const FString& Path, UObject*& Owner, FProperty*& Prop)
+	{
+		TArray<FString> Parts;
+		Path.ParseIntoArray(Parts, TEXT("."));
+		Owner = Root;
+		Prop = nullptr;
+		for (int32 Index = 0; Owner && Index < Parts.Num(); ++Index)
+		{
+			Prop = Owner->GetClass()->FindPropertyByName(FName(*Parts[Index]));
+			if (!Prop)
+			{
+				return false;
+			}
+			if (Index + 1 < Parts.Num())
+			{
+				const FObjectPropertyBase* Sub = CastField<FObjectPropertyBase>(Prop);
+				Owner = Sub ? Sub->GetObjectPropertyValue_InContainer(Owner) : nullptr;
+			}
+		}
+		return Owner && Prop;
+	}
+}
+#endif
+
 bool UShinobiMutableGraphLibrary::SetNodeProperty(UEdGraphNode* Node, const FString& Property, const FString& Value)
 {
 #if WITH_EDITOR
-	FProperty* Prop = Node ? Node->GetClass()->FindPropertyByName(FName(*Property)) : nullptr;
-	if (!Prop)
+	UObject* Owner = nullptr;
+	FProperty* Prop = nullptr;
+	if (!Node || !ResolvePath(Node, Property, Owner, Prop))
 	{
 		UE_LOG(LogShinobiCoop, Warning, TEXT("SetNodeProperty: no property %s on %s"), *Property, *GetNameSafe(Node));
 		return false;
@@ -72,12 +101,42 @@ bool UShinobiMutableGraphLibrary::SetNodeProperty(UEdGraphNode* Node, const FStr
 	{
 		LoadObject<UObject>(nullptr, *Value); // hard references only resolve objects already in memory
 	}
-	Node->PreEditChange(Prop);
-	const bool bSet = Prop->ImportText_InContainer(*Value, Node, Node, PPF_None) != nullptr;
+	Owner->PreEditChange(Prop);
+	const bool bSet = Prop->ImportText_InContainer(*Value, Owner, Owner, PPF_None) != nullptr;
 	FPropertyChangedEvent Changed(Prop, EPropertyChangeType::ValueSet);
-	Node->PostEditChangeProperty(Changed);
+	Owner->PostEditChangeProperty(Changed);
 	Node->ReconstructNode();
 	return bSet;
+#else
+	return false;
+#endif
+}
+
+FString UShinobiMutableGraphLibrary::GetNodeProperty(UEdGraphNode* Node, const FString& Property)
+{
+	FString Value;
+#if WITH_EDITOR
+	UObject* Owner = nullptr;
+	FProperty* Prop = nullptr;
+	if (Node && ResolvePath(Node, Property, Owner, Prop))
+	{
+		Prop->ExportText_InContainer(0, Value, Owner, nullptr, nullptr, PPF_None);
+	}
+#endif
+	return Value;
+}
+
+bool UShinobiMutableGraphLibrary::SetPinDefault(UEdGraphNode* Node, const FString& Pin, const FString& Value)
+{
+#if WITH_EDITOR
+	UEdGraphPin* Input = Node ? Node->FindPin(FName(*Pin), EGPD_Input) : nullptr;
+	if (!Input)
+	{
+		UE_LOG(LogShinobiCoop, Warning, TEXT("SetPinDefault: no input pin %s on %s"), *Pin, *GetNameSafe(Node));
+		return false;
+	}
+	Input->GetSchema()->TrySetDefaultValue(*Input, Value);
+	return Input->DefaultValue == Value;
 #else
 	return false;
 #endif
@@ -125,6 +184,13 @@ FString UShinobiMutableGraphLibrary::DescribeGraph(UCustomizableObject* Object)
 				FString Value;
 				It->ExportText_InContainer(0, Value, Node, Default, nullptr, PPF_None);
 				Props += FString::Printf(TEXT(" %s=%s"), *It->GetName(), *Value.Left(160));
+			}
+		}
+		for (const UEdGraphPin* Pin : Node->Pins)
+		{
+			if (Pin->Direction == EGPD_Input && Pin->LinkedTo.IsEmpty() && !Pin->DefaultValue.IsEmpty())
+			{
+				Props += FString::Printf(TEXT(" %s='%s'"), *Pin->PinName.ToString(), *Pin->DefaultValue.Left(160));
 			}
 		}
 		Text += FString::Printf(TEXT("[%d] %s%s\n"), Index, *Node->GetClass()->GetName(), *Props);
