@@ -110,7 +110,8 @@ void UShinobiMutableLook::Built(const FUpdateContext& Result, int32 ForSequence)
 	}
 	bPending = false;
 	USkeletalMesh* Mesh = nullptr;
-	if (Result.UpdateResult == EUpdateResult::Success && Instance)
+	// ErrorOptimized: the parameters are the last build's (two roster heads on one body), so that mesh stands.
+	if ((Result.UpdateResult == EUpdateResult::Success || Result.UpdateResult == EUpdateResult::ErrorOptimized) && Instance)
 	{
 		const TArray<FName> Components = Instance->GetComponentNames();
 		Mesh = Components.IsEmpty() ? nullptr : Instance->GetComponentMeshSkeletalMesh(Components[0]);

@@ -756,3 +756,24 @@ bool FShinobiMutableRosterPresetFallsBackTest::RunTest(const FString& Parameters
 	TestEqual(TEXT("Cat falls back to its legacy body"), GetPathNameSafe(P->GetHeroMesh()->GetSkeletalMeshAsset()), FString(AShinobiPlayerCharacter::Roster[Cat].Mesh));
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableSameBodyNewHeadTest, "ShinobiCoop.Mutable.SameBodyNewHead", ShinobiTestFlags)
+bool FShinobiMutableSameBodyNewHeadTest::RunTest(const FString& Parameters)
+{
+	// Bika and Cat share a body (female, Normal): Mutable skips the second, identical build, and the head must still change.
+	const TOptional<FShinobiAppearance> Bika = Preset(*this, TEXT("Bika"));
+	const TOptional<FShinobiAppearance> Cat = Preset(*this, TEXT("Cat"));
+	if (!Bika || !Cat)
+	{
+		return false;
+	}
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	Wearer->Body->WearAppearance(*Bika);
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [Wearer, Cat]() { Wearer->Body->WearAppearance(*Cat); });
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer]()
+	{
+		const USkeletalMeshComponent* Head = Wearer->Body->GetStaticHead();
+		TestTrue(TEXT("Cat's head after Bika's"), Head && Head->GetSkeletalMeshAsset() && Head->GetSkeletalMeshAsset()->GetName() == TEXT("SK_Head_Cat"));
+	});
+	return true;
+}
