@@ -24,14 +24,19 @@ OWN_BODIES = {"Male": FULL_BODIES["RamilMH"], "Female": FULL_BODIES["BikaMH"]}
 # Mutable parameter names: mirror Source/ShinobiCoop/Shinobi/Hero/ShinobiMutableNames.h exactly.
 OBJECT = f"{MUTABLE_ROOT}/CO_Shinobi"
 PALETTE = f"{MUTABLE_ROOT}/DT_Palette"
-PARAM_SEX = "Sex"
+PARAM_BODY = "Body"
+BASE = f"{MUTABLE_ROOT}/Bases/SK_MutableBase_{{sex}}"  # .format(sex="Male")
 PARAM_BUILD = "Build"
+BUILDS = ["Under", "Normal", "Over", "Own"]  # EShinobiBuild order; Normal has no morph
 PARAM_BUILD_BLEND = "Build Blend"
 PARAM_SKIN_TONE = "Skin Tone"
 PARAM_AGED = "Aged"
 PARAM_MAKE_UP = "Make Up"
 PARAM_FRECKLES = "Freckles"
 SLOTS = ["Top", "Bottom", "Shoes", "Outer", "Accessory", "Cloak"]  # EShinobiWardrobeSlot order
-COLOUR_SUFFIX = " Colour"
-WEAR_SUFFIX = " Wear"
+MESH_SUFFIX = " Mesh"
+CLIP_SUFFIX = " Clip"
+HIDES_SUFFIX = " Hides"
+ON, OFF = "ON", "OFF"
+WARDROBE_TABLE = f"{MUTABLE_ROOT}/DT_Wardrobe_{{slot}}"  # .format(slot="Top")
 MAX_TATTOOS = 3

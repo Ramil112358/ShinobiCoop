@@ -13,6 +13,7 @@
 #include "Shinobi/Hero/ShinobiFaceBlendLibrary.h"
 #include "Shinobi/Hero/ShinobiMutableGraphLibrary.h"
 #include "Shinobi/Hero/ShinobiMutableNames.h"
+#include "Shinobi/Hero/ShinobiMutableTypes.h"
 #include "Tests/AutomationCommon.h"
 #include "UObject/StrongObjectPtr.h"
 
@@ -194,6 +195,43 @@ bool FShinobiMutableBasesTest::RunTest(const FString& Parameters)
 			TestNotNull(FString::Printf(TEXT("%s base has %s"), Sex, Morph), Base->FindMorphTarget(Morph));
 		}
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableObjectCompilesTest, "ShinobiCoop.Mutable.ObjectCompiles", ShinobiTestFlags)
+bool FShinobiMutableObjectCompilesTest::RunTest(const FString& Parameters)
+{
+	UCustomizableObject* Object = LoadObject<UCustomizableObject>(nullptr, ShinobiMutable::ObjectPath);
+	if (!TestNotNull(TEXT("CO_Shinobi"), Object))
+	{
+		return false;
+	}
+	TestEqual(TEXT("compiles"), UCustomizableObjectEditorFunctionLibrary::CompileCustomizableObjectSynchronously(Object),
+		ECustomizableObjectCompilationState::Completed);
+	TArray<FString> Expected = {ShinobiMutable::Body, ShinobiMutable::Build, ShinobiMutable::BuildBlend};
+	for (const TCHAR* Slot : ShinobiMutable::SlotNames)
+	{
+		Expected.Append({Slot, FString(Slot) + ShinobiMutable::MeshSuffix, FString(Slot) + ShinobiMutable::ClipSuffix,
+			FString(Slot) + ShinobiMutable::HidesSuffix});
+	}
+	for (const FString& Name : Expected)
+	{
+		TestTrue(FString::Printf(TEXT("has parameter '%s'"), *Name), Object->ContainsParameter(Name));
+	}
+	for (const TCHAR* Slot : ShinobiMutable::SlotNames)
+	{
+		const UDataTable* Table = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(Slot));
+		if (!TestNotNull(FString::Printf(TEXT("DT_Wardrobe_%s"), Slot), Table))
+		{
+			continue;
+		}
+		Table->ForeachRow<FShinobiWardrobeRow>(TEXT("ObjectCompiles"), [&](const FName& Row, const FShinobiWardrobeRow& Piece)
+		{
+			TestFalse(FString::Printf(TEXT("%s.%s has both sexes' meshes"), Slot, *Row.ToString()), Piece.MaleMesh.IsNull() || Piece.FemaleMesh.IsNull());
+		});
+	}
+	const UDataTable* Palette = LoadObject<UDataTable>(nullptr, ShinobiMutable::PalettePath);
+	TestTrue(TEXT("a 12-colour palette"), Palette && Palette->GetRowMap().Num() == 12);
 	return true;
 }
 
