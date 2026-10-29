@@ -703,3 +703,56 @@ bool FShinobiMutableOneHeadAtATimeTest::RunTest(const FString& Parameters)
 	}
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableRosterPresetWornTest, "ShinobiCoop.Mutable.RosterPresetWorn", ShinobiTestFlags)
+bool FShinobiMutableRosterPresetWornTest::RunTest(const FString& Parameters)
+{
+	TSharedRef<FShinobiTestWorld> World = MakeShared<FShinobiTestWorld>();
+	const uint8 Cat = uint8(AShinobiPlayerCharacter::FindRosterIndex(TEXT("Cat")));
+	AShinobiPlayerCharacter* A = World->Spawn<AShinobiPlayerCharacter>();
+	AShinobiPlayerCharacter* B = World->Spawn<AShinobiPlayerCharacter>();
+	IConsoleVariable* Switch = IConsoleManager::Get().FindConsoleVariable(TEXT("Shinobi.RosterPresets"));
+	const int32 Previous = Switch ? Switch->GetInt() : 0;
+	if (!TestNotNull(TEXT("Shinobi.RosterPresets"), Switch) || !TestNotNull(TEXT("A's body"), A->GetHeroMesh()))
+	{
+		return false;
+	}
+	Switch->Set(1, ECVF_SetByCode);
+	A->SetCharacterIndex(Cat);
+	B->SetCharacterIndex(Cat);
+	auto BodyOf = [](AShinobiPlayerCharacter* P) { return CastChecked<UShinobiBodyComponent>(P->GetHeroMesh()); };
+	WaitThen(*this, [World, A, B, BodyOf]() { return !BodyOf(A)->IsMutableBuildPending() && !BodyOf(B)->IsMutableBuildPending(); },
+		[this, World, A, B, BodyOf, Switch, Previous]()
+	{
+		Switch->Set(Previous, ECVF_SetByCode);
+		const UShinobiBodyComponent* Body = BodyOf(A);
+		const USkeletalMesh* Mesh = Body->GetSkeletalMeshAsset();
+		TestTrue(TEXT("Cat wears a generated body"), Mesh && Mesh->GetOutermost() == GetTransientPackage());
+		const USkeletalMeshComponent* Head = Body->GetStaticHead();
+		TestTrue(TEXT("with SK_Head_Cat"), Head && Head->GetSkeletalMeshAsset() && Head->GetSkeletalMeshAsset()->GetName() == TEXT("SK_Head_Cat"));
+		TestEqual(TEXT("two Cats look the same"), BodyOf(B)->GetAppearance().ToCode(), Body->GetAppearance().ToCode());
+	});
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableRosterPresetFallsBackTest, "ShinobiCoop.Mutable.RosterPresetFallsBack", ShinobiTestFlags)
+bool FShinobiMutableRosterPresetFallsBackTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld World;
+	const int32 Cat = AShinobiPlayerCharacter::FindRosterIndex(TEXT("Cat"));
+	AShinobiPlayerCharacter* P = World.Spawn<AShinobiPlayerCharacter>();
+	IConsoleVariable* Switch = IConsoleManager::Get().FindConsoleVariable(TEXT("Shinobi.RosterPresets"));
+	if (!TestNotNull(TEXT("Shinobi.RosterPresets"), Switch) || !TestNotNull(TEXT("the body"), P->GetHeroMesh()))
+	{
+		return false;
+	}
+	const int32 Previous = Switch->GetInt();
+	Switch->Set(1, ECVF_SetByCode);
+	UShinobiMutableLook::ObjectPathOverride = TEXT("/Game/Shinobi/Mutable/CO_MissingRoster.CO_MissingRoster");
+	AddExpectedError(TEXT("CO_MissingRoster"), EAutomationExpectedErrorFlags::Contains, 1);
+	P->SetCharacterIndex(uint8(Cat));
+	UShinobiMutableLook::ObjectPathOverride.Reset();
+	Switch->Set(Previous, ECVF_SetByCode);
+	TestEqual(TEXT("Cat falls back to its legacy body"), GetPathNameSafe(P->GetHeroMesh()->GetSkeletalMeshAsset()), FString(AShinobiPlayerCharacter::Roster[Cat].Mesh));
+	return true;
+}

@@ -77,6 +77,11 @@ namespace
 		TEXT(""),
 		TEXT("Appended to the body's name in outfit copy asset names (tests point it at copies that don't exist)."));
 
+	TAutoConsoleVariable<int32> CVarRosterPresets(
+		TEXT("Shinobi.RosterPresets"),
+		0,
+		TEXT("1 = roster picks wear their Mutable preset (the creator catalog's) instead of their own body. Read when a pick is applied."));
+
 	const TCHAR* const WhiteMaskPath = TEXT("/Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture");
 }
 
@@ -397,17 +402,53 @@ void AShinobiPlayerCharacter::UpdateOutfitCloth()
 	}
 }
 
+TOptional<FShinobiAppearance> AShinobiPlayerCharacter::RosterPreset(int32 RosterIndex, int32 FaceIndex)
+{
+	const UShinobiCreatorCatalog* Catalog = CVarRosterPresets.GetValueOnGameThread() == 1 && RosterIndex >= 0 && RosterIndex < UE_ARRAY_COUNT(Roster)
+		? LoadObject<UShinobiCreatorCatalog>(nullptr, UShinobiCreatorCatalog::Path, nullptr, LOAD_NoWarn | LOAD_Quiet) : nullptr;
+	const FShinobiAppearance* Preset = Catalog ? Catalog->FindPreset(Roster[RosterIndex].Name) : nullptr;
+	if (!Preset)
+	{
+		return {};
+	}
+	FShinobiAppearance Look = *Preset;
+	if (const FShinobiFaceEntry* Face = FaceIndex > 0 ? FindFace(RosterIndex, FaceIndex) : nullptr)
+	{
+		// /Game/Shinobi/MetaHumans/<Folder>/Build/...: the catalog face of that name, counted within the sex.
+		TArray<FString> Parts;
+		FString(Face->MetaHuman).ParseIntoArray(Parts, TEXT("/"));
+		const int32 Folder = Parts.IndexOfByKey(TEXT("MetaHumans")) + 1;
+		const FName Id = Folder > 0 && Parts.IsValidIndex(Folder) ? FName(*Parts[Folder]) : NAME_None;
+		int32 Index = 0;
+		for (const FShinobiCreatorFace& Each : Catalog->Faces)
+		{
+			if (Each.Sex == Look.Sex && Each.Id == Id)
+			{
+				Look.Face = uint8(Index);
+				break;
+			}
+			Index += Each.Sex == Look.Sex ? 1 : 0;
+		}
+	}
+	return Look;
+}
+
 bool AShinobiPlayerCharacter::ApplyCharacter()
 {
 	if (!HeroMesh)
 	{
 		return false;
 	}
+	// A made body lands later (Mutable builds it): re-bind the outfit to its skeleton then.
+	HeroMesh->OnBodyBuilt.RemoveAll(this);
+	HeroMesh->OnBodyBuilt.AddUObject(this, &AShinobiPlayerCharacter::ApplyOutfit);
+	if (const TOptional<FShinobiAppearance> Preset = RosterPreset(CharacterIndex, FaceIndex); Preset && HeroMesh->WearAppearance(*Preset))
+	{
+		UE_LOG(LogShinobiCoop, Log, TEXT("%s plays %s (preset %s)"), *GetName(), Roster[CharacterIndex].Name, *Preset->ToCode());
+		return true;
+	}
 	if (CharacterIndex == CustomCharacter)
 	{
-		// The made body lands later (Mutable builds it): re-bind the outfit to its skeleton then.
-		HeroMesh->OnBodyBuilt.RemoveAll(this);
-		HeroMesh->OnBodyBuilt.AddUObject(this, &AShinobiPlayerCharacter::ApplyOutfit);
 		if (HeroMesh->WearAppearance(Appearance))
 		{
 			UE_LOG(LogShinobiCoop, Log, TEXT("%s plays a made character (%s)"), *GetName(), *Appearance.ToCode());

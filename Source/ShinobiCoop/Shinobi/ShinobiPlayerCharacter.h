@@ -112,6 +112,9 @@ public:
 
 	/** Roster index of Name (case-insensitive), or INDEX_NONE. */
 	static int32 FindRosterIndex(const FString& Name);
+	/** With Shinobi.RosterPresets = 1: Roster[RosterIndex]'s look in the creator catalog, with its FaceIndex-th face (a
+	 * MetaHuman's other faces are catalog faces named after their build folder: RamilMHScan, BikaMHKeenFace). Else unset. */
+	static TOptional<FShinobiAppearance> RosterPreset(int32 RosterIndex, int32 FaceIndex = 0);
 
 	/** The faces of the roster characters that have more than one, in pick order (the first is the roster entry's own).
 	 * A character not listed has one face: its roster MetaHuman (or none). */
