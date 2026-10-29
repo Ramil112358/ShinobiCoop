@@ -31,6 +31,7 @@ namespace ShinobiTags
 	UE_DEFINE_GAMEPLAY_TAG(State_Casting_Rasengan, "State.Casting.Rasengan");
 	UE_DEFINE_GAMEPLAY_TAG(State_Casting_Amaterasu, "State.Casting.Amaterasu");
 	UE_DEFINE_GAMEPLAY_TAG(State_Casting_Charging, "State.Casting.Charging");
+	UE_DEFINE_GAMEPLAY_TAG(State_Casting_Sealing, "State.Casting.Sealing");
 	UE_DEFINE_GAMEPLAY_TAG(State_Phased, "State.Phased");
 	UE_DEFINE_GAMEPLAY_TAG(State_Susanoo, "State.Susanoo");
 	UE_DEFINE_GAMEPLAY_TAG(State_DragonBreathing, "State.DragonBreathing");
