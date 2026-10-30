@@ -64,6 +64,8 @@
 #include "ChaosCloth/ChaosClothingSimulationInteractor.h"
 #include "Engine/Texture.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Algo/Find.h"
+#include "Shinobi/Hero/ShinobiMutableNames.h"
 
 namespace
 {
@@ -79,8 +81,12 @@ namespace
 
 	TAutoConsoleVariable<int32> CVarRosterPresets(
 		TEXT("Shinobi.RosterPresets"),
-		0,
-		TEXT("1 = roster picks wear their Mutable preset (the creator catalog's) instead of their own body. Read when a pick is applied."));
+		2,
+		TEXT("Roster picks that wear their Mutable preset (the creator catalog's) instead of their own body: 0 none, 1 all, 2 the approved ones (PresetRoster). Read when a pick is applied."));
+
+	/** The roster characters whose Mutable preset replaced their own body (user-approved side by side, 2026-10-30). The rest
+	 * keep it: the Hero, Bika (her hair falls on her body) and the animal bodies. */
+	const TCHAR* const PresetRoster[] = {TEXT("Ramil"), TEXT("Elvin"), TEXT("RamilMH"), TEXT("BikaMH")};
 
 	const TCHAR* const WhiteMaskPath = TEXT("/Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture");
 }
@@ -316,12 +322,27 @@ bool AShinobiPlayerCharacter::DressOutfit(USkeletalMeshComponent& BodyMesh, USke
 	{
 		Mask = LoadObject<UTexture>(nullptr, WhiteMaskPath);
 	}
+	// A made body's skin tint (UShinobiBodyComponent: to its roster head's neck) carries over to the new instances.
+	TOptional<FLinearColor> Tint;
+	for (int32 Slot = 0; Slot < BodyMesh.GetNumMaterials() && !Tint; ++Slot)
+	{
+		FLinearColor Value;
+		const UMaterialInstanceDynamic* Material = Cast<UMaterialInstanceDynamic>(BodyMesh.GetMaterial(Slot));
+		if (Material && Material->GetVectorParameterValue(FHashedMaterialParameterInfo(ShinobiMutable::SkinTintParameter), Value))
+		{
+			Tint = Value;
+		}
+	}
 	BodyMesh.EmptyOverrideMaterials(); // (a new body brings its own materials)
 	for (int32 Slot = 0; Slot < BodyMesh.GetNumMaterials(); ++Slot)
 	{
 		if (UMaterialInstanceDynamic* Material = BodyMesh.CreateDynamicMaterialInstance(Slot))
 		{
 			Material->SetTextureParameterValue(TEXT("HideMask"), Mask);
+			if (Tint)
+			{
+				Material->SetVectorParameterValue(ShinobiMutable::SkinTintParameter, *Tint);
+			}
 		}
 	}
 	const USkeletalMesh* Body = BodyMesh.GetSkeletalMeshAsset();
@@ -404,7 +425,10 @@ void AShinobiPlayerCharacter::UpdateOutfitCloth()
 
 TOptional<FShinobiAppearance> AShinobiPlayerCharacter::RosterPreset(int32 RosterIndex, int32 FaceIndex)
 {
-	const UShinobiCreatorCatalog* Catalog = CVarRosterPresets.GetValueOnGameThread() == 1 && RosterIndex >= 0 && RosterIndex < UE_ARRAY_COUNT(Roster)
+	const int32 Mode = CVarRosterPresets.GetValueOnGameThread();
+	const bool bWorn = RosterIndex >= 0 && RosterIndex < UE_ARRAY_COUNT(Roster)
+		&& (Mode == 1 || (Mode == 2 && Algo::FindByPredicate(PresetRoster, [RosterIndex](const TCHAR* Name) { return FCString::Stricmp(Name, Roster[RosterIndex].Name) == 0; })));
+	const UShinobiCreatorCatalog* Catalog = bWorn
 		? LoadObject<UShinobiCreatorCatalog>(nullptr, UShinobiCreatorCatalog::Path, nullptr, LOAD_NoWarn | LOAD_Quiet) : nullptr;
 	const FShinobiAppearance* Preset = Catalog ? Catalog->FindPreset(Roster[RosterIndex].Name) : nullptr;
 	if (!Preset)

@@ -99,6 +99,7 @@ bool FShinobiHeroRespawnTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPickSwapsBodyTest, "ShinobiCoop.Hero.PickSwapsBody", ShinobiTestFlags)
 bool FShinobiPickSwapsBodyTest::RunTest(const FString& Parameters)
 {
+	FShinobiOwnBodies OwnBodies;
 	// Every roster character that's been imported (Scripts/setup_hero.py), last to first so the hero comes back last.
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
@@ -147,6 +148,7 @@ bool FShinobiPickSwapsBodyTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSealHandContactTest, "ShinobiCoop.Hero.SealHandsTouchOnEveryBody", ShinobiTestFlags)
 bool FShinobiSealHandContactTest::RunTest(const FString& Parameters)
 {
+	FShinobiOwnBodies OwnBodies; // (Mixamo hand bones)
 	// The Fireball seals end on Tiger (palms pressed together, wrists ~3 cm apart in the source clip). Manny's clip has
 	// its hand contact baked (Scripts/setup_jutsu_anims.py); each hero keeps Manny's at runtime (UShinobiRetargetAnimInstance).
 	UAnimMontage* Seal = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Shinobi/Anims/AM_Fireball_Seal.AM_Fireball_Seal"));
@@ -275,6 +277,7 @@ bool FShinobiPickSurvivesRespawnTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOutfitWornTest, "ShinobiCoop.Hero.OutfitFollowsBodyAndComesOff", ShinobiTestFlags)
 bool FShinobiOutfitWornTest::RunTest(const FString& Parameters)
 {
+	FShinobiOwnBodies OwnBodies;
 	// Every imported outfit copy (Scripts/setup_hero.py) on the roster character it was fitted to.
 	FShinobiTestWorld W;
 	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();

@@ -55,6 +55,7 @@ bool FShinobiReactionsHitTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiReactionsVisibleHitTest, "ShinobiCoop.Reactions.HitShowsOnTheVisibleBody", ShinobiTestFlags)
 bool FShinobiReactionsVisibleHitTest::RunTest(const FString& Parameters)
 {
+	FShinobiOwnBodies OwnBodies;
 	// The physics runs on the hidden Manny; what the player sees is the roster body retargeted from it. A bot's punch (25)
 	// used to sway the visible head ~4 cm: the world-space controls stayed at full strength and pinned every body to the
 	// animation.

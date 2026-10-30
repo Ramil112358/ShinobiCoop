@@ -26,7 +26,6 @@ struct FShinobiTestWorld
 	UWorld* World = nullptr;
 
 	FShinobiTestWorld()
-		: InitialFrameCounter(GFrameCounter)
 	{
 		World = UWorld::CreateWorld(EWorldType::Game, false);
 		FWorldContext& Context = GEngine->CreateNewWorldContext(EWorldType::Game);
@@ -45,7 +44,7 @@ struct FShinobiTestWorld
 
 	~FShinobiTestWorld()
 	{
-		GFrameCounter = InitialFrameCounter;
+		GFrameCounter -= TickedFrames; // (a world kept by a latent test lives across real engine frames: those stay counted)
 		World->EndPlay(EEndPlayReason::Quit);
 		GEngine->DestroyWorldContext(World);
 		World->DestroyWorld(false);
@@ -68,11 +67,23 @@ struct FShinobiTestWorld
 			World->Tick(LEVELTICK_All, Step);
 			Seconds -= Step;
 			++GFrameCounter;
+			++TickedFrames;
 		}
 	}
 
 private:
-	uint64 InitialFrameCounter;
+	uint64 TickedFrames = 0;
+};
+
+/** Holds Shinobi.RosterPresets at 0 for a scope: tests of the roster characters' own (legacy) bodies, which approved
+ * characters otherwise trade for their Mutable preset. */
+struct FShinobiOwnBodies
+{
+	IConsoleVariable* Switch = IConsoleManager::Get().FindConsoleVariable(TEXT("Shinobi.RosterPresets"));
+	int32 Previous = Switch ? Switch->GetInt() : 0;
+
+	FShinobiOwnBodies() { if (Switch) { Switch->Set(0, ECVF_SetByCode); } }
+	~FShinobiOwnBodies() { if (Switch) { Switch->Set(Previous, ECVF_SetByCode); } }
 };
 
 namespace ShinobiTest

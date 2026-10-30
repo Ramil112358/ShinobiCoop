@@ -739,6 +739,53 @@ bool FShinobiMutableRosterPresetWornTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableApprovedPresetsWornTest, "ShinobiCoop.Mutable.ApprovedPresetsWorn", ShinobiTestFlags)
+bool FShinobiMutableApprovedPresetsWornTest::RunTest(const FString& Parameters)
+{
+	// Shinobi.RosterPresets at its default: the characters the user approved wear their preset (a static head's body tinted
+	// to its neck, outfit dressed or not); the rest keep their own body.
+	const UShinobiCreatorCatalog* Catalog = LoadObject<UShinobiCreatorCatalog>(nullptr, UShinobiCreatorCatalog::Path);
+	if (!TestNotNull(TEXT("the creator catalog"), Catalog))
+	{
+		return false;
+	}
+	TSharedRef<FShinobiTestWorld> World = MakeShared<FShinobiTestWorld>();
+	TArray<TPair<FString, AShinobiPlayerCharacter*>> Players;
+	for (const TCHAR* Name : {TEXT("Ramil"), TEXT("Elvin"), TEXT("RamilMH"), TEXT("BikaMH"), TEXT("Hero"), TEXT("Bika"), TEXT("Cat"), TEXT("Misha"), TEXT("Pabu")})
+	{
+		AShinobiPlayerCharacter* P = World->Spawn<AShinobiPlayerCharacter>();
+		P->SetCharacterIndex(uint8(AShinobiPlayerCharacter::FindRosterIndex(Name)));
+		Players.Emplace(Name, P);
+	}
+	auto BodyOf = [](AShinobiPlayerCharacter* P) { return CastChecked<UShinobiBodyComponent>(P->GetHeroMesh()); };
+	WaitThen(*this, [World, Players, BodyOf]()
+	{
+		return !Players.ContainsByPredicate([BodyOf](const auto& Each) { return BodyOf(Each.Value)->IsMutableBuildPending(); });
+	}, [this, World, Players, BodyOf, Catalog]()
+	{
+		for (const auto& [Name, P] : Players)
+		{
+			const UShinobiBodyComponent* Body = BodyOf(P);
+			const USkeletalMesh* Mesh = Body->GetSkeletalMeshAsset();
+			const int32 Index = AShinobiPlayerCharacter::FindRosterIndex(Name);
+			if (Name == TEXT("Ramil") || Name == TEXT("Elvin") || Name == TEXT("RamilMH") || Name == TEXT("BikaMH"))
+			{
+				TestTrue(Name + TEXT(" wears its preset's generated body"), Mesh && Mesh->GetOutermost() == GetTransientPackage());
+				const FShinobiAppearance* Look = Catalog->FindPreset(*Name);
+				if (const FShinobiCreatorHead* Head = Look ? Catalog->FindHead(Look->Head) : nullptr)
+				{
+					TestTrue(FString::Printf(TEXT("%s's body is tinted %s"), *Name, *Head->SkinTint.ToString()), BodyTinted(Body, Head->SkinTint));
+				}
+			}
+			else
+			{
+				TestEqual(Name + TEXT(" keeps its own body"), GetPathNameSafe(Mesh), FString(AShinobiPlayerCharacter::Roster[Index].Mesh));
+			}
+		}
+	});
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableRosterPresetFallsBackTest, "ShinobiCoop.Mutable.RosterPresetFallsBack", ShinobiTestFlags)
 bool FShinobiMutableRosterPresetFallsBackTest::RunTest(const FString& Parameters)
 {
