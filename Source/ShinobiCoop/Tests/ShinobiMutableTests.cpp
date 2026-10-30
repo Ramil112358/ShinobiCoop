@@ -623,7 +623,6 @@ bool FShinobiMutableBuildMorphBakeTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif
 
 namespace
 {
@@ -1024,3 +1023,5 @@ bool FShinobiMutableLODSyncFindsPartsTest::RunTest(const FString& Parameters)
 	});
 	return true;
 }
+
+#endif
