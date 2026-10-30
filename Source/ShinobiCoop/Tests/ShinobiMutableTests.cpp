@@ -485,9 +485,8 @@ bool FShinobiMutableCatalogPresetsTest::RunTest(const FString& Parameters)
 			TestEqual(FString::Printf(TEXT("%s has no static head"), Entry.Name), Look->Head, FShinobiAppearance::None);
 			TestEqual(FString::Printf(TEXT("%s wears its own body"), Entry.Name), Look->Build, EShinobiBuild::Own);
 			TestTrue(FString::Printf(TEXT("%s wears its own face"), Entry.Name), Face && Face->Id == FName(Entry.Name));
-			// (Its blueprint's underwear, not City Sample pieces: those spike when reshaped onto an own body until P3 refits them.)
-			TestTrue(FString::Printf(TEXT("%s wears no Mutable pieces"), Entry.Name),
-				Look->Top == FShinobiAppearance::None && Look->Bottom == FShinobiAppearance::None && Look->Shoes == FShinobiAppearance::None);
+			// (City Sample pieces reshape from their fit morph onto the own body since P3.)
+			TestTrue(FString::Printf(TEXT("%s wears the first piece of each slot"), Entry.Name), Look->Top == 0 && Look->Bottom == 0 && Look->Shoes == 0);
 			continue;
 		}
 		const FShinobiCreatorHead* Head = Catalog->FindHead(Look->Head);
@@ -1100,6 +1099,31 @@ bool FShinobiMutableFitShapeHugsSourceTest::RunTest(const FString& Parameters)
 			}
 		}
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableSlotFitParameterTest, "ShinobiCoop.Mutable.SlotFitParameter", ShinobiTestFlags)
+bool FShinobiMutableSlotFitParameterTest::RunTest(const FString& Parameters)
+{
+	// Each slot's piece is reshaped from its source's fit morph of the base: the row's fit names it, no piece gets "None".
+	FShinobiAppearance Look;
+	Look.Sex = EShinobiSex::Male;
+	Look.Top = 0;
+	Look.Outer = FShinobiAppearance::None;
+	TStrongObjectPtr<UShinobiMutableLook> Builder(NewObject<UShinobiMutableLook>());
+	if (!TestTrue(TEXT("the build starts"), Builder->Request(Look)))
+	{
+		return false;
+	}
+	WaitThen(*this, [Builder]() { return !Builder->IsPending(); }, [this, Builder]()
+	{
+		UCustomizableObjectInstance* Instance = Builder->GetInstance();
+		if (TestNotNull(TEXT("the instance"), Instance))
+		{
+			TestEqual(TEXT("City Sample Top 0 reshapes from Fit_CitySample"), Instance->GetEnumParameterSelectedOption(TEXT("Top Fit")), FString(TEXT("CitySample")));
+			TestEqual(TEXT("no Outer: no fit"), Instance->GetEnumParameterSelectedOption(TEXT("Outer Fit")), FString(TEXT("None")));
+		}
+	});
 	return true;
 }
 

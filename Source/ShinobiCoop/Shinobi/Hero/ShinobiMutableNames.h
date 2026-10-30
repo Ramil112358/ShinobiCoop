@@ -16,6 +16,11 @@ namespace ShinobiMutable
 	 * body the wardrobe pieces were authored on, which they are reshaped from. */
 	inline constexpr const TCHAR* Body = TEXT("Body");
 	inline constexpr const TCHAR* FitBase = TEXT("Fit Base");
+	/** Per slot, enum "<slot> Fit": which fit morph of Fit Base its piece is reshaped from (a FShinobiWardrobeRow fit:
+	 * a wardrobe source's name), or NoFit for Fit Base itself. "Fit Strength" scales the morphs (always 1). */
+	inline constexpr const TCHAR* FitSuffix = TEXT(" Fit");
+	inline constexpr const TCHAR* NoFit = TEXT("None");
+	inline constexpr const TCHAR* FitStrength = TEXT("Fit Strength");
 	inline FString OwnPath(const TCHAR* Sex) { return FString::Printf(TEXT("/Game/Shinobi/Mutable/Bases/SK_MutableOwn_%s.SK_MutableOwn_%s"), Sex, Sex); }
 	inline FString BasePath(const TCHAR* Sex) { return FString::Printf(TEXT("/Game/Shinobi/Mutable/Bases/SK_MutableBase_%s.SK_MutableBase_%s"), Sex, Sex); }
 	/** Build enum (EShinobiBuild names; Normal has no morph) and the morph's weight 0..1. */

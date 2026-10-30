@@ -38,13 +38,17 @@ public:
 	/**
 	 * Adds (or replaces) morph target Morph on every LOD of Base (a Mutable base body), moving each vertex onto the closest
 	 * point of the surface: the body a wardrobe source was made on, in that source's space. The moves are smoothed Smooth
-	 * times over each vertex's neighbours and capped at MaxMove cm. CO_Shinobi applies the morph to the base for a piece's
-	 * reshape Base Shape: Mutable's Skeletal Mesh Reshape needs its Base and Target shapes to share topology, which a morph
-	 * of the base keeps (a separately built copy does not: the build splits vertices by their moved normals). Returns a
+	 * times over each vertex's neighbours and capped at MaxMove cm. Vertices skinned to KeepBones or their children stay
+	 * (by their skin weight on them, faded out over KeepFade rings of neighbours): where the bodies differ in pose or end
+	 * (hands, the neck into the head) projecting shears triangles, and Reshape stretches a piece bound there into a spike.
+	 * CO_Shinobi applies the morph to the base for a piece's reshape Base Shape: Mutable's Skeletal Mesh Reshape needs its
+	 * Base and Target shapes to share topology, which a morph of the base keeps (a separately built copy does not: the
+	 * build splits vertices by their moved normals). Returns a
 	 * report. The caller saves Base.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")
-	static FString BakeFitMorph(USkeletalMesh* Base, FName Morph, const TArray<FVector>& Positions, const TArray<int32>& Triangles, float MaxMove = 8.f, int32 Smooth = 2);
+	static FString BakeFitMorph(USkeletalMesh* Base, FName Morph, const TArray<FVector>& Positions, const TArray<int32>& Triangles, float MaxMove,
+		int32 Smooth, const TArray<FName>& KeepBones, int32 KeepFade = 12);
 
 	/** The share of Piece's LOD 0 vertices more than Tolerance cm inside Body's LOD 0 surface (with Body's morph Morph
 	 * applied, when given), by the closest triangle's outward side. -1 without mesh descriptions. */

@@ -35,9 +35,9 @@ import sys
 import unreal
 
 sys.path += [os.path.dirname(os.path.abspath(__file__)), os.path.join(os.path.dirname(__file__), "mutable")]
-from names import (BASE, BUILDS, CATALOG, FIT_PREFIX, FIT_MAX_MOVE, FIT_SMOOTH, FIT_SOURCES, HEADS, HEADS_DIR, CLIP_SUFFIX, HIDES_SUFFIX,  # noqa: E402
+from names import (BASE, BUILDS, CATALOG, FIT_KEEP_BONES, FIT_KEEP_FADE, FIT_PREFIX, FIT_MAX_MOVE, FIT_SMOOTH, FIT_SOURCES, FIT_SUFFIX, HEADS, HEADS_DIR, CLIP_SUFFIX, HIDES_SUFFIX,  # noqa: E402
                    MESH_SUFFIX, MUTABLE_ROOT, OBJECT, OFF, ON, OWN, OWN_BODIES, PALETTE, PARAM_BODY, PARAM_BUILD, PARAM_BUILD_BLEND,
-                   PARAM_FIT_BASE, SLOTS, WARDROBE_TABLE)
+                   NO_FIT, PARAM_FIT_BASE, PARAM_FIT_STRENGTH, SLOTS, WARDROBE_TABLE)
 
 ONLY = [s for s in os.environ.get("SETUP_MUTABLE_ONLY", "").split(",") if s]
 EAL = unreal.EditorAssetLibrary
@@ -130,7 +130,7 @@ def fits():
                 raise RuntimeError(f"no surface for {source} {sex}: {body}")
             positions, triangles = surface
             base = unreal.load_asset(BASE.format(sex=sex))
-            report = M.bake_fit_morph(base, FIT_PREFIX + source, positions, triangles, FIT_MAX_MOVE, FIT_SMOOTH)
+            report = M.bake_fit_morph(base, FIT_PREFIX + source, positions, triangles, FIT_MAX_MOVE, FIT_SMOOTH, FIT_KEEP_BONES, FIT_KEEP_FADE)
             EAL.save_loaded_asset(base, only_if_is_dirty=False)
             log(f"fit {source} {sex} from {body} ({len(positions)} vertices): {report}")
 
@@ -238,7 +238,7 @@ def catalog():
     # ponytail: no Mutable pieces on the own bodies (their blueprint's underwear comes with the face): unfitted City Sample
     # pieces spike when reshaped onto them. P3's wardrobe refit dresses them.
     for name in ("RamilMH", "BikaMH"):
-        data.set_preset(name, getattr(unreal.ShinobiSex, MH_FACES[name].upper()), 255, face_index(name), unreal.ShinobiBuild.OWN, 255)
+        data.set_preset(name, getattr(unreal.ShinobiSex, MH_FACES[name].upper()), 255, face_index(name), unreal.ShinobiBuild.OWN, 0)
     EAL.save_loaded_asset(data)
     log(f"catalog: {len(heads_list)} heads, faces {list(MH_FACES)}, {len(data.get_editor_property('presets'))} presets")
 
@@ -296,9 +296,9 @@ def wardrobe_rows(slot):
     for index in range(max(len(male), len(female))):
         row = {"Name": f"CitySample{index + 1:02d}", "bHasWear": False}
         if index < len(male):
-            row["MaleMesh"] = male[index]
+            row["MaleMesh"], row["MaleFit"] = male[index], "CitySample"
         if index < len(female):
-            row["FemaleMesh"] = female[index]
+            row["FemaleMesh"], row["FemaleFit"] = female[index], "CitySample"
         rows.append(row)
     return rows
 
@@ -362,6 +362,7 @@ def graph():
     body = mesh_parameter(co, PARAM_BODY, base, -3000, 0)
     fit_base = mesh_parameter(co, PARAM_FIT_BASE, base, -3000, -300)
     blend = node(co, "CustomizableObjectNodeFloatParameter", -3000, 300, ParameterName=PARAM_BUILD_BLEND, DefaultValue="1.0")
+    fit_strength = node(co, "CustomizableObjectNodeFloatParameter", -3000, -450, ParameterName=PARAM_FIT_STRENGTH, DefaultValue="1.0")
     build = enum(co, PARAM_BUILD, BUILDS, "Normal", -3000, 450)
     built = switch(co, build, -2400, 0)
     for i, value in enumerate(BUILDS):
@@ -390,9 +391,17 @@ def graph():
         rows = wardrobe_rows(slot)
         default = next((r.get("MaleMesh") or r.get("FemaleMesh") for r in rows), None)  # any piece: it is passed at runtime
         piece = mesh_parameter(co, slot + MESH_SUFFIX, default or base, -3000, y)
+        # The shape the piece was made on: Fit Base, morphed onto the piece's source body (its row's fit).
+        fit = switch(co, enum(co, slot + FIT_SUFFIX, [NO_FIT, *FIT_SOURCES], NO_FIT, -2850, y + 100), -2550, y + 100)
+        link(fit_base, "Skeletal Mesh", fit, NO_FIT)
+        for j, source in enumerate(FIT_SOURCES):
+            morph = node(co, "CONodeSkeletalMeshMorph", -2700, y + 150 + 100 * j, MorphTargetName=FIT_PREFIX + source)
+            link(fit_base, "Skeletal Mesh", morph, "Skeletal Mesh")
+            link(fit_strength, "Float", morph, "Factor")
+            link(morph, "Skeletal Mesh", fit, source)
         reshape = node(co, "CONodeSkeletalMeshReshape", -2400, y)
         link(piece, "Skeletal Mesh", reshape, "Base Skeletal Mesh")
-        link(fit_base, "Skeletal Mesh", reshape, "Base Shape")
+        link(fit, "Skeletal Mesh", reshape, "Base Shape")
         link(built, "Skeletal Mesh", reshape, "Target Shape")
         worn = switch(co, enum(co, slot, [ON, OFF], OFF, -2400, y + 200), -2100, y)
         link(reshape, "Skeletal Mesh", worn, ON)

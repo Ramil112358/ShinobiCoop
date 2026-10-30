@@ -31,6 +31,9 @@ public:
 
 	bool IsPending() const { return bPending; }
 
+	/** The Mutable instance builds go through (null before the first request). */
+	UCustomizableObjectInstance* GetInstance() const { return Instance; }
+
 	/** The built mesh of the newest request (null if Mutable failed: the caller keeps what it wears). */
 	FOnShinobiMutableBuilt OnBuilt;
 

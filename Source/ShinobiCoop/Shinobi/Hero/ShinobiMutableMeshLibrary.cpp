@@ -183,7 +183,8 @@ bool UShinobiMutableMeshLibrary::ReadMeshSurface(USkeletalMesh* Mesh, TArray<FVe
 #endif
 }
 
-FString UShinobiMutableMeshLibrary::BakeFitMorph(USkeletalMesh* Base, FName Morph, const TArray<FVector>& Positions, const TArray<int32>& Triangles, float MaxMove, int32 Smooth)
+FString UShinobiMutableMeshLibrary::BakeFitMorph(USkeletalMesh* Base, FName Morph, const TArray<FVector>& Positions, const TArray<int32>& Triangles, float MaxMove,
+	int32 Smooth, const TArray<FName>& KeepBones, int32 KeepFade)
 {
 	FString Report;
 #if WITH_EDITOR
@@ -192,6 +193,15 @@ FString UShinobiMutableMeshLibrary::BakeFitMorph(USkeletalMesh* Base, FName Morp
 		return TEXT("no mesh, morph name or surface");
 	}
 	const FSurface Body(Positions, Triangles);
+	// KeepBones and their children.
+	const FReferenceSkeleton& Skeleton = Base->GetRefSkeleton();
+	TArray<bool> Kept;
+	Kept.Init(false, Skeleton.GetNum());
+	for (int32 Bone = 0; Bone < Skeleton.GetNum(); ++Bone)
+	{
+		const int32 Parent = Skeleton.GetParentIndex(Bone);
+		Kept[Bone] = KeepBones.Contains(Skeleton.GetBoneName(Bone)) || (Parent != INDEX_NONE && Kept[Parent]);
+	}
 	for (int32 Lod = 0; Lod < Base->GetLODNum(); ++Lod)
 	{
 		FMeshDescription Description;
@@ -202,13 +212,40 @@ FString UShinobiMutableMeshLibrary::BakeFitMorph(USkeletalMesh* Base, FName Morp
 		FSkeletalMeshAttributes Attributes(Description);
 		Attributes.Register();
 		const TVertexAttributesConstRef<FVector3f> Points = Description.GetVertexPositions();
+		const FSkinWeightsVertexAttributesRef Skin = Attributes.GetVertexSkinWeights();
+		// How much each vertex stays: its skin weight on the kept bones, faded out over KeepFade rings of neighbours so the
+		// morph doesn't stop in one ring (a sheared wrist ring spikes the cuffs bound to it).
+		TMap<FVertexID, float> Keep;
+		for (const FVertexID Vertex : Description.Vertices().GetElementIDs())
+		{
+			float Sum = 0.f;
+			for (const UE::AnimationCore::FBoneWeight& Weight : Skin.Get(Vertex))
+			{
+				Sum += Kept.IsValidIndex(Weight.GetBoneIndex()) && Kept[Weight.GetBoneIndex()] ? Weight.GetWeight() : 0.f;
+			}
+			Keep.Add(Vertex, FMath::Min(Sum, 1.f));
+		}
+		for (int32 Pass = 0; Pass < KeepFade; ++Pass)
+		{
+			TMap<FVertexID, float> Next;
+			for (const TPair<FVertexID, float>& Each : Keep)
+			{
+				float Most = Each.Value;
+				for (const FVertexID Neighbour : Description.GetVertexAdjacentVertices(Each.Key))
+				{
+					Most = FMath::Max(Most, Keep[Neighbour] * 0.85f); // grows the kept region outward, fading
+				}
+				Next.Add(Each.Key, Most);
+			}
+			Keep = MoveTemp(Next);
+		}
 		TMap<FVertexID, FVector> Move;
 		for (const FVertexID Vertex : Description.Vertices().GetElementIDs())
 		{
 			FVector Closest;
 			double Outside = 0.0;
 			const FVector Point(Points[Vertex]);
-			Move.Add(Vertex, Body.Closest(Point, MaxMove, Closest, Outside) ? Closest - Point : FVector::ZeroVector);
+			Move.Add(Vertex, Body.Closest(Point, MaxMove, Closest, Outside) ? (Closest - Point) * (1.0 - Keep[Vertex]) : FVector::ZeroVector);
 		}
 		// Smoothed over neighbours, so nearby vertices don't snap to different sides of a crease (armpits, crotch).
 		for (int32 Pass = 0; Pass < Smooth; ++Pass)

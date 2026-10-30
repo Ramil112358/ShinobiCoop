@@ -71,6 +71,8 @@ void UShinobiMutableLook::SetParameters(const FShinobiAppearance& Look)
 		const FShinobiWardrobeRow* Piece = FindPiece(Slot, Look.Slot(EShinobiWardrobeSlot(Index)));
 		USkeletalMesh* Mesh = Piece ? (bFemale ? Piece->FemaleMesh : Piece->MaleMesh).LoadSynchronous() : nullptr;
 		USkeletalMesh* Clip = Piece ? (bFemale ? Piece->FemaleClip : Piece->MaleClip).LoadSynchronous() : nullptr;
+		const FName Fit = Mesh ? (bFemale ? Piece->FemaleFit : Piece->MaleFit) : NAME_None;
+		Instance->SetEnumParameterSelectedOption(FString(Slot) + ShinobiMutable::FitSuffix, Fit.IsNone() ? FString(ShinobiMutable::NoFit) : Fit.ToString());
 		Instance->SetEnumParameterSelectedOption(Slot, Mesh ? ShinobiMutable::On : ShinobiMutable::Off);
 		Instance->SetEnumParameterSelectedOption(FString(Slot) + ShinobiMutable::HidesSuffix, Clip ? ShinobiMutable::On : ShinobiMutable::Off);
 		if (Mesh)

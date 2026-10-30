@@ -25,6 +25,14 @@ struct FShinobiWardrobeRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Wardrobe)
 	TSoftObjectPtr<USkeletalMesh> FemaleMesh;
 
+	/** The wardrobe source each sex's mesh was made on: CO_Shinobi reshapes the piece from the base's fit morph
+	 * "Fit_<source>" (Scripts/setup_mutable.py stage fits). None: from the base itself. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Wardrobe)
+	FName MaleFit;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Wardrobe)
+	FName FemaleFit;
+
 	/** Closed volumes around the body each sex's mesh covers; none hides nothing. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Wardrobe)
 	TSoftObjectPtr<USkeletalMesh> MaleClip;

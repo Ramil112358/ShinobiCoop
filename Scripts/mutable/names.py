@@ -26,6 +26,7 @@ OBJECT = f"{MUTABLE_ROOT}/CO_Shinobi"
 PALETTE = f"{MUTABLE_ROOT}/DT_Palette"
 PARAM_BODY = "Body"
 PARAM_FIT_BASE = "Fit Base"
+FIT_SUFFIX, NO_FIT, PARAM_FIT_STRENGTH = " Fit", "None", "Fit Strength"  # per slot: which Fit_<source> morph of Fit Base
 OWN = f"{MUTABLE_ROOT}/Bases/SK_MutableOwn_{{sex}}"  # .format(sex="Male"): RamilMH's / BikaMH's body, the Own build
 BASE = f"{MUTABLE_ROOT}/Bases/SK_MutableBase_{{sex}}"  # .format(sex="Male")
 # Fit morphs: morph target "Fit_<Source>" on each sex's base moves it onto the body a wardrobe source was made on
@@ -39,6 +40,9 @@ FIT_SOURCES = {
     "MHSample": {"Male": "dna:f_med_nrw", "Female": "dna:f_med_nrw"},
 }
 FIT_MAX_MOVE, FIT_SMOOTH = 8.0, 2  # cm, passes (UShinobiMutableMeshLibrary::BakeFitMorph)
+# Left where the base has them (with their children), faded out over FIT_KEEP_FADE rings: the bodies' hands differ in
+# pose and their necks end differently, so projecting there shears triangles, which Reshape turns into spikes.
+FIT_KEEP_BONES, FIT_KEEP_FADE = ["hand_l", "hand_r", "neck_02"], 12
 PARAM_BUILD = "Build"
 BUILDS = ["Under", "Normal", "Over", "Own"]  # EShinobiBuild order; Normal has no morph
 PARAM_BUILD_BLEND = "Build Blend"
