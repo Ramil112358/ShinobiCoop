@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
 #include "Shinobi/Hero/ShinobiCreatorCatalog.h"
+#include "Shinobi/Hero/ShinobiMutableTypes.h"
 #include "ShinobiMutableLook.generated.h"
 
 class UCustomizableObjectInstance;
@@ -36,6 +37,9 @@ public:
 
 	/** The built mesh of the newest request (null if Mutable failed: the caller keeps what it wears). */
 	FOnShinobiMutableBuilt OnBuilt;
+
+	/** Row Index of the slot's wardrobe table (DT_Wardrobe_<Slot>), or null (None, or past the rows). */
+	static const FShinobiWardrobeRow* FindRow(EShinobiWardrobeSlot Slot, uint8 Index);
 
 	/** Tests only: the object to build instead of ShinobiMutable::ObjectPath (empty = that). */
 	static FString ObjectPathOverride;

@@ -2,6 +2,7 @@
 #include "ShinobiCoop.h"
 #include "Components/LODSyncComponent.h"
 #include "Engine/BlueprintGeneratedClass.h"
+#include "Engine/DataTable.h"
 #include "Engine/SCS_Node.h"
 #include "Engine/SimpleConstructionScript.h"
 #include "Engine/SkeletalMesh.h"
@@ -13,6 +14,7 @@
 #include "Shinobi/Hero/ShinobiCreatorCatalog.h"
 #include "Shinobi/Hero/ShinobiMutableLook.h"
 #include "Shinobi/Hero/ShinobiMutableNames.h"
+#include "Shinobi/Hero/ShinobiMutableTypes.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/Character.h"
@@ -101,7 +103,8 @@ void UShinobiBodyComponent::DressBuilt(USkeletalMesh* Built)
 	FittingName = UShinobiCreatorCatalog::FittingName(Look.Sex, FMath::Min(Look.Build, EShinobiBuild::Over));
 	WearStaticHead(nullptr);
 	WearMetaHumanParts(nullptr);
-	EmptyOverrideMaterials(); // the last look's skin tint
+	EmptyOverrideMaterials(); // the last look's skin tint and colours
+	ColourPieces(Look);
 	if (const FShinobiCreatorHead* Head = Catalog->FindHead(Look.Head))
 	{
 		// A roster head: its own mesh, no MetaHuman face or grooms, and the body's skin tinted to its neck.
@@ -309,6 +312,43 @@ void UShinobiBodyComponent::UpdateFace(const FShinobiAppearance& Look)
 			Face->SetMorphTarget(Morph, Weight);
 		}
 		Shape->SetFaceBlend(Slot, Target && !bMorph ? Target->Mesh.LoadSynchronous() : nullptr, Weight);
+	}
+}
+
+void UShinobiBodyComponent::ColourPieces(const FShinobiAppearance& Look)
+{
+	const UDataTable* Palette = LoadObject<UDataTable>(nullptr, ShinobiMutable::PalettePath, nullptr, LOAD_NoWarn | LOAD_Quiet);
+	const TArray<FName> Colours = Palette ? Palette->GetRowNames() : TArray<FName>();
+	const bool bFemale = Look.Sex == EShinobiSex::Female;
+	for (int32 Index = 0; Index < ShinobiWardrobeSlotCount; ++Index)
+	{
+		const EShinobiWardrobeSlot Slot = EShinobiWardrobeSlot(Index);
+		const uint8 Colour = Look.SlotColour[Index];
+		const FShinobiWardrobeRow* Row = Colour > 0 && Colours.IsValidIndex(Colour) ? UShinobiMutableLook::FindRow(Slot, Look.Slot(Slot)) : nullptr;
+		const USkeletalMesh* Piece = Row ? (bFemale ? Row->FemaleMesh : Row->MaleMesh).LoadSynchronous() : nullptr;
+		if (!Piece)
+		{
+			continue;
+		}
+		const FLinearColor Value = Palette->FindRow<FShinobiPaletteRow>(Colours[Colour], TEXT("ColourPieces"))->Colour;
+		const TArray<TSoftObjectPtr<UMaterialInterface>>& Tinted = bFemale ? Row->FemaleTinted : Row->MaleTinted;
+		for (int32 Material = 0; Material < FMath::Min(Tinted.Num(), Piece->GetMaterials().Num()); ++Material)
+		{
+			UMaterialInterface* Copy = Tinted[Material].LoadSynchronous();
+			const UMaterialInterface* Own = Piece->GetMaterials()[Material].MaterialInterface;
+			for (int32 Section = 0; Copy && Own && Section < GetNumMaterials(); ++Section)
+			{
+				if (GetMaterial(Section) == Own) // the built body keeps the piece's materials
+				{
+					UMaterialInstanceDynamic* Dynamic = UMaterialInstanceDynamic::Create(Copy, this);
+					for (const FName Parameter : Row->ColourParameters)
+					{
+						Dynamic->SetVectorParameterValue(Parameter, Value);
+					}
+					SetMaterial(Section, Dynamic);
+				}
+			}
+		}
 	}
 }
 

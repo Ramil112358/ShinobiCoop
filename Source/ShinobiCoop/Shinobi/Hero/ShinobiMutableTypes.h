@@ -33,6 +33,18 @@ struct FShinobiWardrobeRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Wardrobe)
 	FName FemaleFit;
 
+	/** Per material slot of each sex's mesh, a copy of its material that takes a palette colour (none: that slot keeps its
+	 * own); UShinobiBodyComponent puts it on the built body's matching sections with ColourParameters set. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Wardrobe)
+	TArray<TSoftObjectPtr<UMaterialInterface>> MaleTinted;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Wardrobe)
+	TArray<TSoftObjectPtr<UMaterialInterface>> FemaleTinted;
+
+	/** The tinted copies' vector parameters that take the colour (City Sample: A_CrowdColor_main). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Wardrobe)
+	TArray<FName> ColourParameters;
+
 	/** Closed volumes around the body each sex's mesh covers; none hides nothing. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Wardrobe)
 	TSoftObjectPtr<USkeletalMesh> MaleClip;
@@ -48,7 +60,8 @@ struct FShinobiWardrobeRow : public FTableRowBase
 	bool bHasWear = false;
 };
 
-/** A wardrobe colour (a row of DT_Palette): FShinobiAppearance::SlotColour indexes the rows in order. */
+/** A wardrobe colour (a row of DT_Palette): FShinobiAppearance::SlotColour indexes the rows in order. Row 0 ("Original")
+ * and an index past the rows leave a piece in its own colours. */
 USTRUCT(BlueprintType)
 struct FShinobiPaletteRow : public FTableRowBase
 {

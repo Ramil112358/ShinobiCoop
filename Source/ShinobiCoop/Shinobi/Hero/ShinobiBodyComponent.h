@@ -98,6 +98,9 @@ private:
 	/** Puts PendingLook on with Built, its Mutable body (null: nothing changes). */
 	void DressBuilt(USkeletalMesh* Built);
 
+	/** Each worn piece's sections in its slot's palette colour (FShinobiWardrobeRow::MaleTinted etc.). */
+	void ColourPieces(const FShinobiAppearance& Look);
+
 	UPROPERTY(Transient)
 	TObjectPtr<UIKRetargeter> Retargeter;
 

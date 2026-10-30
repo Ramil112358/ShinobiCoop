@@ -258,7 +258,7 @@ bool FShinobiMutableObjectCompilesTest::RunTest(const FString& Parameters)
 		});
 	}
 	const UDataTable* Palette = LoadObject<UDataTable>(nullptr, ShinobiMutable::PalettePath);
-	TestTrue(TEXT("a 12-colour palette"), Palette && Palette->GetRowMap().Num() == 12);
+	TestTrue(TEXT("a 12-colour palette after Original"), Palette && Palette->GetRowMap().Num() == 13 && Palette->GetRowNames()[0] == TEXT("Original"));
 	return true;
 }
 
@@ -1196,6 +1196,81 @@ bool FShinobiMutableClipVolumesClosedTest::RunTest(const FString& Parameters)
 		++Checked;
 	});
 	TestTrue(TEXT("some clips"), Checked > 0);
+	return true;
+}
+
+namespace
+{
+	/** The index of palette row Name in DT_Palette, or -1. */
+	int32 PaletteIndex(const TCHAR* Name)
+	{
+		const UDataTable* Palette = LoadObject<UDataTable>(nullptr, ShinobiMutable::PalettePath);
+		return Palette ? Palette->GetRowNames().IndexOfByKey(FName(Name)) : -1;
+	}
+
+	/** The body material slots that wear a tinted copy of a piece's material (Scripts/setup_mutable.py "_Tint"). */
+	TArray<const UMaterialInstanceDynamic*> TintedSlots(const UShinobiBodyComponent* Body)
+	{
+		TArray<const UMaterialInstanceDynamic*> Found;
+		for (int32 Index = 0; Index < Body->GetNumMaterials(); ++Index)
+		{
+			const UMaterialInstanceDynamic* Material = Cast<UMaterialInstanceDynamic>(Body->GetMaterial(Index));
+			if (Material && Material->Parent && Material->Parent->GetName().EndsWith(TEXT("_Tint")))
+			{
+				Found.Add(Material);
+			}
+		}
+		return Found;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableSlotColourAppliedTest, "ShinobiCoop.Mutable.SlotColourApplied", ShinobiTestFlags)
+bool FShinobiMutableSlotColourAppliedTest::RunTest(const FString& Parameters)
+{
+	// A slot's palette colour goes onto its piece's tint-enabled material copy (City Sample: A_CrowdColor_main).
+	const int32 Red = PaletteIndex(TEXT("Red"));
+	const UDataTable* Palette = LoadObject<UDataTable>(nullptr, ShinobiMutable::PalettePath);
+	if (!TestTrue(TEXT("the palette has Red"), Red > 0 && Palette))
+	{
+		return false;
+	}
+	const FLinearColor Colour = Palette->FindRow<FShinobiPaletteRow>(TEXT("Red"), TEXT("test"))->Colour;
+	FShinobiAppearance Look;
+	Look.Sex = EShinobiSex::Male;
+	Look.Top = 0;
+	Look.SlotColour[int32(EShinobiWardrobeSlot::Top)] = uint8(Red);
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	Wearer->Body->WearAppearance(Look);
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer, Colour]()
+	{
+		const TArray<const UMaterialInstanceDynamic*> Tinted = TintedSlots(Wearer->Body);
+		FLinearColor Value;
+		TestTrue(TEXT("the top wears a tinted copy"), Tinted.Num() > 0);
+		TestTrue(FString::Printf(TEXT("in red %s"), *Colour.ToString()), Tinted.ContainsByPredicate([&](const UMaterialInstanceDynamic* Material)
+		{
+			return Material->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("A_CrowdColor_main")), Value) && Value.Equals(Colour, 0.001f);
+		}));
+	});
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableUntintedPieceUnchangedTest, "ShinobiCoop.Mutable.UntintedPieceUnchanged", ShinobiTestFlags)
+bool FShinobiMutableUntintedPieceUnchangedTest::RunTest(const FString& Parameters)
+{
+	// Palette row 0 ("Original") and an index past the palette keep the piece's own materials.
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	for (const uint8 Colour : {uint8(0), uint8(200)})
+	{
+		FShinobiAppearance Look;
+		Look.Top = 0;
+		Look.BuildBlend = Colour; // (a different build each time, so Mutable doesn't skip the second as unchanged)
+		Look.SlotColour[int32(EShinobiWardrobeSlot::Top)] = Colour;
+		ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([Wearer, Look]() { Wearer->Body->WearAppearance(Look); return true; }));
+		WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer, Colour]()
+		{
+			TestEqual(FString::Printf(TEXT("colour %d: no tinted copies"), Colour), TintedSlots(Wearer->Body).Num(), 0);
+		});
+	}
 	return true;
 }
 

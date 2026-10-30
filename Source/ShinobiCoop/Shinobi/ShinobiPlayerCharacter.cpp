@@ -65,7 +65,6 @@
 #include "Engine/Texture.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Algo/Find.h"
-#include "Shinobi/Hero/ShinobiMutableNames.h"
 
 namespace
 {
@@ -322,27 +321,13 @@ bool AShinobiPlayerCharacter::DressOutfit(USkeletalMeshComponent& BodyMesh, USke
 	{
 		Mask = LoadObject<UTexture>(nullptr, WhiteMaskPath);
 	}
-	// A made body's skin tint (UShinobiBodyComponent: to its roster head's neck) carries over to the new instances.
-	TOptional<FLinearColor> Tint;
-	for (int32 Slot = 0; Slot < BodyMesh.GetNumMaterials() && !Tint; ++Slot)
-	{
-		FLinearColor Value;
-		const UMaterialInstanceDynamic* Material = Cast<UMaterialInstanceDynamic>(BodyMesh.GetMaterial(Slot));
-		if (Material && Material->GetVectorParameterValue(FHashedMaterialParameterInfo(ShinobiMutable::SkinTintParameter), Value))
-		{
-			Tint = Value;
-		}
-	}
-	BodyMesh.EmptyOverrideMaterials(); // (a new body brings its own materials)
+	// The body's own material instances stay (a made body's skin tint and piece colours): wearing a new body empties
+	// them (UShinobiBodyComponent::Wear, DressBuilt).
 	for (int32 Slot = 0; Slot < BodyMesh.GetNumMaterials(); ++Slot)
 	{
 		if (UMaterialInstanceDynamic* Material = BodyMesh.CreateDynamicMaterialInstance(Slot))
 		{
 			Material->SetTextureParameterValue(TEXT("HideMask"), Mask);
-			if (Tint)
-			{
-				Material->SetVectorParameterValue(ShinobiMutable::SkinTintParameter, *Tint);
-			}
 		}
 	}
 	const USkeletalMesh* Body = BodyMesh.GetSkeletalMeshAsset();

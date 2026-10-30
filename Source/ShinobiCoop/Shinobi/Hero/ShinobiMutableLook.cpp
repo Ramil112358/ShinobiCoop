@@ -22,6 +22,11 @@ namespace
 	}
 }
 
+const FShinobiWardrobeRow* UShinobiMutableLook::FindRow(EShinobiWardrobeSlot Slot, uint8 Index)
+{
+	return int32(Slot) < ShinobiWardrobeSlotCount ? FindPiece(ShinobiMutable::SlotNames[int32(Slot)], Index) : nullptr;
+}
+
 bool UShinobiMutableLook::Request(const FShinobiAppearance& Look)
 {
 	const FString Path = ObjectPathOverride.IsEmpty() ? FString(ShinobiMutable::ObjectPath) : ObjectPathOverride;

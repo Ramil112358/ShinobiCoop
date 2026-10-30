@@ -48,7 +48,8 @@ BASES = f"{MUTABLE_ROOT}/Bases"
 SEXES = ("Male", "Female")
 # A clip parameter's default (never worn: "<Slot> Hides" is OFF unless a row gives a clip mesh).
 CLIP_DEFAULT = "/Engine/EngineMeshes/SkeletalCube.SkeletalCube"
-PALETTE_ROWS = [("Black", (0.02, 0.02, 0.02)), ("White", (0.85, 0.85, 0.82)), ("Grey", (0.25, 0.25, 0.26)),
+# Row 0 keeps a piece's own colours (FShinobiPaletteRow).
+PALETTE_ROWS = [("Original", (1.0, 1.0, 1.0)), ("Black", (0.02, 0.02, 0.02)), ("White", (0.85, 0.85, 0.82)), ("Grey", (0.25, 0.25, 0.26)),
                 ("Navy", (0.03, 0.05, 0.16)), ("Red", (0.6, 0.04, 0.03)), ("Crimson", (0.3, 0.01, 0.03)),
                 ("Orange", (0.85, 0.3, 0.04)), ("Ochre", (0.55, 0.36, 0.08)), ("Olive", (0.2, 0.22, 0.06)),
                 ("Forest", (0.03, 0.15, 0.06)), ("Teal", (0.02, 0.25, 0.25)), ("Purple", (0.18, 0.05, 0.3))]
@@ -320,6 +321,35 @@ def clip(slot, row, sex, mesh, fit, remake):
     return asset_path(path) if covered else None
 
 
+CITY_SAMPLE_CLOTH = "M_Clothing"  # the City Sample crowd clothing master material
+CITY_SAMPLE_TINT_SWITCHES = ("A_ColorCrowd_DoTint", "A_ColorCrowd_Tint_UseMain")  # its layer A takes A_CrowdColor_main
+CITY_SAMPLE_COLOUR = "A_CrowdColor_main"
+TINTED = f"{MUTABLE_ROOT}/Wardrobe/CitySample/Materials"
+
+
+def tinted(mesh):
+    """Per material slot of a piece, a copy of a City Sample clothing material with its colour tint switched on (made
+    once), else None."""
+    MEL = unreal.MaterialEditingLibrary
+    copies = []
+    for slot in unreal.load_asset(mesh).get_editor_property("materials"):
+        material, parent = slot.material_interface, slot.material_interface
+        while isinstance(parent, unreal.MaterialInstance):
+            parent = parent.get_editor_property("parent")
+        if not material or not parent or parent.get_name() != CITY_SAMPLE_CLOTH:
+            copies.append(None)
+            continue
+        path = f"{TINTED}/{material.get_name()}_Tint"
+        if not EAL.does_asset_exist(path):
+            copy = EAL.duplicate_asset(material.get_path_name(), path)
+            for switch in CITY_SAMPLE_TINT_SWITCHES:
+                MEL.set_material_instance_static_switch_parameter_value(copy, switch, True)
+            MEL.update_material_instance(copy)
+            EAL.save_loaded_asset(copy, only_if_is_dirty=False)
+        copies.append(asset_path(path))
+    return copies
+
+
 def coverage():
     wardrobe(remake=True)
 
@@ -331,6 +361,8 @@ def wardrobe(remake=False):
             for sex in SEXES:
                 if row.get(f"{sex}Mesh"):
                     row[f"{sex}Clip"] = clip(slot, row["Name"], sex, row[f"{sex}Mesh"], row.get(f"{sex}Fit"), remake)
+                    row[f"{sex}Tinted"] = tinted(row[f"{sex}Mesh"])
+            row["ColourParameters"] = [CITY_SAMPLE_COLOUR]
         new_table(WARDROBE_TABLE.format(slot=slot), unreal.ShinobiWardrobeRow, rows)
         log(f"DT_Wardrobe_{slot}: {[r['Name'] for r in rows]}")
 
