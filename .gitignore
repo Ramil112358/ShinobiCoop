@@ -64,3 +64,6 @@ SourceArt/Creatures/*/*.fbm/
 .superpowers/
 /Content/Shinobi/Characters/Creator/Fitting/
 /Packaged/
+
+# Fab downloads (licensed content, local only)
+VaultCache/
