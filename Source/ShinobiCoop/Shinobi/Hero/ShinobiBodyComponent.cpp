@@ -109,15 +109,7 @@ void UShinobiBodyComponent::DressBuilt(USkeletalMesh* Built)
 	{
 		// A roster head: its own mesh, no MetaHuman face or grooms, and the body's skin tinted to its neck.
 		WearStaticHead(Head->Mesh.LoadSynchronous());
-		for (int32 Index = 0; Index < GetNumMaterials(); ++Index)
-		{
-			FLinearColor Unused;
-			const UMaterialInterface* Material = GetMaterial(Index);
-			if (Material && Material->GetVectorParameterValue(FHashedMaterialParameterInfo(ShinobiMutable::SkinTintParameter), Unused))
-			{
-				CreateDynamicMaterialInstance(Index)->SetVectorParameterValue(ShinobiMutable::SkinTintParameter, Head->SkinTint);
-			}
-		}
+		ApplySkinTone(Look, Head->SkinTint);
 		Worn = Look;
 		UpdateBody(Look);
 		OnBodyBuilt.Broadcast();
@@ -182,6 +174,7 @@ void UShinobiBodyComponent::DressBuilt(USkeletalMesh* Built)
 			Strands->RegisterComponent();
 		}
 	}
+	ApplySkinTone(Look, FLinearColor::White);
 	OnBodyBuilt.Broadcast();
 }
 
@@ -315,6 +308,38 @@ void UShinobiBodyComponent::UpdateFace(const FShinobiAppearance& Look)
 	}
 }
 
+FLinearColor UShinobiBodyComponent::SkinToneMultiplier(uint8 Tone)
+{
+	return Tone <= 128 ? FMath::Lerp(ShinobiMutable::SkinToneDark, FLinearColor::White, Tone / 128.f)
+		: FMath::Lerp(FLinearColor::White, ShinobiMutable::SkinToneLight, (Tone - 128) / 127.f);
+}
+
+void UShinobiBodyComponent::ApplySkinTone(const FShinobiAppearance& Look, const FLinearColor& HeadTint)
+{
+	const FLinearColor Tone = SkinToneMultiplier(Look.SkinTone);
+	auto Set = [](UMeshComponent* Mesh, const TCHAR* Parameter, const FLinearColor& Value)
+	{
+		for (int32 Index = 0; Mesh && Index < Mesh->GetNumMaterials(); ++Index)
+		{
+			FLinearColor Unused;
+			const UMaterialInterface* Material = Mesh->GetMaterial(Index);
+			if (Material && Material->GetVectorParameterValue(FHashedMaterialParameterInfo(Parameter), Unused))
+			{
+				Mesh->CreateDynamicMaterialInstance(Index)->SetVectorParameterValue(Parameter, Value);
+			}
+		}
+	};
+	Set(this, ShinobiMutable::SkinTintParameter, HeadTint * Tone);
+	Set(StaticHead, ShinobiMutable::StaticHeadTintParameter, Tone);
+	for (UActorComponent* Part : MetaHumanParts)
+	{
+		if (Part && Part->GetName().StartsWith(TEXT("Face")))
+		{
+			Set(Cast<UMeshComponent>(Part), ShinobiMutable::SkinTintParameter, Tone);
+		}
+	}
+}
+
 void UShinobiBodyComponent::ColourPieces(const FShinobiAppearance& Look)
 {
 	const UDataTable* Palette = LoadObject<UDataTable>(nullptr, ShinobiMutable::PalettePath, nullptr, LOAD_NoWarn | LOAD_Quiet);
@@ -376,6 +401,7 @@ void UShinobiBodyComponent::WearStaticHead(USkeletalMesh* Head)
 		StaticHead->SetRenderCustomDepth(bRenderCustomDepth);
 		StaticHead->RegisterComponent();
 	}
+	StaticHead->EmptyOverrideMaterials(); // (the last head's tinted instances)
 	StaticHead->SetSkeletalMeshAsset(Head);
 	StaticHead->SetLeaderPoseComponent(this);
 }

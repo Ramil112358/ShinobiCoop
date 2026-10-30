@@ -61,6 +61,9 @@ public:
 
 	/** A MetaHuman's face, grooms and LODSync worn with this body (WearMetaHumanParts); empty otherwise. */
 	const TArray<TObjectPtr<UActorComponent>>& GetMetaHumanParts() const { return MetaHumanParts; }
+	/** Skin Tone's multiplier: ShinobiMutable::SkinToneDark at 0, white at 128, SkinToneLight at 255, linear between. */
+	static FLinearColor SkinToneMultiplier(uint8 Tone);
+
 	/** The static head worn with this body (WearStaticHead), or null. */
 	USkeletalMeshComponent* GetStaticHead() const { return StaticHead; }
 
@@ -100,6 +103,9 @@ private:
 
 	/** Each worn piece's sections in its slot's palette colour (FShinobiWardrobeRow::MaleTinted etc.). */
 	void ColourPieces(const FShinobiAppearance& Look);
+
+	/** The look's skin tone on the body (times HeadTint, a static head's neck match), the static head and a MetaHuman face. */
+	void ApplySkinTone(const FShinobiAppearance& Look, const FLinearColor& HeadTint);
 
 	UPROPERTY(Transient)
 	TObjectPtr<UIKRetargeter> Retargeter;

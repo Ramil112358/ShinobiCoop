@@ -704,6 +704,32 @@ void AShinobiPlayerController::RunRosterPresetShot()
 	};
 	IConsoleVariable* Switch = IConsoleManager::Get().FindConsoleVariable(TEXT("Shinobi.RosterPresets"));
 	float T = 0.5f;
+	// -ShinobiSkinTones: each static-head preset at skin tone 0, 128 and 255, the neck close (<Name>_Tone<t>_Neck).
+	if (FParse::Param(FCommandLine::Get(), TEXT("ShinobiSkinTones")))
+	{
+		const UShinobiCreatorCatalog* Catalog = LoadObject<UShinobiCreatorCatalog>(nullptr, UShinobiCreatorCatalog::Path);
+		for (int32 Index = 0; Catalog && Index < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster); ++Index)
+		{
+			const FShinobiAppearance* Preset = Catalog->FindPreset(AShinobiPlayerCharacter::Roster[Index].Name);
+			if (!Preset || Preset->Head == FShinobiAppearance::None)
+			{
+				continue;
+			}
+			for (const uint8 Tone : {uint8(0), uint8(128), uint8(255)})
+			{
+				FShinobiAppearance Look = *Preset;
+				Look.SkinTone = Tone;
+				At(T, [this, Look]() { ServerPickAppearance(Look); });
+#if WITH_EDITOR
+				At(T + 4.f, []() { FAssetCompilingManager::Get().FinishAllCompilation(); if (GShaderCompilingManager) { GShaderCompilingManager->FinishAllCompilation(); } });
+#endif
+				Film(T + 5.f, FString::Printf(TEXT("%s_Tone%d_Neck"), AShinobiPlayerCharacter::Roster[Index].Name, Tone), 90.f, -12.f, true);
+				T += 5.6f;
+			}
+		}
+		At(T, [this]() { ConsoleCommand(TEXT("quit")); });
+		return;
+	}
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster); ++Index)
 	{
 		for (const int32 Preset : {0, 1})

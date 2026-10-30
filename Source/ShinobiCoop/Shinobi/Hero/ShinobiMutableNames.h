@@ -33,6 +33,11 @@ namespace ShinobiMutable
 	inline constexpr const TCHAR* Freckles = TEXT("Freckles");
 	/** The MetaHuman body material's skin multiplier: a static head's FShinobiCreatorHead::SkinTint goes here. */
 	inline constexpr const TCHAR* SkinTintParameter = TEXT("Basecolor Global Multiply Post-Bake");
+	/** A static head's skin multiplier (M_StaticHead, Scripts/setup_mutable.py stage skintone). */
+	inline constexpr const TCHAR* StaticHeadTintParameter = TEXT("Skin Tint");
+	/** Skin Tone 0 and 255's multipliers (128 is white: the head's own skin); UShinobiBodyComponent::SkinToneMultiplier. */
+	inline const FLinearColor SkinToneDark(0.35f, 0.27f, 0.22f);
+	inline const FLinearColor SkinToneLight(1.3f, 1.25f, 1.2f);
 
 	/**
 	 * Wardrobe slots, in EShinobiWardrobeSlot order. Each is dataless (meshes are given at runtime, so new pieces need no

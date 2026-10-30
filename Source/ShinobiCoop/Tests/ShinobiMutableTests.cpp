@@ -1433,4 +1433,80 @@ bool FShinobiMutableUnfittedUntintedRowTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+namespace
+{
+	/** Whether some material slot of Mesh has vector parameter Name equal to Value. */
+	bool HasVector(const UPrimitiveComponent* Mesh, const TCHAR* Name, const FLinearColor& Value)
+	{
+		for (int32 Index = 0; Mesh && Index < Mesh->GetNumMaterials(); ++Index)
+		{
+			FLinearColor Found;
+			const UMaterialInterface* Material = Mesh->GetMaterial(Index);
+			if (Material && Material->GetVectorParameterValue(FHashedMaterialParameterInfo(Name), Found) && Found.Equals(Value, 0.001f))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** A roster preset at skin tone Tone, worn; Then(wearer, head tint or white) once built. */
+	void WearAtTone(FAutomationTestBase& Test, const TCHAR* Roster, uint8 Tone, TFunction<void(TSharedRef<FMutableWearer>, FLinearColor)> Then)
+	{
+		TOptional<FShinobiAppearance> Look = Preset(Test, Roster);
+		const UShinobiCreatorCatalog* Catalog = LoadObject<UShinobiCreatorCatalog>(nullptr, UShinobiCreatorCatalog::Path);
+		if (!Look || !Catalog)
+		{
+			return;
+		}
+		const FShinobiCreatorHead* Head = Catalog->FindHead(Look->Head);
+		const FLinearColor HeadTint = Head ? Head->SkinTint : FLinearColor::White;
+		Look->SkinTone = Tone;
+		TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+		Wearer->Body->WearAppearance(*Look);
+		WaitThen(Test, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [Wearer, HeadTint, Then]() { Then(Wearer, HeadTint); });
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableSkinToneNeutralTest, "ShinobiCoop.Mutable.SkinToneNeutral", ShinobiTestFlags)
+bool FShinobiMutableSkinToneNeutralTest::RunTest(const FString& Parameters)
+{
+	// Tone 128 is the head's own skin: the body keeps its neck tint, the static head is untinted.
+	TestEqual(TEXT("128 is white"), UShinobiBodyComponent::SkinToneMultiplier(128), FLinearColor::White);
+	WearAtTone(*this, TEXT("Ramil"), 128, [this](TSharedRef<FMutableWearer> Wearer, FLinearColor HeadTint)
+	{
+		TestTrue(TEXT("body tinted to the neck"), BodyTinted(Wearer->Body, HeadTint));
+		TestTrue(TEXT("head Skin Tint white"), HasVector(Wearer->Body->GetStaticHead(), ShinobiMutable::StaticHeadTintParameter, FLinearColor::White));
+	});
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableSkinToneDarkensTest, "ShinobiCoop.Mutable.SkinToneDarkens", ShinobiTestFlags)
+bool FShinobiMutableSkinToneDarkensTest::RunTest(const FString& Parameters)
+{
+	// Tone 0: body and head darken together (the body keeps its neck tint under it).
+	const FLinearColor Dark = UShinobiBodyComponent::SkinToneMultiplier(0);
+	TestTrue(TEXT("0 darkens every channel"), Dark.R < 1.f && Dark.G < 1.f && Dark.B < 1.f);
+	WearAtTone(*this, TEXT("Ramil"), 0, [this, Dark](TSharedRef<FMutableWearer> Wearer, FLinearColor HeadTint)
+	{
+		TestTrue(TEXT("body = neck tint x tone"), BodyTinted(Wearer->Body, HeadTint * Dark));
+		TestTrue(TEXT("head = tone"), HasVector(Wearer->Body->GetStaticHead(), ShinobiMutable::StaticHeadTintParameter, Dark));
+	});
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableSkinToneOnFaceTest, "ShinobiCoop.Mutable.SkinToneOnMetaHumanFace", ShinobiTestFlags)
+bool FShinobiMutableSkinToneOnFaceTest::RunTest(const FString& Parameters)
+{
+	// A MetaHuman preset: its face's skin takes the tone as the body does.
+	const FLinearColor Dark = UShinobiBodyComponent::SkinToneMultiplier(0);
+	WearAtTone(*this, TEXT("RamilMH"), 0, [this, Dark](TSharedRef<FMutableWearer> Wearer, FLinearColor)
+	{
+		const TObjectPtr<UActorComponent>* Face = Wearer->Body->GetMetaHumanParts().FindByPredicate([](const UActorComponent* Part) { return Part && Part->GetName().StartsWith(TEXT("Face")); });
+		TestTrue(TEXT("the face's skin toned"), Face && HasVector(Cast<UPrimitiveComponent>(Face->Get()), ShinobiMutable::SkinTintParameter, Dark));
+		TestTrue(TEXT("the body toned"), BodyTinted(Wearer->Body, Dark));
+	});
+	return true;
+}
+
 #endif

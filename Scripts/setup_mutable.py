@@ -16,6 +16,9 @@ heads (needs run_python.ps1 -Render: FBX export): each roster character's head (
   average build's MetaHuman face for the neck) and imported as /Game/Shinobi/Mutable/Heads/SK_Head_<Name> with the
   donor's material and a neck material; Saved/MutableHeads/<Name>_tint.json is the body tint that matches its skin
   (the neck texture's mean colour over the base body's).
+skintone: M_StaticHead (/Game/Shinobi/Mutable/Heads: base colour texture "BaseColor" times vector "Skin Tint", default
+  white; M_Character, tracked and shared, is left alone) under every roster head's materials (its own MI_Head_<Name>_Skin with the donor's texture, and its neck
+  MI), so a look's skin tone reaches the head (UShinobiBodyComponent::ApplySkinTone). Run after heads.
 catalog: DA_CreatorCatalog's Heads (with their tints), the roster MetaHuman faces and a preset per roster character
   (run after setup_creator.py catalog, which rewrites Faces).
 palette: DT_Palette, the wardrobe colours (FShinobiPaletteRow).
@@ -213,6 +216,59 @@ def heads():
 
 # Every roster MetaHuman face (AShinobiPlayerCharacter::Faces): its catalog Faces entry. The first of each is its roster pick.
 MH_FACES = {"RamilMH": "Male", "RamilMHScan": "Male", "BikaMH": "Female", "BikaMHKeenFace": "Female"}
+
+
+STATIC_HEAD = f"{HEADS_DIR}/M_StaticHead"
+STATIC_HEAD_TINT = "Skin Tint"  # ShinobiMutable::StaticHeadTintParameter
+
+
+def skintone():
+    MEL = unreal.MaterialEditingLibrary
+    if not EAL.does_asset_exist(STATIC_HEAD):
+        # M_Character's own inputs (BaseColor texture) times Skin Tint; heads need none of its outfit hide mask.
+        folder, name = STATIC_HEAD.rsplit("/", 1)
+        material = unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, folder, unreal.Material, unreal.MaterialFactoryNew())
+        texture = MEL.create_material_expression(material, unreal.MaterialExpressionTextureSampleParameter2D, -700, 0)
+        texture.set_editor_property("parameter_name", "BaseColor")
+        tint = MEL.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -700, 300)
+        tint.set_editor_property("parameter_name", STATIC_HEAD_TINT)
+        tint.set_editor_property("default_value", unreal.LinearColor(1.0, 1.0, 1.0, 1.0))
+        rgb = MEL.create_material_expression(material, unreal.MaterialExpressionComponentMask, -450, 300)
+        for channel in ("r", "g", "b"):
+            rgb.set_editor_property(channel, True)
+        multiply = MEL.create_material_expression(material, unreal.MaterialExpressionMultiply, -200, 0)
+        wired = [MEL.connect_material_expressions(texture, "RGB", multiply, "A"), MEL.connect_material_expressions(tint, "", rgb, ""),
+                 MEL.connect_material_expressions(rgb, "", multiply, "B"),
+                 MEL.connect_material_property(multiply, "", unreal.MaterialProperty.MP_BASE_COLOR)]
+        if not all(wired):
+            EAL.delete_asset(STATIC_HEAD)
+            raise RuntimeError(f"could not wire M_StaticHead: {wired}")
+        material.set_editor_property("used_with_skeletal_mesh", True)
+        MEL.recompile_material(material)
+        EAL.save_loaded_asset(material, only_if_is_dirty=False)
+        log(f"made {STATIC_HEAD}")
+    parent = unreal.load_asset(STATIC_HEAD)
+    for name in HEADS:
+        head = unreal.load_asset(f"{HEADS_DIR}/SK_Head_{name}")
+        if not head:
+            continue
+        slots = []
+        for slot in head.get_editor_property("materials"):
+            material = slot.get_editor_property("material_interface")
+            if material and material.get_name().endswith("_Neck"):
+                MEL.set_material_instance_parent(material, parent)
+                EAL.save_loaded_asset(material, only_if_is_dirty=False)
+            elif material:
+                texture = MEL.get_material_instance_texture_parameter_value(material, "BaseColor") if isinstance(material, unreal.MaterialInstance) else None
+                if texture:
+                    import setup_creator as creator  # (as a library)
+                    material = creator.material_instance(f"MI_Head_{name}_Skin", HEADS_DIR, texture, parent)
+                else:
+                    log(f"head {name}: {material.get_name()} has no BaseColor texture: left untinted")
+            slots.append(unreal.SkeletalMaterial(material_interface=material, material_slot_name=slot.get_editor_property("material_slot_name")))
+        head.set_editor_property("materials", slots)
+        EAL.save_loaded_asset(head, only_if_is_dirty=False)
+        log(f"head {name}: {[s.material_interface.get_name() for s in slots]}")
 
 
 def catalog():
@@ -581,6 +637,6 @@ def graph():
         raise RuntimeError("CO_Shinobi did not compile")
 
 
-STAGES = {"bases": bases, "faceskin": face_skin, "samplecopy": sample_copy, "fabimport": fab_import, "fits": fits, "heads": heads, "catalog": catalog, "palette": palette, "coverage": coverage, "wardrobe": wardrobe, "graph": graph}
+STAGES = {"bases": bases, "faceskin": face_skin, "samplecopy": sample_copy, "fabimport": fab_import, "fits": fits, "heads": heads, "catalog": catalog, "skintone": skintone, "palette": palette, "coverage": coverage, "wardrobe": wardrobe, "graph": graph}
 for stage in ONLY or [s for s in STAGES if s != "faceskin"]:
     STAGES[stage]()
