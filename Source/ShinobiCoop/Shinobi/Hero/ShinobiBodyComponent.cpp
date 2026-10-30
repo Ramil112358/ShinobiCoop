@@ -326,6 +326,7 @@ void UShinobiBodyComponent::UpdateSkin(const FShinobiAppearance& Look)
 {
 	ApplySkinTone(Look, WornHeadTint);
 	ApplySkinLayers(Look);
+	ColourPieces(Look);
 }
 
 void UShinobiBodyComponent::ApplySkinTone(const FShinobiAppearance& Look, const FLinearColor& HeadTint)
@@ -440,28 +441,41 @@ void UShinobiBodyComponent::ColourPieces(const FShinobiAppearance& Look)
 	{
 		const EShinobiWardrobeSlot Slot = EShinobiWardrobeSlot(Index);
 		const uint8 Colour = Look.SlotColour[Index];
-		const FShinobiWardrobeRow* Row = Colour > 0 && Colours.IsValidIndex(Colour) ? UShinobiMutableLook::FindRow(Slot, Look.Slot(Slot)) : nullptr;
+		const bool bColoured = Colour > 0 && Colours.IsValidIndex(Colour);
+		const FShinobiWardrobeRow* Row = UShinobiMutableLook::FindRow(Slot, Look.Slot(Slot));
 		const USkeletalMesh* Piece = Row ? (bFemale ? Row->FemaleMesh : Row->MaleMesh).LoadSynchronous() : nullptr;
-		if (!Piece)
+		const USkeletalMesh* Built = GetSkeletalMeshAsset();
+		if (!Piece || !Built)
 		{
 			continue;
 		}
-		const FLinearColor Value = Palette->FindRow<FShinobiPaletteRow>(Colours[Colour], TEXT("ColourPieces"))->Colour;
+		const FLinearColor Value = bColoured ? Palette->FindRow<FShinobiPaletteRow>(Colours[Colour], TEXT("ColourPieces"))->Colour : FLinearColor::White;
 		const TArray<TSoftObjectPtr<UMaterialInterface>>& Tinted = bFemale ? Row->FemaleTinted : Row->MaleTinted;
 		for (int32 Material = 0; Material < FMath::Min(Tinted.Num(), Piece->GetMaterials().Num()); ++Material)
 		{
 			UMaterialInterface* Copy = Tinted[Material].LoadSynchronous();
-			const UMaterialInterface* Own = Piece->GetMaterials()[Material].MaterialInterface;
-			for (int32 Section = 0; Copy && Own && Section < GetNumMaterials(); ++Section)
+			UMaterialInterface* Own = Piece->GetMaterials()[Material].MaterialInterface;
+			// The built body keeps the piece's materials: those sections take the colour (or, Original, their own again).
+			for (int32 Section = 0; Copy && Own && Section < Built->GetMaterials().Num(); ++Section)
 			{
-				if (GetMaterial(Section) == Own) // the built body keeps the piece's materials
+				if (Built->GetMaterials()[Section].MaterialInterface != Own)
 				{
-					UMaterialInstanceDynamic* Dynamic = UMaterialInstanceDynamic::Create(Copy, this);
-					for (const FName Parameter : Row->ColourParameters)
-					{
-						Dynamic->SetVectorParameterValue(Parameter, Value);
-					}
+					continue;
+				}
+				if (!bColoured)
+				{
+					SetMaterial(Section, Own);
+					continue;
+				}
+				UMaterialInstanceDynamic* Dynamic = Cast<UMaterialInstanceDynamic>(GetMaterial(Section));
+				if (!Dynamic || Dynamic->Parent != Copy)
+				{
+					Dynamic = UMaterialInstanceDynamic::Create(Copy, this);
 					SetMaterial(Section, Dynamic);
+				}
+				for (const FName Parameter : Row->ColourParameters)
+				{
+					Dynamic->SetVectorParameterValue(Parameter, Value);
 				}
 			}
 		}

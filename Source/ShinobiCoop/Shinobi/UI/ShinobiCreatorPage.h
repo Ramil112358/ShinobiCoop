@@ -6,6 +6,8 @@
 #include "ShinobiCreatorPage.generated.h"
 
 class AShinobiMenuStage;
+struct FShinobiWardrobeRow;
+class UPanelWidget;
 class UCircularThrobber;
 class UEditableTextBox;
 class UShinobiCharacterSave;
@@ -78,6 +80,13 @@ public:
 	/** Clears what Look's sex doesn't have: a head of the other sex, wardrobe rows without a mesh for it, faces, blend
 	 * faces and grooms past its counts. */
 	static void ValidateForSex(FShinobiAppearance& Look, const UShinobiCreatorCatalog& Catalog);
+	/** The wardrobe table rows (FShinobiAppearance's slot index) of WardrobeSlot that have a mesh for Sex, in table order. */
+	static TArray<uint8> RowsForSex(EShinobiWardrobeSlot WardrobeSlot, EShinobiSex Sex);
+	/** Whether Row takes a palette colour on Sex's mesh (a tinted material copy). */
+	static bool IsTinted(const FShinobiWardrobeRow& Row, EShinobiSex Sex);
+	/** CLOTHES: WardrobeSlot's strip of pieces (None first), and the palette swatches under the worn one; null when not shown. */
+	UPanelWidget* GetClothesStrip(EShinobiWardrobeSlot WardrobeSlot) const;
+	UPanelWidget* GetSwatches(EShinobiWardrobeSlot WardrobeSlot) const;
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -124,6 +133,11 @@ private:
 	/** On the stage while a Mutable build is pending (the previous look stays visible). */
 	UPROPERTY()
 	TObjectPtr<UCircularThrobber> Spinner;
+	/** CLOTHES, per wardrobe slot (null when not shown). */
+	UPROPERTY()
+	TArray<TObjectPtr<UPanelWidget>> ClothesStrips;
+	UPROPERTY()
+	TArray<TObjectPtr<UPanelWidget>> Swatches;
 
 	FShinobiAppearance Look;
 	/** Outfits index worn over the look (the saved outfit pick, shared with the roster). */
@@ -132,6 +146,8 @@ private:
 	ECategory Category = ECategory::Character;
 	/** A pick was made: the rows rebuild (and the stage re-dresses) next tick, not inside its own click. */
 	bool bRedressPending = false;
+	/** An instant edit moved a selection mark: the rows rebuild next tick. */
+	bool bRowsPending = false;
 	/** A Debounced slider moved: the stage re-dresses when this runs out. */
 	float DebounceLeft = 0.f;
 };

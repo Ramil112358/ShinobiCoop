@@ -43,8 +43,8 @@ public:
 	/** Body sliders of Look (bone scales on this body, height on the whole character, capsule included) on the body
 	 * already worn: the creator's live edits. */
 	void UpdateBody(const FShinobiAppearance& Look);
-	/** The look's skin tone, tattoos, make-up and freckles on the worn body at once, without a Mutable build (the CREATE
-	 * tab's skin rows; the worn mesh and head stay). */
+	/** The look's skin tone, tattoos, make-up, freckles and piece colours on the worn body at once, without a Mutable
+	 * build (the CREATE tab's skin rows and swatches; the worn mesh and head stay). */
 	void UpdateSkin(const FShinobiAppearance& Look);
 
 	/** The body slider names, in order (FShinobiAppearance::BodyShape). */

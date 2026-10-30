@@ -16,7 +16,9 @@
 #include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "Shinobi/Hero/ShinobiCharacterSave.h"
 #include "Shinobi/Hero/ShinobiFaceShapeAnimInstance.h"
+#include "Engine/DataTable.h"
 #include "Shinobi/Hero/ShinobiMutableLook.h"
+#include "Shinobi/Hero/ShinobiMutableNames.h"
 #include "Shinobi/Hero/ShinobiMutableTypes.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/UI/ShinobiMenuArt.h"
@@ -39,6 +41,14 @@ namespace
 	}
 
 	int8 CreatorShape(float Value) { return int8(FMath::Clamp(FMath::RoundToInt(Value * 127.f), -127, 127)); }
+
+	/** The wardrobe table's row name of Row in WardrobeSlot (the piece's display name), or None. */
+	FName ShinobiCreatorRowName(EShinobiWardrobeSlot WardrobeSlot, uint8 Row)
+	{
+		const UDataTable* Table = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(ShinobiMutable::SlotNames[int32(WardrobeSlot)]), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		const TArray<FName> Names = Table ? Table->GetRowNames() : TArray<FName>();
+		return Names.IsValidIndex(Row) ? Names[Row] : NAME_None;
+	}
 
 	/** AShinobiPlayerCharacter::Roster's index of the character named Name, or INDEX_NONE. */
 	int32 CreatorRosterIndex(FName Name)
@@ -102,6 +112,39 @@ void UShinobiCreatorPage::ValidateForSex(FShinobiAppearance& Look, const UShinob
 			*Groom.Key = FShinobiAppearance::None;
 		}
 	}
+}
+
+TArray<uint8> UShinobiCreatorPage::RowsForSex(EShinobiWardrobeSlot WardrobeSlot, EShinobiSex Sex)
+{
+	TArray<uint8> Found;
+	for (int32 Row = 0; Row < FShinobiAppearance::None; ++Row)
+	{
+		const FShinobiWardrobeRow* Piece = UShinobiMutableLook::FindRow(WardrobeSlot, uint8(Row));
+		if (!Piece)
+		{
+			break;
+		}
+		if (!(Sex == EShinobiSex::Female ? Piece->FemaleMesh : Piece->MaleMesh).IsNull())
+		{
+			Found.Add(uint8(Row));
+		}
+	}
+	return Found;
+}
+
+bool UShinobiCreatorPage::IsTinted(const FShinobiWardrobeRow& Row, EShinobiSex Sex)
+{
+	return (Sex == EShinobiSex::Female ? Row.FemaleTinted : Row.MaleTinted).ContainsByPredicate([](const TSoftObjectPtr<UMaterialInterface>& Copy) { return !Copy.IsNull(); });
+}
+
+UPanelWidget* UShinobiCreatorPage::GetClothesStrip(EShinobiWardrobeSlot WardrobeSlot) const
+{
+	return ClothesStrips.IsValidIndex(int32(WardrobeSlot)) ? ClothesStrips[int32(WardrobeSlot)].Get() : nullptr;
+}
+
+UPanelWidget* UShinobiCreatorPage::GetSwatches(EShinobiWardrobeSlot WardrobeSlot) const
+{
+	return Swatches.IsValidIndex(int32(WardrobeSlot)) ? Swatches[int32(WardrobeSlot)].Get() : nullptr;
 }
 
 UShinobiIndexButton* UShinobiCreatorPage::MakeButton(const FString& Label, int32 Index, TFunction<void(int32)> Handler, int32 Size)
@@ -317,9 +360,14 @@ void UShinobiCreatorPage::TickEdits(float DeltaSeconds)
 {
 	if (bRedressPending)
 	{
-		bRedressPending = false;
+		bRedressPending = bRowsPending = false;
 		DebounceLeft = 0.f; // (this rebuild carries it)
 		Refresh(true);
+	}
+	if (bRowsPending)
+	{
+		bRowsPending = false;
+		Refresh(false);
 	}
 	if (DebounceLeft > 0.f)
 	{
@@ -439,6 +487,8 @@ void UShinobiCreatorPage::Refresh(bool bRedress)
 	CodeBox->SetText(FText::FromString(Look.ToCode()));
 
 	Rows->ClearChildren();
+	ClothesStrips.Init(nullptr, ShinobiWardrobeSlotCount);
+	Swatches.Init(nullptr, ShinobiWardrobeSlotCount);
 	switch (Category)
 	{
 	case ECategory::Character: BuildCharacterRows(); break;
@@ -521,10 +571,95 @@ void UShinobiCreatorPage::BuildCharacterRows()
 void UShinobiCreatorPage::BuildClothesRows()
 {
 	const EShinobiSex Sex = Look.Sex;
-	const auto Styles = [this, Sex](EShinobiWardrobeSlot WardrobeSlot) { return Catalog ? Catalog->CountStyles(Sex, WardrobeSlot) : 0; };
-	AddPicker(TEXT("Top"), &FShinobiAppearance::Top, Styles(EShinobiWardrobeSlot::Top), false);
-	AddPicker(TEXT("Bottom"), &FShinobiAppearance::Bottom, Styles(EShinobiWardrobeSlot::Bottom), false);
-	AddPicker(TEXT("Shoes"), &FShinobiAppearance::Shoes, Styles(EShinobiWardrobeSlot::Shoes), false);
+	const UDataTable* Palette = LoadObject<UDataTable>(nullptr, ShinobiMutable::PalettePath, nullptr, LOAD_NoWarn | LOAD_Quiet);
+	// Slots a worn piece takes off (a whole outfit's Top, Bottom and Shoes), and by which.
+	TMap<EShinobiWardrobeSlot, FName> ReplacedBy;
+	for (int32 Index = 0; Index < ShinobiWardrobeSlotCount; ++Index)
+	{
+		if (const FShinobiWardrobeRow* Worn = UShinobiMutableLook::FindRow(EShinobiWardrobeSlot(Index), Look.Slot(EShinobiWardrobeSlot(Index))))
+		{
+			for (const EShinobiWardrobeSlot Replaced : Worn->Replaces)
+			{
+				ReplacedBy.Add(Replaced, ShinobiCreatorRowName(EShinobiWardrobeSlot(Index), Look.Slot(EShinobiWardrobeSlot(Index))));
+			}
+		}
+	}
+	for (int32 Index = 0; Index < int32(EShinobiWardrobeSlot::Cloak); ++Index) // (cloaks: the outfit picker below until P5)
+	{
+		const EShinobiWardrobeSlot WardrobeSlot = EShinobiWardrobeSlot(Index);
+		const TArray<uint8> Pieces = RowsForSex(WardrobeSlot, Sex);
+		if (Pieces.Num() == 0)
+		{
+			continue;
+		}
+		const uint8 Worn = Look.Slot(WardrobeSlot);
+		AddNote(FString(ShinobiMutable::SlotNames[Index]).ToUpper() + (Worn != FShinobiAppearance::None ? TEXT("  ") + ShinobiCreatorRowName(WardrobeSlot, Worn).ToString() : FString()));
+		if (const FName* By = ReplacedBy.Find(WardrobeSlot))
+		{
+			AddNote(FString::Printf(TEXT("(worn under %s)"), *By->ToString()));
+			continue;
+		}
+		UScrollBox* Strip = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass());
+		Strip->SetOrientation(Orient_Horizontal);
+		Rows->AddChildToVerticalBox(Strip);
+		ClothesStrips[Index] = Strip;
+		for (int32 Position = 0; Position <= Pieces.Num(); ++Position)
+		{
+			const uint8 Row = Position == 0 ? FShinobiAppearance::None : Pieces[Position - 1];
+			UShinobiIndexButton* Card = MakeButton(FString(), Row, [this, WardrobeSlot](int32 Picked)
+			{
+				EditLook([WardrobeSlot, Picked](FShinobiAppearance& L) { L.Slot(WardrobeSlot) = uint8(Picked); }, EShinobiLookEdit::Rebuild);
+			});
+			ShinobiMenuStyle::StyleButton(*Card, Row == Worn, FMargin(3.f));
+			USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+			Box->SetWidthOverride(72.f);
+			Box->SetHeightOverride(72.f);
+			const FShinobiWardrobeRow* Piece = UShinobiMutableLook::FindRow(WardrobeSlot, Row);
+			if (UTexture2D* Thumbnail = Piece ? Piece->Thumbnail.LoadSynchronous() : nullptr)
+			{
+				UImage* Picture = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
+				Picture->SetBrushFromTexture(Thumbnail);
+				Box->AddChild(Picture);
+			}
+			else
+			{
+				UTextBlock* Name = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Piece ? ShinobiCreatorRowName(WardrobeSlot, Row).ToString() : TEXT("None")), 10, FLinearColor::White);
+				Name->SetAutoWrapText(true);
+				Name->SetJustification(ETextJustify::Center);
+				Box->AddChild(Name);
+			}
+			Card->AddChild(Box);
+			Strip->AddChild(Card);
+		}
+		// The worn piece's colours, when it takes them.
+		const FShinobiWardrobeRow* WornPiece = UShinobiMutableLook::FindRow(WardrobeSlot, Worn);
+		if (Palette && WornPiece && IsTinted(*WornPiece, Sex))
+		{
+			UHorizontalBox* Colours = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+			Rows->AddChildToVerticalBox(Colours)->SetPadding(FMargin(0.f, 4.f, 0.f, 6.f));
+			Swatches[Index] = Colours;
+			const TArray<FName> Names = Palette->GetRowNames();
+			for (int32 Colour = 0; Colour < Names.Num(); ++Colour)
+			{
+				UShinobiIndexButton* Swatch = MakeButton(FString(), Colour, [this, Index](int32 Picked)
+				{
+					EditLook([Index, Picked](FShinobiAppearance& L) { L.SlotColour[Index] = uint8(Picked); }, EShinobiLookEdit::Skin);
+					bRowsPending = true; // (the selection mark moves)
+				});
+				ShinobiMenuStyle::StyleButton(*Swatch, Look.SlotColour[Index] == Colour, FMargin(2.f));
+				USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+				Box->SetWidthOverride(20.f);
+				Box->SetHeightOverride(20.f);
+				UBorder* Fill = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+				// Original (row 0) shows as the dark panel colour: the piece's own colours.
+				Fill->SetBrush(ShinobiMenuStyle::ColorBrush(Colour == 0 ? FLinearColor(0.15f, 0.15f, 0.17f) : Palette->FindRow<FShinobiPaletteRow>(Names[Colour], TEXT("Swatch"))->Colour));
+				Box->AddChild(Fill);
+				Swatch->AddChild(Box);
+				Swatch->SetToolTipText(FText::FromName(Names[Colour]));
+				Colours->AddChildToHorizontalBox(Swatch)->SetPadding(FMargin(0.f, 0.f, 3.f, 0.f));
+			}
+		}
+	}
 	TArray<FString> Cloaks;
 	for (const auto& Outfit : AShinobiPlayerCharacter::Outfits)
 	{

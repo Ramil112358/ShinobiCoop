@@ -1694,4 +1694,41 @@ bool FShinobiMutableBuildAfterWorldGoneTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableRecolourWithoutRebuildTest, "ShinobiCoop.Mutable.RecolourWithoutRebuild", ShinobiTestFlags)
+bool FShinobiMutableRecolourWithoutRebuildTest::RunTest(const FString& Parameters)
+{
+	// The CREATE tab's swatches: a worn piece takes another colour, then its own again, at once (UpdateSkin), no build.
+	const int32 Red = PaletteIndex(TEXT("Red"));
+	const int32 Navy = PaletteIndex(TEXT("Navy"));
+	const UDataTable* Palette = LoadObject<UDataTable>(nullptr, ShinobiMutable::PalettePath);
+	if (!TestTrue(TEXT("the palette has Red and Navy"), Red > 0 && Navy > 0 && Palette))
+	{
+		return false;
+	}
+	const FLinearColor NavyColour = Palette->FindRow<FShinobiPaletteRow>(TEXT("Navy"), TEXT("test"))->Colour;
+	FShinobiAppearance Look;
+	Look.Sex = EShinobiSex::Male;
+	Look.Top = 0;
+	Look.SlotColour[int32(EShinobiWardrobeSlot::Top)] = uint8(Red);
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	Wearer->Body->WearAppearance(Look);
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer, Look, Navy, NavyColour]()
+	{
+		FShinobiAppearance Recoloured = Look;
+		Recoloured.SlotColour[int32(EShinobiWardrobeSlot::Top)] = uint8(Navy);
+		Wearer->Body->UpdateSkin(Recoloured);
+		TestFalse(TEXT("no rebuild"), Wearer->Body->IsMutableBuildPending());
+		FLinearColor Value;
+		const TArray<const UMaterialInstanceDynamic*> Tinted = TintedSlots(Wearer->Body);
+		TestTrue(TEXT("now navy"), Tinted.ContainsByPredicate([&](const UMaterialInstanceDynamic* Material)
+		{
+			return Material->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("A_CrowdColor_main")), Value) && Value.Equals(NavyColour, 0.001f);
+		}));
+		Recoloured.SlotColour[int32(EShinobiWardrobeSlot::Top)] = 0;
+		Wearer->Body->UpdateSkin(Recoloured);
+		TestEqual(TEXT("its own materials again"), TintedSlots(Wearer->Body).Num(), 0);
+	});
+	return true;
+}
+
 #endif

@@ -6,7 +6,9 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Shinobi/Hero/ShinobiBodyComponent.h"
+#include "Engine/DataTable.h"
 #include "Shinobi/Hero/ShinobiMutableLook.h"
+#include "Shinobi/Hero/ShinobiMutableNames.h"
 #include "Shinobi/Hero/ShinobiMutableTypes.h"
 #include "Shinobi/UI/ShinobiCreatorPage.h"
 #include "Shinobi/UI/ShinobiMenuStage.h"
@@ -211,6 +213,109 @@ bool FShinobiCreatorEveryRowFocusableTest::RunTest(const FString& Parameters)
 		}
 		TestTrue(*FString::Printf(TEXT("category %d has controls"), Category), Controls > 0);
 	}
+	return true;
+}
+
+namespace
+{
+	constexpr EShinobiWardrobeSlot CreatorTestSlots[] = { EShinobiWardrobeSlot::Top, EShinobiWardrobeSlot::Bottom, EShinobiWardrobeSlot::Shoes,
+		EShinobiWardrobeSlot::Outer, EShinobiWardrobeSlot::Accessory };
+
+	/** Clicks Panel's Index-th child (a UShinobiIndexButton); false if there is none. */
+	bool CreatorTestClick(UPanelWidget* Panel, int32 Index)
+	{
+		UShinobiIndexButton* Button = Panel ? Cast<UShinobiIndexButton>(Panel->GetChildAt(Index)) : nullptr;
+		return Button && Button->OnIndexClicked.ExecuteIfBound(Button->Index);
+	}
+
+	/** A male look in CLOTHES wearing Top row Row. */
+	void CreatorTestWearTop(FCreatorBench& Bench, uint8 Row)
+	{
+		Bench.Page->EditLook([Row](FShinobiAppearance& L) { L.Sex = EShinobiSex::Male; L.Top = Row; }, EShinobiLookEdit::Rebuild);
+		Bench.Page->ShowCategory(UShinobiCreatorPage::ECategory::Clothes);
+		Bench.Page->TickEdits(0.f);
+	}
+
+	/** The first male Top row that is (or isn't) tinted. */
+	uint8 CreatorTestTop(bool bTinted)
+	{
+		for (const uint8 Row : UShinobiCreatorPage::RowsForSex(EShinobiWardrobeSlot::Top, EShinobiSex::Male))
+		{
+			const FShinobiWardrobeRow* Piece = UShinobiMutableLook::FindRow(EShinobiWardrobeSlot::Top, Row);
+			if (Piece && UShinobiCreatorPage::IsTinted(*Piece, EShinobiSex::Male) == bTinted)
+			{
+				return Row;
+			}
+		}
+		return FShinobiAppearance::None;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCreatorClothesStripsTest, "ShinobiCoop.UI.CreatorClothesStrips", ShinobiTestFlags)
+bool FShinobiCreatorClothesStripsTest::RunTest(const FString& Parameters)
+{
+	FCreatorBench Bench;
+	CreatorTestWearTop(Bench, 0);
+	int32 Shown = 0;
+	for (const EShinobiWardrobeSlot Slot : CreatorTestSlots)
+	{
+		const TArray<uint8> Rows = UShinobiCreatorPage::RowsForSex(Slot, EShinobiSex::Male);
+		const UPanelWidget* Strip = Bench.Page->GetClothesStrip(Slot);
+		if (Rows.Num() > 0 && TestNotNull(*FString::Printf(TEXT("slot %d strip"), int32(Slot)), Strip))
+		{
+			TestEqual(*FString::Printf(TEXT("slot %d: None and a button per piece"), int32(Slot)), Strip->GetChildrenCount(), Rows.Num() + 1);
+			++Shown;
+		}
+	}
+	TestTrue(TEXT("strips shown"), Shown >= 3);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCreatorPickPieceTest, "ShinobiCoop.UI.CreatorPickPiece", ShinobiTestFlags)
+bool FShinobiCreatorPickPieceTest::RunTest(const FString& Parameters)
+{
+	FCreatorBench Bench;
+	CreatorTestWearTop(Bench, FShinobiAppearance::None);
+	const TArray<uint8> Rows = UShinobiCreatorPage::RowsForSex(EShinobiWardrobeSlot::Top, EShinobiSex::Male);
+	TestTrue(TEXT("the second button picked"), CreatorTestClick(Bench.Page->GetClothesStrip(EShinobiWardrobeSlot::Top), 1));
+	TestEqual(TEXT("the first male top worn"), Bench.Page->GetLook().Top, Rows.Num() > 0 ? Rows[0] : FShinobiAppearance::None);
+	TestTrue(TEXT("None first"), CreatorTestClick(Bench.Page->GetClothesStrip(EShinobiWardrobeSlot::Top), 0));
+	TestEqual(TEXT("no top"), Bench.Page->GetLook().Top, FShinobiAppearance::None);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCreatorSwatchesOnlyWhenTintedTest, "ShinobiCoop.UI.CreatorSwatchesOnlyWhenTinted", ShinobiTestFlags)
+bool FShinobiCreatorSwatchesOnlyWhenTintedTest::RunTest(const FString& Parameters)
+{
+	const UDataTable* Palette = LoadObject<UDataTable>(nullptr, ShinobiMutable::PalettePath, nullptr, LOAD_NoWarn | LOAD_Quiet);
+	const uint8 Tinted = CreatorTestTop(true);
+	const uint8 Plain = CreatorTestTop(false);
+	if (!TestNotNull(TEXT("DT_Palette"), Palette) || !TestNotEqual(TEXT("a tinted male top"), Tinted, FShinobiAppearance::None)
+		|| !TestNotEqual(TEXT("an untinted male top"), Plain, FShinobiAppearance::None))
+	{
+		return false;
+	}
+	FCreatorBench Bench;
+	CreatorTestWearTop(Bench, Tinted);
+	const UPanelWidget* Swatches = Bench.Page->GetSwatches(EShinobiWardrobeSlot::Top);
+	TestTrue(TEXT("a swatch per palette colour"), Swatches && Swatches->GetChildrenCount() == Palette->GetRowNames().Num());
+	CreatorTestWearTop(Bench, Plain);
+	TestNull(TEXT("no swatches for an untinted piece"), Bench.Page->GetSwatches(EShinobiWardrobeSlot::Top));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCreatorSwatchSetsColourTest, "ShinobiCoop.UI.CreatorSwatchSetsColour", ShinobiTestFlags)
+bool FShinobiCreatorSwatchSetsColourTest::RunTest(const FString& Parameters)
+{
+	const uint8 Tinted = CreatorTestTop(true);
+	if (!TestNotEqual(TEXT("a tinted male top"), Tinted, FShinobiAppearance::None))
+	{
+		return false;
+	}
+	FCreatorBench Bench;
+	CreatorTestWearTop(Bench, Tinted);
+	TestTrue(TEXT("swatch 3 clicked"), CreatorTestClick(Bench.Page->GetSwatches(EShinobiWardrobeSlot::Top), 3));
+	TestEqual(TEXT("the top's colour"), Bench.Page->GetLook().SlotColour[int32(EShinobiWardrobeSlot::Top)], uint8(3));
 	return true;
 }
 
