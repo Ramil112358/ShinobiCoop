@@ -8,6 +8,8 @@
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Image.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "Components/ScrollBox.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
@@ -30,7 +32,24 @@
 namespace
 {
 	const TCHAR* const CreatorCategoryNames[] = { TEXT("CHARACTER"), TEXT("CLOTHES"), TEXT("BODY & SKIN"), TEXT("FACE") };
-	const TCHAR* const CreatorBuildNames[] = { TEXT("Slim"), TEXT("Average"), TEXT("Heavy") };
+	const TCHAR* const CreatorBuildNames[] = { TEXT("Slim"), TEXT("Average"), TEXT("Heavy"), TEXT("Own") };
+	/** The skin tone bar's steps, and the skin colour it multiplies (a mid skin, for the picture only). */
+	constexpr int32 CreatorToneSteps = 16;
+	const FLinearColor CreatorToneSkin(0.8f, 0.6f, 0.5f);
+
+	/** Row names of the DataTable at Path, or none. */
+	TArray<FString> CreatorRowNames(const TCHAR* Path)
+	{
+		TArray<FString> Names;
+		if (const UDataTable* Table = LoadObject<UDataTable>(nullptr, Path, nullptr, LOAD_NoWarn | LOAD_Quiet))
+		{
+			for (const FName Name : Table->GetRowNames())
+			{
+				Names.Add(FName::NameToDisplayString(Name.ToString(), false));
+			}
+		}
+		return Names;
+	}
 	constexpr float CreatorPanelWidth = 470.f;
 	constexpr float CreatorRowsHeight = 470.f;
 
@@ -402,7 +421,7 @@ void UShinobiCreatorPage::AddChoice(const FString& Label, const TArray<FString>&
 	for (const int32 Direction : {-1, +1})
 	{
 		const int32 Next = ((Shown + Direction) % Names.Num() + Names.Num()) % Names.Num();
-		UShinobiIndexButton* Arrow = MakeButton(Direction < 0 ? TEXT("<") : TEXT(">"), Next, Pick);
+		UShinobiIndexButton* Arrow = MakeButton(Direction < 0 ? TEXT("<") : TEXT(">"), Next, [this, Pick](int32 Picked) { Pick(Picked); bRowsPending = true; });
 		ShinobiMenuStyle::StyleButton(*Arrow, false, FMargin(10.f, 4.f));
 		Row->AddChildToHorizontalBox(Arrow);
 		if (Direction < 0)
@@ -438,7 +457,7 @@ void UShinobiCreatorPage::AddPicker(const FString& Label, uint8 FShinobiAppearan
 	});
 }
 
-void UShinobiCreatorPage::AddSlider(const FString& Label, float Value, bool bUnit, TFunction<void(float)> Set)
+void UShinobiCreatorPage::AddSlider(const FString& Label, float Value, bool bUnit, TFunction<void(float)> Set, UWidget* Background)
 {
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 	Rows->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 2.f));
@@ -453,9 +472,52 @@ void UShinobiCreatorPage::AddSlider(const FString& Label, float Value, bool bUni
 	Slider->SetSliderHandleColor(ShinobiMenuStyle::Accent);
 	Slider->OnIndexValue = FShinobiIndexValue::CreateWeakLambda(this, [Set](int32, float NewValue) { Set(NewValue); });
 	Slider->Arm();
-	UHorizontalBoxSlot* SliderSlot = Row->AddChildToHorizontalBox(Slider);
+	UWidget* Control = Slider;
+	if (Background)
+	{
+		UOverlay* Layers = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass());
+		UOverlaySlot* Under = Layers->AddChildToOverlay(Background);
+		Under->SetHorizontalAlignment(HAlign_Fill);
+		Under->SetVerticalAlignment(VAlign_Center);
+		UOverlaySlot* Over = Layers->AddChildToOverlay(Slider);
+		Over->SetHorizontalAlignment(HAlign_Fill);
+		Over->SetVerticalAlignment(VAlign_Center);
+		Control = Layers;
+	}
+	UHorizontalBoxSlot* SliderSlot = Row->AddChildToHorizontalBox(Control);
 	SliderSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	SliderSlot->SetVerticalAlignment(VAlign_Center);
+}
+
+UPanelWidget* UShinobiCreatorPage::AddStrip(const TArray<UTexture2D*>& Pictures, const TArray<FString>& Names, int32 Picked, float Size, TFunction<void(int32)> Pick)
+{
+	UScrollBox* Strip = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass());
+	Strip->SetOrientation(Orient_Horizontal);
+	Rows->AddChildToVerticalBox(Strip);
+	for (int32 Position = 0; Position < Names.Num(); ++Position)
+	{
+		UShinobiIndexButton* Card = MakeButton(FString(), Position, Pick);
+		ShinobiMenuStyle::StyleButton(*Card, Position == Picked, FMargin(3.f));
+		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		Box->SetWidthOverride(Size);
+		Box->SetHeightOverride(Size);
+		if (UTexture2D* Picture = Pictures.IsValidIndex(Position) ? Pictures[Position] : nullptr)
+		{
+			UImage* Image = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
+			Image->SetBrushFromTexture(Picture);
+			Box->AddChild(Image);
+		}
+		else
+		{
+			UTextBlock* Name = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Names[Position]), 10, FLinearColor::White);
+			Name->SetAutoWrapText(true);
+			Name->SetJustification(ETextJustify::Center);
+			Box->AddChild(Name);
+		}
+		Card->AddChild(Box);
+		Strip->AddChild(Card);
+	}
+	return Strip;
 }
 
 void UShinobiCreatorPage::Redress()
@@ -674,7 +736,13 @@ void UShinobiCreatorPage::BuildClothesRows()
 
 void UShinobiCreatorPage::BuildBodySkinRows()
 {
-	AddPicker(TEXT("Build"), reinterpret_cast<uint8 FShinobiAppearance::*>(&FShinobiAppearance::Build), 3, false, [](int32 V) { return FString(CreatorBuildNames[V]); });
+	// Build: the base's build morph (Own: the roster MetaHuman's own body) and how far toward it.
+	AddPicker(TEXT("Build"), reinterpret_cast<uint8 FShinobiAppearance::*>(&FShinobiAppearance::Build), UE_ARRAY_COUNT(CreatorBuildNames), false,
+		[](int32 V) { return FString(CreatorBuildNames[V]); });
+	AddSlider(TEXT("Build blend"), Look.BuildBlend / 255.f, true, [this](float V)
+	{
+		EditLook([V](FShinobiAppearance& L) { L.BuildBlend = uint8(FMath::RoundToInt(V * 255.f)); }, EShinobiLookEdit::Debounced);
+	});
 	const TArray<FName> Sliders = UShinobiBodyComponent::GetBodySliderNames();
 	for (int32 Index = 0; Index < Sliders.Num(); ++Index)
 	{
@@ -687,6 +755,88 @@ void UShinobiCreatorPage::BuildBodySkinRows()
 					L.BodyShape[Index] = CreatorShape(V);
 				}, EShinobiLookEdit::Shape);
 			});
+	}
+
+	// Skin: a tone bar (the slider over the tones it gives), make-up and freckles, all at once on the worn body.
+	AddNote(TEXT("SKIN"));
+	UHorizontalBox* Tones = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+	for (int32 Step = 0; Step < CreatorToneSteps; ++Step)
+	{
+		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		Box->SetHeightOverride(10.f);
+		UBorder* Tone = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+		Tone->SetBrush(ShinobiMenuStyle::ColorBrush(CreatorToneSkin * UShinobiBodyComponent::SkinToneMultiplier(uint8(Step * 255 / (CreatorToneSteps - 1)))));
+		Box->AddChild(Tone);
+		Tones->AddChildToHorizontalBox(Box)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	}
+	AddSlider(TEXT("Skin tone"), Look.SkinTone / 255.f, true, [this](float V)
+	{
+		EditLook([V](FShinobiAppearance& L) { L.SkinTone = uint8(FMath::RoundToInt(V * 255.f)); }, EShinobiLookEdit::Skin);
+	}, Tones);
+	AddChoice(TEXT("Make up"), CreatorRowNames(ShinobiMutable::MakeUpPath), Look.MakeUp, [this](int32 Picked)
+	{
+		EditLook([Picked](FShinobiAppearance& L) { L.MakeUp = uint8(Picked); }, EShinobiLookEdit::Skin);
+	});
+	TArray<FString> Freckles = { TEXT("None") };
+	while (LoadObject<UTexture2D>(nullptr, *ShinobiMutable::FrecklesPath(Freckles.Num()), nullptr, LOAD_NoWarn | LOAD_Quiet))
+	{
+		Freckles.Add(FString::Printf(TEXT("%d"), Freckles.Num()));
+	}
+	AddChoice(TEXT("Freckles"), Freckles, Look.Freckles, [this](int32 Picked)
+	{
+		EditLook([Picked](FShinobiAppearance& L) { L.Freckles = uint8(Picked); }, EShinobiLookEdit::Skin);
+	});
+
+	// Tattoos: each one's design, body region, place, turn and size; up to ShinobiMutable::MaxTattoos.
+	const UDataTable* Designs = LoadObject<UDataTable>(nullptr, ShinobiMutable::TattoosPath, nullptr, LOAD_NoWarn | LOAD_Quiet);
+	TArray<UTexture2D*> DesignPictures;
+	TArray<FString> DesignNames;
+	for (const FName Name : Designs ? Designs->GetRowNames() : TArray<FName>())
+	{
+		const FShinobiTattooDesign* Design = Designs->FindRow<FShinobiTattooDesign>(Name, TEXT("Creator"));
+		UTexture2D* Picture = Design->Thumbnail.LoadSynchronous();
+		DesignPictures.Add(Picture ? Picture : Design->Texture.LoadSynchronous());
+		DesignNames.Add(Name.ToString());
+	}
+	const TArray<FString> Regions = CreatorRowNames(ShinobiMutable::TattooRegionsPath);
+	for (int32 Tattoo = 0; Tattoo < Look.Tattoos.Num(); ++Tattoo)
+	{
+		const FShinobiTattoo& Worn = Look.Tattoos[Tattoo];
+		AddNote(FString::Printf(TEXT("TATTOO %d"), Tattoo + 1));
+		const auto EditTattoo = [this, Tattoo](TFunction<void(FShinobiTattoo&)> Change)
+		{
+			EditLook([Tattoo, &Change](FShinobiAppearance& L) { if (L.Tattoos.IsValidIndex(Tattoo)) { Change(L.Tattoos[Tattoo]); } }, EShinobiLookEdit::Skin);
+		};
+		AddStrip(DesignPictures, DesignNames, Worn.Design, 48.f, [this, EditTattoo](int32 Picked)
+		{
+			EditTattoo([Picked](FShinobiTattoo& T) { T.Design = uint8(Picked); });
+			bRowsPending = true;
+		});
+		AddChoice(TEXT("Region"), Regions, Worn.Region, [this, EditTattoo, Regions](int32 Picked)
+		{
+			EditTattoo([Picked](FShinobiTattoo& T) { T.Region = uint8(Picked); });
+			if (AShinobiMenuStage* Shown = Stage.Get())
+			{
+				Shown->SetAutoZoom(Regions.IsValidIndex(Picked) && Regions[Picked].Contains(TEXT("Neck")) ? 1.f : 0.f); // up close for the neck
+			}
+		});
+		AddSlider(TEXT("Offset U"), Worn.OffsetU / 127.f, false, [EditTattoo](float V) { EditTattoo([V](FShinobiTattoo& T) { T.OffsetU = CreatorShape(V); }); });
+		AddSlider(TEXT("Offset V"), Worn.OffsetV / 127.f, false, [EditTattoo](float V) { EditTattoo([V](FShinobiTattoo& T) { T.OffsetV = CreatorShape(V); }); });
+		AddSlider(TEXT("Rotation"), Worn.Rotation / 255.f, true, [EditTattoo](float V) { EditTattoo([V](FShinobiTattoo& T) { T.Rotation = uint8(FMath::RoundToInt(V * 255.f)); }); });
+		AddSlider(TEXT("Size"), Worn.Scale / 255.f, true, [EditTattoo](float V) { EditTattoo([V](FShinobiTattoo& T) { T.Scale = uint8(FMath::RoundToInt(V * 255.f)); }); });
+		Rows->AddChildToVerticalBox(MakeButton(TEXT("DELETE"), Tattoo, [this](int32 Picked)
+		{
+			EditLook([Picked](FShinobiAppearance& L) { if (L.Tattoos.IsValidIndex(Picked)) { L.Tattoos.RemoveAt(Picked); } }, EShinobiLookEdit::Skin);
+			bRowsPending = true;
+		}, 12))->SetHorizontalAlignment(HAlign_Left);
+	}
+	if (Look.Tattoos.Num() < ShinobiMutable::MaxTattoos && DesignNames.Num() > 0 && Regions.Num() > 0)
+	{
+		Rows->AddChildToVerticalBox(MakeButton(TEXT("+ ADD TATTOO"), 0, [this](int32)
+		{
+			EditLook([](FShinobiAppearance& L) { L.Tattoos.Add({0, 0, 0, 0, 0, 128}); }, EShinobiLookEdit::Skin);
+			bRowsPending = true;
+		}, 12))->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
 	}
 }
 

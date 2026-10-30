@@ -97,8 +97,10 @@ private:
 	void AddChoice(const FString& Label, const TArray<FString>& Names, int32 Current, TFunction<void(int32)> Pick);
 	/** AddChoice over a look field: 0..Count-1, and None first when bNone, named by Name (else 1, 2, ...); a Rebuild edit. */
 	void AddPicker(const FString& Label, uint8 FShinobiAppearance::* Field, int32 Count, bool bNone, TFunction<FString(int32)> Name = nullptr);
-	/** One slider row (-1..1, or 0..1 when bUnit) starting at Value; Set takes each new value. */
-	void AddSlider(const FString& Label, float Value, bool bUnit, TFunction<void(float)> Set);
+	/** One slider row (-1..1, or 0..1 when bUnit) starting at Value, over Background if given; Set takes each new value. */
+	void AddSlider(const FString& Label, float Value, bool bUnit, TFunction<void(float)> Set, UWidget* Background = nullptr);
+	/** A strip of image buttons (Pictures; a null one shows its name), Picked's marked; a click calls Pick with its position. */
+	UPanelWidget* AddStrip(const TArray<UTexture2D*>& Pictures, const TArray<FString>& Names, int32 Picked, float Size, TFunction<void(int32)> Pick);
 	/** A caption line in the rows. */
 	void AddNote(const FString& Text);
 	/** A button for the rows (and the bars above them). */

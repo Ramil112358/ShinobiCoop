@@ -319,4 +319,156 @@ bool FShinobiCreatorSwatchSetsColourTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+namespace
+{
+	/** The first row (a horizontal box) of the page's rows whose caption reads Caption. */
+	UPanelWidget* CreatorTestRow(UShinobiCreatorPage& Page, const FString& Caption)
+	{
+		TArray<UWidget*> Widgets;
+		CreatorTestWidgets(Page.GetRows(), Widgets);
+		for (UWidget* Widget : Widgets)
+		{
+			UPanelWidget* Row = Cast<UPanelWidget>(Widget);
+			const UTextBlock* First = Row && Row->GetChildrenCount() > 0 ? Cast<UTextBlock>(Row->GetChildAt(0)) : nullptr;
+			if (First && First->GetText().ToString().TrimStartAndEnd() == Caption)
+			{
+				return Row;
+			}
+		}
+		return nullptr;
+	}
+
+	/** The last widget of class T under Root (a row's ">" arrow, its slider). */
+	template <typename T>
+	T* CreatorTestLast(UWidget* Root)
+	{
+		TArray<UWidget*> Widgets;
+		if (Root)
+		{
+			CreatorTestWidgets(Root, Widgets);
+		}
+		for (int32 Index = Widgets.Num() - 1; Index >= 0; --Index)
+		{
+			if (T* Found = Cast<T>(Widgets[Index]))
+			{
+				return Found;
+			}
+		}
+		return nullptr;
+	}
+
+	/** Clicks the first button labelled Label; false if there is none. */
+	bool CreatorTestPress(UShinobiCreatorPage& Page, const FString& Label)
+	{
+		TArray<UWidget*> Widgets;
+		CreatorTestWidgets(Page.GetRows(), Widgets);
+		for (UWidget* Widget : Widgets)
+		{
+			UShinobiIndexButton* Button = Cast<UShinobiIndexButton>(Widget);
+			const UTextBlock* Text = Button ? Cast<UTextBlock>(Button->GetChildAt(0)) : nullptr;
+			if (Text && Text->GetText().ToString() == Label)
+			{
+				return Button->OnIndexClicked.ExecuteIfBound(Button->Index);
+			}
+		}
+		return false;
+	}
+
+	/** Clicks the ">" of the row captioned Caption, then lets the page rebuild its rows. */
+	bool CreatorTestNext(UShinobiCreatorPage& Page, const FString& Caption)
+	{
+		UShinobiIndexButton* Next = CreatorTestLast<UShinobiIndexButton>(CreatorTestRow(Page, Caption));
+		const bool bClicked = Next && Next->OnIndexClicked.ExecuteIfBound(Next->Index);
+		Page.TickEdits(0.f);
+		return bClicked;
+	}
+
+	/** Moves the slider of the row captioned Caption to Value. */
+	bool CreatorTestSlide(UShinobiCreatorPage& Page, const FString& Caption, float Value)
+	{
+		UShinobiIndexSlider* Slider = CreatorTestLast<UShinobiIndexSlider>(CreatorTestRow(Page, Caption));
+		return Slider && Slider->OnIndexValue.ExecuteIfBound(0, Value);
+	}
+
+	void CreatorTestBodySkin(FCreatorBench& Bench)
+	{
+		Bench.Page->EditLook([](FShinobiAppearance& L) { L = FShinobiAppearance(); }, EShinobiLookEdit::Rebuild);
+		Bench.Page->ShowCategory(UShinobiCreatorPage::ECategory::BodySkin);
+		Bench.Page->TickEdits(0.f);
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCreatorBuildPickersTest, "ShinobiCoop.UI.CreatorBuildPickers", ShinobiTestFlags)
+bool FShinobiCreatorBuildPickersTest::RunTest(const FString& Parameters)
+{
+	FCreatorBench Bench;
+	CreatorTestBodySkin(Bench);
+	Bench.Page->EditLook([](FShinobiAppearance& L) { L.Build = EShinobiBuild::Over; }, EShinobiLookEdit::Rebuild);
+	Bench.Page->TickEdits(0.f);
+	TestTrue(TEXT("Build stepped"), CreatorTestNext(*Bench.Page, TEXT("Build")));
+	TestTrue(TEXT("Heavy, then Own"), Bench.Page->GetLook().Build == EShinobiBuild::Own);
+	TestTrue(TEXT("blend slid"), CreatorTestSlide(*Bench.Page, TEXT("Build blend"), 0.5f));
+	TestEqual(TEXT("blend 0..1 to 0..255"), Bench.Page->GetLook().BuildBlend, uint8(128));
+	TestTrue(TEXT("rebuilds once it rests"), Bench.Page->IsRedressPending());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCreatorSkinToneInstantTest, "ShinobiCoop.UI.CreatorSkinToneInstant", ShinobiTestFlags)
+bool FShinobiCreatorSkinToneInstantTest::RunTest(const FString& Parameters)
+{
+	FCreatorBench Bench;
+	CreatorTestBodySkin(Bench);
+	TestTrue(TEXT("tone slid"), CreatorTestSlide(*Bench.Page, TEXT("Skin tone"), 0.f));
+	TestEqual(TEXT("darkest"), Bench.Page->GetLook().SkinTone, uint8(0));
+	TestFalse(TEXT("no rebuild"), Bench.Page->IsRedressPending());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCreatorTattooAddEditDeleteTest, "ShinobiCoop.UI.CreatorTattooAddEditDelete", ShinobiTestFlags)
+bool FShinobiCreatorTattooAddEditDeleteTest::RunTest(const FString& Parameters)
+{
+	FCreatorBench Bench;
+	CreatorTestBodySkin(Bench);
+	TestTrue(TEXT("added"), CreatorTestPress(*Bench.Page, TEXT("+ ADD TATTOO")));
+	Bench.Page->TickEdits(0.f);
+	const FShinobiTattoo Fresh{0, 0, 0, 0, 0, 128};
+	TestTrue(TEXT("one tattoo, design 0 on region 0 at size 128"), Bench.Page->GetLook().Tattoos.Num() == 1 && Bench.Page->GetLook().Tattoos[0] == Fresh);
+	TestTrue(TEXT("region stepped"), CreatorTestNext(*Bench.Page, TEXT("Region")));
+	TestEqual(TEXT("next region"), Bench.Page->GetLook().Tattoos.Num() == 1 ? Bench.Page->GetLook().Tattoos[0].Region : uint8(255), uint8(1));
+	TestTrue(TEXT("moved"), CreatorTestSlide(*Bench.Page, TEXT("Offset U"), 0.5f));
+	TestEqual(TEXT("offset"), Bench.Page->GetLook().Tattoos.Num() == 1 ? int32(Bench.Page->GetLook().Tattoos[0].OffsetU) : 0, 64);
+	TestFalse(TEXT("all instant"), Bench.Page->IsRedressPending());
+	TestTrue(TEXT("deleted"), CreatorTestPress(*Bench.Page, TEXT("DELETE")));
+	TestEqual(TEXT("none left"), Bench.Page->GetLook().Tattoos.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCreatorTattooCapTest, "ShinobiCoop.UI.CreatorTattooCap", ShinobiTestFlags)
+bool FShinobiCreatorTattooCapTest::RunTest(const FString& Parameters)
+{
+	FCreatorBench Bench;
+	CreatorTestBodySkin(Bench);
+	for (int32 Add = 0; Add < 3; ++Add)
+	{
+		TestTrue(TEXT("added"), CreatorTestPress(*Bench.Page, TEXT("+ ADD TATTOO")));
+		Bench.Page->TickEdits(0.f);
+	}
+	TestEqual(TEXT("three"), Bench.Page->GetLook().Tattoos.Num(), 3);
+	TestFalse(TEXT("no fourth"), CreatorTestPress(*Bench.Page, TEXT("+ ADD TATTOO")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCreatorMakeUpAndFrecklesTest, "ShinobiCoop.UI.CreatorMakeUpAndFreckles", ShinobiTestFlags)
+bool FShinobiCreatorMakeUpAndFrecklesTest::RunTest(const FString& Parameters)
+{
+	FCreatorBench Bench;
+	CreatorTestBodySkin(Bench);
+	TestTrue(TEXT("make-up stepped"), CreatorTestNext(*Bench.Page, TEXT("Make up")));
+	TestEqual(TEXT("the first look"), Bench.Page->GetLook().MakeUp, uint8(1));
+	TestTrue(TEXT("freckles stepped"), CreatorTestNext(*Bench.Page, TEXT("Freckles")));
+	TestEqual(TEXT("the first freckles"), Bench.Page->GetLook().Freckles, uint8(1));
+	TestFalse(TEXT("both instant"), Bench.Page->IsRedressPending());
+	return true;
+}
+
 #endif
