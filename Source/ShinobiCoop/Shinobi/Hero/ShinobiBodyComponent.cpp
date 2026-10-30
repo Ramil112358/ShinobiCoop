@@ -379,6 +379,44 @@ void UShinobiBodyComponent::ApplySkinLayers(const FShinobiAppearance& Look)
 			Skin->SetScalarParameterValue(*(Name + TEXT(" Scale")), Region->Scale * (0.5f + Tattoo->Scale / 255.f));
 		}
 	}
+	// Make-up and freckles: a MetaHuman face's skin (static heads keep their own painted faces).
+	const UDataTable* MakeUps = LoadObject<UDataTable>(nullptr, ShinobiMutable::MakeUpPath, nullptr, LOAD_NoWarn | LOAD_Quiet);
+	const TArray<FName> MakeUpRows = MakeUps ? MakeUps->GetRowNames() : TArray<FName>();
+	const FShinobiMakeUpRow* MakeUp = Look.MakeUp > 0 && MakeUpRows.IsValidIndex(Look.MakeUp) ? MakeUps->FindRow<FShinobiMakeUpRow>(MakeUpRows[Look.MakeUp], TEXT("ApplySkinLayers")) : nullptr;
+	UTexture2D* Freckles = Look.Freckles > 0 ? LoadObject<UTexture2D>(nullptr, *ShinobiMutable::FrecklesPath(Look.Freckles), nullptr, LOAD_NoWarn | LOAD_Quiet) : nullptr;
+	for (UActorComponent* Part : MetaHumanParts)
+	{
+		UMeshComponent* Face = Part && Part->GetName().StartsWith(TEXT("Face")) ? Cast<UMeshComponent>(Part) : nullptr;
+		for (int32 Index = 0; Face && Index < Face->GetNumMaterials(); ++Index)
+		{
+			float Unused;
+			const UMaterialInterface* Material = Face->GetMaterial(Index);
+			if (!Material || !Material->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Lips Makeup Opacity")), Unused))
+			{
+				continue;
+			}
+			UMaterialInstanceDynamic* Skin = Face->CreateDynamicMaterialInstance(Index);
+			auto Paint = [Skin](const TCHAR* Layer, const TSoftObjectPtr<UTexture2D>* Mask, const FLinearColor& Colour, float Opacity)
+			{
+				UTexture2D* Texture = Mask ? Mask->LoadSynchronous() : nullptr;
+				Skin->SetScalarParameterValue(*(FString(Layer) + TEXT(" Opacity")), Texture ? Opacity : 0.f);
+				if (Texture)
+				{
+					Skin->SetTextureParameterValue(Layer, Texture);
+					Skin->SetVectorParameterValue(*(FString(Layer) + TEXT(" Colour")), Colour);
+				}
+			};
+			Paint(TEXT("Eye Makeup"), MakeUp ? &MakeUp->Eye : nullptr, MakeUp ? MakeUp->EyeColour : FLinearColor::Black, 0.85f);
+			Paint(TEXT("Lips Makeup"), MakeUp ? &MakeUp->Lips : nullptr, MakeUp ? MakeUp->LipsColour : FLinearColor::Black, 0.8f);
+			Paint(TEXT("Blush Makeup"), MakeUp ? &MakeUp->Blush : nullptr, MakeUp ? MakeUp->BlushColour : FLinearColor::Black, 0.5f);
+			Skin->SetScalarParameterValue(TEXT("Freckles Opacity"), Freckles ? 0.6f : 0.f);
+			if (Freckles)
+			{
+				Skin->SetTextureParameterValue(TEXT("Freckles"), Freckles);
+				Skin->SetVectorParameterValue(TEXT("Freckles Colour"), ShinobiMutable::FrecklesColour);
+			}
+		}
+	}
 }
 
 void UShinobiBodyComponent::ColourPieces(const FShinobiAppearance& Look)

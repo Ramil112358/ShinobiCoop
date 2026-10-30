@@ -648,6 +648,41 @@ void AShinobiPlayerController::RunTattooShot()
 			T += 5.f;
 		}
 	}
+	// Make-up looks and freckles on BikaMH's face, close (ShinobiTattooShot_MakeUp<n>_Face).
+	const UShinobiCreatorCatalog* Catalog = LoadObject<UShinobiCreatorCatalog>(nullptr, UShinobiCreatorCatalog::Path);
+	if (const FShinobiAppearance* Bika = Catalog ? Catalog->FindPreset(TEXT("BikaMH")) : nullptr)
+	{
+		for (int32 MakeUp = 0; MakeUp <= 4; ++MakeUp)
+		{
+			FShinobiAppearance Look = *Bika;
+			Look.MakeUp = uint8(MakeUp);
+			Look.Freckles = MakeUp == 0 ? 1 : 0;
+			At(T, [this, Look]() { ServerPickAppearance(Look); });
+#if WITH_EDITOR
+			At(T + 3.5f, []() { FAssetCompilingManager::Get().FinishAllCompilation(); if (GShaderCompilingManager) { GShaderCompilingManager->FinishAllCompilation(); } });
+#endif
+			At(T + 4.f, [this]()
+			{
+				const AShinobiPlayerCharacter* Shinobi = GetPawn<AShinobiPlayerCharacter>();
+				const USkeletalMeshComponent* Body = Shinobi ? Shinobi->GetHeroMesh() : nullptr;
+				if (!Body || Body->GetBoneIndex(TEXT("head")) == INDEX_NONE)
+				{
+					return;
+				}
+				const FVector Target = Body->GetBoneLocation(TEXT("head")) + FVector(0.f, 0.f, 8.f);
+				const FVector Eye = Target + Shinobi->GetActorForwardVector() * 60.f;
+				ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Target - Eye).Rotation());
+				Camera->GetCameraComponent()->SetFieldOfView(40.f);
+				Camera->SetLifeSpan(0.5f);
+				SetViewTarget(Camera);
+			});
+			At(T + 4.15f, [MakeUp]()
+			{
+				FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / FString::Printf(TEXT("ShinobiTattooShot_MakeUp%d_Face"), MakeUp)), false, false);
+			});
+			T += 5.f;
+		}
+	}
 	At(T + 0.5f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
 

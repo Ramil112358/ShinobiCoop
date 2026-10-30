@@ -1579,4 +1579,37 @@ bool FShinobiMutableTattooOnBodyTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableMakeUpOnFaceTest, "ShinobiCoop.Mutable.MakeUpOnFace", ShinobiTestFlags)
+bool FShinobiMutableMakeUpOnFaceTest::RunTest(const FString& Parameters)
+{
+	// Make-up option 1 and freckles 1 on a MetaHuman face (DT_MakeUp, the plugin's freckle masks): the face's skin shows them.
+	TOptional<FShinobiAppearance> Look = Preset(*this, TEXT("RamilMH"));
+	if (!Look)
+	{
+		return false;
+	}
+	Look->MakeUp = 1;
+	Look->Freckles = 1;
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	Wearer->Body->WearAppearance(*Look);
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer]()
+	{
+		const TObjectPtr<UActorComponent>* Face = Wearer->Body->GetMetaHumanParts().FindByPredicate([](const UActorComponent* Part) { return Part && Part->GetName().StartsWith(TEXT("Face")); });
+		const UPrimitiveComponent* Mesh = Face ? Cast<UPrimitiveComponent>(Face->Get()) : nullptr;
+		float Lips = 0.f, Freckles = 0.f;
+		for (int32 Index = 0; Mesh && Index < Mesh->GetNumMaterials(); ++Index)
+		{
+			if (const UMaterialInterface* Material = Mesh->GetMaterial(Index))
+			{
+				float Value = 0.f;
+				Lips = Material->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Lips Makeup Opacity")), Value) ? FMath::Max(Lips, Value) : Lips;
+				Freckles = Material->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Freckles Opacity")), Value) ? FMath::Max(Freckles, Value) : Freckles;
+			}
+		}
+		TestTrue(TEXT("lips made up"), Lips > 0.f);
+		TestTrue(TEXT("freckles"), Freckles > 0.f);
+	});
+	return true;
+}
+
 #endif

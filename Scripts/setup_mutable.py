@@ -25,6 +25,7 @@ skinlayer: /Game/Shinobi/Skin/M_ShinobiSkin, the project's MetaHuman skin materi
 tattoos: DT_Tattoos (FShinobiTattooDesign: the Mutable Sample's tattoo designs with alpha) and DT_TattooRegions
   (FShinobiTattooRegion: where each body region sits in the MetaHuman body's UVs, found on the male base by
   UShinobiSkinLibrary::SkinUV; mirrored left/right UVs are logged).
+makeup: DT_MakeUp (FShinobiMakeUpRow: row 0 none, then looks from the MetaHuman plugin's ArtistDelights face masks).
 catalog: DA_CreatorCatalog's Heads (with their tints), the roster MetaHuman faces and a preset per roster character
   (run after setup_creator.py catalog, which rewrites Faces).
 palette: DT_Palette, the wardrobe colours (FShinobiPaletteRow).
@@ -326,6 +327,32 @@ def tattoos():
             log(f"tattoo regions {left['Name']} and {right['Name']} share UVs (mirrored): a tattoo shows on both")
     new_table(TATTOO_REGIONS_TABLE, unreal.ShinobiTattooRegion, regions)
     log(f"DT_Tattoos: {[d['Name'] for d in designs]}; DT_TattooRegions: {list(TATTOO_REGIONS)}")
+
+
+_ART = "/MetaHumanCharacter/Textures/ArtistDelights"
+MAKEUP = f"{MUTABLE_ROOT}/DT_MakeUp"
+# Look: (eye mask, eye colour, lips mask, lips colour, blush mask, blush colour); a mask None leaves that part bare.
+MAKEUP_LOOKS = {
+    "None": (None, None, None, None, None, None),
+    "Natural": (None, None, "Natural", (0.45, 0.16, 0.14), "Apple", (0.55, 0.22, 0.2)),
+    "Smoky": ("SoftSmokey", (0.04, 0.035, 0.035), "Natural", (0.38, 0.2, 0.17), None, None),
+    "CatEye": ("CatEye", (0.01, 0.01, 0.01), "Hollywood", (0.45, 0.02, 0.03), None, None),
+    "Dramatic": ("DramaticSmudge", (0.05, 0.02, 0.06), "Cupid", (0.3, 0.02, 0.06), "Angled", (0.45, 0.12, 0.15)),
+}
+
+
+def makeup():
+    rows = []
+    for name, (eye, eye_colour, lips, lips_colour, blush, blush_colour) in MAKEUP_LOOKS.items():
+        row = {"Name": name}
+        for part, folder, mask, colour in (("Eye", "EyeMakeup", eye, eye_colour), ("Lips", "LipsMakeup", lips, lips_colour),
+                                           ("Blush", "BlushMakeup", blush, blush_colour)):
+            if mask:
+                row[part] = asset_path(f"{_ART}/{folder}/T_{folder}_{mask}")
+                row[f"{part}Colour"] = {"R": colour[0], "G": colour[1], "B": colour[2], "A": 1.0}
+        rows.append(row)
+    new_table(MAKEUP, unreal.ShinobiMakeUpRow, rows)
+    log(f"DT_MakeUp: {list(MAKEUP_LOOKS)}")
 
 
 def catalog():
@@ -694,6 +721,6 @@ def graph():
         raise RuntimeError("CO_Shinobi did not compile")
 
 
-STAGES = {"bases": bases, "faceskin": face_skin, "samplecopy": sample_copy, "fabimport": fab_import, "fits": fits, "heads": heads, "catalog": catalog, "skintone": skintone, "skinlayer": skinlayer, "tattoos": tattoos, "palette": palette, "coverage": coverage, "wardrobe": wardrobe, "graph": graph}
+STAGES = {"bases": bases, "faceskin": face_skin, "samplecopy": sample_copy, "fabimport": fab_import, "fits": fits, "heads": heads, "catalog": catalog, "skintone": skintone, "skinlayer": skinlayer, "tattoos": tattoos, "makeup": makeup, "palette": palette, "coverage": coverage, "wardrobe": wardrobe, "graph": graph}
 for stage in ONLY or [s for s in STAGES if s != "faceskin"]:
     STAGES[stage]()

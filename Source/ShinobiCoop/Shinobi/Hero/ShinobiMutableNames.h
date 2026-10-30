@@ -13,6 +13,10 @@ namespace ShinobiMutable
 	/** Tattoo designs and body regions (FShinobiTattooDesign, FShinobiTattooRegion; Scripts/setup_mutable.py stage tattoos). */
 	inline constexpr const TCHAR* TattoosPath = TEXT("/Game/Shinobi/Mutable/DT_Tattoos.DT_Tattoos");
 	inline constexpr const TCHAR* TattooRegionsPath = TEXT("/Game/Shinobi/Mutable/DT_TattooRegions.DT_TattooRegions");
+	/** Make-up looks (FShinobiMakeUpRow, stage makeup) and freckle masks (Freckles option k: the k-th; 0 is none). */
+	inline constexpr const TCHAR* MakeUpPath = TEXT("/Game/Shinobi/Mutable/DT_MakeUp.DT_MakeUp");
+	inline FString FrecklesPath(int32 Option) { return FString::Printf(TEXT("/MetaHumanCharacter/Textures/ArtistDelights/Freckles/T_Freckles_%03d.T_Freckles_%03d"), Option, Option); }
+	inline const FLinearColor FrecklesColour(0.22f, 0.11f, 0.06f);
 
 	/** The body: a Skeletal Mesh Parameter given the sex's base (SK_MutableBase_<Sex>), or for the Own build that roster
 	 * character's own body (SK_MutableOwn_<Sex>), so the sex needs no parameter. "Fit Base" is always the sex's base: the

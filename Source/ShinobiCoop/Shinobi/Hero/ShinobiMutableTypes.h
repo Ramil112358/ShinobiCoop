@@ -111,3 +111,29 @@ struct FShinobiTattooRegion : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Tattoo)
 	float Rotation = 0.f;
 };
+
+/** A make-up look (a row of DT_MakeUp; row 0 is none): FShinobiAppearance::MakeUp indexes the rows in order. Masks are the
+ * MetaHuman plugin's face masks (Textures/ArtistDelights); a missing mask leaves that part bare. */
+USTRUCT(BlueprintType)
+struct FShinobiMakeUpRow : public FTableRowBase
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = MakeUp)
+	TSoftObjectPtr<UTexture2D> Eye;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = MakeUp)
+	FLinearColor EyeColour = FLinearColor::Black;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = MakeUp)
+	TSoftObjectPtr<UTexture2D> Lips;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = MakeUp)
+	FLinearColor LipsColour = FLinearColor::Black;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = MakeUp)
+	TSoftObjectPtr<UTexture2D> Blush;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = MakeUp)
+	FLinearColor BlushColour = FLinearColor::Black;
+};
