@@ -19,6 +19,9 @@ heads (needs run_python.ps1 -Render: FBX export): each roster character's head (
 catalog: DA_CreatorCatalog's Heads (with their tints), the roster MetaHuman faces and a preset per roster character
   (run after setup_creator.py catalog, which rewrites Faces).
 palette: DT_Palette, the wardrobe colours (FShinobiPaletteRow).
+fits: morph target Fit_<Source> on each sex's base per names.FIT_SOURCES, moving it onto the body that source's pieces
+  were made on (UShinobiMutableMeshLibrary::BakeFitMorph), so a piece is reshaped from the body it fits to whatever body
+  is built.
 wardrobe: DT_Wardrobe_<Slot> per slot (FShinobiWardrobeRow): data the game passes to CO_Shinobi at runtime, so rows can be
   added without recompiling. Top, Bottom and Shoes hold every City Sample catalog style, index-aligned per sex.
 graph: CO_Shinobi, built with UShinobiMutableGraphLibrary. Body parameter -> Build switch over the build morphs (scaled by
@@ -32,8 +35,9 @@ import sys
 import unreal
 
 sys.path += [os.path.dirname(os.path.abspath(__file__)), os.path.join(os.path.dirname(__file__), "mutable")]
-from names import (BASE, BUILDS, CATALOG, HEADS, HEADS_DIR, CLIP_SUFFIX, HIDES_SUFFIX, MESH_SUFFIX, MUTABLE_ROOT, OBJECT, OFF, ON, OWN, OWN_BODIES,  # noqa: E402
-                   PALETTE, PARAM_BODY, PARAM_BUILD, PARAM_BUILD_BLEND, PARAM_FIT_BASE, SLOTS, WARDROBE_TABLE)
+from names import (BASE, BUILDS, CATALOG, FIT_PREFIX, FIT_MAX_MOVE, FIT_SMOOTH, FIT_SOURCES, HEADS, HEADS_DIR, CLIP_SUFFIX, HIDES_SUFFIX,  # noqa: E402
+                   MESH_SUFFIX, MUTABLE_ROOT, OBJECT, OFF, ON, OWN, OWN_BODIES, PALETTE, PARAM_BODY, PARAM_BUILD, PARAM_BUILD_BLEND,
+                   PARAM_FIT_BASE, SLOTS, WARDROBE_TABLE)
 
 ONLY = [s for s in os.environ.get("SETUP_MUTABLE_ONLY", "").split(",") if s]
 EAL = unreal.EditorAssetLibrary
@@ -62,8 +66,9 @@ def asset_path(path):
 
 
 def replace(path):
-    if EAL.does_asset_exist(path) and not EAL.delete_asset(path):
-        raise RuntimeError(f"could not delete {path} (open in an editor?)")
+    if EAL.does_asset_exist(path):
+        if not EAL.delete_asset(path):
+            raise RuntimeError(f"could not delete {path} (open in an editor?)")
 
 
 def skin_face_bones(mesh):
@@ -109,6 +114,25 @@ def bases():
         if os.path.exists(blueprint):
             os.remove(blueprint)
             log(f"removed {blueprint}")
+
+
+def fits():
+    dna_dir = os.path.join(unreal.Paths.engine_plugins_dir(), "MetaHuman", "MetaHumanCharacter", "Content", "Optional", "Body", "FixedCompatibility")
+    M = unreal.ShinobiMutableMeshLibrary
+    for source, bodies in FIT_SOURCES.items():
+        for sex, body in bodies.items():
+            # (a bool UFUNCTION with out parameters returns the outs, or None when it returns false)
+            if body.startswith("dna:"):
+                surface = M.read_dna_body(os.path.join(dna_dir, body[4:] + ".dna"))
+            else:
+                surface = M.read_mesh_surface(unreal.load_asset(body))
+            if not surface:
+                raise RuntimeError(f"no surface for {source} {sex}: {body}")
+            positions, triangles = surface
+            base = unreal.load_asset(BASE.format(sex=sex))
+            report = M.bake_fit_morph(base, FIT_PREFIX + source, positions, triangles, FIT_MAX_MOVE, FIT_SMOOTH)
+            EAL.save_loaded_asset(base, only_if_is_dirty=False)
+            log(f"fit {source} {sex} from {body} ({len(positions)} vertices): {report}")
 
 
 def heads():
@@ -401,6 +425,6 @@ def graph():
         raise RuntimeError("CO_Shinobi did not compile")
 
 
-STAGES = {"bases": bases, "faceskin": face_skin, "heads": heads, "catalog": catalog, "palette": palette, "wardrobe": wardrobe, "graph": graph}
+STAGES = {"bases": bases, "faceskin": face_skin, "fits": fits, "heads": heads, "catalog": catalog, "palette": palette, "wardrobe": wardrobe, "graph": graph}
 for stage in ONLY or [s for s in STAGES if s != "faceskin"]:
     STAGES[stage]()

@@ -38,6 +38,7 @@ public class ShinobiCoop : ModuleRules
 			"MeshDescription",
 			"StaticMeshDescription",
 			"SkeletalMeshDescription", // creator: face blend morphs baked into mesh descriptions (ShinobiFaceBlendLibrary)
+			"GeometryCore", // Mutable fit shapes: closest points on a body (ShinobiMutableMeshLibrary)
 			"MotionWarping",
 			"Chooser",
 			"AnimationWarpingRuntime",

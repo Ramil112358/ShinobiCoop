@@ -7,6 +7,7 @@
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "Components/LODSyncComponent.h"
+#include "Engine/DataTable.h"
 #include "Engine/SkeletalMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "MuCO/CustomizableObject.h"
@@ -1021,6 +1022,84 @@ bool FShinobiMutableLODSyncFindsPartsTest::RunTest(const FString& Parameters)
 		}
 		TestTrue(TEXT("the face and grooms are synced"), Checked >= 5);
 	});
+	return true;
+}
+
+namespace
+{
+	/** Whether Mesh has morph target Name. */
+	bool HasMorph(const USkeletalMesh* Mesh, const TCHAR* Name)
+	{
+		return Mesh && Mesh->FindMorphTarget(Name) != nullptr;
+	}
+
+	/** The meshes of a slot's wardrobe rows for a sex (City Sample rows only: CitySampleNN). */
+	TArray<USkeletalMesh*> CitySamplePieces(const TCHAR* Slot, bool bMale)
+	{
+		TArray<USkeletalMesh*> Pieces;
+		if (const UDataTable* Table = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(Slot)))
+		{
+			Table->ForeachRow<FShinobiWardrobeRow>(TEXT("fit test"), [&](const FName& Name, const FShinobiWardrobeRow& Row)
+			{
+				if (USkeletalMesh* Mesh = Name.ToString().StartsWith(TEXT("CitySample")) ? (bMale ? Row.MaleMesh : Row.FemaleMesh).LoadSynchronous() : nullptr)
+				{
+					Pieces.Add(Mesh);
+				}
+			});
+		}
+		return Pieces;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableFitMorphsOnBasesTest, "ShinobiCoop.Mutable.FitMorphsOnBases", ShinobiTestFlags)
+bool FShinobiMutableFitMorphsOnBasesTest::RunTest(const FString& Parameters)
+{
+	// A piece is reshaped from its source's fit morph of the base (Scripts/setup_mutable.py stage fits) to the built body:
+	// the base keeps the MetaHuman template's 32334 render vertices (Scripts/mutable/base_bodies.py), so both shapes share
+	// Reshape's topology.
+	for (const TCHAR* Sex : {TEXT("Male"), TEXT("Female")})
+	{
+		const USkeletalMesh* Base = LoadObject<USkeletalMesh>(nullptr, *ShinobiMutable::BasePath(Sex));
+		if (!TestNotNull(TEXT("the base"), Base))
+		{
+			continue;
+		}
+		TestEqual(Base->GetName() + TEXT(": the template's vertex count"), int32(Base->GetResourceForRendering()->LODRenderData[0].GetNumVertices()), 32334);
+		for (const TCHAR* Source : {TEXT("CitySample"), TEXT("MHSample")})
+		{
+			TestTrue(FString::Printf(TEXT("%s has Fit_%s"), *Base->GetName(), Source), HasMorph(Base, *(FString(TEXT("Fit_")) + Source)));
+		}
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableFitShapeHugsSourceTest, "ShinobiCoop.Mutable.FitShapeHugsSource", ShinobiTestFlags)
+bool FShinobiMutableFitShapeHugsSourceTest::RunTest(const FString& Parameters)
+{
+	// City Sample tops and bottoms were made on the legacy MetaHuman tal_nrw bodies: they sit outside the fit shape baked
+	// from those bodies, and clip into the plain base (the shoulders and crotch the P2 sheets showed).
+	for (const bool bMale : {true, false})
+	{
+		const TCHAR* Sex = bMale ? TEXT("Male") : TEXT("Female");
+		USkeletalMesh* Base = LoadObject<USkeletalMesh>(nullptr, *ShinobiMutable::BasePath(Sex));
+		if (!TestNotNull(TEXT("the base"), Base) || !TestTrue(TEXT("the base has Fit_CitySample"), HasMorph(Base, TEXT("Fit_CitySample"))))
+		{
+			continue;
+		}
+		for (const TCHAR* Slot : {TEXT("Top"), TEXT("Bottom")})
+		{
+			for (USkeletalMesh* Piece : CitySamplePieces(Slot, bMale))
+			{
+				const float OnFit = UShinobiMutableMeshLibrary::FractionInside(Piece, Base, 0.5f, TEXT("Fit_CitySample"));
+				const float OnBase = UShinobiMutableMeshLibrary::FractionInside(Piece, Base);
+				AddInfo(FString::Printf(TEXT("%s: %.1f%% inside its fit shape, %.1f%% inside the base"), *Piece->GetName(), OnFit * 100.f, OnBase * 100.f));
+				// (a few percent stay inside: the base's vertices sample the source body, and tight cloth dips below the flat
+				// triangles between them; 0-9% with or without smoothing)
+				TestTrue(FString::Printf(TEXT("%s sits on its fit shape (%.1f%% inside)"), *Piece->GetName(), OnFit * 100.f), OnFit < 0.08f);
+				TestTrue(FString::Printf(TEXT("%s fits its fit shape better than the base"), *Piece->GetName()), OnFit < OnBase);
+			}
+		}
+	}
 	return true;
 }
 

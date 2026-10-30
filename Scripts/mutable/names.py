@@ -28,6 +28,17 @@ PARAM_BODY = "Body"
 PARAM_FIT_BASE = "Fit Base"
 OWN = f"{MUTABLE_ROOT}/Bases/SK_MutableOwn_{{sex}}"  # .format(sex="Male"): RamilMH's / BikaMH's body, the Own build
 BASE = f"{MUTABLE_ROOT}/Bases/SK_MutableBase_{{sex}}"  # .format(sex="Male")
+# Fit morphs: morph target "Fit_<Source>" on each sex's base moves it onto the body a wardrobe source was made on
+# (setup_mutable.py stage fits); a piece is reshaped from it.
+FIT_PREFIX = "Fit_"
+# Each source's body per sex: "dna:<type>" = a MetaHuman compatibility body (the MetaHuman plugin's FixedCompatibility
+# folder), else a skeletal mesh. The City Sample crowd was made on the tal_nrw bodies; the Mutable Sample's MetaHuman
+# clothing on f_med_nrw (female only: its male fit is the same body).
+FIT_SOURCES = {
+    "CitySample": {"Male": "dna:m_tal_nrw", "Female": "dna:f_tal_nrw"},
+    "MHSample": {"Male": "dna:f_med_nrw", "Female": "dna:f_med_nrw"},
+}
+FIT_MAX_MOVE, FIT_SMOOTH = 8.0, 2  # cm, passes (UShinobiMutableMeshLibrary::BakeFitMorph)
 PARAM_BUILD = "Build"
 BUILDS = ["Under", "Normal", "Over", "Own"]  # EShinobiBuild order; Normal has no morph
 PARAM_BUILD_BLEND = "Build Blend"

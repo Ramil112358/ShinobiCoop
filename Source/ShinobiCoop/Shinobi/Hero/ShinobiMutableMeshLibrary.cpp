@@ -5,8 +5,85 @@
 
 #if WITH_EDITOR
 #include "AnimationRuntime.h"
+#include "DNAReader.h"
+#include "DNAUtils.h"
+#include "DynamicMesh/DynamicMesh3.h"
+#include "DynamicMesh/DynamicMeshAABBTree3.h"
 #include "MeshDescription.h"
+#include "MeshQueries.h"
 #include "SkeletalMeshAttributes.h"
+
+namespace
+{
+	using UE::Geometry::FDynamicMesh3;
+	using UE::Geometry::FDynamicMeshAABBTree3;
+
+	/** A surface to find closest points on, with each triangle's outward normal. */
+	struct FSurface
+	{
+		FDynamicMesh3 Mesh;
+		FDynamicMeshAABBTree3 Tree;
+		double Sign = 1.0; // -1 when the triangle normals point into the body
+
+		FSurface(const TArray<FVector>& Positions, const TArray<int32>& Triangles)
+		{
+			for (const FVector& Position : Positions)
+			{
+				Mesh.AppendVertex(Position);
+			}
+			for (int32 Index = 0; Index + 2 < Triangles.Num(); Index += 3)
+			{
+				Mesh.AppendTriangle(Triangles[Index], Triangles[Index + 1], Triangles[Index + 2]);
+			}
+			// Which way the normals face: mostly away from the body's upright axis (a body is open at the neck, so no volume
+			// sign; and the winding convention varies by source).
+			const FVector Axis = FBox(Positions).GetCenter();
+			double Facing = 0.0;
+			for (const int32 Triangle : Mesh.TriangleIndicesItr())
+			{
+				const FVector Away = Mesh.GetTriCentroid(Triangle) - Axis;
+				Facing += Mesh.GetTriArea(Triangle) * FVector::DotProduct(Mesh.GetTriNormal(Triangle), FVector(Away.X, Away.Y, 0.0).GetSafeNormal());
+			}
+			Sign = Facing < 0.0 ? -1.0 : 1.0;
+			Tree.SetMesh(&Mesh, true);
+		}
+
+		/** The closest surface point to Point within MaxDistance, and how far Point is outside (negative: inside). */
+		bool Closest(const FVector& Point, double MaxDistance, FVector& Out, double& Outside) const
+		{
+			double DistanceSquared = 0.0;
+			const int32 Triangle = Tree.FindNearestTriangle(Point, DistanceSquared, UE::Geometry::IMeshSpatial::FQueryOptions(MaxDistance));
+			if (Triangle == IndexConstants::InvalidID)
+			{
+				return false;
+			}
+			Out = UE::Geometry::TMeshQueries<FDynamicMesh3>::TriangleDistance(Mesh, Triangle, Point).ClosestTrianglePoint;
+			Outside = FVector::DotProduct(Point - Out, Mesh.GetTriNormal(Triangle)) * Sign;
+			return true;
+		}
+	};
+
+	/** A mesh description's vertex positions (plus morph Morph's deltas, when it has it) and triangles, in vertex-ID order. */
+	bool Surface(const FMeshDescription& Description, TArray<FVector>& Positions, TArray<int32>& Triangles, FName Morph = NAME_None)
+	{
+		TMap<FVertexID, int32> Index;
+		const TVertexAttributesConstRef<FVector3f> Points = Description.GetVertexPositions();
+		const TVertexAttributesConstRef<FVector3f> Delta = Morph.IsNone() ? TVertexAttributesConstRef<FVector3f>()
+			: FSkeletalMeshConstAttributes(Description).GetVertexMorphPositionDelta(Morph);
+		for (const FVertexID Vertex : Description.Vertices().GetElementIDs())
+		{
+			Index.Add(Vertex, Positions.Add(FVector(Points[Vertex] + (Delta.IsValid() ? Delta[Vertex] : FVector3f::ZeroVector))));
+		}
+		for (const FTriangleID Triangle : Description.Triangles().GetElementIDs())
+		{
+			for (const FVertexID Vertex : Description.GetTriangleVertices(Triangle))
+			{
+				Triangles.Add(Index[Vertex]);
+			}
+		}
+		return Positions.Num() > 0;
+	}
+}
 #endif
 
 int32 UShinobiMutableMeshLibrary::AddBoneSkinning(USkeletalMesh* Mesh, FName Bone, int32 Count, float Weight)
@@ -58,4 +135,144 @@ int32 UShinobiMutableMeshLibrary::AddBoneSkinning(USkeletalMesh* Mesh, FName Bon
 	Mesh->Build();
 #endif
 	return Lod0Added;
+}
+
+bool UShinobiMutableMeshLibrary::ReadDnaBody(const FString& DnaPath, TArray<FVector>& Positions, TArray<int32>& Triangles)
+{
+	Positions.Reset();
+	Triangles.Reset();
+#if WITH_EDITOR
+	const TSharedPtr<IDNAReader> Reader = ReadDNAFromFile(DnaPath, EDNADataLayer::Geometry);
+	if (!Reader || Reader->GetMeshCount() == 0)
+	{
+		return false;
+	}
+	for (uint32 Vertex = 0; Vertex < Reader->GetVertexPositionCount(0); ++Vertex)
+	{
+		Positions.Add(Reader->GetVertexPosition(0, Vertex));
+	}
+	// Faces index vertex layouts (position + UV + normal); each is a fan of 3 or more.
+	for (uint32 Face = 0; Face < Reader->GetFaceCount(0); ++Face)
+	{
+		const TArrayView<const uint32> Layouts = Reader->GetFaceVertexLayoutIndices(0, Face);
+		for (int32 Corner = 2; Corner < Layouts.Num(); ++Corner)
+		{
+			for (const uint32 Layout : {Layouts[0], Layouts[Corner - 1], Layouts[Corner]})
+			{
+				Triangles.Add(int32(Reader->GetVertexLayout(0, Layout).Position));
+			}
+		}
+	}
+	UE_LOG(LogShinobiCoop, Log, TEXT("ReadDnaBody %s: %d vertices, %d triangles, bounds %s"), *DnaPath, Positions.Num(), Triangles.Num() / 3,
+		*FBox(Positions).ToString());
+	return Triangles.Num() > 0;
+#else
+	return false;
+#endif
+}
+
+bool UShinobiMutableMeshLibrary::ReadMeshSurface(USkeletalMesh* Mesh, TArray<FVector>& Positions, TArray<int32>& Triangles, FName Morph)
+{
+	Positions.Reset();
+	Triangles.Reset();
+#if WITH_EDITOR
+	FMeshDescription Description;
+	return Mesh && Mesh->CloneMeshDescription(0, Description) && Surface(Description, Positions, Triangles, Morph);
+#else
+	return false;
+#endif
+}
+
+FString UShinobiMutableMeshLibrary::BakeFitMorph(USkeletalMesh* Base, FName Morph, const TArray<FVector>& Positions, const TArray<int32>& Triangles, float MaxMove, int32 Smooth)
+{
+	FString Report;
+#if WITH_EDITOR
+	if (!Base || Morph.IsNone() || Triangles.Num() < 3)
+	{
+		return TEXT("no mesh, morph name or surface");
+	}
+	const FSurface Body(Positions, Triangles);
+	for (int32 Lod = 0; Lod < Base->GetLODNum(); ++Lod)
+	{
+		FMeshDescription Description;
+		if (!Base->CloneMeshDescription(Lod, Description))
+		{
+			continue;
+		}
+		FSkeletalMeshAttributes Attributes(Description);
+		Attributes.Register();
+		const TVertexAttributesConstRef<FVector3f> Points = Description.GetVertexPositions();
+		TMap<FVertexID, FVector> Move;
+		for (const FVertexID Vertex : Description.Vertices().GetElementIDs())
+		{
+			FVector Closest;
+			double Outside = 0.0;
+			const FVector Point(Points[Vertex]);
+			Move.Add(Vertex, Body.Closest(Point, MaxMove, Closest, Outside) ? Closest - Point : FVector::ZeroVector);
+		}
+		// Smoothed over neighbours, so nearby vertices don't snap to different sides of a crease (armpits, crotch).
+		for (int32 Pass = 0; Pass < Smooth; ++Pass)
+		{
+			TMap<FVertexID, FVector> Next;
+			for (const TPair<FVertexID, FVector>& Each : Move)
+			{
+				FVector Sum = FVector::ZeroVector;
+				int32 Count = 0;
+				for (const FVertexID Neighbour : Description.GetVertexAdjacentVertices(Each.Key))
+				{
+					Sum += Move[Neighbour];
+					++Count;
+				}
+				Next.Add(Each.Key, Count ? 0.5 * Each.Value + 0.5 * Sum / Count : Each.Value);
+			}
+			Move = MoveTemp(Next);
+		}
+		Attributes.UnregisterMorphTargetAttribute(Morph);
+		Attributes.RegisterMorphTargetAttribute(Morph, false);
+		TVertexAttributesRef<FVector3f> Delta = Attributes.GetVertexMorphPositionDelta(Morph);
+		double Total = 0.0, Most = 0.0;
+		int32 Moved = 0;
+		for (const TPair<FVertexID, FVector>& Each : Move)
+		{
+			const FVector Step = Each.Value.GetClampedToMaxSize(MaxMove);
+			Delta[Each.Key] = FVector3f(Step);
+			Total += Step.Size();
+			Most = FMath::Max(Most, Step.Size());
+			Moved += Step.Size() > 0.1 ? 1 : 0;
+		}
+		if (Lod == 0)
+		{
+			Report = FString::Printf(TEXT("moved %d of %d vertices, mean %.2f cm, max %.2f cm"), Moved, Move.Num(), Move.Num() ? Total / Move.Num() : 0.0, Most);
+		}
+		Base->CreateMeshDescription(Lod, MoveTemp(Description));
+		USkeletalMesh::FCommitMeshDescriptionParams Params;
+		Params.bMarkPackageDirty = true;
+		Base->CommitMeshDescription(Lod, Params);
+	}
+	Base->Build();
+#endif
+	return Report;
+}
+
+float UShinobiMutableMeshLibrary::FractionInside(USkeletalMesh* Piece, USkeletalMesh* Body, float Tolerance, FName Morph)
+{
+#if WITH_EDITOR
+	TArray<FVector> PiecePoints, BodyPoints;
+	TArray<int32> PieceTriangles, BodyTriangles;
+	if (!ReadMeshSurface(Piece, PiecePoints, PieceTriangles) || !ReadMeshSurface(Body, BodyPoints, BodyTriangles, Morph))
+	{
+		return -1.f;
+	}
+	const FSurface Surface(BodyPoints, BodyTriangles);
+	int32 Inside = 0;
+	for (const FVector& Point : PiecePoints)
+	{
+		FVector Closest;
+		double Outside = 0.0;
+		Inside += Surface.Closest(Point, 20.0, Closest, Outside) && Outside < -Tolerance ? 1 : 0;
+	}
+	return float(Inside) / PiecePoints.Num();
+#else
+	return -1.f;
+#endif
 }
