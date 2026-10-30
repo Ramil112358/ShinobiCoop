@@ -81,18 +81,7 @@ void AShinobiMenuStage::ShowAppearance(const FShinobiAppearance& Look, int32 Out
 void AShinobiMenuStage::Show(int32 RosterIndex, int32 OutfitIndex, int32 Face)
 {
 	StartDriver();
-	if (const TOptional<FShinobiAppearance> Preset = AShinobiPlayerCharacter::RosterPreset(RosterIndex, Face))
-	{
-		Body->OnBodyBuilt.RemoveAll(this);
-		Body->OnBodyBuilt.AddWeakLambda(this, [this, OutfitIndex]() { AShinobiPlayerCharacter::DressOutfit(*Body, *Outfit, OutfitIndex, Body->GetFittingName()); });
-		if (Body->WearAppearance(*Preset))
-		{
-			ShownBody = RosterIndex;
-			Body->HideDriver();
-			return;
-		}
-		Body->OnBodyBuilt.RemoveAll(this);
-	}
+	Body->OnBodyBuilt.RemoveAll(this);
 	ShownBody = INDEX_NONE;
 	for (const int32 Index : { RosterIndex, 0 }) // the pick, else the hero
 	{
@@ -112,6 +101,19 @@ void AShinobiMenuStage::Show(int32 RosterIndex, int32 OutfitIndex, int32 Face)
 	}
 	Body->HideDriver();
 	AShinobiPlayerCharacter::DressOutfit(*Body, *Outfit, OutfitIndex, AShinobiPlayerCharacter::Roster[ShownBody].Name);
+	// A roster preset replaces that body once built; until then (or if it can't be) the body above stands in.
+	if (const TOptional<FShinobiAppearance> Preset = AShinobiPlayerCharacter::RosterPreset(RosterIndex, Face))
+	{
+		Body->OnBodyBuilt.AddWeakLambda(this, [this, OutfitIndex]() { AShinobiPlayerCharacter::DressOutfit(*Body, *Outfit, OutfitIndex, Body->GetFittingName()); });
+		if (Body->WearAppearance(*Preset))
+		{
+			ShownBody = RosterIndex;
+		}
+		else
+		{
+			Body->OnBodyBuilt.RemoveAll(this);
+		}
+	}
 
 }
 

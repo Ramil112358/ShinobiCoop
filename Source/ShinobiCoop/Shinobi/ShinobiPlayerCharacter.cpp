@@ -466,11 +466,6 @@ bool AShinobiPlayerCharacter::ApplyCharacter()
 	// A made body lands later (Mutable builds it): re-bind the outfit to its skeleton then.
 	HeroMesh->OnBodyBuilt.RemoveAll(this);
 	HeroMesh->OnBodyBuilt.AddUObject(this, &AShinobiPlayerCharacter::ApplyOutfit);
-	if (const TOptional<FShinobiAppearance> Preset = RosterPreset(CharacterIndex, FaceIndex); Preset && HeroMesh->WearAppearance(*Preset))
-	{
-		UE_LOG(LogShinobiCoop, Log, TEXT("%s plays %s (preset %s)"), *GetName(), Roster[CharacterIndex].Name, *Preset->ToCode());
-		return true;
-	}
 	if (CharacterIndex == CustomCharacter)
 	{
 		if (HeroMesh->WearAppearance(Appearance))
@@ -494,6 +489,11 @@ bool AShinobiPlayerCharacter::ApplyCharacter()
 				Worn ? *FString::Printf(TEXT(" (%s face)"), Worn->Name) : TEXT(""),
 				Index == CharacterIndex ? TEXT("") : TEXT(" (not imported: shown as the hero)"));
 			ApplyOutfit(); // the new body's skeleton: re-bind the outfit to it
+			// A roster preset replaces that body once built; until then (or if it can't be) the body above stands in.
+			if (const TOptional<FShinobiAppearance> Preset = RosterPreset(CharacterIndex, FaceIndex); Preset && HeroMesh->WearAppearance(*Preset))
+			{
+				UE_LOG(LogShinobiCoop, Log, TEXT("%s plays %s (preset %s)"), *GetName(), Roster[CharacterIndex].Name, *Preset->ToCode());
+			}
 			return true;
 		}
 	}

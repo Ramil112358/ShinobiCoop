@@ -148,6 +148,7 @@ void AShinobiCharacterBase::ApplyOutlineFor(const AShinobiCharacterBase* Viewer)
 		{
 			ShinobiLook::EnableOutline(Cast<UPrimitiveComponent>(Part), OutlineStencilFor(Viewer));
 		}
+		ShinobiLook::EnableOutline(Body->GetStaticHead(), OutlineStencilFor(Viewer)); // a roster head likewise
 	}
 }
 

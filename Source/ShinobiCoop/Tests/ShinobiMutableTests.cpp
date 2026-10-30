@@ -754,7 +754,10 @@ bool FShinobiMutableApprovedPresetsWornTest::RunTest(const FString& Parameters)
 	for (const TCHAR* Name : {TEXT("Ramil"), TEXT("Elvin"), TEXT("RamilMH"), TEXT("BikaMH"), TEXT("Hero"), TEXT("Bika"), TEXT("Cat"), TEXT("Misha"), TEXT("Pabu")})
 	{
 		AShinobiPlayerCharacter* P = World->Spawn<AShinobiPlayerCharacter>();
-		P->SetCharacterIndex(uint8(AShinobiPlayerCharacter::FindRosterIndex(Name)));
+		const int32 Index = AShinobiPlayerCharacter::FindRosterIndex(Name);
+		P->SetCharacterIndex(uint8(Index));
+		// Seen at once: its own body stands in while the preset builds (and stays if the build fails).
+		TestEqual(FString(Name) + TEXT(" shows its own body at once"), GetPathNameSafe(P->GetHeroMesh()->GetSkeletalMeshAsset()), FString(AShinobiPlayerCharacter::Roster[Index].Mesh));
 		Players.Emplace(Name, P);
 	}
 	auto BodyOf = [](AShinobiPlayerCharacter* P) { return CastChecked<UShinobiBodyComponent>(P->GetHeroMesh()); };
@@ -775,6 +778,9 @@ bool FShinobiMutableApprovedPresetsWornTest::RunTest(const FString& Parameters)
 				if (const FShinobiCreatorHead* Head = Look ? Catalog->FindHead(Look->Head) : nullptr)
 				{
 					TestTrue(FString::Printf(TEXT("%s's body is tinted %s"), *Name, *Head->SkinTint.ToString()), BodyTinted(Body, Head->SkinTint));
+					const USkeletalMeshComponent* Static = Body->GetStaticHead();
+					TestTrue(Name + TEXT("'s head is outlined as its body"), Static && Body->bRenderCustomDepth && Static->bRenderCustomDepth
+						&& Static->CustomDepthStencilValue == Body->CustomDepthStencilValue);
 				}
 			}
 			else
@@ -782,6 +788,37 @@ bool FShinobiMutableApprovedPresetsWornTest::RunTest(const FString& Parameters)
 				TestEqual(Name + TEXT(" keeps its own body"), GetPathNameSafe(Mesh), FString(AShinobiPlayerCharacter::Roster[Index].Mesh));
 			}
 		}
+	});
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutablePresetTintStaysTest, "ShinobiCoop.Mutable.PresetTintStaysWithItsBody", ShinobiTestFlags)
+bool FShinobiMutablePresetTintStaysTest::RunTest(const FString& Parameters)
+{
+	// Elvin's preset (a body tinted to his neck), then BikaMH's own MetaHuman body: Elvin's tint must not come along.
+	const TOptional<FShinobiAppearance> Elvin = Preset(*this, TEXT("Elvin"));
+	const UShinobiCreatorCatalog* Catalog = LoadObject<UShinobiCreatorCatalog>(nullptr, UShinobiCreatorCatalog::Path);
+	const FShinobiCreatorHead* Head = Elvin && Catalog ? Catalog->FindHead(Elvin->Head) : nullptr;
+	IConsoleVariable* Switch = IConsoleManager::Get().FindConsoleVariable(TEXT("Shinobi.RosterPresets"));
+	if (!TestNotNull(TEXT("Elvin's head"), Head) || !TestNotNull(TEXT("Shinobi.RosterPresets"), Switch))
+	{
+		return false;
+	}
+	const FLinearColor Tint = Head->SkinTint;
+	const int32 Previous = Switch->GetInt();
+	TSharedRef<FShinobiTestWorld> World = MakeShared<FShinobiTestWorld>();
+	AShinobiPlayerCharacter* P = World->Spawn<AShinobiPlayerCharacter>();
+	UShinobiBodyComponent* Body = CastChecked<UShinobiBodyComponent>(P->GetHeroMesh());
+	Switch->Set(1, ECVF_SetByCode);
+	P->SetCharacterIndex(uint8(AShinobiPlayerCharacter::FindRosterIndex(TEXT("Elvin"))));
+	WaitThen(*this, [Body]() { return !Body->IsMutableBuildPending(); }, [this, World, P, Body, Switch, Previous, Tint]()
+	{
+		TestTrue(TEXT("Elvin's preset is tinted"), BodyTinted(Body, Tint));
+		Switch->Set(0, ECVF_SetByCode);
+		P->SetCharacterIndex(uint8(AShinobiPlayerCharacter::FindRosterIndex(TEXT("BikaMH"))));
+		Switch->Set(Previous, ECVF_SetByCode);
+		TestTrue(TEXT("BikaMH wears her own body"), GetPathNameSafe(Body->GetSkeletalMeshAsset()).Contains(TEXT("BikaMH")));
+		TestFalse(TEXT("without Elvin's tint"), BodyTinted(Body, Tint));
 	});
 	return true;
 }

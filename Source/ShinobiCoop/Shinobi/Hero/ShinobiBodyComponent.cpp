@@ -44,6 +44,7 @@ bool UShinobiBodyComponent::Wear(const TCHAR* MeshPath, const TCHAR* RetargeterP
 	SetAnimInstanceClass(UShinobiRetargetAnimInstance::StaticClass());
 	UpdateBody(FShinobiAppearance()); // a roster body is worn as made: no creator shapes or height
 	FittingName.Reset();
+	EmptyOverrideMaterials(); // the last made body's skin tint
 	WearStaticHead(nullptr);
 	WearMetaHumanParts(MetaHumanClassPath);
 	return true;
@@ -331,6 +332,8 @@ void UShinobiBodyComponent::WearStaticHead(USkeletalMesh* Head)
 		StaticHead = NewObject<USkeletalMeshComponent>(GetOwner(), TEXT("StaticHead"), RF_Transient);
 		StaticHead->SetupAttachment(this);
 		StaticHead->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		StaticHead->SetCustomDepthStencilValue(CustomDepthStencilValue); // the outline, as on the body
+		StaticHead->SetRenderCustomDepth(bRenderCustomDepth);
 		StaticHead->RegisterComponent();
 	}
 	StaticHead->SetSkeletalMeshAsset(Head);
