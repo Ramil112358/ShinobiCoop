@@ -66,4 +66,7 @@ namespace ShinobiMutable
 	inline FString WardrobeTablePath(const TCHAR* Slot) { return FString::Printf(TEXT("/Game/Shinobi/Mutable/DT_Wardrobe_%s.DT_Wardrobe_%s"), Slot, Slot); }
 
 	inline constexpr int32 MaxTattoos = 3;
+	/** Scripts/smoke_m4.ps1's client look: a woman, Own build at 200, the first women's Fab top in palette colour 3, tattoo 1 on
+	 * the back, make-up 2 (ShinobiCoop.Mutable.SmokeLookCodeIsFull keeps it so). */
+	inline constexpr const TCHAR* SmokeLookCode = TEXT("AgEDAAD__xQAAP__AAAAAP_I____AwAAAAAAAAAAAAAAgAACAAEBAQAAAIA");
 }

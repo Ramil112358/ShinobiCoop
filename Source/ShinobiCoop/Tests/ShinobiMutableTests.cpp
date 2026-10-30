@@ -1804,4 +1804,35 @@ bool FShinobiMutableOwnBuildCloakCopyTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableSmokeLookCodeTest, "ShinobiCoop.Mutable.SmokeLookCodeIsFull", ShinobiTestFlags)
+bool FShinobiMutableSmokeLookCodeTest::RunTest(const FString& Parameters)
+{
+	// Scripts/smoke_m4.ps1's client plays this code: a look using the Mutable fields, so the host must build all of them.
+	const UDataTable* Tops = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(TEXT("Top")));
+	const UDataTable* Regions = LoadObject<UDataTable>(nullptr, ShinobiMutable::TattooRegionsPath);
+	const TArray<FName> TopNames = Tops ? Tops->GetRowNames() : TArray<FName>();
+	const int32 FabTop = TopNames.IndexOfByPredicate([Tops](FName Name)
+	{
+		return Name.ToString().StartsWith(TEXT("Fab")) && !Tops->FindRow<FShinobiWardrobeRow>(Name, TEXT("test"))->FemaleMesh.IsNull();
+	});
+	const int32 Back = Regions ? Regions->GetRowNames().IndexOfByKey(FName(TEXT("Back"))) : INDEX_NONE;
+	if (!TestTrue(TEXT("a women's Fab top and the Back region"), FabTop != INDEX_NONE && Back != INDEX_NONE))
+	{
+		return false;
+	}
+	FShinobiAppearance Wanted;
+	Wanted.Sex = EShinobiSex::Female;
+	Wanted.Build = EShinobiBuild::Own;
+	Wanted.BuildBlend = 200;
+	Wanted.Top = uint8(FabTop);
+	Wanted.SlotColour[int32(EShinobiWardrobeSlot::Top)] = 3;
+	Wanted.Tattoos.Add({1, uint8(Back), 0, 0, 0, 128});
+	Wanted.MakeUp = 2;
+	FShinobiAppearance Coded;
+	TestTrue(TEXT("decodes"), FShinobiAppearance::FromCode(ShinobiMutable::SmokeLookCode, Coded));
+	TestTrue(FString::Printf(TEXT("the smoke look (its code: %s)"), *Wanted.ToCode()), Coded == Wanted);
+	TestEqual(TEXT("round-trips"), Coded.ToCode(), FString(ShinobiMutable::SmokeLookCode));
+	return true;
+}
+
 #endif

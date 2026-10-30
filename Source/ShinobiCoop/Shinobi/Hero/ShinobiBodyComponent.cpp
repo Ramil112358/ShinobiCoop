@@ -118,6 +118,7 @@ void UShinobiBodyComponent::DressBuilt(USkeletalMesh* Built)
 		ApplySkinLayers(Look);
 		Worn = Look;
 		UpdateBody(Look);
+		UE_LOG(LogShinobiCoop, Log, TEXT("%s wears its Mutable look (%s)"), *GetNameSafe(GetOwner()), *Look.ToCode());
 		OnBodyBuilt.Broadcast();
 		return;
 	}
@@ -183,6 +184,7 @@ void UShinobiBodyComponent::DressBuilt(USkeletalMesh* Built)
 	WornHeadTint = FLinearColor::White;
 	ApplySkinTone(Look, WornHeadTint);
 	ApplySkinLayers(Look);
+	UE_LOG(LogShinobiCoop, Log, TEXT("%s wears its Mutable look (%s)"), *GetNameSafe(GetOwner()), *Look.ToCode());
 	OnBodyBuilt.Broadcast();
 }
 
