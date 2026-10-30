@@ -539,7 +539,8 @@ int32 UShinobiMutableMeshLibrary::MakeClipVolume(USkeletalMesh* Clip, USkeletalM
 	Normals.Init(FVector::ZeroVector, Positions.Num());
 	for (int32 Index = 0; Index + 2 < Triangles.Num(); Index += 3)
 	{
-		const FVector Area = FVector::CrossProduct(Positions[Triangles[Index + 1]] - Positions[Triangles[Index]], Positions[Triangles[Index + 2]] - Positions[Triangles[Index]]);
+		// (UE's winding, as FDynamicMesh3::GetTriNormal, which Body.Sign was measured with: edge2 x edge1)
+		const FVector Area = FVector::CrossProduct(Positions[Triangles[Index + 2]] - Positions[Triangles[Index]], Positions[Triangles[Index + 1]] - Positions[Triangles[Index]]);
 		for (int32 Corner = 0; Corner < 3; ++Corner)
 		{
 			Normals[Triangles[Index + Corner]] += Area * Body.Sign;

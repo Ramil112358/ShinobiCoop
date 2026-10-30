@@ -1378,4 +1378,59 @@ bool FShinobiMutableRowReplacesSlotsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableClipUnderSkinTest, "ShinobiCoop.Mutable.ClipShellUnderTheSkin", ShinobiTestFlags)
+bool FShinobiMutableClipUnderSkinTest::RunTest(const FString& Parameters)
+{
+	// A coverage volume reaches 0.3 cm out of its fit shape and 3 cm into it (so a slimmer built body's skin is still
+	// inside it): no clip vertex lies more than 1 cm outside the fit surface.
+	int32 Checked = 0;
+	for (const TCHAR* Slot : {TEXT("Top"), TEXT("Bottom")})
+	{
+		const UDataTable* Table = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(Slot));
+		const FShinobiWardrobeRow* Row = Table ? Table->FindRow<FShinobiWardrobeRow>(TEXT("CitySample01"), TEXT("test")) : nullptr;
+		USkeletalMesh* Clip = Row ? Row->MaleClip.LoadSynchronous() : nullptr;
+		USkeletalMesh* Base = LoadObject<USkeletalMesh>(nullptr, *ShinobiMutable::BasePath(TEXT("Male")));
+		if (!TestNotNull(FString::Printf(TEXT("%s CitySample01's male clip"), Slot), Clip) || !Base)
+		{
+			continue;
+		}
+		const float Within = UShinobiMutableMeshLibrary::FractionInside(Clip, Base, -1.f, *(TEXT("Fit_") + Row->MaleFit.ToString()));
+		TestTrue(FString::Printf(TEXT("%s: %.1f%% of the clip within 1 cm outside its fit shape"), Slot, Within * 100.f), Within > 0.95f); // (inside out: ~50%; a few rim vertices at concave spots measure just outside)
+		++Checked;
+	}
+	TestEqual(TEXT("clips checked"), Checked, 2);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableUnfittedUntintedRowTest, "ShinobiCoop.Mutable.UnfittedUntintedRow", ShinobiTestFlags)
+bool FShinobiMutableUnfittedUntintedRowTest::RunTest(const FString& Parameters)
+{
+	// A row with no fit (a rebound Cyborg piece) reshapes from the base ("None"), and one without tinted copies keeps
+	// its own materials whatever colour is asked for.
+	const UDataTable* Tops = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(TEXT("Top")));
+	const int32 Shirt = Tops ? Tops->GetRowNames().IndexOfByKey(FName(TEXT("CyborgTShirt"))) : INDEX_NONE;
+	const int32 Red = PaletteIndex(TEXT("Red"));
+	if (!TestTrue(TEXT("Top has CyborgTShirt and the palette Red"), Shirt != INDEX_NONE && Red > 0))
+	{
+		return false;
+	}
+	FShinobiAppearance Look;
+	Look.Sex = EShinobiSex::Male;
+	Look.Top = uint8(Shirt);
+	Look.SlotColour[int32(EShinobiWardrobeSlot::Top)] = uint8(Red);
+	TStrongObjectPtr<UShinobiMutableLook> Builder(NewObject<UShinobiMutableLook>());
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	if (!TestTrue(TEXT("the builds start"), Builder->Request(Look) && Wearer->Body->WearAppearance(Look)))
+	{
+		return false;
+	}
+	WaitThen(*this, [Builder, Wearer]() { return !Builder->IsPending() && !Wearer->Body->IsMutableBuildPending(); }, [this, Builder, Wearer]()
+	{
+		UCustomizableObjectInstance* Instance = Builder->GetInstance();
+		TestEqual(TEXT("no fit"), Instance ? Instance->GetEnumParameterSelectedOption(TEXT("Top Fit")) : FString(), FString(ShinobiMutable::NoFit));
+		TestEqual(TEXT("no tinted copies"), TintedSlots(Wearer->Body).Num(), 0);
+	});
+	return true;
+}
+
 #endif
