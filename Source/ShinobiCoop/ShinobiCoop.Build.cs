@@ -57,6 +57,7 @@ public class ShinobiCoop : ModuleRules
 			PrivateDependencyModuleNames.AddRange(new string[] { "ClothingSystemEditorInterface", "SkeletalMeshEditor", "PhysicsUtilities", "AssetRegistry" });
 			PrivateDependencyModuleNames.Add("CustomizableObjectEditor"); // Mutable graph builder (ShinobiMutableGraphLibrary)
 			PrivateDependencyModuleNames.Add("ChaosClothAssetEngine"); // Fab outfits' cloth assets to wardrobe meshes (ShinobiMutableMeshLibrary)
+			PrivateDependencyModuleNames.Add("MaterialEditor"); // skin layers on MetaHuman skin materials (ShinobiSkinLibrary)
 		}
 
 		PublicIncludePaths.AddRange(new string[] {
