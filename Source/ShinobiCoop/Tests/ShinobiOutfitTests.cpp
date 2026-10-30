@@ -225,36 +225,48 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOutfitEveryCopyTest, "ShinobiCoop.Outfi
 bool FShinobiOutfitEveryCopyTest::RunTest(const FString& Parameters)
 {
 	// Every outfit fitted to every body a roster character wears (Scripts/character/build_outfits.ps1, Scripts/setup_hero.py):
-	// its own body's copy, or, for one that plays its Mutable preset, the crowd frame copy that body takes (the Own build:
-	// the heavy frame's). Such a character falling back to its own body without a copy shows no cloak (MenuStageMissingOutfit).
+	// its own body's copy (worn on each pick until a preset lands, and for good without one), and, for one that plays its
+	// Mutable preset, the crowd frame copy that body takes (the Own build: the heavy frame's). BikaMH has no own-body copies
+	// (never fitted; it plays its preset), so it shows no cloak until its preset lands (MenuStageMissingOutfit covers that).
 	for (int32 Outfit = 1; Outfit < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Outfits); ++Outfit)
 	{
 		for (int32 Body = 0; Body < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster); ++Body)
 		{
+			const FString Roster = AShinobiPlayerCharacter::Roster[Body].Name;
 			const TOptional<FShinobiAppearance> Preset = AShinobiPlayerCharacter::RosterPreset(Body, 0);
-			const FString Fitted = Preset ? UShinobiCreatorCatalog::FittingName(Preset->Sex, FMath::Min(Preset->Build, EShinobiBuild::Over))
-				: FString(AShinobiPlayerCharacter::Roster[Body].Name);
-			const FString Who = FString::Printf(TEXT("%s on %s (%s)"), AShinobiPlayerCharacter::Outfits[Outfit].Name, AShinobiPlayerCharacter::Roster[Body].Name, *Fitted);
-			const USkeletalMesh* Copy = LoadObject<USkeletalMesh>(nullptr, *AShinobiPlayerCharacter::OutfitMeshPath(Outfit, Fitted), nullptr, LOAD_NoWarn | LOAD_Quiet);
-			if (!TestNotNull(Who + TEXT(": its copy is imported"), Copy))
+			TArray<FString> Bodies;
+			if (Roster != TEXT("BikaMH"))
 			{
-				continue;
+				Bodies.Add(Roster);
 			}
-			TestNotNull(Who + TEXT(": its hide mask is imported"), LoadObject<UTexture>(nullptr, *AShinobiPlayerCharacter::OutfitHidePath(Outfit, Fitted), nullptr, LOAD_NoWarn | LOAD_Quiet));
-			if (!TestEqual(Who + TEXT(": one clothing asset"), Copy->GetMeshClothingAssets().Num(), 1))
+			if (Preset)
 			{
-				continue;
+				Bodies.Add(UShinobiCreatorCatalog::FittingName(Preset->Sex, FMath::Min(Preset->Build, EShinobiBuild::Over)));
 			}
+			for (const FString& Fitted : Bodies)
+			{
+				const FString Who = FString::Printf(TEXT("%s on %s (%s)"), AShinobiPlayerCharacter::Outfits[Outfit].Name, AShinobiPlayerCharacter::Roster[Body].Name, *Fitted);
+				const USkeletalMesh* Copy = LoadObject<USkeletalMesh>(nullptr, *AShinobiPlayerCharacter::OutfitMeshPath(Outfit, Fitted), nullptr, LOAD_NoWarn | LOAD_Quiet);
+				if (!TestNotNull(Who + TEXT(": its copy is imported"), Copy))
+				{
+					continue;
+				}
+				TestNotNull(Who + TEXT(": its hide mask is imported"), LoadObject<UTexture>(nullptr, *AShinobiPlayerCharacter::OutfitHidePath(Outfit, Fitted), nullptr, LOAD_NoWarn | LOAD_Quiet));
+				if (!TestEqual(Who + TEXT(": one clothing asset"), Copy->GetMeshClothingAssets().Num(), 1))
+				{
+					continue;
+				}
 #if WITH_EDITORONLY_DATA
-			const UClothingAssetCommon* Cloth = Cast<UClothingAssetCommon>(Copy->GetMeshClothingAssets()[0]);
-			const FPointWeightMap* MaxDistance = Cloth && Cloth->LodData.Num() ? Cloth->LodData[0].PointWeightMaps.FindByPredicate(
-				[](const FPointWeightMap& Map) { return Map.CurrentTarget == uint8(EWeightMapTargetCommon::MaxDistance); }) : nullptr;
-			if (TestNotNull(Who + TEXT(": a Max Distance map"), MaxDistance))
-			{
-				TestTrue(Who + TEXT(": the hem swings (Max Distance over 20 cm)"), MaxDistance->Values.ContainsByPredicate([](float V) { return V > 20.f; }));
-				TestTrue(Who + TEXT(": the shoulders stay pinned (Max Distance 0)"), MaxDistance->Values.ContainsByPredicate([](float V) { return V == 0.f; }));
-			}
+				const UClothingAssetCommon* Cloth = Cast<UClothingAssetCommon>(Copy->GetMeshClothingAssets()[0]);
+				const FPointWeightMap* MaxDistance = Cloth && Cloth->LodData.Num() ? Cloth->LodData[0].PointWeightMaps.FindByPredicate(
+					[](const FPointWeightMap& Map) { return Map.CurrentTarget == uint8(EWeightMapTargetCommon::MaxDistance); }) : nullptr;
+				if (TestNotNull(Who + TEXT(": a Max Distance map"), MaxDistance))
+				{
+					TestTrue(Who + TEXT(": the hem swings (Max Distance over 20 cm)"), MaxDistance->Values.ContainsByPredicate([](float V) { return V > 20.f; }));
+					TestTrue(Who + TEXT(": the shoulders stay pinned (Max Distance 0)"), MaxDistance->Values.ContainsByPredicate([](float V) { return V == 0.f; }));
+				}
 #endif
+			}
 		}
 	}
 	return true;
