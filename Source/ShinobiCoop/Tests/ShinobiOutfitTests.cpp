@@ -224,18 +224,23 @@ bool FShinobiOutfitClothSimulatesTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiOutfitEveryCopyTest, "ShinobiCoop.Outfit.EveryCopyHasCloth", ShinobiTestFlags)
 bool FShinobiOutfitEveryCopyTest::RunTest(const FString& Parameters)
 {
-	// Every outfit fitted to every roster body (Scripts/character/build_outfits.ps1, Scripts/setup_hero.py).
+	// Every outfit fitted to every body a roster character wears (Scripts/character/build_outfits.ps1, Scripts/setup_hero.py):
+	// its own body's copy, or, for one that plays its Mutable preset, the crowd frame copy that body takes (the Own build:
+	// the heavy frame's). Such a character falling back to its own body without a copy shows no cloak (MenuStageMissingOutfit).
 	for (int32 Outfit = 1; Outfit < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Outfits); ++Outfit)
 	{
 		for (int32 Body = 0; Body < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster); ++Body)
 		{
-			const FString Who = FString::Printf(TEXT("%s on %s"), AShinobiPlayerCharacter::Outfits[Outfit].Name, AShinobiPlayerCharacter::Roster[Body].Name);
-			const USkeletalMesh* Copy = LoadObject<USkeletalMesh>(nullptr, *AShinobiPlayerCharacter::OutfitMeshPath(Outfit, Body), nullptr, LOAD_NoWarn | LOAD_Quiet);
+			const TOptional<FShinobiAppearance> Preset = AShinobiPlayerCharacter::RosterPreset(Body, 0);
+			const FString Fitted = Preset ? UShinobiCreatorCatalog::FittingName(Preset->Sex, FMath::Min(Preset->Build, EShinobiBuild::Over))
+				: FString(AShinobiPlayerCharacter::Roster[Body].Name);
+			const FString Who = FString::Printf(TEXT("%s on %s (%s)"), AShinobiPlayerCharacter::Outfits[Outfit].Name, AShinobiPlayerCharacter::Roster[Body].Name, *Fitted);
+			const USkeletalMesh* Copy = LoadObject<USkeletalMesh>(nullptr, *AShinobiPlayerCharacter::OutfitMeshPath(Outfit, Fitted), nullptr, LOAD_NoWarn | LOAD_Quiet);
 			if (!TestNotNull(Who + TEXT(": its copy is imported"), Copy))
 			{
 				continue;
 			}
-			TestNotNull(Who + TEXT(": its hide mask is imported"), LoadObject<UTexture>(nullptr, *AShinobiPlayerCharacter::OutfitHidePath(Outfit, Body), nullptr, LOAD_NoWarn | LOAD_Quiet));
+			TestNotNull(Who + TEXT(": its hide mask is imported"), LoadObject<UTexture>(nullptr, *AShinobiPlayerCharacter::OutfitHidePath(Outfit, Fitted), nullptr, LOAD_NoWarn | LOAD_Quiet));
 			if (!TestEqual(Who + TEXT(": one clothing asset"), Copy->GetMeshClothingAssets().Num(), 1))
 			{
 				continue;

@@ -131,8 +131,9 @@ bool FShinobiPickSwapsBodyTest::RunTest(const FString& Parameters)
 		if (Entry.MetaHuman)
 		{
 			const TArray<TObjectPtr<UActorComponent>>& Parts = CastChecked<UShinobiBodyComponent>(P->GetHeroMesh())->GetMetaHumanParts();
-			TestTrue(Name + TEXT(" wears its MetaHuman face and hair"), Parts.ContainsByPredicate([](const UActorComponent* Part) { return Part && Part->GetFName() == TEXT("Face"); })
-				&& Parts.ContainsByPredicate([](const UActorComponent* Part) { return Part && Part->GetFName() == TEXT("Hair"); }));
+			// (by prefix, as the body finds them: a part made while the last pick's is still being destroyed is Face_0)
+			TestTrue(Name + TEXT(" wears its MetaHuman face and hair"), Parts.ContainsByPredicate([](const UActorComponent* Part) { return Part && Part->GetName().StartsWith(TEXT("Face")); })
+				&& Parts.ContainsByPredicate([](const UActorComponent* Part) { return Part && Part->GetName().StartsWith(TEXT("Hair")); }));
 		}
 		TestTrue(Name + TEXT(" is the body mesh"), P->GetBodyMesh() == Body);
 		// The retargeted pose must be full size: a stray scaled root bone (an FBX armature node) shrinks it to nothing.
