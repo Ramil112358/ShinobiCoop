@@ -1756,4 +1756,29 @@ bool FShinobiMutableEveryRowHasThumbnailTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableInstantEditDuringBuildTest, "ShinobiCoop.Mutable.InstantEditDuringBuildKept", ShinobiTestFlags)
+bool FShinobiMutableInstantEditDuringBuildTest::RunTest(const FString& Parameters)
+{
+	// A skin edit made while a build is pending (a swatch or the tone slider right after a pick) survives the build landing.
+	TOptional<FShinobiAppearance> Look = Preset(*this, TEXT("Ramil"));
+	const UShinobiCreatorCatalog* Catalog = LoadObject<UShinobiCreatorCatalog>(nullptr, UShinobiCreatorCatalog::Path);
+	if (!Look || !Catalog)
+	{
+		return false;
+	}
+	const FShinobiCreatorHead* Head = Catalog->FindHead(Look->Head);
+	const FLinearColor Expected = (Head ? Head->SkinTint : FLinearColor::White) * UShinobiBodyComponent::SkinToneMultiplier(0);
+	Look->SkinTone = 128;
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	Wearer->Body->WearAppearance(*Look);
+	Look->SkinTone = 0;
+	Wearer->Body->UpdateSkin(*Look); // before the build lands
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer, Expected]()
+	{
+		TestTrue(TEXT("the body keeps the later tone"), BodyTinted(Wearer->Body, Expected));
+		TestEqual(TEXT("and wears it"), Wearer->Body->GetAppearance().SkinTone, uint8(0));
+	});
+	return true;
+}
+
 #endif

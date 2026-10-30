@@ -13,6 +13,8 @@ class UEditableTextBox;
 class UShinobiCharacterSave;
 class UShinobiIndexButton;
 class UTextBlock;
+class UScrollBox;
+class UScrollBoxSlot;
 class UVerticalBox;
 
 /** How an edit reaches the stage: a Mutable rebuild now or once a slider rests, or at once on the worn body. */
@@ -72,7 +74,9 @@ public:
 	const FShinobiAppearance& GetLook() const { return Look; }
 	UWidget* GetFocusTarget() const;
 	/** The category's rows (tests). */
-	UVerticalBox* GetRows() const { return Rows; }
+	UPanelWidget* GetRows() const;
+	/** The control a rows rebuild hands focus back to: the one at the clicked control's place (null when none was). */
+	UWidget* GetRefocusTarget() const { return RefocusTarget; }
 	const TArray<TObjectPtr<UShinobiIndexButton>>& GetCategoryButtons() const { return CategoryButtons; }
 
 	/** Indices into Catalog.Heads of the heads made for Sex. */
@@ -101,6 +105,10 @@ private:
 	void AddSlider(const FString& Label, float Value, bool bUnit, TFunction<void(float)> Set, UWidget* Background = nullptr);
 	/** A strip of image buttons (Pictures; a null one shows its name), Picked's marked; a click calls Pick with its position. */
 	UPanelWidget* AddStrip(const TArray<UTexture2D*>& Pictures, const TArray<FString>& Names, int32 Picked, float Size, TFunction<void(int32)> Pick);
+	/** Adds a row widget to the rows. */
+	UScrollBoxSlot* AddRow(UWidget* Row);
+	/** The rows' buttons and sliders, depth first (a control's place survives a rebuild of the same category). */
+	TArray<UWidget*> RowControls() const;
 	/** A caption line in the rows. */
 	void AddNote(const FString& Text);
 	/** A button for the rows (and the bars above them). */
@@ -124,8 +132,11 @@ private:
 	TArray<TObjectPtr<UShinobiIndexButton>> SlotButtons;
 	UPROPERTY()
 	TArray<TObjectPtr<UShinobiIndexButton>> CategoryButtons;
+	/** The rows, straight in the scroll box, which follows focus down past the fold. */
 	UPROPERTY()
-	TObjectPtr<UVerticalBox> Rows;
+	TObjectPtr<UScrollBox> Rows;
+	UPROPERTY()
+	TObjectPtr<UWidget> RefocusTarget;
 	UPROPERTY()
 	TObjectPtr<UEditableTextBox> NameBox;
 	UPROPERTY()
@@ -150,6 +161,10 @@ private:
 	bool bRedressPending = false;
 	/** An instant edit moved a selection mark: the rows rebuild next tick. */
 	bool bRowsPending = false;
+	/** The place among RowControls of the control last clicked (INDEX_NONE: none), refocused after the rows rebuild. */
+	int32 ClickedPlace = INDEX_NONE;
+	/** The category the rows were last built for (strips keep their scroll only within it). */
+	ECategory BuiltCategory = ECategory::Num;
 	/** A Debounced slider moved: the stage re-dresses when this runs out. */
 	float DebounceLeft = 0.f;
 };

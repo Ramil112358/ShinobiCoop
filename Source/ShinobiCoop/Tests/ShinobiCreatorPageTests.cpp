@@ -2,6 +2,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR // (run in the editor only: the catalog and Mutable content are local)
 
+#include "Components/ScrollBox.h"
 #include "Components/Slider.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
@@ -180,7 +181,7 @@ bool FShinobiCreatorLastPickWinsTest::RunTest(const FString& Parameters)
 			return false;
 		}
 		TestFalse(TEXT("built in time"), Bench->Stage->GetBody()->IsMutableBuildPending());
-		TestEqual(TEXT("the second pick shown"), Bench->Stage->GetShownLook().Top, uint8(1));
+		TestEqual(TEXT("the second pick worn"), Bench->Stage->GetBody()->GetAppearance().Top, uint8(1));
 		TestNotNull(TEXT("a body worn"), Bench->Stage->GetBody()->GetSkeletalMeshAsset());
 		return true;
 	}));
@@ -468,6 +469,46 @@ bool FShinobiCreatorMakeUpAndFrecklesTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("freckles stepped"), CreatorTestNext(*Bench.Page, TEXT("Freckles")));
 	TestEqual(TEXT("the first freckles"), Bench.Page->GetLook().Freckles, uint8(1));
 	TestFalse(TEXT("both instant"), Bench.Page->IsRedressPending());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCreatorRowsScrollToFocusTest, "ShinobiCoop.UI.CreatorRowsScrollToFocus", ShinobiTestFlags)
+bool FShinobiCreatorRowsScrollToFocusTest::RunTest(const FString& Parameters)
+{
+	// Gamepad: the rows sit straight in a scroll box that follows focus, so moving down past the fold scrolls to them.
+	FCreatorBench Bench;
+	const UScrollBox* Scroll = Cast<UScrollBox>(Bench.Page->GetRows());
+	TestTrue(TEXT("the rows are the scroll box's own children"), Scroll != nullptr);
+	TestTrue(TEXT("it scrolls to the focused row"), Scroll && Scroll->GetScrollWhenFocusChanges() != EScrollWhenFocusChanges::NoScroll);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCreatorPickKeepsPlaceTest, "ShinobiCoop.UI.CreatorPickKeepsPlace", ShinobiTestFlags)
+bool FShinobiCreatorPickKeepsPlaceTest::RunTest(const FString& Parameters)
+{
+	// A pick rebuilds the rows: focus goes back to the control in the clicked one's place, and strips keep their scroll.
+	FCreatorBench Bench;
+	CreatorTestBodySkin(Bench);
+	TestTrue(TEXT("Build stepped"), CreatorTestNext(*Bench.Page, TEXT("Build")));
+	const UWidget* Next = CreatorTestLast<UShinobiIndexButton>(CreatorTestRow(*Bench.Page, TEXT("Build")));
+	TestTrue(TEXT("focus back on the Build row's >"), Next && Bench.Page->GetRefocusTarget() == Next);
+
+	CreatorTestWearTop(Bench, CreatorTestTop(true));
+	UScrollBox* Strip = Cast<UScrollBox>(Bench.Page->GetClothesStrip(EShinobiWardrobeSlot::Top));
+	if (TestNotNull(TEXT("top strip"), Strip))
+	{
+		Strip->TakeWidget(); // (on screen it is built; headless, the scroll lives on the Slate widget)
+		Strip->SetScrollOffset(120.f);
+		TestTrue(TEXT("a swatch picked"), CreatorTestClick(Bench.Page->GetSwatches(EShinobiWardrobeSlot::Top), 2));
+		Bench.Page->TickEdits(0.f);
+		const UScrollBox* Rebuilt = Cast<UScrollBox>(Bench.Page->GetClothesStrip(EShinobiWardrobeSlot::Top));
+		TestTrue(TEXT("rebuilt"), Rebuilt && Rebuilt != Strip);
+		if (Rebuilt)
+		{
+			const_cast<UScrollBox*>(Rebuilt)->TakeWidget();
+		}
+		TestEqual(TEXT("same scroll"), Rebuilt ? Rebuilt->GetScrollOffset() : -1.f, 120.f, 0.5f);
+	}
 	return true;
 }
 

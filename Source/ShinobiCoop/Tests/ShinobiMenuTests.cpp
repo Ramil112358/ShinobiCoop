@@ -15,6 +15,7 @@
 #include "Components/RectLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Camera/CameraComponent.h"
+#include "Blueprint/WidgetTree.h"
 #include "Shinobi/UI/ShinobiMainMenuWidget.h"
 #include "Shinobi/UI/ShinobiRosterPage.h"
 #include "Shinobi/UI/ShinobiSkillsWidget.h"
@@ -555,6 +556,37 @@ bool FShinobiStudioLightsStayInStudioTest::RunTest(const FString& Parameters)
 	{
 		TestTrue(TEXT("light ends before the roof"), Light->AttenuationRadius < Light->GetComponentLocation().Size());
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMainMenuPreviewCatcherTest, "ShinobiCoop.UI.MainMenuPreviewInputOnlyFromOpenStage", ShinobiTestFlags)
+bool FShinobiMainMenuPreviewCatcherTest::RunTest(const FString& Parameters)
+{
+	// Drags and the wheel move the preview only on the open stage: a catcher under the pages takes them, so a press on a
+	// panel's background or the wheel at a list's end doesn't turn or zoom the character.
+	FShinobiTestWorld W;
+	UShinobiMainMenuWidget* Menu = CreateWidget<UShinobiMainMenuWidget>(W.World, UShinobiMainMenuWidget::StaticClass());
+	Menu->TakeWidget();
+	const UWidget* Catcher = Menu->GetPreviewCatcher();
+	const UPanelWidget* Root = Cast<UPanelWidget>(Menu->WidgetTree->RootWidget);
+	if (!TestNotNull(TEXT("a catcher"), Catcher) || !TestNotNull(TEXT("root"), Root))
+	{
+		return false;
+	}
+	TestTrue(TEXT("it takes clicks"), Catcher->GetVisibility() == ESlateVisibility::Visible);
+	TestTrue(TEXT("under the pages"), Root->GetChildIndex(Catcher) != INDEX_NONE && Root->GetChildIndex(Catcher) < Root->GetChildIndex(Menu->GetPagesWidget()));
+	TestTrue(TEXT("the root itself doesn't"), Root->GetVisibility() != ESlateVisibility::Visible);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMenuStageKeepsHeightOnWideTest, "ShinobiCoop.UI.MenuStageKeepsHeightOnWide", ShinobiTestFlags)
+bool FShinobiMenuStageKeepsHeightOnWideTest::RunTest(const FString& Parameters)
+{
+	// An ultrawide window shows more to the sides, not less above and below (the character's head stays in frame).
+	FShinobiTestWorld W;
+	const AShinobiMenuStage* Stage = W.Spawn<AShinobiMenuStage>();
+	TestTrue(TEXT("keeps the vertical field of view"), Stage->GetCamera()->bOverrideAspectRatioAxisConstraint
+		&& Stage->GetCamera()->AspectRatioAxisConstraint == EAspectRatioAxisConstraint::AspectRatio_MaintainYFOV);
 	return true;
 }
 

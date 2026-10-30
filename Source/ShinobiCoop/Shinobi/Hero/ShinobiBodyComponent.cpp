@@ -243,6 +243,10 @@ TArray<FName> UShinobiBodyComponent::GetBodySliderNames()
 void UShinobiBodyComponent::UpdateBody(const FShinobiAppearance& Look)
 {
 	Worn.BodyShape = Look.BodyShape;
+	if (IsMutableBuildPending())
+	{
+		PendingLook.BodyShape = Look.BodyShape;
+	}
 	auto Value = [&Look](int32 Slider) { return Look.BodyShape.IsValidIndex(Slider) ? Look.BodyShape[Slider] / 127.f : 0.f; };
 	TMap<FName, FVector> Scales;
 	for (const FBodyPart& Part : BodyParts)
@@ -293,6 +297,11 @@ void UShinobiBodyComponent::UpdateFace(const FShinobiAppearance& Look)
 		return;
 	}
 	Worn.FaceShape = Look.FaceShape;
+	if (IsMutableBuildPending())
+	{
+		PendingLook.FaceShape = Look.FaceShape;
+		FMemory::Memcpy(PendingLook.BlendWeight, Look.BlendWeight, sizeof(Look.BlendWeight));
+	}
 	const TArray<FName> Sliders = UShinobiFaceShapeAnimInstance::GetSliderNames();
 	for (int32 Index = 0; Index < Sliders.Num(); ++Index)
 	{
@@ -324,6 +333,18 @@ FLinearColor UShinobiBodyComponent::SkinToneMultiplier(uint8 Tone)
 
 void UShinobiBodyComponent::UpdateSkin(const FShinobiAppearance& Look)
 {
+	// (and onto a look still building, so its landing doesn't bring the old skin back)
+	for (FShinobiAppearance* Kept : { &Worn, IsMutableBuildPending() ? &PendingLook : nullptr })
+	{
+		if (Kept)
+		{
+			Kept->SkinTone = Look.SkinTone;
+			Kept->MakeUp = Look.MakeUp;
+			Kept->Freckles = Look.Freckles;
+			Kept->Tattoos = Look.Tattoos;
+			FMemory::Memcpy(Kept->SlotColour, Look.SlotColour, sizeof(Look.SlotColour));
+		}
+	}
 	ApplySkinTone(Look, WornHeadTint);
 	ApplySkinLayers(Look);
 	ColourPieces(Look);

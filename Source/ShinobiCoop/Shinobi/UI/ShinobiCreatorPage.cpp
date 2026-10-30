@@ -11,6 +11,7 @@
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "Components/ScrollBox.h"
+#include "Components/ScrollBoxSlot.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
@@ -156,6 +157,32 @@ bool UShinobiCreatorPage::IsTinted(const FShinobiWardrobeRow& Row, EShinobiSex S
 	return (Sex == EShinobiSex::Female ? Row.FemaleTinted : Row.MaleTinted).ContainsByPredicate([](const TSoftObjectPtr<UMaterialInterface>& Copy) { return !Copy.IsNull(); });
 }
 
+UPanelWidget* UShinobiCreatorPage::GetRows() const
+{
+	return Rows;
+}
+
+UScrollBoxSlot* UShinobiCreatorPage::AddRow(UWidget* Row)
+{
+	return Cast<UScrollBoxSlot>(Rows->AddChild(Row));
+}
+
+TArray<UWidget*> UShinobiCreatorPage::RowControls() const
+{
+	TArray<UWidget*> Controls;
+	if (Rows)
+	{
+		UWidgetTree::ForWidgetAndChildren(Rows, [&Controls](UWidget* Widget)
+		{
+			if (Widget->IsA<UShinobiIndexButton>() || Widget->IsA<UShinobiIndexSlider>())
+			{
+				Controls.Add(Widget);
+			}
+		});
+	}
+	return Controls;
+}
+
 UPanelWidget* UShinobiCreatorPage::GetClothesStrip(EShinobiWardrobeSlot WardrobeSlot) const
 {
 	return ClothesStrips.IsValidIndex(int32(WardrobeSlot)) ? ClothesStrips[int32(WardrobeSlot)].Get() : nullptr;
@@ -170,7 +197,11 @@ UShinobiIndexButton* UShinobiCreatorPage::MakeButton(const FString& Label, int32
 {
 	UShinobiIndexButton* Button = WidgetTree->ConstructWidget<UShinobiIndexButton>(UShinobiIndexButton::StaticClass());
 	Button->Index = Index;
-	Button->OnIndexClicked = FShinobiIndexClicked::CreateWeakLambda(this, [Handler = MoveTemp(Handler)](int32 Picked) { Handler(Picked); });
+	Button->OnIndexClicked = FShinobiIndexClicked::CreateWeakLambda(this, [this, Button, Handler = MoveTemp(Handler)](int32 Picked)
+	{
+		ClickedPlace = RowControls().IndexOfByKey(Button); // (a pick rebuilds the rows: focus comes back to this place)
+		Handler(Picked);
+	});
 	Button->Arm();
 	if (!Label.IsEmpty())
 	{
@@ -213,10 +244,9 @@ TSharedRef<SWidget> UShinobiCreatorPage::RebuildWidget()
 		// The rows of the category, scrolling (the face has 30-odd sliders).
 		USizeBox* RowsBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 		RowsBox->SetHeightOverride(CreatorRowsHeight);
-		UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass());
-		RowsBox->AddChild(Scroll);
-		Rows = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-		Scroll->AddChild(Rows);
+		Rows = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass());
+		Rows->SetScrollWhenFocusChanges(EScrollWhenFocusChanges::AnimatedScroll);
+		RowsBox->AddChild(Rows);
 		Column->AddChildToVerticalBox(RowsBox);
 		// Name, code and the buttons.
 		const auto AddBox = [this, Column](const TCHAR* Label, const FText& Hint)
@@ -403,7 +433,7 @@ void UShinobiCreatorPage::AddNote(const FString& Text)
 {
 	UTextBlock* Note = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Text), 13, ShinobiMenuStyle::TextDim);
 	Note->SetAutoWrapText(true);
-	Rows->AddChildToVerticalBox(Note)->SetPadding(FMargin(0.f, 6.f));
+	AddRow(Note)->SetPadding(FMargin(0.f, 6.f));
 }
 
 void UShinobiCreatorPage::AddChoice(const FString& Label, const TArray<FString>& Names, int32 Current, TFunction<void(int32)> Pick)
@@ -413,7 +443,7 @@ void UShinobiCreatorPage::AddChoice(const FString& Label, const TArray<FString>&
 		return; // nothing to pick
 	}
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-	Rows->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 3.f));
+	AddRow(Row)->SetPadding(FMargin(0.f, 3.f));
 	UTextBlock* Caption = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Label), 14, ShinobiMenuStyle::TextDim);
 	Caption->SetMinDesiredWidth(150.f);
 	Row->AddChildToHorizontalBox(Caption)->SetVerticalAlignment(VAlign_Center);
@@ -460,7 +490,7 @@ void UShinobiCreatorPage::AddPicker(const FString& Label, uint8 FShinobiAppearan
 void UShinobiCreatorPage::AddSlider(const FString& Label, float Value, bool bUnit, TFunction<void(float)> Set, UWidget* Background)
 {
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-	Rows->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 2.f));
+	AddRow(Row)->SetPadding(FMargin(0.f, 2.f));
 	UTextBlock* Caption = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Label), 13, ShinobiMenuStyle::TextDim);
 	Caption->SetMinDesiredWidth(150.f);
 	Row->AddChildToHorizontalBox(Caption)->SetVerticalAlignment(VAlign_Center);
@@ -493,7 +523,7 @@ UPanelWidget* UShinobiCreatorPage::AddStrip(const TArray<UTexture2D*>& Pictures,
 {
 	UScrollBox* Strip = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass());
 	Strip->SetOrientation(Orient_Horizontal);
-	Rows->AddChildToVerticalBox(Strip);
+	AddRow(Strip);
 	for (int32 Position = 0; Position < Names.Num(); ++Position)
 	{
 		UShinobiIndexButton* Card = MakeButton(FString(), Position, Pick);
@@ -548,6 +578,28 @@ void UShinobiCreatorPage::Refresh(bool bRedress)
 	}
 	CodeBox->SetText(FText::FromString(Look.ToCode()));
 
+	// Strips (horizontal scroll boxes) keep their scroll across a rebuild of the same category.
+	TArray<float> StripOffsets;
+	const auto Strips = [this]()
+	{
+		TArray<UScrollBox*> Found;
+		WidgetTree->ForWidgetAndChildren(Rows, [this, &Found](UWidget* Widget)
+		{
+			UScrollBox* Strip = Cast<UScrollBox>(Widget);
+			if (Strip && Strip != Rows)
+			{
+				Found.Add(Strip);
+			}
+		});
+		return Found;
+	};
+	if (BuiltCategory == Category)
+	{
+		for (const UScrollBox* Strip : Strips())
+		{
+			StripOffsets.Add(Strip->GetScrollOffset());
+		}
+	}
 	Rows->ClearChildren();
 	ClothesStrips.Init(nullptr, ShinobiWardrobeSlotCount);
 	Swatches.Init(nullptr, ShinobiWardrobeSlotCount);
@@ -559,6 +611,24 @@ void UShinobiCreatorPage::Refresh(bool bRedress)
 	case ECategory::Face:
 	default: BuildFaceRows(); break;
 	}
+	BuiltCategory = Category;
+	const TArray<UScrollBox*> Rebuilt = Strips();
+	for (int32 Index = 0; Index < FMath::Min(Rebuilt.Num(), StripOffsets.Num()); ++Index)
+	{
+		Rebuilt[Index]->SetScrollOffset(StripOffsets[Index]);
+	}
+	// Gamepad: focus goes back to the control in the clicked one's place (the clicked one is gone).
+	RefocusTarget = nullptr;
+	if (ClickedPlace != INDEX_NONE)
+	{
+		const TArray<UWidget*> Controls = RowControls();
+		RefocusTarget = Controls.Num() > 0 ? Controls[FMath::Min(ClickedPlace, Controls.Num() - 1)] : nullptr;
+		ClickedPlace = INDEX_NONE;
+		if (RefocusTarget && GetOwningPlayer())
+		{
+			RefocusTarget->SetFocus();
+		}
+	}
 }
 
 void UShinobiCreatorPage::BuildCharacterRows()
@@ -567,7 +637,7 @@ void UShinobiCreatorPage::BuildCharacterRows()
 	AddNote(TEXT("START FROM"));
 	UScrollBox* Strip = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass());
 	Strip->SetOrientation(Orient_Horizontal);
-	Rows->AddChildToVerticalBox(Strip);
+	AddRow(Strip);
 	for (int32 Index = 0; Catalog && Index < Catalog->Presets.Num(); ++Index)
 	{
 		const FName Roster = Catalog->Presets[Index].Roster;
@@ -599,7 +669,7 @@ void UShinobiCreatorPage::BuildCharacterRows()
 	// Save slots.
 	AddNote(TEXT("SAVE SLOT"));
 	UHorizontalBox* SlotRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-	Rows->AddChildToVerticalBox(SlotRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+	AddRow(SlotRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 	for (int32 SlotIndex = 0; SlotIndex < SlotButtons.Num(); ++SlotIndex)
 	{
 		UShinobiIndexButton* Button = SlotButtons[SlotIndex];
@@ -663,7 +733,7 @@ void UShinobiCreatorPage::BuildClothesRows()
 		}
 		UScrollBox* Strip = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass());
 		Strip->SetOrientation(Orient_Horizontal);
-		Rows->AddChildToVerticalBox(Strip);
+		AddRow(Strip);
 		ClothesStrips[Index] = Strip;
 		for (int32 Position = 0; Position <= Pieces.Num(); ++Position)
 		{
@@ -698,7 +768,7 @@ void UShinobiCreatorPage::BuildClothesRows()
 		if (Palette && WornPiece && IsTinted(*WornPiece, Sex))
 		{
 			UHorizontalBox* Colours = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-			Rows->AddChildToVerticalBox(Colours)->SetPadding(FMargin(0.f, 4.f, 0.f, 6.f));
+			AddRow(Colours)->SetPadding(FMargin(0.f, 4.f, 0.f, 6.f));
 			Swatches[Index] = Colours;
 			const TArray<FName> Names = Palette->GetRowNames();
 			for (int32 Colour = 0; Colour < Names.Num(); ++Colour)
@@ -824,7 +894,7 @@ void UShinobiCreatorPage::BuildBodySkinRows()
 		AddSlider(TEXT("Offset V"), Worn.OffsetV / 127.f, false, [EditTattoo](float V) { EditTattoo([V](FShinobiTattoo& T) { T.OffsetV = CreatorShape(V); }); });
 		AddSlider(TEXT("Rotation"), Worn.Rotation / 255.f, true, [EditTattoo](float V) { EditTattoo([V](FShinobiTattoo& T) { T.Rotation = uint8(FMath::RoundToInt(V * 255.f)); }); });
 		AddSlider(TEXT("Size"), Worn.Scale / 255.f, true, [EditTattoo](float V) { EditTattoo([V](FShinobiTattoo& T) { T.Scale = uint8(FMath::RoundToInt(V * 255.f)); }); });
-		Rows->AddChildToVerticalBox(MakeButton(TEXT("DELETE"), Tattoo, [this](int32 Picked)
+		AddRow(MakeButton(TEXT("DELETE"), Tattoo, [this](int32 Picked)
 		{
 			EditLook([Picked](FShinobiAppearance& L) { if (L.Tattoos.IsValidIndex(Picked)) { L.Tattoos.RemoveAt(Picked); } }, EShinobiLookEdit::Skin);
 			bRowsPending = true;
@@ -832,7 +902,7 @@ void UShinobiCreatorPage::BuildBodySkinRows()
 	}
 	if (Look.Tattoos.Num() < ShinobiMutable::MaxTattoos && DesignNames.Num() > 0 && Regions.Num() > 0)
 	{
-		Rows->AddChildToVerticalBox(MakeButton(TEXT("+ ADD TATTOO"), 0, [this](int32)
+		AddRow(MakeButton(TEXT("+ ADD TATTOO"), 0, [this](int32)
 		{
 			EditLook([](FShinobiAppearance& L) { L.Tattoos.Add({0, 0, 0, 0, 0, 128}); }, EShinobiLookEdit::Skin);
 			bRowsPending = true;

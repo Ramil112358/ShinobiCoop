@@ -102,7 +102,6 @@ TSharedRef<SWidget> UShinobiMainMenuWidget::RebuildWidget()
 	{
 		SetIsFocusable(true); // tab keys arrive here when nothing inside has focus
 		UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Root"));
-		Root->SetVisibility(ESlateVisibility::Visible); // clicks on the open stage reach the preview
 		WidgetTree->RootWidget = Root;
 
 		Backdrop = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("Backdrop"));
@@ -135,6 +134,11 @@ TSharedRef<SWidget> UShinobiMainMenuWidget::RebuildWidget()
 		Gap->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		StatusText = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 13, ShinobiMenuStyle::TextDim);
 		Tabs->AddChildToHorizontalBox(StatusText)->SetVerticalAlignment(VAlign_Center);
+
+		// Under the pages: the open stage, where the mouse turns and zooms the preview.
+		PreviewCatcher = CreateWidget<UShinobiPreviewCatcher>(this, UShinobiPreviewCatcher::StaticClass());
+		PreviewCatcher->Menu = this;
+		MainMenuPlace(Root, PreviewCatcher, FAnchors(0.f, 0.f, 1.f, 1.f), FMargin(0.f));
 
 		Pages = WidgetTree->ConstructWidget<UWidgetSwitcher>(UWidgetSwitcher::StaticClass(), TEXT("Pages"));
 		MainMenuPlace(Root, Pages, FAnchors(0.f, 0.f, 1.f, 1.f), FMargin(0.f, MainMenuTopBar, 0.f, 40.f));
@@ -573,6 +577,11 @@ void UShinobiMainMenuWidget::TickStudioFade(float DeltaSeconds)
 	Blackout->SetVisibility(StudioFade > 0.f ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 }
 
+UWidget* UShinobiMainMenuWidget::GetPagesWidget() const
+{
+	return Pages;
+}
+
 AShinobiMenuStage* UShinobiMainMenuWidget::GetPreviewStage() const
 {
 	return Tab == EShinobiMenuTab::Shinobi || Tab == EShinobiMenuTab::Create ? GetStage() : nullptr;
@@ -599,28 +608,45 @@ FText UShinobiMainMenuWidget::GetHintText() const
 	return FText::FromString(FString::Join(Parts, TEXT(" ")));
 }
 
-FReply UShinobiMainMenuWidget::NativeOnMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event)
-{
-	UseGamepadHints(false);
-	if (GetPreviewStage() && (Event.GetEffectingButton() == EKeys::LeftMouseButton || Event.GetEffectingButton() == EKeys::RightMouseButton))
-	{
-		return FReply::Handled().CaptureMouse(TakeWidget());
-	}
-	return Super::NativeOnMouseButtonDown(Geometry, Event);
-}
-
-FReply UShinobiMainMenuWidget::NativeOnMouseButtonUp(const FGeometry& Geometry, const FPointerEvent& Event)
-{
-	return HasMouseCapture() ? FReply::Handled().ReleaseMouseCapture() : Super::NativeOnMouseButtonUp(Geometry, Event);
-}
-
 FReply UShinobiMainMenuWidget::NativeOnMouseMove(const FGeometry& Geometry, const FPointerEvent& Event)
 {
 	if (bGamepadHints && !Event.GetCursorDelta().IsNearlyZero())
 	{
 		UseGamepadHints(false);
 	}
-	if (AShinobiMenuStage* Stage = HasMouseCapture() ? GetPreviewStage() : nullptr)
+	return Super::NativeOnMouseMove(Geometry, Event);
+}
+
+TSharedRef<SWidget> UShinobiPreviewCatcher::RebuildWidget()
+{
+	if (WidgetTree && !WidgetTree->RootWidget)
+	{
+		UBorder* Area = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Area"));
+		Area->SetBrush(ShinobiMenuStyle::ColorBrush(FLinearColor::Transparent)); // (invisible, but takes the clicks)
+		WidgetTree->RootWidget = Area;
+	}
+	SetVisibility(ESlateVisibility::Visible);
+	return Super::RebuildWidget();
+}
+
+FReply UShinobiPreviewCatcher::NativeOnMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event)
+{
+	if (Menu.IsValid() && Menu->GetPreviewStage() && (Event.GetEffectingButton() == EKeys::LeftMouseButton || Event.GetEffectingButton() == EKeys::RightMouseButton))
+	{
+		Menu->UseGamepadHints(false);
+		return FReply::Handled().CaptureMouse(TakeWidget());
+	}
+	return Super::NativeOnMouseButtonDown(Geometry, Event);
+}
+
+FReply UShinobiPreviewCatcher::NativeOnMouseButtonUp(const FGeometry& Geometry, const FPointerEvent& Event)
+{
+	return HasMouseCapture() ? FReply::Handled().ReleaseMouseCapture() : Super::NativeOnMouseButtonUp(Geometry, Event);
+}
+
+FReply UShinobiPreviewCatcher::NativeOnMouseMove(const FGeometry& Geometry, const FPointerEvent& Event)
+{
+	if (AShinobiMenuStage* Stage = HasMouseCapture() && Menu.IsValid() ? Menu->GetPreviewStage() : nullptr)
 	{
 		Stage->AddYaw(Event.GetCursorDelta().X * 0.4f);
 		return FReply::Handled();
@@ -628,9 +654,9 @@ FReply UShinobiMainMenuWidget::NativeOnMouseMove(const FGeometry& Geometry, cons
 	return Super::NativeOnMouseMove(Geometry, Event);
 }
 
-FReply UShinobiMainMenuWidget::NativeOnMouseWheel(const FGeometry& Geometry, const FPointerEvent& Event)
+FReply UShinobiPreviewCatcher::NativeOnMouseWheel(const FGeometry& Geometry, const FPointerEvent& Event)
 {
-	if (AShinobiMenuStage* Stage = GetPreviewStage())
+	if (AShinobiMenuStage* Stage = Menu.IsValid() ? Menu->GetPreviewStage() : nullptr)
 	{
 		Stage->AddZoom(Event.GetWheelDelta() * 0.1f);
 		return FReply::Handled();
@@ -638,9 +664,9 @@ FReply UShinobiMainMenuWidget::NativeOnMouseWheel(const FGeometry& Geometry, con
 	return Super::NativeOnMouseWheel(Geometry, Event);
 }
 
-FReply UShinobiMainMenuWidget::NativeOnMouseButtonDoubleClick(const FGeometry& Geometry, const FPointerEvent& Event)
+FReply UShinobiPreviewCatcher::NativeOnMouseButtonDoubleClick(const FGeometry& Geometry, const FPointerEvent& Event)
 {
-	if (AShinobiMenuStage* Stage = GetPreviewStage())
+	if (AShinobiMenuStage* Stage = Menu.IsValid() ? Menu->GetPreviewStage() : nullptr)
 	{
 		Stage->ResetView();
 		return FReply::Handled();

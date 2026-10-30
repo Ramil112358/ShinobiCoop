@@ -39,6 +39,8 @@ AShinobiMenuStage::AShinobiMenuStage()
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(Root);
+	Camera->bOverrideAspectRatioAxisConstraint = true; // (a wider window shows more at the sides, the same height)
+	Camera->AspectRatioAxisConstraint = AspectRatio_MaintainYFOV;
 	PlaceCamera();
 }
 
