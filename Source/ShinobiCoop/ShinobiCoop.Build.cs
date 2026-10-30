@@ -56,6 +56,7 @@ public class ShinobiCoop : ModuleRules
 			// outfit builder: Chaos cloth on the fitted copies (editor only)
 			PrivateDependencyModuleNames.AddRange(new string[] { "ClothingSystemEditorInterface", "SkeletalMeshEditor", "PhysicsUtilities", "AssetRegistry" });
 			PrivateDependencyModuleNames.Add("CustomizableObjectEditor"); // Mutable graph builder (ShinobiMutableGraphLibrary)
+			PrivateDependencyModuleNames.Add("ChaosClothAssetEngine"); // Fab outfits' cloth assets to wardrobe meshes (ShinobiMutableMeshLibrary)
 		}
 
 		PublicIncludePaths.AddRange(new string[] {

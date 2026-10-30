@@ -1315,7 +1315,7 @@ bool FShinobiMutableSamplePiecesTest::RunTest(const FString& Parameters)
 			{
 				USkeletalMesh* Mesh = (bMale ? Row.MaleMesh : Row.FemaleMesh).LoadSynchronous();
 				const FName Fit = bMale ? Row.MaleFit : Row.FemaleFit; // (none: rebound onto the base already)
-				static const TArray<FString> Prefixes = {TEXT("Cyborg"), TEXT("MHSample"), TEXT("Mannequin")};
+				static const TArray<FString> Prefixes = {TEXT("Cyborg"), TEXT("MHSample"), TEXT("Mannequin"), TEXT("Fab")};
 				const FString* Source = Algo::FindByPredicate(Prefixes, [&](const FString& Prefix) { return Name.ToString().StartsWith(Prefix); });
 				if (!Mesh || !Source)
 				{
@@ -1334,10 +1334,47 @@ bool FShinobiMutableSamplePiecesTest::RunTest(const FString& Parameters)
 			}
 		});
 	}
-	for (const TCHAR* Source : {TEXT("Cyborg"), TEXT("MHSample"), TEXT("Mannequin")})
+	for (const TCHAR* Source : {TEXT("Cyborg"), TEXT("MHSample"), TEXT("Mannequin"), TEXT("Fab")})
 	{
 		TestTrue(FString::Printf(TEXT("rows from %s"), Source), Sources.Contains(Source));
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableRowReplacesSlotsTest, "ShinobiCoop.Mutable.RowReplacesSlots", ShinobiTestFlags)
+bool FShinobiMutableRowReplacesSlotsTest::RunTest(const FString& Parameters)
+{
+	// A whole outfit (a Fab outfit in Outer) takes the slots it replaces off: no jeans through its trousers.
+	const UDataTable* Outer = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(TEXT("Outer")));
+	const int32 Survivor = Outer ? Outer->GetRowNames().IndexOfByKey(FName(TEXT("FabSurvivor"))) : INDEX_NONE;
+	if (!TestTrue(TEXT("Outer has FabSurvivor"), Survivor != INDEX_NONE))
+	{
+		return false;
+	}
+	const FShinobiWardrobeRow* Row = Outer->FindRow<FShinobiWardrobeRow>(TEXT("FabSurvivor"), TEXT("test"));
+	TestTrue(TEXT("it replaces Top, Bottom and Shoes"), Row->Replaces.Contains(EShinobiWardrobeSlot::Top) && Row->Replaces.Contains(EShinobiWardrobeSlot::Bottom)
+		&& Row->Replaces.Contains(EShinobiWardrobeSlot::Shoes));
+	FShinobiAppearance Look;
+	Look.Sex = Row->MaleMesh.IsNull() ? EShinobiSex::Female : EShinobiSex::Male;
+	Look.Top = Look.Bottom = Look.Shoes = 0;
+	Look.Outer = uint8(Survivor);
+	TStrongObjectPtr<UShinobiMutableLook> Builder(NewObject<UShinobiMutableLook>());
+	if (!TestTrue(TEXT("the build starts"), Builder->Request(Look)))
+	{
+		return false;
+	}
+	WaitThen(*this, [Builder]() { return !Builder->IsPending(); }, [this, Builder]()
+	{
+		UCustomizableObjectInstance* Instance = Builder->GetInstance();
+		if (TestNotNull(TEXT("the instance"), Instance))
+		{
+			TestEqual(TEXT("Outer worn"), Instance->GetEnumParameterSelectedOption(TEXT("Outer")), FString(ShinobiMutable::On));
+			for (const TCHAR* Slot : {TEXT("Top"), TEXT("Bottom"), TEXT("Shoes")})
+			{
+				TestEqual(FString::Printf(TEXT("%s replaced"), Slot), Instance->GetEnumParameterSelectedOption(Slot), FString(ShinobiMutable::Off));
+			}
+		}
+	});
 	return true;
 }
 

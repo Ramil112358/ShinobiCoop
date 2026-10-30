@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataTable.h"
+#include "Shinobi/Hero/ShinobiCreatorCatalog.h"
 #include "ShinobiMutableTypes.generated.h"
 
 class USkeletalMesh;
@@ -44,6 +45,10 @@ struct FShinobiWardrobeRow : public FTableRowBase
 	/** The tinted copies' vector parameters that take the colour (City Sample: A_CrowdColor_main). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Wardrobe)
 	TArray<FName> ColourParameters;
+
+	/** Slots this piece takes off when worn (a whole outfit replaces Top, Bottom and Shoes; a dress, Bottom). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Wardrobe)
+	TArray<EShinobiWardrobeSlot> Replaces;
 
 	/** Closed volumes around the body each sex's mesh covers; none hides nothing. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Wardrobe)

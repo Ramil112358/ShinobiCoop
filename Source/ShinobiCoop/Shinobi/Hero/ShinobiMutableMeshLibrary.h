@@ -25,6 +25,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")
 	static int32 AddBoneSkinning(USkeletalMesh* Mesh, FName Bone, int32 Count = 8, float Weight = 0.00392f); // (1/255: the smallest 8-bit skin weight)
 
+	/** A Chaos cloth asset's render mesh (a MetaHuman Fab outfit's) as the skeletal mesh at AssetPath (made, or replaced),
+	 * through the engine's own converter (UChaosClothAssetBase::ExportToSkeletalMesh). Null if that fails. The caller saves it. */
+	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")
+	static USkeletalMesh* ExportClothAsset(UObject* ClothAsset, const FString& AssetPath);
+
 	/** Mesh 0, LOD 0 of a body DNA (a MetaHuman compatibility body: .../MetaHumanCharacter/Content/Optional/Body/
 	 * FixedCompatibility/<type>.dna) as triangles in mesh space, cm. False when the file has no geometry. */
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")

@@ -70,10 +70,19 @@ void UShinobiMutableLook::SetParameters(const FShinobiAppearance& Look)
 	Instance->SetSkeletalMeshParameterSelectedOption(ShinobiMutable::FitBase, Base);
 	Instance->SetEnumParameterSelectedOption(ShinobiMutable::Build, StaticEnum<EShinobiBuild>()->GetNameStringByValue(int64(Look.Build)));
 	Instance->SetFloatParameterSelectedOption(ShinobiMutable::BuildBlend, Look.BuildBlend / 255.f);
+	// Slots a worn piece takes off (a whole outfit's Top, Bottom and Shoes).
+	TSet<EShinobiWardrobeSlot> Replaced;
+	for (int32 Index = 0; Index < ShinobiWardrobeSlotCount; ++Index)
+	{
+		if (const FShinobiWardrobeRow* Piece = FindPiece(ShinobiMutable::SlotNames[Index], Look.Slot(EShinobiWardrobeSlot(Index))))
+		{
+			Replaced.Append(Piece->Replaces);
+		}
+	}
 	for (int32 Index = 0; Index < ShinobiWardrobeSlotCount; ++Index)
 	{
 		const TCHAR* Slot = ShinobiMutable::SlotNames[Index];
-		const FShinobiWardrobeRow* Piece = FindPiece(Slot, Look.Slot(EShinobiWardrobeSlot(Index)));
+		const FShinobiWardrobeRow* Piece = Replaced.Contains(EShinobiWardrobeSlot(Index)) ? nullptr : FindPiece(Slot, Look.Slot(EShinobiWardrobeSlot(Index)));
 		USkeletalMesh* Mesh = Piece ? (bFemale ? Piece->FemaleMesh : Piece->MaleMesh).LoadSynchronous() : nullptr;
 		USkeletalMesh* Clip = Piece ? (bFemale ? Piece->FemaleClip : Piece->MaleClip).LoadSynchronous() : nullptr;
 		const FName Fit = Mesh ? (bFemale ? Piece->FemaleFit : Piece->MaleFit) : NAME_None;

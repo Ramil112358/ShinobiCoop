@@ -5,6 +5,9 @@
 
 #if WITH_EDITOR
 #include "AnimationRuntime.h"
+#include "AssetRegistry/AssetRegistryModule.h"
+#include "ChaosClothAsset/ClothAssetBase.h"
+#include "UObject/Package.h"
 #include "DNAReader.h"
 #include "DNAUtils.h"
 #include "DynamicMesh/DynamicMesh3.h"
@@ -225,6 +228,41 @@ int32 UShinobiMutableMeshLibrary::AddBoneSkinning(USkeletalMesh* Mesh, FName Bon
 	Mesh->Build();
 #endif
 	return Lod0Added;
+}
+
+USkeletalMesh* UShinobiMutableMeshLibrary::ExportClothAsset(UObject* ClothAsset, const FString& AssetPath)
+{
+#if WITH_EDITOR
+	const UChaosClothAssetBase* Cloth = Cast<UChaosClothAssetBase>(ClothAsset);
+	if (!Cloth)
+	{
+		return nullptr;
+	}
+	const FString Name = FPackageName::GetShortName(AssetPath);
+	UPackage* Package = CreatePackage(*AssetPath);
+	USkeletalMesh* Mesh = FindObject<USkeletalMesh>(Package, *Name);
+	const bool bNew = !Mesh;
+	if (bNew)
+	{
+		Mesh = NewObject<USkeletalMesh>(Package, *Name, RF_Public | RF_Standalone);
+	}
+	if (!Cloth->ExportToSkeletalMesh(*Mesh))
+	{
+		return nullptr;
+	}
+	if (!Mesh->GetSkeleton())
+	{
+		Mesh->SetSkeleton(const_cast<USkeleton*>(Cloth->GetSkeleton())); // (the converter leaves it unset)
+	}
+	if (bNew)
+	{
+		FAssetRegistryModule::AssetCreated(Mesh);
+	}
+	Mesh->MarkPackageDirty();
+	return Mesh;
+#else
+	return nullptr;
+#endif
 }
 
 bool UShinobiMutableMeshLibrary::ReadDnaBody(const FString& DnaPath, TArray<FVector>& Positions, TArray<int32>& Triangles)

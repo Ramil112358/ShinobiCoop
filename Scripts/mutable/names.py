@@ -37,18 +37,26 @@ FIT_PREFIX = "Fit_"
 # UShinobiMutableMeshLibrary::ReadPosedSurface / RebindPiece); else a MetaHuman skeletal mesh. The City Sample crowd was
 # made on the tal_nrw bodies; the Mutable Sample's MetaHuman clothing on its female MetaHuman (female only), its Cyborg
 # pieces on its male body; the Fab leather jacket on the UE mannequins.
+_FAB = "/Game/Outfits"
+_BOTH = lambda mesh: {"Male": mesh, "Female": mesh}  # noqa: E731
 FIT_SOURCES = {
     "CitySample": {"Male": "dna:m_tal_nrw", "Female": "dna:f_tal_nrw"},
     "MHSample": {"Female": "/Game/MetaHumans/Body/SKM_MH_Female_BodyMesh"},
     "Cyborg": {"Male": "pose:/Game/Character/Body/SK_BaseBody", "Female": "pose:/Game/Character/Body/SK_BaseBody"},
     "Mannequin": {"Male": "pose:/Game/Jacket/Meshes/SKM_Manny", "Female": "pose:/Game/Jacket/Meshes/SKM_Quinn"},
+    # MetaHuman Fab outfits: the bodies their packages ship as each cloth asset's source (/Game/Outfits, stage fabimport).
+    "FabMed": {"Male": f"{_FAB}/Shorts/Shorts/meshes/m_med_nrw_CombinedSkelMesh", "Female": f"{_FAB}/Shorts/Shorts/meshes/f_med_nrw_CombinedSkelMesh"},
+    "FabBof2": _BOTH(f"{_FAB}/minidress01_variant/MiniDress01/Meshes/bodyShapeBof2_CombinedSkelMesh_bodyShapeBof2_CombinedSkelMesh"),
+    "FabTechG": _BOTH(f"{_FAB}/techwearoutfit/techwearOutfit/Meshes/bodyShapeG_CombinedSkelMesh"),
+    "FabTechH": _BOTH(f"{_FAB}/techwearoutfit/techwearOutfit/Meshes/bodyShapeH_CombinedSkelMesh"),
+    "FabMax": _BOTH(f"{_FAB}/aaa_henley_shirt/AAA_Henley_Shirt/Meshes/Max_FullBody"),
 }
-# Wardrobe pieces from those sources, appended after the City Sample rows: (row, slot, source, {sex: mesh}). Pieces of a
-# "pose:" source are rebound onto each sex's base (/Game/Shinobi/Mutable/Wardrobe/<Source>/SK_<Row>_<Sex>).
+# Wardrobe pieces from those sources, appended after the City Sample rows: (row, slot, source, {sex: mesh}[, replaces]).
+# Pieces of a "pose:" source, and Fab cloth assets (CA_*, exported to skeletal meshes first), are rebound onto each sex's
+# base (/Game/Shinobi/Mutable/Wardrobe/<Source>/SK_<Row>_<Sex>); replaces: the slots the piece takes off.
 SAMPLE_CONTENT = "E:/MutableSample/Content"  # the Mutable Sample project (Fab), copied into Content/ by stage samplecopy
 SAMPLE_FOLDERS = ["Character", "MetaHumans", "Shared"]
 _C, _MH = "/Game/Character", "/Game/MetaHumans/Clothing"
-_BOTH = lambda mesh: {"Male": mesh, "Female": mesh}  # noqa: E731
 _FEMALE = lambda mesh: {"Female": mesh}  # noqa: E731  (women's cuts: a male fit can't take their shape)
 SAMPLE_PIECES = [
     ("CyborgJacketA", "Top", "Cyborg", _BOTH(f"{_C}/Jacket_A/SK_Jacket_A")),
@@ -70,6 +78,25 @@ SAMPLE_PIECES = [
     ("MHSampleShoes", "Shoes", "MHSample", _FEMALE(f"{_MH}/Shoes/MH_Female_Outfits_3")),
     ("MannequinLeatherJacket", "Outer", "Mannequin", {"Male": "/Game/Jacket/Meshes/SKM_Manny_Jacket", "Female": "/Game/Jacket/Meshes/SKM_Quinn_Jacket"}),
 ]
+_WHOLE = ["Top", "Bottom", "Shoes"]  # a whole outfit's
+_JEANS = lambda name, piece: {s: f"{_FAB}/slimjeansvariants/{name}/ClothAssets/CA_{piece}_{s[0].lower()}_med_nrw" for s in ("Male", "Female")}  # noqa: E731
+FAB_PIECES = [
+    ("FabHenley", "Top", "FabMax", _BOTH(f"{_FAB}/aaa_henley_shirt/AAA_Henley_Shirt/ClothAsset/CA_AAA_Henley_Shirt")),
+    ("FabMiniDress", "Top", "FabBof2", _BOTH(f"{_FAB}/minidress01_variant/MiniDress01/ClothAssets/CA_MiniDress01"), ["Bottom"]),
+    ("FabShorts", "Bottom", "FabMed", {s: f"{_FAB}/Shorts/Shorts/ClothAssets/CA_shorts_{s[0].lower()}_med_nrw" for s in ("Male", "Female")}),
+    ("FabJeansSlim", "Bottom", "FabMed", _JEANS("Jeans_slm", "jeans_slm")),
+    ("FabJeansAkn", "Bottom", "FabMed", _JEANS("Jeansakn", "Jeansakn")),
+    ("FabJeansMcf", "Bottom", "FabMed", _JEANS("Jeansmcf", "jeansmcf")),
+    ("FabSurvivor", "Outer", "FabBof2", _BOTH(f"{_FAB}/survivoroutfit/SurvivorOutfit/ClothAssets/CA_SurvivorOutfit_Bof2"), _WHOLE),
+    ("FabStreetwear12", "Outer", "FabBof2", _BOTH(f"{_FAB}/street_wear_12/Street_Wear_12/ClothAssets/CA_Street_Wear_12"), _WHOLE),
+    ("FabTechwearG", "Outer", "FabTechG", _BOTH(f"{_FAB}/techwearoutfit/techwearOutfit/clothAssets/CA_techwearOutfit_bodyShapeG"), _WHOLE),
+    ("FabTechwearH", "Outer", "FabTechH", _BOTH(f"{_FAB}/techwearoutfit/techwearOutfit/clothAssets/CA_techwearOutfit_bodyShapeH"), _WHOLE),
+]
+# The packages (VaultCache/FabLibrary/<listing>/metahuman/UE_5.x/<file>, downloaded by the user) -> /Game/Outfits/<folder>.
+FAB_PACKAGES = {"Shorts": "oa_shorts", "slimjeansvariants": "oa_slimjeansvariants", "techwearoutfit": "oa_techwearoutfit",
+                "survivoroutfit": "oa_survivoroutfit", "aaa_henley_shirt": "oa_aaa_henley_shirt", "minidress01_variant": "oa_minidress01_variant",
+                "street_wear_12": "oa_street_wear_12"}
+FAB_MAX_INSIDE = 0.06  # a sex whose fit shape a piece sits further inside than this is left out (a women's cut on a man)
 FIT_MAX_MOVE, FIT_SMOOTH = 12.0, 2  # cm (broad mannequin shoulders lie ~10 cm off a MetaHuman), passes (UShinobiMutableMeshLibrary::BakeFitMorph)
 # Left where the base has them (with their children), faded out over FIT_KEEP_FADE rings: the bodies' hands differ in
 # pose and their necks end differently, so projecting there shears triangles, which Reshape turns into spikes.
