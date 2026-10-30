@@ -291,6 +291,154 @@ FString UShinobiMutableMeshLibrary::BakeFitMorph(USkeletalMesh* Base, FName Morp
 	return Report;
 }
 
+int32 UShinobiMutableMeshLibrary::MakeClipVolume(USkeletalMesh* Clip, USkeletalMesh* Base, FName FitMorph, USkeletalMesh* Piece, float Reach, int32 Erode, float Out, float Depth)
+{
+	int32 Covered = 0;
+#if WITH_EDITOR
+	FMeshDescription Description;
+	TArray<FVector> Positions, PiecePoints;
+	TArray<int32> Triangles, PieceTriangles;
+	if (!Clip || !Base || !Base->CloneMeshDescription(0, Description) || !Surface(Description, Positions, Triangles, FitMorph)
+		|| !ReadMeshSurface(Piece, PiecePoints, PieceTriangles))
+	{
+		return 0;
+	}
+	// Indices follow Surface's vertex order.
+	TArray<FVertexID> Ids;
+	for (const FVertexID Vertex : Description.Vertices().GetElementIDs())
+	{
+		Ids.Add(Vertex);
+	}
+	const FSurface Body(Positions, Triangles);
+	const FSurface Cloth(PiecePoints, PieceTriangles);
+	TArray<FVector> Normals;
+	Normals.Init(FVector::ZeroVector, Positions.Num());
+	for (int32 Index = 0; Index + 2 < Triangles.Num(); Index += 3)
+	{
+		const FVector Area = FVector::CrossProduct(Positions[Triangles[Index + 1]] - Positions[Triangles[Index]], Positions[Triangles[Index + 2]] - Positions[Triangles[Index]]);
+		for (int32 Corner = 0; Corner < 3; ++Corner)
+		{
+			Normals[Triangles[Index + Corner]] += Area * Body.Sign;
+		}
+	}
+	TArray<bool> In;
+	In.Init(false, Positions.Num());
+	for (int32 Vertex = 0; Vertex < Positions.Num(); ++Vertex)
+	{
+		Normals[Vertex] = Normals[Vertex].GetSafeNormal();
+		double Hit = 0.0;
+		int32 Triangle = IndexConstants::InvalidID;
+		In[Vertex] = Cloth.Tree.FindNearestHitTriangle(FRay3d(Positions[Vertex] - Normals[Vertex], Normals[Vertex]), Hit, Triangle) && Hit <= Reach + 1.0;
+	}
+	// The covered triangles, eroded at the rim: a vertex on a triangle that isn't covered leaves.
+	TArray<int32> Region;
+	for (int32 Pass = 0; Pass <= Erode; ++Pass)
+	{
+		Region.Reset();
+		TArray<bool> Rim;
+		Rim.Init(false, Positions.Num());
+		for (int32 Index = 0; Index + 2 < Triangles.Num(); Index += 3)
+		{
+			const bool bAll = In[Triangles[Index]] && In[Triangles[Index + 1]] && In[Triangles[Index + 2]];
+			for (int32 Corner = 0; Corner < 3; ++Corner)
+			{
+				Rim[Triangles[Index + Corner]] |= !bAll;
+			}
+			if (bAll)
+			{
+				Region.Add(Index);
+			}
+		}
+		if (Pass < Erode)
+		{
+			for (int32 Vertex = 0; Vertex < Positions.Num(); ++Vertex)
+			{
+				In[Vertex] = In[Vertex] && !Rim[Vertex];
+			}
+		}
+	}
+	Covered = Region.Num();
+	if (!Covered)
+	{
+		return 0;
+	}
+	// The shell, wound outward: the region pushed out, a reversed copy pushed in, walls along each rim edge.
+	FSkeletalMeshAttributes Attributes(Description);
+	FSkinWeightsVertexAttributesRef Skin = Attributes.GetVertexSkinWeights();
+	TArray<TArray<UE::AnimationCore::FBoneWeight>> Weights;
+	for (const FVertexID Vertex : Ids)
+	{
+		TArray<UE::AnimationCore::FBoneWeight>& Each = Weights.AddDefaulted_GetRef();
+		for (const UE::AnimationCore::FBoneWeight& Weight : Skin.Get(Vertex))
+		{
+			Each.Add(Weight);
+		}
+	}
+	const FName Slot = Attributes.GetPolygonGroupMaterialSlotNames()[*Description.PolygonGroups().GetElementIDs().CreateConstIterator()];
+	TArray<FIntVector> Faces;
+	TMap<TPair<int32, int32>, int32> EdgeUse;
+	for (const int32 Index : Region)
+	{
+		const bool bOutward = Body.Sign > 0.0;
+		const FIntVector Face(Triangles[Index], bOutward ? Triangles[Index + 1] : Triangles[Index + 2], bOutward ? Triangles[Index + 2] : Triangles[Index + 1]);
+		Faces.Add(Face);
+		for (int32 Corner = 0; Corner < 3; ++Corner)
+		{
+			const int32 A = Face[Corner], B = Face[(Corner + 1) % 3];
+			++EdgeUse.FindOrAdd(TPair<int32, int32>(FMath::Min(A, B), FMath::Max(A, B)));
+		}
+	}
+	Description.Empty();
+	const FPolygonGroupID Group = Description.CreatePolygonGroup();
+	Attributes.GetPolygonGroupMaterialSlotNames()[Group] = Slot;
+	TMap<int32, FVertexID> Outer, Inner;
+	auto Place = [&](TMap<int32, FVertexID>& Layer, int32 Vertex, float Offset) -> FVertexID
+	{
+		if (const FVertexID* Found = Layer.Find(Vertex))
+		{
+			return *Found;
+		}
+		const FVertexID New = Description.CreateVertex();
+		Description.GetVertexPositions()[New] = FVector3f(Positions[Vertex] + Normals[Vertex] * Offset);
+		Skin.Set(New, Weights[Vertex]);
+		return Layer.Add(Vertex, New);
+	};
+	auto Triangle = [&](FVertexID A, FVertexID B, FVertexID C)
+	{
+		TArray<FVertexInstanceID> Corners;
+		for (const FVertexID Vertex : {A, B, C})
+		{
+			Corners.Add(Description.CreateVertexInstance(Vertex));
+		}
+		Description.CreateTriangle(Group, Corners);
+	};
+	for (const FIntVector& Face : Faces)
+	{
+		Triangle(Place(Outer, Face.X, Out), Place(Outer, Face.Y, Out), Place(Outer, Face.Z, Out));
+		Triangle(Place(Inner, Face.X, -Depth), Place(Inner, Face.Z, -Depth), Place(Inner, Face.Y, -Depth));
+		for (int32 Corner = 0; Corner < 3; ++Corner)
+		{
+			const int32 A = Face[Corner], B = Face[(Corner + 1) % 3];
+			if (EdgeUse[TPair<int32, int32>(FMath::Min(A, B), FMath::Max(A, B))] == 1) // a rim edge
+			{
+				Triangle(Outer[B], Outer[A], Inner[A]);
+				Triangle(Outer[B], Inner[A], Inner[B]);
+			}
+		}
+	}
+	for (int32 Lod = 0; Lod < Clip->GetLODNum(); ++Lod)
+	{
+		FMeshDescription Copy = Description;
+		Clip->CreateMeshDescription(Lod, MoveTemp(Copy));
+		USkeletalMesh::FCommitMeshDescriptionParams Params;
+		Params.bMarkPackageDirty = true;
+		Clip->CommitMeshDescription(Lod, Params);
+	}
+	Clip->Build();
+#endif
+	return Covered;
+}
+
 float UShinobiMutableMeshLibrary::FractionInside(USkeletalMesh* Piece, USkeletalMesh* Body, float Tolerance, FName Morph)
 {
 #if WITH_EDITOR

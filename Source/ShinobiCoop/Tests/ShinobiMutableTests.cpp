@@ -1127,4 +1127,76 @@ bool FShinobiMutableSlotFitParameterTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+namespace
+{
+	/** Every Top/Bottom/Shoes row's mesh and clip per sex: Visit(row name, sex, mesh, clip). */
+	void ForEachRowPiece(TFunctionRef<void(const FString&, const TCHAR*, USkeletalMesh*, USkeletalMesh*)> Visit)
+	{
+		for (const TCHAR* Slot : {TEXT("Top"), TEXT("Bottom"), TEXT("Shoes")})
+		{
+			if (const UDataTable* Table = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(Slot)))
+			{
+				Table->ForeachRow<FShinobiWardrobeRow>(TEXT("coverage test"), [&](const FName& Name, const FShinobiWardrobeRow& Row)
+				{
+					const FString Who = FString(Slot) + TEXT(" ") + Name.ToString();
+					Visit(Who, TEXT("Male"), Row.MaleMesh.LoadSynchronous(), Row.MaleClip.LoadSynchronous());
+					Visit(Who, TEXT("Female"), Row.FemaleMesh.LoadSynchronous(), Row.FemaleClip.LoadSynchronous());
+				});
+			}
+		}
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableRowsHaveClipsTest, "ShinobiCoop.Mutable.RowsHaveClips", ShinobiTestFlags)
+bool FShinobiMutableRowsHaveClipsTest::RunTest(const FString& Parameters)
+{
+	// Every piece hides the skin it covers (Scripts/setup_mutable.py stage coverage).
+	int32 Pieces = 0;
+	ForEachRowPiece([&](const FString& Who, const TCHAR* Sex, USkeletalMesh* Mesh, USkeletalMesh* Clip)
+	{
+		if (Mesh)
+		{
+			TestNotNull(FString::Printf(TEXT("%s (%s) has a clip"), *Who, Sex), Clip);
+			++Pieces;
+		}
+	});
+	TestTrue(TEXT("some pieces"), Pieces > 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableClipVolumesClosedTest, "ShinobiCoop.Mutable.ClipVolumesClosed", ShinobiTestFlags)
+bool FShinobiMutableClipVolumesClosedTest::RunTest(const FString& Parameters)
+{
+	// Clip With Mesh removes what lies inside a closed volume: no clip has an open edge, and each is on the base's
+	// skeleton (Reshape moves it from the piece's fit shape to the built body).
+	const USkeletalMesh* Base = LoadObject<USkeletalMesh>(nullptr, *ShinobiMutable::BasePath(TEXT("Male")));
+	int32 Checked = 0;
+	ForEachRowPiece([&](const FString& Who, const TCHAR* Sex, USkeletalMesh* Mesh, USkeletalMesh* Clip)
+	{
+		TArray<FVector> Positions;
+		TArray<int32> Triangles;
+		if (!Clip || !TestTrue(Who + TEXT(": clip surface"), UShinobiMutableMeshLibrary::ReadMeshSurface(Clip, Positions, Triangles)))
+		{
+			return;
+		}
+		TMap<TPair<int32, int32>, int32> Edges;
+		for (int32 Index = 0; Index + 2 < Triangles.Num(); Index += 3)
+		{
+			for (int32 Corner = 0; Corner < 3; ++Corner)
+			{
+				const int32 A = Triangles[Index + Corner], B = Triangles[Index + (Corner + 1) % 3];
+				++Edges.FindOrAdd(TPair<int32, int32>(FMath::Min(A, B), FMath::Max(A, B)));
+			}
+		}
+		const int32 Open = Algo::CountIf(Edges, [](const TPair<TPair<int32, int32>, int32>& Edge) { return Edge.Value == 1; });
+		const int32 Shared = Algo::CountIf(Edges, [](const TPair<TPair<int32, int32>, int32>& Edge) { return Edge.Value > 2; });
+		// (an edge shared by 3+ triangles is a wall edge where the covered region pinches to one vertex: still closed)
+		TestEqual(FString::Printf(TEXT("%s (%s): open edges (%d of %d edges at pinch points)"), *Who, Sex, Shared, Edges.Num()), Open, 0);
+		TestTrue(Who + TEXT(": the base's skeleton"), Base && Clip->GetSkeleton() == Base->GetSkeleton());
+		++Checked;
+	});
+	TestTrue(TEXT("some clips"), Checked > 0);
+	return true;
+}
+
 #endif

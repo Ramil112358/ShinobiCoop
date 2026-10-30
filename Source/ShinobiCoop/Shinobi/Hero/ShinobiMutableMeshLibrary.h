@@ -50,6 +50,18 @@ public:
 	static FString BakeFitMorph(USkeletalMesh* Base, FName Morph, const TArray<FVector>& Positions, const TArray<int32>& Triangles, float MaxMove,
 		int32 Smooth, const TArray<FName>& KeepBones, int32 KeepFade = 12);
 
+	/**
+	 * Makes Clip (a copy of Base) the coverage volume of Piece: the closed shell under the part of Base (with its morph
+	 * FitMorph: the piece's fit shape, when given) that Piece covers, for CO_Shinobi's Clip With Mesh to hide that skin.
+	 * A vertex is covered when its outward normal (from 1 cm inside) hits Piece within Reach cm; triangles with all three
+	 * corners covered, eroded by Erode rings so skin stays at the hems, are pushed Out cm outward and joined by side walls
+	 * to a copy pushed Depth cm inward. Skinned like Base, on every LOD. Returns the covered triangles (0: Clip unchanged,
+	 * nothing covered). The caller saves Clip.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")
+	static int32 MakeClipVolume(USkeletalMesh* Clip, USkeletalMesh* Base, FName FitMorph, USkeletalMesh* Piece, float Reach = 4.f, int32 Erode = 1,
+		float Out = 0.3f, float Depth = 3.f);
+
 	/** The share of Piece's LOD 0 vertices more than Tolerance cm inside Body's LOD 0 surface (with Body's morph Morph
 	 * applied, when given), by the closest triangle's outward side. -1 without mesh descriptions. */
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")

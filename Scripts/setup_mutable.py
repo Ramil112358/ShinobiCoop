@@ -22,6 +22,8 @@ palette: DT_Palette, the wardrobe colours (FShinobiPaletteRow).
 fits: morph target Fit_<Source> on each sex's base per names.FIT_SOURCES, moving it onto the body that source's pieces
   were made on (UShinobiMutableMeshLibrary::BakeFitMorph), so a piece is reshaped from the body it fits to whatever body
   is built.
+coverage: wardrobe, remaking every row's coverage volume first (/Game/Shinobi/Mutable/Wardrobe/Clips/SK_Clip_<Slot>_<Row>_<Sex>:
+  the closed shell under the skin each piece covers, made on its fit shape; UShinobiMutableMeshLibrary::MakeClipVolume).
 wardrobe: DT_Wardrobe_<Slot> per slot (FShinobiWardrobeRow): data the game passes to CO_Shinobi at runtime, so rows can be
   added without recompiling. Top, Bottom and Shoes hold every City Sample catalog style, index-aligned per sex.
 graph: CO_Shinobi, built with UShinobiMutableGraphLibrary. Body parameter -> Build switch over the build morphs (scaled by
@@ -35,7 +37,7 @@ import sys
 import unreal
 
 sys.path += [os.path.dirname(os.path.abspath(__file__)), os.path.join(os.path.dirname(__file__), "mutable")]
-from names import (BASE, BUILDS, CATALOG, FIT_KEEP_BONES, FIT_KEEP_FADE, FIT_PREFIX, FIT_MAX_MOVE, FIT_SMOOTH, FIT_SOURCES, FIT_SUFFIX, HEADS, HEADS_DIR, CLIP_SUFFIX, HIDES_SUFFIX,  # noqa: E402
+from names import (BASE, BUILDS, CATALOG, CLIP, CLIP_DEPTH, CLIP_ERODE, CLIP_OUT, CLIP_REACH, FIT_KEEP_BONES, FIT_KEEP_FADE, FIT_PREFIX, FIT_MAX_MOVE, FIT_SMOOTH, FIT_SOURCES, FIT_SUFFIX, HEADS, HEADS_DIR, CLIP_SUFFIX, HIDES_SUFFIX,  # noqa: E402
                    MESH_SUFFIX, MUTABLE_ROOT, OBJECT, OFF, ON, OWN, OWN_BODIES, PALETTE, PARAM_BODY, PARAM_BUILD, PARAM_BUILD_BLEND,
                    NO_FIT, PARAM_FIT_BASE, PARAM_FIT_STRENGTH, SLOTS, WARDROBE_TABLE)
 
@@ -303,9 +305,32 @@ def wardrobe_rows(slot):
     return rows
 
 
-def wardrobe():
+def clip(slot, row, sex, mesh, fit, remake):
+    """The coverage volume of row's piece for sex (made when remake or missing), or None when it covers nothing."""
+    path = CLIP.format(slot=slot, row=row, sex=sex)
+    if EAL.does_asset_exist(path) and not remake:
+        return asset_path(path)
+    base = BASE.format(sex=sex)
+    # (kept between runs and remade in place: a deleted asset can't be duplicated onto in the same session)
+    volume = unreal.load_asset(path) if EAL.does_asset_exist(path) else EAL.duplicate_asset(base, path)
+    covered = unreal.ShinobiMutableMeshLibrary.make_clip_volume(volume, unreal.load_asset(base), FIT_PREFIX + fit if fit else "None",
+                                                                  unreal.load_asset(mesh), CLIP_REACH, CLIP_ERODE, CLIP_OUT, CLIP_DEPTH)
+    EAL.save_loaded_asset(volume, only_if_is_dirty=False)
+    log(f"clip {slot} {row} {sex}: {covered} triangles")
+    return asset_path(path) if covered else None
+
+
+def coverage():
+    wardrobe(remake=True)
+
+
+def wardrobe(remake=False):
     for slot in SLOTS:
         rows = wardrobe_rows(slot)
+        for row in rows:
+            for sex in SEXES:
+                if row.get(f"{sex}Mesh"):
+                    row[f"{sex}Clip"] = clip(slot, row["Name"], sex, row[f"{sex}Mesh"], row.get(f"{sex}Fit"), remake)
         new_table(WARDROBE_TABLE.format(slot=slot), unreal.ShinobiWardrobeRow, rows)
         log(f"DT_Wardrobe_{slot}: {[r['Name'] for r in rows]}")
 
@@ -407,6 +432,9 @@ def graph():
         link(reshape, "Skeletal Mesh", worn, ON)
         pieces.append(worn)
 
+        # Its coverage volume, as made on the piece's fit shape (close to the average build): reshaping it to the built
+        # body tore holes and spikes through the merged pieces (Mutable 5.8 clipping with a reshaped mesh, also reported
+        # on the forums), so slim, heavy and own builds hide roughly what the average one would.
         clip_mesh = mesh_parameter(co, slot + CLIP_SUFFIX, CLIP_DEFAULT, -3000, y + 350)
         hides = switch(co, enum(co, slot + HIDES_SUFFIX, [ON, OFF], OFF, -2400, y + 450), -2100, y + 350)
         link(clip_mesh, "Skeletal Mesh", hides, ON)
@@ -434,6 +462,6 @@ def graph():
         raise RuntimeError("CO_Shinobi did not compile")
 
 
-STAGES = {"bases": bases, "faceskin": face_skin, "fits": fits, "heads": heads, "catalog": catalog, "palette": palette, "wardrobe": wardrobe, "graph": graph}
+STAGES = {"bases": bases, "faceskin": face_skin, "fits": fits, "heads": heads, "catalog": catalog, "palette": palette, "coverage": coverage, "wardrobe": wardrobe, "graph": graph}
 for stage in ONLY or [s for s in STAGES if s != "faceskin"]:
     STAGES[stage]()

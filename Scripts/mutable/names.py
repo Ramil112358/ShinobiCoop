@@ -56,6 +56,9 @@ CLIP_SUFFIX = " Clip"
 HIDES_SUFFIX = " Hides"
 ON, OFF = "ON", "OFF"
 WARDROBE_TABLE = f"{MUTABLE_ROOT}/DT_Wardrobe_{{slot}}"  # .format(slot="Top")
+# Coverage volumes (setup_mutable.py stage coverage; UShinobiMutableMeshLibrary::MakeClipVolume).
+CLIP = f"{MUTABLE_ROOT}/Wardrobe/Clips/SK_Clip_{{slot}}_{{row}}_{{sex}}"
+CLIP_REACH, CLIP_ERODE, CLIP_OUT, CLIP_DEPTH = 4.0, 1, 0.3, 3.0  # cm, rings, cm, cm
 MAX_TATTOOS = 3
 
 # Roster characters with a grafted static head, and their base sex (catalog Heads order = this order).
