@@ -31,6 +31,8 @@ public:
 	 * when the creator catalog isn't built. Live slider edits go to GetBody()->UpdateFace / UpdateBody instead. */
 	void ShowAppearance(const FShinobiAppearance& Look, int32 OutfitIndex);
 	int32 GetShownBody() const { return ShownBody; }
+	/** The look last given to ShowAppearance (its build may still be pending). */
+	const FShinobiAppearance& GetShownLook() const { return ShownLook; }
 	/** Head and shoulders of the body worn, for a portrait (a 3:4 view); the character stands centred at once. */
 	void FramePortrait();
 	/** Eases the character sideways to Focus's spot. */
@@ -95,6 +97,7 @@ private:
 	/** FramePortrait's view holds until the view is moved. */
 	bool bPortrait = false;
 	bool bInStudio = false;
+	FShinobiAppearance ShownLook;
 	/** Where the stage stood before it went into the studio. */
 	FTransform Home;
 };

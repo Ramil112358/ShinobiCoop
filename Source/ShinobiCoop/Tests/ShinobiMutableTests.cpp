@@ -1678,4 +1678,20 @@ bool FShinobiMutableUpdateSkinMovesTattooTest::RunTest(const FString& Parameters
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableBuildAfterWorldGoneTest, "ShinobiCoop.Mutable.BuildAfterWorldGoneIsDropped", ShinobiTestFlags)
+bool FShinobiMutableBuildAfterWorldGoneTest::RunTest(const FString& Parameters)
+{
+	// A look still building when its wearer's world goes (a pawn leaving, a menu closing) is dropped quietly: nothing is
+	// dressed into the dead world (that logs "register component in invalid or cleaned up world" errors).
+	TSharedPtr<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	FShinobiAppearance Look = MutableLook(EShinobiSex::Female, EShinobiBuild::Normal);
+	Look.Face = 1;
+	Wearer->Body->WearAppearance(Look);
+	TWeakObjectPtr<UShinobiBodyComponent> Body = Wearer->Body;
+	Wearer.Reset();
+	const double Until = FPlatformTime::Seconds() + 8.0;
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([Until]() { return FPlatformTime::Seconds() >= Until; }));
+	return true;
+}
+
 #endif

@@ -64,6 +64,7 @@ void AShinobiMenuStage::StartDriver()
 void AShinobiMenuStage::ShowAppearance(const FShinobiAppearance& Look, int32 OutfitIndex)
 {
 	StartDriver();
+	ShownLook = Look;
 	// The made body lands later (Mutable builds it): dress the outfit on its skeleton then.
 	Body->OnBodyBuilt.RemoveAll(this);
 	Body->OnBodyBuilt.AddWeakLambda(this, [this, OutfitIndex]()

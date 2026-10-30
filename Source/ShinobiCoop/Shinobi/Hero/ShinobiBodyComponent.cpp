@@ -92,6 +92,10 @@ void UShinobiBodyComponent::DressBuilt(USkeletalMesh* Built)
 	{
 		return; // what is worn stays
 	}
+	if (!IsRegistered() || !GetWorld() || GetWorld()->bIsTearingDown)
+	{
+		return; // the wearer left (its world is gone) while this built
+	}
 	const FShinobiAppearance& Look = PendingLook;
 	const FShinobiCreatorFace* FacePick = Catalog->FindFace(Look.Sex, Look.Face);
 	// Retargeter first: a new mesh re-initialises the anim instance, which reads it. The Own build is a roster MetaHuman's
