@@ -231,29 +231,41 @@ STATIC_HEAD_TINT = "Skin Tint"  # ShinobiMutable::StaticHeadTintParameter
 
 def skintone():
     MEL = unreal.MaterialEditingLibrary
-    if not EAL.does_asset_exist(STATIC_HEAD):
-        # M_Character's own inputs (BaseColor texture) times Skin Tint; heads need none of its outfit hide mask.
-        folder, name = STATIC_HEAD.rsplit("/", 1)
-        material = unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, folder, unreal.Material, unreal.MaterialFactoryNew())
-        texture = MEL.create_material_expression(material, unreal.MaterialExpressionTextureSampleParameter2D, -700, 0)
-        texture.set_editor_property("parameter_name", "BaseColor")
-        tint = MEL.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -700, 300)
-        tint.set_editor_property("parameter_name", STATIC_HEAD_TINT)
-        tint.set_editor_property("default_value", unreal.LinearColor(1.0, 1.0, 1.0, 1.0))
-        rgb = MEL.create_material_expression(material, unreal.MaterialExpressionComponentMask, -450, 300)
-        for channel in ("r", "g", "b"):
-            rgb.set_editor_property(channel, True)
-        multiply = MEL.create_material_expression(material, unreal.MaterialExpressionMultiply, -200, 0)
-        wired = [MEL.connect_material_expressions(texture, "RGB", multiply, "A"), MEL.connect_material_expressions(tint, "", rgb, ""),
-                 MEL.connect_material_expressions(rgb, "", multiply, "B"),
-                 MEL.connect_material_property(multiply, "", unreal.MaterialProperty.MP_BASE_COLOR)]
-        if not all(wired):
-            EAL.delete_asset(STATIC_HEAD)
-            raise RuntimeError(f"could not wire M_StaticHead: {wired}")
-        material.set_editor_property("used_with_skeletal_mesh", True)
-        MEL.recompile_material(material)
-        EAL.save_loaded_asset(material, only_if_is_dirty=False)
-        log(f"made {STATIC_HEAD}")
+    # M_Character's look (setup_hero.character_material: masked by the texture's alpha, two-sided, rough 0.8, specular
+    # 0.3) times Skin Tint; heads need none of its outfit hide mask. Rebuilt in place, so the head instances keep it.
+    folder, name = STATIC_HEAD.rsplit("/", 1)
+    material = unreal.load_asset(STATIC_HEAD) if EAL.does_asset_exist(STATIC_HEAD) else         unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, folder, unreal.Material, unreal.MaterialFactoryNew())
+    MEL.delete_all_material_expressions(material)
+    material.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MASKED)
+    material.set_editor_property("two_sided", True)
+    texture = MEL.create_material_expression(material, unreal.MaterialExpressionTextureSampleParameter2D, -700, 0)
+    texture.set_editor_property("parameter_name", "BaseColor")
+    texture.set_editor_property("texture", unreal.load_asset("/Engine/EngineResources/DefaultTexture"))
+    tint = MEL.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -700, 300)
+    tint.set_editor_property("parameter_name", STATIC_HEAD_TINT)
+    tint.set_editor_property("default_value", unreal.LinearColor(1.0, 1.0, 1.0, 1.0))
+    rgb = MEL.create_material_expression(material, unreal.MaterialExpressionComponentMask, -450, 300)
+    for channel in ("r", "g", "b"):
+        rgb.set_editor_property(channel, True)
+    multiply = MEL.create_material_expression(material, unreal.MaterialExpressionMultiply, -200, 0)
+    rough = MEL.create_material_expression(material, unreal.MaterialExpressionConstant, -450, 450)
+    rough.set_editor_property("r", 0.8)
+    spec = MEL.create_material_expression(material, unreal.MaterialExpressionConstant, -450, 550)
+    spec.set_editor_property("r", 0.3)
+    shading = MEL.create_material_expression(material, unreal.MaterialExpressionSubstrateShadingModels, 0, 0)
+    wired = [MEL.connect_material_expressions(texture, "RGB", multiply, "A"), MEL.connect_material_expressions(tint, "", rgb, ""),
+             MEL.connect_material_expressions(rgb, "", multiply, "B"),
+             MEL.connect_material_expressions(multiply, "", shading, "BaseColor"),
+             MEL.connect_material_expressions(rough, "", shading, "Roughness"),
+             MEL.connect_material_expressions(spec, "", shading, "Specular"),
+             MEL.connect_material_property(shading, "", unreal.MaterialProperty.MP_FRONT_MATERIAL),
+             MEL.connect_material_property(texture, "A", unreal.MaterialProperty.MP_OPACITY_MASK)]
+    if not all(wired):
+        raise RuntimeError(f"could not wire M_StaticHead: {wired}")
+    MEL.set_base_material_usage(material, unreal.MaterialUsage.MATUSAGE_SKELETAL_MESH, True)
+    MEL.recompile_material(material)
+    EAL.save_loaded_asset(material, only_if_is_dirty=False)
+    log(f"made {STATIC_HEAD}")
     parent = unreal.load_asset(STATIC_HEAD)
     for name in HEADS:
         head = unreal.load_asset(f"{HEADS_DIR}/SK_Head_{name}")

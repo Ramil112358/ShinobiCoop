@@ -1481,6 +1481,21 @@ bool FShinobiMutableSkinToneNeutralTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableStaticHeadShadingTest, "ShinobiCoop.Mutable.StaticHeadShadesLikeCharacter", ShinobiTestFlags)
+bool FShinobiMutableStaticHeadShadingTest::RunTest(const FString& Parameters)
+{
+	// The tintable head material keeps the roster bodies' look (M_Character): masked by the texture's alpha, two-sided.
+	const UMaterial* Character = LoadObject<UMaterial>(nullptr, TEXT("/Game/Shinobi/Characters/M_Character.M_Character"));
+	const UMaterial* Head = LoadObject<UMaterial>(nullptr, TEXT("/Game/Shinobi/Mutable/Heads/M_StaticHead.M_StaticHead"));
+	if (!TestNotNull(TEXT("M_Character"), Character) || !TestNotNull(TEXT("M_StaticHead"), Head))
+	{
+		return false;
+	}
+	TestEqual(TEXT("blend mode"), Head->GetBlendMode(), Character->GetBlendMode());
+	TestEqual(TEXT("two-sided"), Head->IsTwoSided(), Character->IsTwoSided());
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableSkinToneDarkensTest, "ShinobiCoop.Mutable.SkinToneDarkens", ShinobiTestFlags)
 bool FShinobiMutableSkinToneDarkensTest::RunTest(const FString& Parameters)
 {
