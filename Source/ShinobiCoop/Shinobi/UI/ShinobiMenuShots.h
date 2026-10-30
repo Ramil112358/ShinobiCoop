@@ -9,6 +9,7 @@
  *   -ShinobiMenuTour (Lvl_MainMenu): every tab, an arena in 2v2 and the empty Find Games list -> ShinobiMenuTour_<n>.png
  *   -ShinobiMenuPortraits (Lvl_MainMenu, a 3:4 window): each roster character's head and shoulders, no UI
  *     -> ShinobiMenuPortrait_<Name>.png (the SHINOBI tab's cards)
+ *   -ShinobiCreatorTour (Lvl_MainMenu): CREATE's tabs, light presets, zooms and turns -> ShinobiCreatorTour_<n>_<What>.png
  *   -ShinobiThumbnailShot (Lvl_MainMenu, a square window): each wardrobe piece alone on its sex's base in the CREATE
  *     studio, framed on the piece, no UI -> ShinobiThumbnail_<Slot>_<Row>.png (the CREATE tab's strips)
  *   -ShinobiMapShot (any level): the level from a camera tagged ShinobiMenuShot, else above and behind the first
@@ -27,6 +28,7 @@ private:
 	void StartPortraits(UWorld& World);
 	void StartMapShot(UWorld& World);
 	void StartThumbnails(UWorld& World);
+	void StartCreatorTour(UWorld& World);
 	/** Frames WardrobeSlot's Row once the stage's build lands (else tries again next step), then shoots it. */
 	TFunction<void()> ShootThumbnail(TWeakObjectPtr<class AShinobiMenuStage> Stage, int32 WardrobeSlot, uint8 Row, FString Name);
 	/** Runs Steps one after another, Interval seconds apart, then quits. */

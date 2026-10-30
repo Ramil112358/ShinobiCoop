@@ -48,7 +48,7 @@ bool UShinobiMenuShotSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 	const TCHAR* Cmd = FCommandLine::Get();
 	return World && World->IsGameWorld()
 		&& (FParse::Param(Cmd, TEXT("ShinobiMenuTour")) || FParse::Param(Cmd, TEXT("ShinobiMenuPortraits")) || FParse::Param(Cmd, TEXT("ShinobiMapShot"))
-			|| FParse::Param(Cmd, TEXT("ShinobiThumbnailShot")));
+			|| FParse::Param(Cmd, TEXT("ShinobiThumbnailShot")) || FParse::Param(Cmd, TEXT("ShinobiCreatorTour")));
 }
 
 void UShinobiMenuShotSubsystem::OnWorldBeginPlay(UWorld& World)
@@ -72,6 +72,11 @@ void UShinobiMenuShotSubsystem::OnWorldBeginPlay(UWorld& World)
 	if (FParse::Param(Cmd, TEXT("ShinobiThumbnailShot")))
 	{
 		StartThumbnails(World);
+		return;
+	}
+	if (FParse::Param(Cmd, TEXT("ShinobiCreatorTour")))
+	{
+		StartCreatorTour(World);
 		return;
 	}
 	TWeakObjectPtr<UWorld> WeakWorld(&World);
@@ -142,6 +147,52 @@ void UShinobiMenuShotSubsystem::StartPortraits(UWorld& World)
 		});
 		Steps.Add([Index]() { MenuShotsTake(FString(TEXT("ShinobiMenuPortrait_")) + AShinobiPlayerCharacter::Roster[Index].Name, false); });
 	}
+	RunSteps(MoveTemp(Steps), 1.5f);
+}
+
+void UShinobiMenuShotSubsystem::StartCreatorTour(UWorld& World)
+{
+	TWeakObjectPtr<UWorld> WeakWorld(&World);
+	const auto Menu = [WeakWorld]() { return WeakWorld.IsValid() ? MenuShotsFindMenu(*WeakWorld) : nullptr; };
+	const auto Creator = [Menu]() { UShinobiMainMenuWidget* M = Menu(); return M ? Cast<UShinobiCreatorPage>(M->GetTabPage(EShinobiMenuTab::Create)) : nullptr; };
+	const auto Stage = [Menu]() { UShinobiMainMenuWidget* M = Menu(); return M ? M->GetStage() : nullptr; };
+	TArray<TFunction<void()>> Steps;
+	int32 Shot = 0;
+	// Set a view up, give it two steps (builds, fades, easing), shoot.
+	const auto View = [&Steps, &Shot](const TCHAR* What, TFunction<void()> Setup)
+	{
+		Steps.Add(MoveTemp(Setup));
+		Steps.Add([] {});
+		Steps.Add([Name = FString::Printf(TEXT("ShinobiCreatorTour_%02d_%s"), ++Shot, What)]() { MenuShotsTake(Name); });
+	};
+	Steps.Add([] {}); // the level settles
+	View(TEXT("Character"), [Menu, Creator]()
+	{
+		if (UShinobiMainMenuWidget* M = Menu()) { M->SelectTab(EShinobiMenuTab::Create); }
+		if (UShinobiCreatorPage* C = Creator()) { C->ApplyPreset(0); C->ShowCategory(UShinobiCreatorPage::ECategory::Character); }
+	});
+	View(TEXT("Clothes"), [Creator]() { if (UShinobiCreatorPage* C = Creator()) { C->ShowCategory(UShinobiCreatorPage::ECategory::Clothes); } });
+	View(TEXT("BodySkin"), [Creator]()
+	{
+		if (UShinobiCreatorPage* C = Creator())
+		{
+			C->EditLook([](FShinobiAppearance& L) { L.Tattoos = { {0, 1, 0, 0, 0, 128} }; }, EShinobiLookEdit::Skin);
+			C->ShowCategory(UShinobiCreatorPage::ECategory::BodySkin);
+		}
+	});
+	View(TEXT("Face"), [Creator]() { if (UShinobiCreatorPage* C = Creator()) { C->ShowCategory(UShinobiCreatorPage::ECategory::Face); } });
+	for (const TPair<const TCHAR*, EShinobiStudioLight> Light : { TPair<const TCHAR*, EShinobiStudioLight>(TEXT("Day"), EShinobiStudioLight::Day),
+		TPair<const TCHAR*, EShinobiStudioLight>(TEXT("Dusk"), EShinobiStudioLight::Dusk), TPair<const TCHAR*, EShinobiStudioLight>(TEXT("Studio"), EShinobiStudioLight::Studio) })
+	{
+		View(Light.Key, [Creator, Stage, Preset = Light.Value]()
+		{
+			if (UShinobiCreatorPage* C = Creator()) { C->ShowCategory(UShinobiCreatorPage::ECategory::Clothes); }
+			if (AShinobiStudioSet* Studio = Stage() ? Stage()->GetStudio() : nullptr) { Studio->ApplyPreset(Preset); }
+		});
+	}
+	View(TEXT("Zoom50"), [Stage]() { if (AShinobiMenuStage* S = Stage()) { S->AddZoom(0.5f); } });
+	View(TEXT("Yaw90"), [Stage]() { if (AShinobiMenuStage* S = Stage()) { S->AddZoom(-1.f); S->AddYaw(90.f); } });
+	View(TEXT("Yaw180"), [Stage]() { if (AShinobiMenuStage* S = Stage()) { S->AddYaw(90.f); } });
 	RunSteps(MoveTemp(Steps), 1.5f);
 }
 
