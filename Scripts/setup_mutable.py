@@ -45,6 +45,7 @@ graph: CO_Shinobi, built with UShinobiMutableGraphLibrary. Body parameter -> Bui
   Build Blend) -> pose reshape (the skeleton follows the build) -> each slot's clip (when "<Slot> Hides" is ON) -> each slot's piece merged in (when "<Slot>" is ON), its
   "<Slot> Mesh" reshaped from the base to the built body -> the Body component.
 """
+import glob
 import json
 import os
 import sys
@@ -324,7 +325,8 @@ TATTOOS, TATTOO_REGIONS_TABLE = f"{MUTABLE_ROOT}/DT_Tattoos", f"{MUTABLE_ROOT}/D
 
 
 def tattoos():
-    designs = [{"Name": path.rsplit("/", 1)[1][len("T_Tattoo"):-len("_alpha")], "Texture": asset_path(path)}
+    # A design's thumbnail is the design itself (a white mask, shown on the CREATE tab's dark buttons).
+    designs = [{"Name": path.rsplit("/", 1)[1][len("T_Tattoo"):-len("_alpha")], "Texture": asset_path(path), "Thumbnail": asset_path(path)}
                for path in TATTOO_DESIGNS if EAL.does_asset_exist(path)]
     new_table(TATTOOS, unreal.ShinobiTattooDesign, designs)
     base = unreal.load_asset(BASE.format(sex="Male"))
@@ -593,6 +595,32 @@ def coverage():
     wardrobe(remake=True)
 
 
+THUMBNAILS = f"{MUTABLE_ROOT}/Thumbnails"
+
+
+def thumbnails():
+    """Imports Saved/MenuArt/Thumbnails/T_Thumb_<Slot>_<Row>.png (Scripts/menu_shots.ps1 -Thumbnails), then refills the
+    wardrobe tables so each row points at its picture."""
+    source = os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir()), "Saved", "MenuArt", "Thumbnails")
+    pngs = sorted(glob.glob(os.path.join(source, "T_Thumb_*.png")))
+    for png in pngs:
+        task = unreal.AssetImportTask()
+        task.filename = png
+        task.destination_path = THUMBNAILS
+        task.destination_name = os.path.splitext(os.path.basename(png))[0]
+        task.automated = True
+        task.replace_existing = True
+        unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
+        texture = next((o for o in task.get_objects() if isinstance(o, unreal.Texture2D)), None)
+        if texture is None:
+            raise RuntimeError(f"import of {png} produced no texture")
+        texture.set_editor_property("lod_group", unreal.TextureGroup.TEXTUREGROUP_UI)
+        texture.set_editor_property("max_texture_size", 256)
+        EAL.save_loaded_asset(texture, only_if_is_dirty=False)
+    log(f"{len(pngs)} thumbnails from {source}")
+    wardrobe()
+
+
 def wardrobe(remake=False):
     for slot in SLOTS:
         rows = wardrobe_rows(slot) + sample_rows(slot, remake)
@@ -602,6 +630,9 @@ def wardrobe(remake=False):
                     row[f"{sex}Clip"] = clip(slot, row["Name"], sex, row[f"{sex}Mesh"], row.get(f"{sex}Fit"), remake)
                     row[f"{sex}Tinted"] = tinted(row[f"{sex}Mesh"])
             row["ColourParameters"] = [CITY_SAMPLE_COLOUR]
+            thumb = f"{THUMBNAILS}/T_Thumb_{slot}_{row['Name']}"
+            if EAL.does_asset_exist(thumb):
+                row["Thumbnail"] = asset_path(thumb)
         new_table(WARDROBE_TABLE.format(slot=slot), unreal.ShinobiWardrobeRow, rows)
         log(f"DT_Wardrobe_{slot}: {[r['Name'] for r in rows]}")
 
@@ -733,6 +764,6 @@ def graph():
         raise RuntimeError("CO_Shinobi did not compile")
 
 
-STAGES = {"bases": bases, "faceskin": face_skin, "samplecopy": sample_copy, "fabimport": fab_import, "fits": fits, "heads": heads, "catalog": catalog, "skintone": skintone, "skinlayer": skinlayer, "tattoos": tattoos, "makeup": makeup, "palette": palette, "coverage": coverage, "wardrobe": wardrobe, "graph": graph}
+STAGES = {"bases": bases, "faceskin": face_skin, "samplecopy": sample_copy, "fabimport": fab_import, "fits": fits, "heads": heads, "catalog": catalog, "skintone": skintone, "skinlayer": skinlayer, "tattoos": tattoos, "makeup": makeup, "palette": palette, "thumbnails": thumbnails, "coverage": coverage, "wardrobe": wardrobe, "graph": graph}
 for stage in ONLY or [s for s in STAGES if s != "faceskin"]:
     STAGES[stage]()

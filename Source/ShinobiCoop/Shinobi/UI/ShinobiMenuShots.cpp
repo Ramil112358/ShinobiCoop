@@ -10,12 +10,19 @@
 #include "Misc/CommandLine.h"
 #include "TimerManager.h"
 #include "UnrealClient.h"
+#include "Engine/SkeletalMesh.h"
+#include "Shinobi/Hero/ShinobiBodyComponent.h"
+#include "Shinobi/Hero/ShinobiMutableLook.h"
+#include "Shinobi/Hero/ShinobiMutableNames.h"
+#include "Shinobi/Hero/ShinobiMutableTypes.h"
 #include "Shinobi/Online/ShinobiSessionSubsystem.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/UI/ShinobiCreatorPage.h"
 #include "Shinobi/UI/ShinobiMainMenuWidget.h"
 #include "Shinobi/UI/ShinobiMenuArt.h"
 #include "Shinobi/UI/ShinobiMenuStage.h"
+#include "Shinobi/UI/ShinobiStudioSet.h"
+#include "Engine/DataTable.h"
 
 namespace
 {
@@ -40,7 +47,8 @@ bool UShinobiMenuShotSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 	const UWorld* World = Cast<UWorld>(Outer);
 	const TCHAR* Cmd = FCommandLine::Get();
 	return World && World->IsGameWorld()
-		&& (FParse::Param(Cmd, TEXT("ShinobiMenuTour")) || FParse::Param(Cmd, TEXT("ShinobiMenuPortraits")) || FParse::Param(Cmd, TEXT("ShinobiMapShot")));
+		&& (FParse::Param(Cmd, TEXT("ShinobiMenuTour")) || FParse::Param(Cmd, TEXT("ShinobiMenuPortraits")) || FParse::Param(Cmd, TEXT("ShinobiMapShot"))
+			|| FParse::Param(Cmd, TEXT("ShinobiThumbnailShot")));
 }
 
 void UShinobiMenuShotSubsystem::OnWorldBeginPlay(UWorld& World)
@@ -59,6 +67,11 @@ void UShinobiMenuShotSubsystem::OnWorldBeginPlay(UWorld& World)
 	if (FParse::Param(Cmd, TEXT("ShinobiMenuPortraits")))
 	{
 		StartPortraits(World);
+		return;
+	}
+	if (FParse::Param(Cmd, TEXT("ShinobiThumbnailShot")))
+	{
+		StartThumbnails(World);
 		return;
 	}
 	TWeakObjectPtr<UWorld> WeakWorld(&World);
@@ -130,6 +143,92 @@ void UShinobiMenuShotSubsystem::StartPortraits(UWorld& World)
 		Steps.Add([Index]() { MenuShotsTake(FString(TEXT("ShinobiMenuPortrait_")) + AShinobiPlayerCharacter::Roster[Index].Name, false); });
 	}
 	RunSteps(MoveTemp(Steps), 1.5f);
+}
+
+void UShinobiMenuShotSubsystem::StartThumbnails(UWorld& World)
+{
+	TActorIterator<AShinobiMenuStage> It(&World);
+	TWeakObjectPtr<AShinobiMenuStage> Stage = It ? *It : nullptr;
+	TArray<TFunction<void()>> Steps;
+	Steps.Add([Stage]()
+	{
+		// No menu; the stage in the studio, in its Studio light.
+		TArray<UUserWidget*> Widgets;
+		if (Stage.IsValid())
+		{
+			UWidgetBlueprintLibrary::GetAllWidgetsOfClass(Stage->GetWorld(), Widgets, UUserWidget::StaticClass(), true);
+			Stage->SetStudio(true);
+			if (AShinobiStudioSet* Studio = Stage->GetStudio())
+			{
+				Studio->ApplyPreset(EShinobiStudioLight::Studio);
+			}
+		}
+		for (UUserWidget* Widget : Widgets)
+		{
+			Widget->RemoveFromParent();
+		}
+	});
+	for (int32 Slot = 0; Slot < int32(EShinobiWardrobeSlot::Cloak); ++Slot)
+	{
+		const UDataTable* Table = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(ShinobiMutable::SlotNames[Slot]), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		const TArray<FName> Names = Table ? Table->GetRowNames() : TArray<FName>();
+		for (int32 Row = 0; Row < Names.Num(); ++Row)
+		{
+			const FShinobiWardrobeRow* Piece = UShinobiMutableLook::FindRow(EShinobiWardrobeSlot(Slot), uint8(Row));
+			if (!Piece)
+			{
+				continue;
+			}
+			// The piece alone on its sex's base (men first), average build, a MetaHuman face without hair.
+			FShinobiAppearance Look;
+			Look.Sex = Piece->MaleMesh.IsNull() ? EShinobiSex::Female : EShinobiSex::Male;
+			Look.Head = FShinobiAppearance::None;
+			Look.Hair = Look.Beard = Look.Mustache = FShinobiAppearance::None;
+			for (int32 Other = 0; Other < ShinobiWardrobeSlotCount; ++Other)
+			{
+				Look.Slot(EShinobiWardrobeSlot(Other)) = Other == Slot ? uint8(Row) : FShinobiAppearance::None;
+			}
+			Steps.Add([Stage, Look]() { if (Stage.IsValid()) { Stage->ShowAppearance(Look, 0); } });
+			Steps.Add(ShootThumbnail(Stage, Slot, uint8(Row), FString::Printf(TEXT("ShinobiThumbnail_%s_%s"), ShinobiMutable::SlotNames[Slot], *Names[Row].ToString())));
+		}
+	}
+	RunSteps(MoveTemp(Steps), 0.75f);
+}
+
+TFunction<void()> UShinobiMenuShotSubsystem::ShootThumbnail(TWeakObjectPtr<AShinobiMenuStage> Stage, int32 WardrobeSlot, uint8 Row, FString Name)
+{
+	return [this, Stage, WardrobeSlot, Row, Name]()
+	{
+		UShinobiBodyComponent* Body = Stage.IsValid() ? Stage->GetBody() : nullptr;
+		if (Body && Body->IsMutableBuildPending())
+		{
+			Pending.Insert(ShootThumbnail(Stage, WardrobeSlot, Row, Name), 0); // not built yet: again next step
+			return;
+		}
+		const FShinobiWardrobeRow* Piece = UShinobiMutableLook::FindRow(EShinobiWardrobeSlot(WardrobeSlot), Row);
+		const USkeletalMesh* Mesh = Piece ? (Piece->MaleMesh.IsNull() ? Piece->FemaleMesh : Piece->MaleMesh).LoadSynchronous() : nullptr;
+		if (!Body || !Mesh)
+		{
+			return;
+		}
+		// The piece's bounds on the body, seen from 20 degrees off the front and a little above, with a 10 % margin.
+		Stage->FramePortrait(); // (holds the camera where it is put)
+		FBox Box = Mesh->GetBounds().GetBox().TransformBy(Body->GetComponentTransform());
+		if (WardrobeSlot == int32(EShinobiWardrobeSlot::Shoes))
+		{
+			// (shoe meshes' bounds reach far past the feet): the feet, from ankle to toe
+			Box = FBox(TArray<FVector>{ Body->GetBoneLocation(TEXT("foot_l")), Body->GetBoneLocation(TEXT("foot_r")), Body->GetBoneLocation(TEXT("ball_l")),
+				Body->GetBoneLocation(TEXT("ball_r")) }).ExpandBy(FVector(12.f, 12.f, 10.f));
+		}
+		const float Fov = 30.f;
+		const float Radius = FMath::Max(Box.GetExtent().Z, FMath::Max(Box.GetExtent().X, Box.GetExtent().Y)) * 1.1f;
+		const float Above = WardrobeSlot == int32(EShinobiWardrobeSlot::Shoes) ? 25.f : 5.f; // (shoes from above: less floor)
+		const FVector Toward = Stage->GetActorTransform().TransformVectorNoScale(FRotator(Above, 20.f, 0.f).Vector());
+		UCameraComponent* Camera = Stage->GetCamera();
+		Camera->SetFieldOfView(Fov);
+		Camera->SetWorldLocationAndRotation(Box.GetCenter() + Toward * (Radius / FMath::Tan(FMath::DegreesToRadians(Fov / 2.f))), (-Toward).Rotation());
+		Pending.Insert([Name]() { MenuShotsTake(Name, false); }, 0); // next step: the new view rendered
+	};
 }
 
 void UShinobiMenuShotSubsystem::StartMapShot(UWorld& World)

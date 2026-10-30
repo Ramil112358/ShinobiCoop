@@ -2,9 +2,11 @@
 #   -Packaged: in the built game (Packaged\Windows, Scripts/package.ps1) instead of the editor.
 #   -Tour:      -ShinobiMenuTour on Lvl_MainMenu: every tab, an arena in 2v2, Find Games (Saved\Screenshots\...\ShinobiMenuTour_*.png).
 #   -Portraits: -ShinobiMenuPortraits in a 3:4 window: each roster character -> Saved\MenuArt\T_Portrait_<Name>.png
+#   -Thumbnails: -ShinobiThumbnailShot in a square window: each wardrobe piece -> Saved\MenuArt\Thumbnails\T_Thumb_<Slot>_<Row>.png
+#               (import with: SETUP_MUTABLE_ONLY=thumbnails,tattoos Scripts/run_python.ps1 -Script Scripts/setup_mutable.py -Editor)
 #   -Maps:      -ShinobiMapShot on every Host Game map -> Saved\MenuArt\T_Map_<Id>.png; -Map <Id> shoots just that one.
 # Then import Saved\MenuArt with: powershell -File Scripts/run_python.ps1 -Script Scripts/setup_menu_art.py
-param([switch]$Tour, [switch]$Portraits, [switch]$Maps, [string]$Map = "", [switch]$Packaged, [int]$TimeoutSec = 180)
+param([switch]$Tour, [switch]$Portraits, [switch]$Thumbnails, [switch]$Maps, [string]$Map = "", [switch]$Packaged, [int]$TimeoutSec = 180)
 $ErrorActionPreference = "Stop"
 $Editor = "C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe"
 $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
@@ -40,6 +42,16 @@ if ($Portraits -or $Maps -or $Map) { New-Item -ItemType Directory -Force $ArtDir
 if ($Portraits) {
     Run-Game "/Game/Shinobi/Maps/Lvl_MainMenu" "-ShinobiMenuPortraits" "ShinobiMenuPortrait_*.png" "ShinobiMenuPortraits" "-ResX=600 -ResY=800" | ForEach-Object {
         $Out = Join-Path $ArtDir ($_.Name -replace "^ShinobiMenuPortrait_", "T_Portrait_")
+        Copy-Item $_.FullName $Out -Force
+        Write-Host $Out
+    }
+}
+
+if ($Thumbnails) {
+    $ThumbDir = Join-Path $ArtDir "Thumbnails"
+    New-Item -ItemType Directory -Force $ThumbDir | Out-Null
+    Run-Game "/Game/Shinobi/Maps/Lvl_MainMenu" "-ShinobiThumbnailShot -ExecCmds=`"r.Streaming.FullyLoadUsedTextures 1`"" "ShinobiThumbnail_*.png" "ShinobiThumbnailShot" "-ResX=512 -ResY=512" | ForEach-Object {
+        $Out = Join-Path $ThumbDir ($_.Name -replace "^ShinobiThumbnail_", "T_Thumb_")
         Copy-Item $_.FullName $Out -Force
         Write-Host $Out
     }

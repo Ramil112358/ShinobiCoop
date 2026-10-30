@@ -1731,4 +1731,29 @@ bool FShinobiMutableRecolourWithoutRebuildTest::RunTest(const FString& Parameter
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableEveryRowHasThumbnailTest, "ShinobiCoop.Mutable.EveryRowHasThumbnail", ShinobiTestFlags)
+bool FShinobiMutableEveryRowHasThumbnailTest::RunTest(const FString& Parameters)
+{
+	// The CREATE tab's strips: every wardrobe piece (Scripts/menu_shots.ps1 -Thumbnails, setup_mutable.py thumbnails) and
+	// every tattoo design has a picture.
+	int32 Checked = 0;
+	for (const TCHAR* Slot : ShinobiMutable::SlotNames)
+	{
+		const UDataTable* Table = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(Slot), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		for (const FName Name : Table ? Table->GetRowNames() : TArray<FName>())
+		{
+			++Checked;
+			TestNotNull(*FString::Printf(TEXT("%s %s thumbnail"), Slot, *Name.ToString()), Table->FindRow<FShinobiWardrobeRow>(Name, TEXT("test"))->Thumbnail.LoadSynchronous());
+		}
+	}
+	const UDataTable* Designs = LoadObject<UDataTable>(nullptr, ShinobiMutable::TattoosPath);
+	for (const FName Name : Designs ? Designs->GetRowNames() : TArray<FName>())
+	{
+		++Checked;
+		TestNotNull(*FString::Printf(TEXT("tattoo %s thumbnail"), *Name.ToString()), Designs->FindRow<FShinobiTattooDesign>(Name, TEXT("test"))->Thumbnail.LoadSynchronous());
+	}
+	TestTrue(TEXT("rows checked"), Checked > 20);
+	return true;
+}
+
 #endif
