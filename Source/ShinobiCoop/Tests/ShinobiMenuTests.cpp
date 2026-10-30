@@ -11,6 +11,9 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/UI/ShinobiMenuArt.h"
 #include "Shinobi/UI/ShinobiMenuStage.h"
+#include "Shinobi/UI/ShinobiStudioSet.h"
+#include "Components/RectLightComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Shinobi/UI/ShinobiMainMenuWidget.h"
 #include "Shinobi/UI/ShinobiRosterPage.h"
@@ -455,6 +458,103 @@ bool FShinobiMainMenuHintsFollowDeviceTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("mouse hints"), Mouse.Contains(TEXT("Wheel")) && Mouse.Contains(TEXT("Drag")));
 	Menu->UseGamepadHints(true);
 	TestTrue(TEXT("gamepad hints"), Menu->GetHintText().ToString().Contains(TEXT("RS")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiStudioSetLightRigTest, "ShinobiCoop.UI.StudioSetLightRig", ShinobiTestFlags)
+bool FShinobiStudioSetLightRigTest::RunTest(const FString& Parameters)
+{
+	// Key front-left above, fill from the right at about 35 %, a cool rim from behind (the camera looks along -X from +X,
+	// so screen-left is +Y).
+	FShinobiTestWorld W;
+	const AShinobiStudioSet* Set = W.Spawn<AShinobiStudioSet>();
+	const FVector Key = Set->GetKeyLight()->GetRelativeLocation();
+	const FVector Fill = Set->GetFillLight()->GetRelativeLocation();
+	const FVector Rim = Set->GetRimLight()->GetRelativeLocation();
+	TestTrue(TEXT("key in front, left, above"), Key.X > 0.f && Key.Y > 0.f && Key.Z > 200.f);
+	TestTrue(TEXT("fill from the right"), Fill.Y < 0.f);
+	TestTrue(TEXT("rim behind"), Rim.X < 0.f);
+	TestEqual(TEXT("fill at 35 % of the key"), Set->GetFillLight()->Intensity, 0.35f * Set->GetKeyLight()->Intensity, 0.01f * Set->GetKeyLight()->Intensity);
+	TestTrue(TEXT("rim cool"), Set->GetRimLight()->GetLightColor().B > Set->GetRimLight()->GetLightColor().R);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiStudioPresetsRetuneTest, "ShinobiCoop.UI.StudioPresetsRetune", ShinobiTestFlags)
+bool FShinobiStudioPresetsRetuneTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiStudioSet* Set = W.Spawn<AShinobiStudioSet>();
+	const auto Tint = [Set]()
+	{
+		FLinearColor Value = FLinearColor::Transparent;
+		const UMaterialInterface* Material = Set->GetBackdrop()->GetMaterial(0);
+		return Material && Material->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("Tint")), Value) ? Value : FLinearColor::Transparent;
+	};
+	Set->ApplyPreset(EShinobiStudioLight::Studio);
+	const FLinearColor StudioKey = Set->GetKeyLight()->GetLightColor();
+	const FLinearColor StudioTint = Tint();
+	TestNotEqual(TEXT("the backdrop takes a tint"), StudioTint, FLinearColor::Transparent);
+	UMaterialInterface* Backdrop = Set->GetBackdrop()->GetMaterial(0);
+	TestEqual(TEXT("on the studio backdrop material (Scripts/setup_menu.py)"), Backdrop ? Backdrop->GetBaseMaterial()->GetName() : FString(), FString(TEXT("M_StudioBackdrop")));
+	for (const EShinobiStudioLight Preset : { EShinobiStudioLight::Day, EShinobiStudioLight::Dusk })
+	{
+		Set->ApplyPreset(Preset);
+		TestTrue(TEXT("its own key colour"), !Set->GetKeyLight()->GetLightColor().Equals(StudioKey, 0.01f));
+		TestTrue(TEXT("its own backdrop tint"), !Tint().Equals(StudioTint, 0.01f));
+	}
+	Set->ApplyPreset(EShinobiStudioLight::Studio);
+	TestTrue(TEXT("Studio again"), Set->GetKeyLight()->GetLightColor().Equals(StudioKey, 0.001f) && Tint().Equals(StudioTint, 0.001f));
+	TestTrue(TEXT("remembers it"), Set->GetPreset() == EShinobiStudioLight::Studio);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMenuStageMovesToStudioTest, "ShinobiCoop.UI.MenuStageMovesToStudio", ShinobiTestFlags)
+bool FShinobiMenuStageMovesToStudioTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiMenuStage* Stage = W.Spawn<AShinobiMenuStage>();
+	const AShinobiStudioSet* Set = W.Spawn<AShinobiStudioSet>(FVector(0.f, 0.f, 20000.f));
+	const FVector Home = Stage->GetActorLocation();
+	Stage->SetStudio(true);
+	TestTrue(TEXT("in the studio"), Stage->IsInStudio() && Stage->GetActorLocation().Equals(Set->GetActorLocation(), 1.f));
+	Stage->SetStudio(false);
+	TestTrue(TEXT("back on the roof"), !Stage->IsInStudio() && Stage->GetActorLocation().Equals(Home, 1.f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMenuStageLeavesStudioMidFadeTest, "ShinobiCoop.UI.MenuStageLeavesStudioMidFade", ShinobiTestFlags)
+bool FShinobiMenuStageLeavesStudioMidFadeTest::RunTest(const FString& Parameters)
+{
+	// CREATE fades to black, moves the stage into the studio and fades back; leaving halfway turns the fade around.
+	FShinobiTestWorld W;
+	AShinobiMenuStage* Stage = W.Spawn<AShinobiMenuStage>();
+	W.Spawn<AShinobiStudioSet>(FVector(0.f, 0.f, 20000.f));
+	UShinobiMainMenuWidget* Menu = CreateWidget<UShinobiMainMenuWidget>(W.World, UShinobiMainMenuWidget::StaticClass());
+	Menu->TakeWidget();
+	Menu->SelectTab(EShinobiMenuTab::Create);
+	for (int32 Step = 0; Step < 20; ++Step) { Menu->TickStudioFade(0.05f); }
+	TestTrue(TEXT("CREATE is in the studio"), Stage->IsInStudio());
+	TestEqual(TEXT("faded back in"), Menu->GetStudioFade(), 0.f, 0.001f);
+	Menu->SelectTab(EShinobiMenuTab::Shinobi);
+	Menu->TickStudioFade(0.1f); // halfway to black
+	Menu->SelectTab(EShinobiMenuTab::Create);
+	Menu->SelectTab(EShinobiMenuTab::Shinobi);
+	for (int32 Step = 0; Step < 20; ++Step) { Menu->TickStudioFade(0.05f); }
+	TestFalse(TEXT("SHINOBI is on the roof"), Stage->IsInStudio());
+	TestEqual(TEXT("no black left"), Menu->GetStudioFade(), 0.f, 0.001f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiStudioLightsStayInStudioTest, "ShinobiCoop.UI.StudioLightsStayInStudio", ShinobiTestFlags)
+bool FShinobiStudioLightsStayInStudioTest::RunTest(const FString& Parameters)
+{
+	// Placed as Scripts/setup_menu.py places it: none of its lights reaches the rooftop stage.
+	FShinobiTestWorld W;
+	const AShinobiStudioSet* Set = W.Spawn<AShinobiStudioSet>(FVector(0.f, 0.f, AShinobiStudioSet::HeightAboveStageCm));
+	for (const ULocalLightComponent* Light : { Set->GetKeyLight(), Set->GetFillLight(), Set->GetRimLight() })
+	{
+		TestTrue(TEXT("light ends before the roof"), Light->AttenuationRadius < Light->GetComponentLocation().Size());
+	}
 	return true;
 }
 

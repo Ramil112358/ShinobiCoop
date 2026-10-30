@@ -8,6 +8,7 @@
 class UCameraComponent;
 class USkeletalMeshComponent;
 class UShinobiBodyComponent;
+class AShinobiStudioSet;
 
 /** Where the stage's character stands on screen, so a tab's panels don't cover it. */
 enum class EShinobiMenuStageFocus : uint8 { Center, Left, Right };
@@ -42,6 +43,12 @@ public:
 	void SetAutoZoom(float Zoom);
 	/** Facing front at the last SetAutoZoom framing. */
 	void ResetView();
+	/** Moves the stage (character and camera) into the level's studio set, or back where it stood; without a studio set it
+	 * stays. */
+	void SetStudio(bool bInStudio);
+	bool IsInStudio() const { return bInStudio; }
+	/** The level's studio set (CREATE), or null. */
+	AShinobiStudioSet* GetStudio() const;
 	float GetZoom() const { return Zoom; }
 	float GetYaw() const { return Yaw; }
 
@@ -87,4 +94,7 @@ private:
 	float AutoZoom = 0.f;
 	/** FramePortrait's view holds until the view is moved. */
 	bool bPortrait = false;
+	bool bInStudio = false;
+	/** Where the stage stood before it went into the studio. */
+	FTransform Home;
 };

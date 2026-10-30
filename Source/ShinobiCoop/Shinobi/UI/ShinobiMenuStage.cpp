@@ -3,8 +3,10 @@
 #include "Camera/CameraComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
+#include "EngineUtils.h"
 #include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/UI/ShinobiStudioSet.h"
 
 namespace
 {
@@ -140,6 +142,31 @@ void AShinobiMenuStage::FramePortrait()
 	Camera->SetFieldOfView(24.f);
 	Camera->SetRelativeLocation(FVector(300.f, 0.f, HeadHeight() - 2.f));
 	Camera->SetRelativeRotation(FRotator(0.f, 180.f, 0.f));
+}
+
+AShinobiStudioSet* AShinobiMenuStage::GetStudio() const
+{
+	TActorIterator<AShinobiStudioSet> Studio(GetWorld());
+	return Studio ? *Studio : nullptr;
+}
+
+void AShinobiMenuStage::SetStudio(bool bStudio)
+{
+	if (bStudio == bInStudio)
+	{
+		return;
+	}
+	if (!bStudio)
+	{
+		SetActorTransform(Home);
+		bInStudio = false;
+	}
+	else if (const AShinobiStudioSet* Studio = GetStudio())
+	{
+		Home = GetActorTransform();
+		SetActorTransform(Studio->GetActorTransform());
+		bInStudio = true;
+	}
 }
 
 void AShinobiMenuStage::AddYaw(float Degrees)

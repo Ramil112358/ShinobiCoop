@@ -24,6 +24,7 @@
 #include "Shinobi/UI/ShinobiMenuArt.h"
 #include "Shinobi/UI/ShinobiMenuStage.h"
 #include "Shinobi/UI/ShinobiMenuStyle.h"
+#include "Shinobi/UI/ShinobiStudioSet.h"
 #include "Shinobi/Hero/ShinobiCharacterSave.h"
 #include "Shinobi/UI/ShinobiSettings.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
@@ -179,6 +180,31 @@ TSharedRef<SWidget> UShinobiMainMenuWidget::RebuildWidget()
 		Hints->SetVisibility(ESlateVisibility::Collapsed);
 		MainMenuPlace(Root, Hints, FAnchors(1.f, 1.f), FMargin(-32.f, -20.f, 0.f, 0.f), FVector2D(1.f, 1.f))->SetAutoSize(true);
 		UseGamepadHints(false);
+
+		LightPresets = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+		for (const TCHAR* Name : { TEXT("STUDIO"), TEXT("DAY"), TEXT("DUSK") })
+		{
+			LightPresetButtons.Add(MakeButton(Name, 12, false, LightPresetButtons.Num(), FShinobiIndexClicked::CreateWeakLambda(this, [this](int32 Picked)
+			{
+				if (AShinobiStudioSet* Studio = GetStage() ? GetStage()->GetStudio() : nullptr)
+				{
+					Studio->ApplyPreset(EShinobiStudioLight(Picked));
+				}
+				for (int32 Index = 0; Index < LightPresetButtons.Num(); ++Index)
+				{
+					ShinobiMenuStyle::StyleButton(*LightPresetButtons[Index], Index == Picked);
+				}
+			})));
+			LightPresets->AddChildToHorizontalBox(LightPresetButtons.Last())->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
+		}
+		ShinobiMenuStyle::StyleButton(*LightPresetButtons[0], true);
+		LightPresets->SetVisibility(ESlateVisibility::Collapsed);
+		MainMenuPlace(Root, LightPresets, FAnchors(1.f, 0.f), FMargin(-32.f, MainMenuTopBar + 16.f, 0.f, 0.f), FVector2D(1.f, 0.f))->SetAutoSize(true);
+
+		Blackout = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+		Blackout->SetBrush(ShinobiMenuStyle::ColorBrush(FLinearColor::Black));
+		Blackout->SetVisibility(ESlateVisibility::Collapsed);
+		MainMenuPlace(Root, Blackout, FAnchors(0.f, 0.f, 1.f, 1.f), FMargin(0.f));
 	}
 	return UUserWidget::RebuildWidget(); // not UShinobiMenuWidget's: this menu has no centred column
 }
@@ -400,6 +426,9 @@ void UShinobiMainMenuWidget::SelectTab(EShinobiMenuTab NewTab)
 	}
 	UpdateBackdrop();
 	Hints->SetVisibility(GetPreviewStage() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	const AShinobiMenuStage* Shown = GetStage();
+	bWantStudio = NewTab == EShinobiMenuTab::Create && Shown && Shown->GetStudio();
+	LightPresets->SetVisibility(bWantStudio ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	Shade->SetVisibility(NewTab == EShinobiMenuTab::Play ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	// Session news ("Searching...", "Host left") belongs to PLAY; a failed game drops you there anyway.
 	MessageText->SetVisibility(NewTab == EShinobiMenuTab::Play ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
@@ -462,6 +491,7 @@ AShinobiMenuStage* UShinobiMainMenuWidget::GetStage() const
 void UShinobiMainMenuWidget::NativeTick(const FGeometry& Geometry, float DeltaTime)
 {
 	Super::NativeTick(Geometry, DeltaTime); // focus highlight
+	TickStudioFade(DeltaTime);
 	if (AShinobiMenuStage* Stage = GetPreviewStage(); Stage && !PreviewStick.IsZero())
 	{
 		Stage->AddYaw(PreviewStick.X * 180.f * DeltaTime);
@@ -518,6 +548,29 @@ FReply UShinobiMainMenuWidget::NativeOnKeyDown(const FGeometry& Geometry, const 
 		return FReply::Handled();
 	}
 	return Super::NativeOnKeyDown(Geometry, Event);
+}
+
+void UShinobiMainMenuWidget::TickStudioFade(float DeltaSeconds)
+{
+	AShinobiMenuStage* Stage = GetStage();
+	if (!Stage || !Blackout)
+	{
+		return;
+	}
+	if (bWantStudio != Stage->IsInStudio())
+	{
+		StudioFade = FMath::Min(1.f, StudioFade + DeltaSeconds / 0.2f);
+		if (StudioFade >= 1.f)
+		{
+			Stage->SetStudio(bWantStudio); // in the dark
+		}
+	}
+	else
+	{
+		StudioFade = FMath::Max(0.f, StudioFade - DeltaSeconds / 0.3f);
+	}
+	Blackout->SetRenderOpacity(StudioFade);
+	Blackout->SetVisibility(StudioFade > 0.f ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 }
 
 AShinobiMenuStage* UShinobiMainMenuWidget::GetPreviewStage() const

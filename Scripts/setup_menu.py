@@ -5,6 +5,7 @@ PolyHaven props under /Game/Shinobi/London). Close the GUI editor, then:
     powershell -File Scripts/run_python.ps1 -Script Scripts/setup_menu.py
 
 The stage stands at the origin facing +X; its camera looks back along -X, so everything behind the character is at -X.
+CREATE's studio (AShinobiStudioSet, its materials built here under /Game/Shinobi/UI/Studio) floats high above the roof.
 """
 import unreal
 
@@ -124,6 +125,91 @@ s.set_editor_property("auto_exposure_bias", 10.0)
 s.set_editor_property("override_vignette_intensity", True)
 s.set_editor_property("vignette_intensity", 0.6)
 pp.set_editor_property("settings", s)
+
+# CREATE's studio: AShinobiStudioSet builds itself; its three materials are made here (rebuilt in place, so the level keeps them).
+MEL = unreal.MaterialEditingLibrary
+STUDIO = "/Game/Shinobi/UI/Studio"
+
+
+def studio_material(name, build):
+    path = "%s/%s" % (STUDIO, name)
+    material = unreal.load_asset(path) if unreal.EditorAssetLibrary.does_asset_exist(path) else \
+        unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, STUDIO, unreal.Material, unreal.MaterialFactoryNew())
+    MEL.delete_all_material_expressions(material)
+    build(material)
+    MEL.recompile_material(material)
+    unreal.EditorAssetLibrary.save_loaded_asset(material, only_if_is_dirty=False)
+    log("made " + path)
+
+
+def node(material, cls, x, y, **props):
+    expression = MEL.create_material_expression(material, cls, x, y)
+    for key, value in props.items():
+        expression.set_editor_property(key, value)
+    return expression
+
+
+def wire(*links):
+    for source, output, target, pin in links:
+        if not MEL.connect_material_expressions(source, output, target, pin):
+            raise RuntimeError("could not connect %s.%s -> %s.%s" % (source.get_name(), output, target.get_name(), pin))
+
+
+def backdrop(m):
+    # Unlit inside of a sphere: charcoal at the edges to slate behind the character (-X, a little up), times Tint.
+    m.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    m.set_editor_property("two_sided", True)
+    world = node(m, unreal.MaterialExpressionWorldPosition, -1200, 0)
+    centre = node(m, unreal.MaterialExpressionObjectPositionWS, -1200, 150)
+    offset = node(m, unreal.MaterialExpressionSubtract, -1000, 50)
+    direction = node(m, unreal.MaterialExpressionNormalize, -850, 50)
+    behind = node(m, unreal.MaterialExpressionConstant3Vector, -850, 200, constant=unreal.LinearColor(-0.98, 0.0, 0.2, 1.0))
+    dot = node(m, unreal.MaterialExpressionDotProduct, -650, 100)
+    clamp = node(m, unreal.MaterialExpressionSaturate, -500, 100)
+    power = node(m, unreal.MaterialExpressionPower, -350, 100, const_exponent=2.5)
+    edge = node(m, unreal.MaterialExpressionConstant3Vector, -350, -150, constant=unreal.LinearColor(0.02, 0.022, 0.026, 1.0))
+    halo = node(m, unreal.MaterialExpressionConstant3Vector, -350, -50, constant=unreal.LinearColor(0.09, 0.1, 0.11, 1.0))
+    lerp = node(m, unreal.MaterialExpressionLinearInterpolate, -150, 0)
+    tint = node(m, unreal.MaterialExpressionVectorParameter, -150, 200, parameter_name="Tint", default_value=unreal.LinearColor(1, 1, 1, 1))
+    out = node(m, unreal.MaterialExpressionMultiply, 50, 50)
+    wire((world, "", offset, "A"), (centre, "", offset, "B"), (offset, "", direction, "VectorInput"), (direction, "", dot, "A"),
+         (behind, "", dot, "B"), (dot, "", clamp, ""), (clamp, "", power, "Base"), (edge, "", lerp, "A"), (halo, "", lerp, "B"),
+         (power, "", lerp, "Alpha"), (lerp, "", out, "A"), (tint, "", out, "B"))
+    MEL.connect_material_property(out, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+
+def floor(m):
+    colour = node(m, unreal.MaterialExpressionConstant3Vector, -400, 0, constant=unreal.LinearColor(0.035, 0.037, 0.04, 1.0))
+    rough = node(m, unreal.MaterialExpressionConstant, -400, 150, r=0.85)
+    MEL.connect_material_property(colour, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    MEL.connect_material_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
+
+
+def ring(m):
+    # A thin unlit band in the UI orange: opacity = 0.3 x saturate(1 - |distance(UV, centre) - 0.45| x 40).
+    m.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    m.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    uv = node(m, unreal.MaterialExpressionTextureCoordinate, -1000, 0)
+    middle = node(m, unreal.MaterialExpressionConstant2Vector, -1000, 120, r=0.5, g=0.5)
+    distance = node(m, unreal.MaterialExpressionDistance, -850, 50)
+    shift = node(m, unreal.MaterialExpressionSubtract, -700, 50, const_b=0.45)
+    absolute = node(m, unreal.MaterialExpressionAbs, -550, 50)
+    sharpen = node(m, unreal.MaterialExpressionMultiply, -400, 50, const_b=40.0)
+    invert = node(m, unreal.MaterialExpressionOneMinus, -250, 50)
+    clamp = node(m, unreal.MaterialExpressionSaturate, -120, 50)
+    fade = node(m, unreal.MaterialExpressionMultiply, 20, 50, const_b=0.3)
+    orange = node(m, unreal.MaterialExpressionConstant3Vector, 20, -120, constant=unreal.LinearColor(1.0, 0.48, 0.1, 1.0))
+    wire((uv, "", distance, "A"), (middle, "", distance, "B"), (distance, "", shift, "A"), (shift, "", absolute, ""),
+         (absolute, "", sharpen, "A"), (sharpen, "", invert, ""), (invert, "", clamp, ""), (clamp, "", fade, "A"))
+    MEL.connect_material_property(orange, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    MEL.connect_material_property(fade, "", unreal.MaterialProperty.MP_OPACITY)
+
+
+studio_material("M_StudioBackdrop", backdrop)
+studio_material("M_StudioFloor", floor)
+studio_material("M_StudioRing", ring)
+studio_class = unreal.load_class(None, "/Script/ShinobiCoop.ShinobiStudioSet")
+spawn(studio_class, (0, 0, 20000), label="StudioSet")  # AShinobiStudioSet::HeightAboveStageCm
 
 unreal.EditorLoadingAndSavingUtils.save_map(unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world(), MAP)
 log("saved " + MAP)

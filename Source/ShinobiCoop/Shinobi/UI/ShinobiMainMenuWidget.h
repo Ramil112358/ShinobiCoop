@@ -48,6 +48,10 @@ public:
 	/** The preview hints for a gamepad (right stick) or a mouse (wheel, drag): the last device used picks. */
 	void UseGamepadHints(bool bGamepad);
 	FText GetHintText() const;
+	/** CREATE's cut to the studio (NativeTick drives it): fades to black, moves the stage in or out, fades back. */
+	void TickStudioFade(float DeltaSeconds);
+	/** The black over the screen, 0..1. */
+	float GetStudioFade() const { return StudioFade; }
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -95,6 +99,9 @@ private:
 	/** Right stick (dead zone applied), turning and zooming the preview each tick. */
 	FVector2D PreviewStick = FVector2D::ZeroVector;
 	bool bGamepadHints = false;
+	/** The stage belongs in the studio (CREATE, with a studio set in the level). */
+	bool bWantStudio = false;
+	float StudioFade = 0.f;
 
 	UPROPERTY()
 	TObjectPtr<UWidgetSwitcher> Pages;
@@ -140,4 +147,11 @@ private:
 	TObjectPtr<UHorizontalBox> Hints;
 	UPROPERTY()
 	TArray<TObjectPtr<UTextBlock>> HintTexts;
+	UPROPERTY()
+	TObjectPtr<UBorder> Blackout;
+	/** CREATE's light presets (STUDIO, DAY, DUSK), top right. */
+	UPROPERTY()
+	TObjectPtr<UHorizontalBox> LightPresets;
+	UPROPERTY()
+	TArray<TObjectPtr<UShinobiIndexButton>> LightPresetButtons;
 };
