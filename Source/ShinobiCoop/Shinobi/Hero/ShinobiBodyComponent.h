@@ -107,6 +107,9 @@ private:
 	/** The look's skin tone on the body (times HeadTint, a static head's neck match), the static head and a MetaHuman face. */
 	void ApplySkinTone(const FShinobiAppearance& Look, const FLinearColor& HeadTint);
 
+	/** The look's tattoos on the body's skin layer (M_ShinobiSkin): unused slots off, unknown designs or regions skipped. */
+	void ApplySkinLayers(const FShinobiAppearance& Look);
+
 	UPROPERTY(Transient)
 	TObjectPtr<UIKRetargeter> Retargeter;
 

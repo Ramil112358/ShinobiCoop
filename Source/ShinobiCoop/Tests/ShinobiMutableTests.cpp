@@ -1540,4 +1540,43 @@ bool FShinobiMutableSkinLayerMaterialTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableTattooOnBodyTest, "ShinobiCoop.Mutable.TattooOnBody", ShinobiTestFlags)
+bool FShinobiMutableTattooOnBodyTest::RunTest(const FString& Parameters)
+{
+	// A look's first tattoo (design 0 on the chest) goes onto the body's skin layer: its texture, full opacity, the region's place.
+	const UDataTable* Designs = LoadObject<UDataTable>(nullptr, ShinobiMutable::TattoosPath);
+	const UDataTable* Regions = LoadObject<UDataTable>(nullptr, ShinobiMutable::TattooRegionsPath);
+	const int32 Chest = Regions ? Regions->GetRowNames().IndexOfByKey(FName(TEXT("Chest"))) : INDEX_NONE;
+	if (!TestTrue(TEXT("DT_Tattoos and DT_TattooRegions (Chest)"), Designs && Designs->GetRowNames().Num() > 0 && Chest != INDEX_NONE))
+	{
+		return false;
+	}
+	const UTexture* Design = Designs->FindRow<FShinobiTattooDesign>(Designs->GetRowNames()[0], TEXT("test"))->Texture.LoadSynchronous();
+	const FVector2D Centre = Regions->FindRow<FShinobiTattooRegion>(TEXT("Chest"), TEXT("test"))->Centre;
+	FShinobiAppearance Look;
+	Look.Top = Look.Bottom = Look.Shoes = FShinobiAppearance::None;
+	Look.Tattoos.Add({0, uint8(Chest), 0, 0, 0, 128});
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	Wearer->Body->WearAppearance(Look);
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer, Design, Centre]()
+	{
+		bool bFound = false;
+		for (int32 Index = 0; Index < Wearer->Body->GetNumMaterials(); ++Index)
+		{
+			const UMaterialInstanceDynamic* Material = Cast<UMaterialInstanceDynamic>(Wearer->Body->GetMaterial(Index));
+			UTexture* Texture = nullptr;
+			float Opacity = 0.f;
+			FLinearColor Offset;
+			if (Material && Material->GetTextureParameterValue(FHashedMaterialParameterInfo(TEXT("Tattoo 1")), Texture) && Texture == Design
+				&& Material->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Tattoo 1 Opacity")), Opacity) && Opacity == 1.f
+				&& Material->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("Tattoo 1 Offset")), Offset))
+			{
+				bFound = FMath::IsNearlyEqual(Offset.R, Centre.X, 0.001) && FMath::IsNearlyEqual(Offset.G, Centre.Y, 0.001);
+			}
+		}
+		TestTrue(TEXT("the body wears tattoo 1 on the chest"), bFound);
+	});
+	return true;
+}
+
 #endif

@@ -10,6 +10,9 @@ namespace ShinobiMutable
 {
 	inline constexpr const TCHAR* ObjectPath = TEXT("/Game/Shinobi/Mutable/CO_Shinobi.CO_Shinobi");
 	inline constexpr const TCHAR* PalettePath = TEXT("/Game/Shinobi/Mutable/DT_Palette.DT_Palette");
+	/** Tattoo designs and body regions (FShinobiTattooDesign, FShinobiTattooRegion; Scripts/setup_mutable.py stage tattoos). */
+	inline constexpr const TCHAR* TattoosPath = TEXT("/Game/Shinobi/Mutable/DT_Tattoos.DT_Tattoos");
+	inline constexpr const TCHAR* TattooRegionsPath = TEXT("/Game/Shinobi/Mutable/DT_TattooRegions.DT_TattooRegions");
 
 	/** The body: a Skeletal Mesh Parameter given the sex's base (SK_MutableBase_<Sex>), or for the Own build that roster
 	 * character's own body (SK_MutableOwn_<Sex>), so the sex needs no parameter. "Fit Base" is always the sex's base: the

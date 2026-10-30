@@ -78,3 +78,36 @@ struct FShinobiPaletteRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Wardrobe)
 	FLinearColor Colour = FLinearColor::White;
 };
+
+/** A tattoo design (a row of DT_Tattoos): FShinobiTattoo::Design indexes the rows in order. */
+USTRUCT(BlueprintType)
+struct FShinobiTattooDesign : public FTableRowBase
+{
+	GENERATED_BODY()
+
+	/** The design, with a transparent border (the skin layer clamps it: it shows once). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Tattoo)
+	TSoftObjectPtr<UTexture2D> Texture;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Tattoo)
+	TSoftObjectPtr<UTexture2D> Thumbnail;
+};
+
+/** Where on the body a tattoo goes (a row of DT_TattooRegions): FShinobiTattoo::Region indexes the rows in order. In the
+ * MetaHuman body's UVs (Scripts/setup_mutable.py stage tattoos). */
+USTRUCT(BlueprintType)
+struct FShinobiTattooRegion : public FTableRowBase
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Tattoo)
+	FVector2D Centre = FVector2D(0.5, 0.5);
+
+	/** The design's size in UV units at FShinobiTattoo::Scale 128. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Tattoo)
+	float Scale = 0.1f;
+
+	/** Turns that stand the design upright there. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Tattoo)
+	float Rotation = 0.f;
+};

@@ -22,6 +22,9 @@ skintone: M_StaticHead (/Game/Shinobi/Mutable/Heads: base colour texture "BaseCo
 skinlayer: /Game/Shinobi/Skin/M_ShinobiSkin, the project's MetaHuman skin material (M_skin_unified_baked) with the skin
   layers (UShinobiSkinLibrary::AddSkinLayers: 3 tattoos, eye/lips/blush make-up, freckles; all off), under the shared
   MetaHumans/Common MI_Head_Baked_LOD0_VT, so every MetaHuman body and face in the project can wear them.
+tattoos: DT_Tattoos (FShinobiTattooDesign: the Mutable Sample's tattoo designs with alpha) and DT_TattooRegions
+  (FShinobiTattooRegion: where each body region sits in the MetaHuman body's UVs, found on the male base by
+  UShinobiSkinLibrary::SkinUV; mirrored left/right UVs are logged).
 catalog: DA_CreatorCatalog's Heads (with their tints), the roster MetaHuman faces and a preset per roster character
   (run after setup_creator.py catalog, which rewrites Faces).
 palette: DT_Palette, the wardrobe colours (FShinobiPaletteRow).
@@ -290,6 +293,39 @@ def skinlayer():
     unreal.MaterialEditingLibrary.set_material_instance_parent(root, unreal.load_asset(SKIN))
     EAL.save_loaded_asset(root, only_if_is_dirty=False)
     log(f"{SKIN_ROOT} now under {SKIN}")
+
+
+_TATTOO = "/Game/Character/Skin_Variations"
+TATTOO_DESIGNS = [f"{_TATTOO}/Projected_Tattoos/T_Tattoo{n}_alpha" for n in ("Owl", "Geometric", "Native", "Precolumbian")] +                  [f"{_TATTOO}/Cylindrical_Tattos_Projected/T_Tattoo{n}_alpha" for n in ("Frieze", "Stripes", "Triangles")]
+# Region: (bone, end bone, direction out of the body (MetaHuman bodies face +Y; left is +X), along bone to end, reach cm,
+# UV scale).
+TATTOO_REGIONS = {
+    "Chest": ("spine_05", "", (0, 1, 0), 0.0, 30, 0.13), "Back": ("spine_04", "", (0, -1, 0), 0.0, 30, 0.15),
+    "Belly": ("spine_02", "", (0, 1, 0), 0.0, 30, 0.1), "Neck": ("neck_01", "neck_02", (0, 1, 0), 0.5, 20, 0.05),
+    "UpperArmL": ("upperarm_l", "lowerarm_l", (0, 1, 0), 0.5, 20, 0.08), "UpperArmR": ("upperarm_r", "lowerarm_r", (0, 1, 0), 0.5, 20, 0.08),
+    "ForearmL": ("lowerarm_l", "hand_l", (0, 1, 0), 0.5, 20, 0.06), "ForearmR": ("lowerarm_r", "hand_r", (0, 1, 0), 0.5, 20, 0.06),
+    "ThighL": ("thigh_l", "calf_l", (0, 1, 0), 0.5, 25, 0.09), "ThighR": ("thigh_r", "calf_r", (0, 1, 0), 0.5, 25, 0.09),
+    "CalfL": ("calf_l", "foot_l", (0, -1, 0), 0.4, 20, 0.07), "CalfR": ("calf_r", "foot_r", (0, -1, 0), 0.4, 20, 0.07),
+}
+TATTOOS, TATTOO_REGIONS_TABLE = f"{MUTABLE_ROOT}/DT_Tattoos", f"{MUTABLE_ROOT}/DT_TattooRegions"
+
+
+def tattoos():
+    designs = [{"Name": path.rsplit("/", 1)[1][len("T_Tattoo"):-len("_alpha")], "Texture": asset_path(path)}
+               for path in TATTOO_DESIGNS if EAL.does_asset_exist(path)]
+    new_table(TATTOOS, unreal.ShinobiTattooDesign, designs)
+    base = unreal.load_asset(BASE.format(sex="Male"))
+    regions = []
+    for name, (bone, end, direction, along, reach, scale) in TATTOO_REGIONS.items():
+        uv = unreal.ShinobiSkinLibrary.skin_uv(base, bone, end or "None", unreal.Vector(*direction), along, reach)
+        regions.append({"Name": name, "Centre": {"X": uv.x, "Y": uv.y}, "Scale": scale, "Rotation": 0.0})
+        log(f"tattoo region {name}: UV ({uv.x:.3f}, {uv.y:.3f})")
+    for left in [r for r in regions if r["Name"].endswith("L")]:
+        right = next(r for r in regions if r["Name"] == left["Name"][:-1] + "R")
+        if abs(left["Centre"]["X"] - right["Centre"]["X"]) + abs(left["Centre"]["Y"] - right["Centre"]["Y"]) < 0.01:
+            log(f"tattoo regions {left['Name']} and {right['Name']} share UVs (mirrored): a tattoo shows on both")
+    new_table(TATTOO_REGIONS_TABLE, unreal.ShinobiTattooRegion, regions)
+    log(f"DT_Tattoos: {[d['Name'] for d in designs]}; DT_TattooRegions: {list(TATTOO_REGIONS)}")
 
 
 def catalog():
@@ -658,6 +694,6 @@ def graph():
         raise RuntimeError("CO_Shinobi did not compile")
 
 
-STAGES = {"bases": bases, "faceskin": face_skin, "samplecopy": sample_copy, "fabimport": fab_import, "fits": fits, "heads": heads, "catalog": catalog, "skintone": skintone, "skinlayer": skinlayer, "palette": palette, "coverage": coverage, "wardrobe": wardrobe, "graph": graph}
+STAGES = {"bases": bases, "faceskin": face_skin, "samplecopy": sample_copy, "fabimport": fab_import, "fits": fits, "heads": heads, "catalog": catalog, "skintone": skintone, "skinlayer": skinlayer, "tattoos": tattoos, "palette": palette, "coverage": coverage, "wardrobe": wardrobe, "graph": graph}
 for stage in ONLY or [s for s in STAGES if s != "faceskin"]:
     STAGES[stage]()

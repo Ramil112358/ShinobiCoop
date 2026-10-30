@@ -110,6 +110,7 @@ void UShinobiBodyComponent::DressBuilt(USkeletalMesh* Built)
 		// A roster head: its own mesh, no MetaHuman face or grooms, and the body's skin tinted to its neck.
 		WearStaticHead(Head->Mesh.LoadSynchronous());
 		ApplySkinTone(Look, Head->SkinTint);
+		ApplySkinLayers(Look);
 		Worn = Look;
 		UpdateBody(Look);
 		OnBodyBuilt.Broadcast();
@@ -175,6 +176,7 @@ void UShinobiBodyComponent::DressBuilt(USkeletalMesh* Built)
 		}
 	}
 	ApplySkinTone(Look, FLinearColor::White);
+	ApplySkinLayers(Look);
 	OnBodyBuilt.Broadcast();
 }
 
@@ -336,6 +338,45 @@ void UShinobiBodyComponent::ApplySkinTone(const FShinobiAppearance& Look, const 
 		if (Part && Part->GetName().StartsWith(TEXT("Face")))
 		{
 			Set(Cast<UMeshComponent>(Part), ShinobiMutable::SkinTintParameter, Tone);
+		}
+	}
+}
+
+void UShinobiBodyComponent::ApplySkinLayers(const FShinobiAppearance& Look)
+{
+	const UDataTable* Designs = LoadObject<UDataTable>(nullptr, ShinobiMutable::TattoosPath, nullptr, LOAD_NoWarn | LOAD_Quiet);
+	const UDataTable* Regions = LoadObject<UDataTable>(nullptr, ShinobiMutable::TattooRegionsPath, nullptr, LOAD_NoWarn | LOAD_Quiet);
+	const TArray<FName> DesignRows = Designs ? Designs->GetRowNames() : TArray<FName>();
+	const TArray<FName> RegionRows = Regions ? Regions->GetRowNames() : TArray<FName>();
+	for (int32 Index = 0; Index < GetNumMaterials(); ++Index)
+	{
+		float Unused;
+		const UMaterialInterface* Material = GetMaterial(Index);
+		if (!Material || !Material->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("Tattoo 1 Opacity")), Unused))
+		{
+			continue; // not skin (or not M_ShinobiSkin)
+		}
+		UMaterialInstanceDynamic* Skin = CreateDynamicMaterialInstance(Index);
+		for (int32 Slot = 0; Slot < ShinobiMutable::MaxTattoos; ++Slot)
+		{
+			const FString Name = FString::Printf(TEXT("Tattoo %d"), Slot + 1);
+			const FShinobiTattoo* Tattoo = Look.Tattoos.IsValidIndex(Slot) ? &Look.Tattoos[Slot] : nullptr;
+			const FShinobiTattooDesign* Design = Tattoo && DesignRows.IsValidIndex(Tattoo->Design)
+				? Designs->FindRow<FShinobiTattooDesign>(DesignRows[Tattoo->Design], TEXT("ApplySkinLayers")) : nullptr;
+			const FShinobiTattooRegion* Region = Tattoo && RegionRows.IsValidIndex(Tattoo->Region)
+				? Regions->FindRow<FShinobiTattooRegion>(RegionRows[Tattoo->Region], TEXT("ApplySkinLayers")) : nullptr;
+			UTexture2D* Texture = Design && Region ? Design->Texture.LoadSynchronous() : nullptr;
+			Skin->SetScalarParameterValue(*(Name + TEXT(" Opacity")), Texture ? 1.f : 0.f);
+			if (!Texture)
+			{
+				continue;
+			}
+			// Nudged up to a region's size either way, turned a full turn over the byte, sized 0.5x to 1.5x.
+			const FVector2D Centre = Region->Centre + FVector2D(Tattoo->OffsetU, Tattoo->OffsetV) / 127.0 * Region->Scale;
+			Skin->SetTextureParameterValue(*Name, Texture);
+			Skin->SetVectorParameterValue(*(Name + TEXT(" Offset")), FLinearColor(Centre.X, Centre.Y, 0.f, 0.f));
+			Skin->SetScalarParameterValue(*(Name + TEXT(" Rotation")), Region->Rotation + Tattoo->Rotation / 255.f);
+			Skin->SetScalarParameterValue(*(Name + TEXT(" Scale")), Region->Scale * (0.5f + Tattoo->Scale / 255.f));
 		}
 	}
 }

@@ -596,6 +596,61 @@ void AShinobiPlayerController::RunCreatorMutableShot()
 	At(T + 6.5f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
 
+// -ShinobiTattooShot (shot_chakra.ps1 -Tattoos): tattoo design 0 on each DT_TattooRegions row, on a male and a female base in
+// shoes only, front and back. Shots: ShinobiTattooShot_<Region>_<Sex>_<Front|Back>.
+void AShinobiPlayerController::RunTattooShot()
+{
+	auto At = [this](float Seconds, TFunction<void()> Fn)
+	{
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
+	};
+	auto Film = [this, At](float When, const FString& Name, float Yaw)
+	{
+		At(When, [this, Yaw]()
+		{
+			const APawn* Shinobi = GetPawn();
+			if (!Shinobi)
+			{
+				return;
+			}
+			const FVector Target = Shinobi->GetActorLocation() + FVector(0.f, 0.f, -5.f);
+			const FVector Eye = Target + Shinobi->GetActorForwardVector().RotateAngleAxis(Yaw, FVector::UpVector) * 360.f;
+			ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Target - Eye).Rotation());
+			Camera->GetCameraComponent()->SetFieldOfView(40.f);
+			Camera->SetLifeSpan(0.5f);
+			SetViewTarget(Camera);
+		});
+		At(When + 0.15f, [Name]()
+		{
+			FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / (TEXT("ShinobiTattooShot_") + Name)), false, false);
+		});
+	};
+	const UDataTable* Regions = LoadObject<UDataTable>(nullptr, ShinobiMutable::TattooRegionsPath, nullptr, LOAD_NoWarn | LOAD_Quiet);
+	const TArray<FName> Rows = Regions ? Regions->GetRowNames() : TArray<FName>();
+	float T = 0.5f;
+	for (int32 Region = 0; Region < Rows.Num(); ++Region)
+	{
+		for (const EShinobiSex Sex : {EShinobiSex::Male, EShinobiSex::Female})
+		{
+			FShinobiAppearance Look;
+			Look.Sex = Sex;
+			Look.Top = Look.Bottom = FShinobiAppearance::None;
+			Look.Shoes = 0;
+			Look.Tattoos.Add({0, uint8(Region), 0, 0, 0, 128});
+			At(T, [this, Look]() { ServerPickAppearance(Look); });
+#if WITH_EDITOR
+			At(T + 3.5f, []() { FAssetCompilingManager::Get().FinishAllCompilation(); if (GShaderCompilingManager) { GShaderCompilingManager->FinishAllCompilation(); } });
+#endif
+			const FString Name = Rows[Region].ToString() + TEXT("_") + StaticEnum<EShinobiSex>()->GetNameStringByValue(int64(Sex));
+			Film(T + 4.f, Name + TEXT("_Front"), 0.f);
+			Film(T + 4.4f, Name + TEXT("_Back"), 180.f);
+			T += 5.f;
+		}
+	}
+	At(T + 0.5f, [this]() { ConsoleCommand(TEXT("quit")); });
+}
+
 // -ShinobiWardrobeShot (shot_chakra.ps1 -Wardrobe): every Top, Bottom, Shoes and Outer row on each sex it has a piece for,
 // on the slim, average, heavy and own builds, with the first piece of the other slots. Shots:
 // ShinobiWardrobeShot_<Slot>_<Row>_<Sex><Build>. -ShinobiWardrobeRows=<prefix>,...: only those rows.

@@ -139,6 +139,10 @@ void AShinobiPlayerController::BeginPlay()
 	{
 		RunCreatorMutableShot();
 	}
+	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiTattooShot")))
+	{
+		RunTattooShot();
+	}
 	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiWardrobeShot")))
 	{
 		RunWardrobeShot();

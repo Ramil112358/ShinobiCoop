@@ -3,16 +3,24 @@
 #include "Materials/Material.h"
 
 #if WITH_EDITOR
+#include "AnimationRuntime.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/Texture2D.h"
+#include "MeshDescription.h"
+#include "SkeletalMeshAttributes.h"
 #include "MaterialEditingLibrary.h"
 #include "Materials/MaterialAttributeDefinitionMap.h"
+#include "Materials/MaterialExpressionAbs.h"
 #include "Materials/MaterialExpressionAdd.h"
 #include "Materials/MaterialExpressionComponentMask.h"
 #include "Materials/MaterialExpressionConstant2Vector.h"
 #include "Materials/MaterialExpressionDivide.h"
 #include "Materials/MaterialExpressionGetMaterialAttributes.h"
 #include "Materials/MaterialExpressionLinearInterpolate.h"
+#include "Materials/MaterialExpressionMax.h"
 #include "Materials/MaterialExpressionMultiply.h"
+#include "Materials/MaterialExpressionOneMinus.h"
+#include "Materials/MaterialExpressionSaturate.h"
 #include "Materials/MaterialExpressionRotator.h"
 #include "Materials/MaterialExpressionScalarParameter.h"
 #include "Materials/MaterialExpressionSetMaterialAttributes.h"
@@ -47,16 +55,12 @@ bool UShinobiSkinLibrary::AddSkinLayers(UMaterial* Material)
 		Node->DefaultValue = Default;
 		return Node;
 	};
-	auto Texture = [&](const FString& Name, bool bClamp)
+	auto Texture = [&](const FString& Name)
 	{
 		UMaterialExpressionTextureSampleParameter2D* Node = Make((UMaterialExpressionTextureSampleParameter2D*)nullptr);
 		Node->ParameterName = *Name;
 		Node->Texture = Black;
 		Node->SamplerType = SAMPLERTYPE_Color;
-		if (bClamp)
-		{
-			Node->SamplerSource = SSM_Clamp_WorldGroupSettings; // a design's transparent border, not its next copy, past its square
-		}
 		return Node;
 	};
 	// (the pins by hand, as the nodes' own edits do: those need an editor graph node, which a script-built one lacks)
@@ -90,6 +94,7 @@ bool UShinobiSkinLibrary::AddSkinLayers(UMaterial* Material)
 		const FString Name = FString::Printf(TEXT("Tattoo %d"), Slot);
 		UMaterialExpressionComponentMask* Offset = Make((UMaterialExpressionComponentMask*)nullptr);
 		Offset->R = Offset->G = 1;
+		Offset->B = Offset->A = 0;
 		Offset->Input.Connect(0, Vector(Name + TEXT(" Offset"), FLinearColor(0.5f, 0.5f, 0.f, 0.f)));
 		UMaterialExpressionSubtract* Centred = Make((UMaterialExpressionSubtract*)nullptr);
 		Centred->A.Connect(0, UV);
@@ -109,14 +114,46 @@ bool UShinobiSkinLibrary::AddSkinLayers(UMaterial* Material)
 		Turned->Speed = 1.f;
 		Turned->Coordinate.Connect(0, Placed);
 		Turned->Time.Connect(0, Radians);
-		UMaterialExpressionTextureSampleParameter2D* Design = Texture(Name, true);
+		UMaterialExpressionTextureSampleParameter2D* Design = Texture(Name);
 		Design->Coordinates.Connect(0, Turned);
-		Layer(Design, 0, Design, 4, Name + TEXT(" Opacity")); // (RGB over, by A)
+		// Only inside its own square (1 - saturate((max |UV - 0.5| - 0.5) x 1000)): a design shows once, and its border
+		// (clamped or wrapped) never spreads over the rest of the body.
+		UMaterialExpressionSubtract* FromMiddle = Make((UMaterialExpressionSubtract*)nullptr);
+		FromMiddle->A.Connect(0, Turned);
+		FromMiddle->ConstB = 0.5f;
+		UMaterialExpressionAbs* Distance = Make((UMaterialExpressionAbs*)nullptr);
+		Distance->Input.Connect(0, FromMiddle);
+		UMaterialExpressionComponentMask* DistanceU = Make((UMaterialExpressionComponentMask*)nullptr);
+		DistanceU->R = 1;
+		DistanceU->G = DistanceU->B = DistanceU->A = 0; // (every channel set: the defaults keep R)
+		DistanceU->Input.Connect(0, Distance);
+		UMaterialExpressionComponentMask* DistanceV = Make((UMaterialExpressionComponentMask*)nullptr);
+		DistanceV->G = 1;
+		DistanceV->R = DistanceV->B = DistanceV->A = 0;
+		DistanceV->Input.Connect(0, Distance);
+		UMaterialExpressionMax* Farthest = Make((UMaterialExpressionMax*)nullptr);
+		Farthest->A.Connect(0, DistanceU);
+		Farthest->B.Connect(0, DistanceV);
+		UMaterialExpressionSubtract* Outside = Make((UMaterialExpressionSubtract*)nullptr);
+		Outside->A.Connect(0, Farthest);
+		Outside->ConstB = 0.5f;
+		UMaterialExpressionMultiply* Sharp = Make((UMaterialExpressionMultiply*)nullptr);
+		Sharp->A.Connect(0, Outside);
+		Sharp->ConstB = 1000.f;
+		UMaterialExpressionSaturate* Clipped = Make((UMaterialExpressionSaturate*)nullptr);
+		Clipped->Input.Connect(0, Sharp);
+		UMaterialExpressionOneMinus* Inside = Make((UMaterialExpressionOneMinus*)nullptr);
+		Inside->Input.Connect(0, Clipped);
+		// The design is a mask (the Mutable Sample's tattoos: white ink on black, red channel) in the slot's ink colour.
+		UMaterialExpressionMultiply* Ink = Make((UMaterialExpressionMultiply*)nullptr);
+		Ink->A.Connect(1, Design); // R
+		Ink->B.Connect(0, Inside);
+		Layer(Vector(Name + TEXT(" Colour"), FLinearColor(0.03f, 0.035f, 0.05f)), 0, Ink, 0, Name + TEXT(" Opacity"));
 	}
 	// MetaHuman face masks (the plugin's ArtistDelights textures, face UVs): a colour where the mask is.
 	for (const TCHAR* Mask : {TEXT("Eye Makeup"), TEXT("Lips Makeup"), TEXT("Blush Makeup"), TEXT("Freckles")})
 	{
-		UMaterialExpressionTextureSampleParameter2D* Where = Texture(Mask, false);
+		UMaterialExpressionTextureSampleParameter2D* Where = Texture(Mask);
 		Layer(Vector(FString(Mask) + TEXT(" Colour"), FLinearColor::Black), 0, Where, 1, FString(Mask) + TEXT(" Opacity")); // (by R)
 	}
 	UMaterialExpressionSetMaterialAttributes* Set = Make((UMaterialExpressionSetMaterialAttributes*)nullptr);
@@ -133,5 +170,43 @@ bool UShinobiSkinLibrary::AddSkinLayers(UMaterial* Material)
 	return true;
 #else
 	return false;
+#endif
+}
+
+FVector2D UShinobiSkinLibrary::SkinUV(USkeletalMesh* Mesh, FName Bone, FName End, FVector Direction, float Along, float Reach)
+{
+#if WITH_EDITOR
+	FMeshDescription Description;
+	const int32 Index = Mesh ? Mesh->GetRefSkeleton().FindBoneIndex(Bone) : INDEX_NONE;
+	if (Index == INDEX_NONE || !Mesh->CloneMeshDescription(0, Description))
+	{
+		return FVector2D(-1.0);
+	}
+	const FReferenceSkeleton& Skeleton = Mesh->GetRefSkeleton();
+	// (the end named: a limb bone's first child is a twist bone by its joint)
+	FVector From = FAnimationRuntime::GetComponentSpaceTransformRefPose(Skeleton, Index).GetLocation();
+	const int32 EndIndex = Skeleton.FindBoneIndex(End);
+	if (EndIndex != INDEX_NONE)
+	{
+		From = FMath::Lerp(From, FAnimationRuntime::GetComponentSpaceTransformRefPose(Skeleton, EndIndex).GetLocation(), double(Along));
+	}
+	const FVector Target = From + Direction.GetSafeNormal() * Reach;
+	FSkeletalMeshAttributes Attributes(Description);
+	const TVertexAttributesConstRef<FVector3f> Points = Description.GetVertexPositions();
+	const TVertexInstanceAttributesConstRef<FVector2f> UVs = Attributes.GetVertexInstanceUVs();
+	FVertexID Best = INDEX_NONE;
+	double BestDistance = TNumericLimits<double>::Max();
+	for (const FVertexID Vertex : Description.Vertices().GetElementIDs())
+	{
+		const double Distance = FVector::DistSquared(FVector(Points[Vertex]), Target);
+		if (Distance < BestDistance && Description.GetVertexVertexInstanceIDs(Vertex).Num() > 0)
+		{
+			BestDistance = Distance;
+			Best = Vertex;
+		}
+	}
+	return Best == INDEX_NONE ? FVector2D(-1.0) : FVector2D(UVs.Get(Description.GetVertexVertexInstanceIDs(Best)[0], 0));
+#else
+	return FVector2D(-1.0);
 #endif
 }
