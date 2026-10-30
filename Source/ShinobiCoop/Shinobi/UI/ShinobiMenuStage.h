@@ -34,8 +34,16 @@ public:
 	void FramePortrait();
 	/** Eases the character sideways to Focus's spot. */
 	void SetFocus(EShinobiMenuStageFocus Focus);
-	/** The camera on the face, following it (the creator's FACE and HAIR rows), or back on the whole character. */
-	void SetCloseUp(bool bHead);
+	/** Turns the character (not the camera) by Degrees, easing there. */
+	void AddYaw(float Degrees);
+	/** Zooms by Delta: 0 frames the whole character, 1 the face (the aim sliding from chest to face). Clamped. */
+	void AddZoom(float Delta);
+	/** A tab's framing (CREATE's FACE: 1, else 0); ResetView returns to it. */
+	void SetAutoZoom(float Zoom);
+	/** Facing front at the last SetAutoZoom framing. */
+	void ResetView();
+	float GetZoom() const { return Zoom; }
+	float GetYaw() const { return Yaw; }
 
 	UCameraComponent* GetCamera() const { return Camera; }
 	UShinobiBodyComponent* GetBody() const { return Body; }
@@ -67,7 +75,16 @@ private:
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UCameraComponent> Camera;
 
+	/** Places the camera for Zoom (between the full view and the face close-up). */
+	void PlaceCamera();
+
 	int32 ShownBody = INDEX_NONE;
 	float TargetOffset = 0.f;
-	bool bCloseUp = false;
+	float Yaw = 0.f;
+	float TargetYaw = 0.f;
+	float Zoom = 0.f;
+	float TargetZoom = 0.f;
+	float AutoZoom = 0.f;
+	/** FramePortrait's view holds until the view is moved. */
+	bool bPortrait = false;
 };

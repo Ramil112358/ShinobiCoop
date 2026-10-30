@@ -38,7 +38,7 @@ public:
 	bool LoadCode();
 
 	/** The stage wears the edited look again (entering the tab). */
-	void ShowOnStage() { Refresh(true); }
+	void ShowOnStage() { FrameCategory(); Refresh(true); }
 
 	const FShinobiAppearance& GetLook() const { return Look; }
 	UWidget* GetFocusTarget() const;
@@ -57,6 +57,8 @@ private:
 	void Refresh(bool bRedress);
 	/** A pick changed the sex: indices that the other sex doesn't have start over. */
 	void ResetForSex();
+	/** The stage's framing for the category (the face close-up on FACE). */
+	void FrameCategory();
 
 	UPROPERTY()
 	TObjectPtr<UShinobiCharacterSave> Save;

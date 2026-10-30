@@ -141,7 +141,16 @@ void UShinobiCreatorPage::EditSlot(int32 SlotIndex)
 void UShinobiCreatorPage::ShowCategory(ECategory NewCategory)
 {
 	Category = NewCategory;
+	FrameCategory();
 	Refresh(false);
+}
+
+void UShinobiCreatorPage::FrameCategory()
+{
+	if (AShinobiMenuStage* Shown = Stage.Get())
+	{
+		Shown->SetAutoZoom(Category == ECategory::Face || Category == ECategory::Hair ? 1.f : 0.f);
+	}
 }
 
 void UShinobiCreatorPage::SaveAndPlay()
@@ -303,10 +312,6 @@ void UShinobiCreatorPage::Refresh(bool bRedress)
 
 	Rows->ClearChildren();
 	UShinobiBodyComponent* Body = Stage.IsValid() ? Stage->GetBody() : nullptr;
-	if (Stage.IsValid())
-	{
-		Stage->SetCloseUp(Category == ECategory::Face || Category == ECategory::Hair);
-	}
 	const EShinobiSex Sex = Look.Sex;
 	const auto Count = [this, Sex](auto Counter) { return Catalog ? Counter(*Catalog, Sex) : 0; };
 	switch (Category)

@@ -45,12 +45,23 @@ public:
 	/** Screenshot tour (UShinobiMenuShotSubsystem): select the Host row of DisplayName in its Mode-th format. */
 	void TourSelectHost(const FString& DisplayName, int32 Mode);
 	void TourShowFind() { ShowFind(true); }
+	/** The preview hints for a gamepad (right stick) or a mouse (wheel, drag): the last device used picks. */
+	void UseGamepadHints(bool bGamepad);
+	FText GetHintText() const;
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& Geometry, float DeltaTime) override;
 	virtual FReply NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event) override;
+	// The preview (SHINOBI and CREATE): drag turns the character, the wheel zooms, a double-click resets; the right stick
+	// turns and zooms, R3 resets.
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event) override;
+	virtual FReply NativeOnMouseButtonUp(const FGeometry& Geometry, const FPointerEvent& Event) override;
+	virtual FReply NativeOnMouseMove(const FGeometry& Geometry, const FPointerEvent& Event) override;
+	virtual FReply NativeOnMouseWheel(const FGeometry& Geometry, const FPointerEvent& Event) override;
+	virtual FReply NativeOnMouseButtonDoubleClick(const FGeometry& Geometry, const FPointerEvent& Event) override;
+	virtual FReply NativeOnAnalogValueChanged(const FGeometry& Geometry, const FAnalogInputEvent& Event) override;
 	virtual FString GetTitle() const override { return FString(); }
 	virtual TArray<FString> GetEntries() const override { return {}; }
 	virtual void OnEntry(int32 Index) override {}
@@ -69,6 +80,8 @@ private:
 	UShinobiIndexButton* MakeButton(const FString& Label, int32 Size, bool bPrimary, int32 Index, FShinobiIndexClicked Handler);
 	/** Background art of the selected map (Host view only). */
 	void UpdateBackdrop();
+	/** The stage when this tab previews a character (SHINOBI, CREATE), else null. */
+	AShinobiMenuStage* GetPreviewStage() const;
 
 	EShinobiMenuTab Tab = EShinobiMenuTab::Play;
 	float FadeIn = 1.f;
@@ -79,6 +92,9 @@ private:
 	/** The Host row that had focus last tick (INDEX_NONE: none). */
 	int32 LastFocusedRow = INDEX_NONE;
 	int32 SelectedMode = 0;
+	/** Right stick (dead zone applied), turning and zooming the preview each tick. */
+	FVector2D PreviewStick = FVector2D::ZeroVector;
+	bool bGamepadHints = false;
 
 	UPROPERTY()
 	TObjectPtr<UWidgetSwitcher> Pages;
@@ -119,4 +135,9 @@ private:
 	TObjectPtr<UShinobiIndexButton> RefreshButton;
 	UPROPERTY()
 	TObjectPtr<UShinobiIndexButton> QuitButton;
+	/** Bottom right: the preview's zoom and rotate hints, (key, label) twice. */
+	UPROPERTY()
+	TObjectPtr<UHorizontalBox> Hints;
+	UPROPERTY()
+	TArray<TObjectPtr<UTextBlock>> HintTexts;
 };

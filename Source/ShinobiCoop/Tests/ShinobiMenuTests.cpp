@@ -11,6 +11,7 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/UI/ShinobiMenuArt.h"
 #include "Shinobi/UI/ShinobiMenuStage.h"
+#include "Camera/CameraComponent.h"
 #include "Shinobi/UI/ShinobiMainMenuWidget.h"
 #include "Shinobi/UI/ShinobiRosterPage.h"
 #include "Shinobi/UI/ShinobiSkillsWidget.h"
@@ -362,6 +363,98 @@ bool FShinobiMainMenuReturnKeepsPickTest::RunTest(const FString& Parameters)
 	}
 	ShinobiSettings::SetSavedCharacter(OldCharacter);
 	GConfig->Flush(false, GGameUserSettingsIni);
+	return true;
+}
+
+
+namespace
+{
+	/** The stage body's head bone height in the stage's space (as AShinobiMenuStage frames it). */
+	float MenuTestHeadHeight(const AShinobiMenuStage& Stage)
+	{
+		const UShinobiBodyComponent* Body = Stage.GetBody();
+		for (int32 Bone = 0; Bone < Body->GetNumBones(); ++Bone)
+		{
+			if (Body->GetBoneName(Bone).ToString().EndsWith(TEXT("Head"), ESearchCase::IgnoreCase))
+			{
+				return Stage.GetActorTransform().InverseTransformPosition(Body->GetBoneLocation(Body->GetBoneName(Bone))).Z;
+			}
+		}
+		return 165.f;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMenuStageZoomFramesHeadTest, "ShinobiCoop.UI.MenuStageZoomFramesHead", ShinobiTestFlags)
+bool FShinobiMenuStageZoomFramesHeadTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiMenuStage* Stage = W.Spawn<AShinobiMenuStage>();
+	Stage->SetAutoZoom(1.f);
+	W.Tick(2.f);
+	TestEqual(TEXT("close-up FOV"), Stage->GetCamera()->FieldOfView, 22.f, 0.5f);
+	TestEqual(TEXT("camera at the head"), float(Stage->GetCamera()->GetRelativeLocation().Z), MenuTestHeadHeight(*Stage), 10.f);
+	Stage->SetAutoZoom(0.f);
+	W.Tick(2.f);
+	TestEqual(TEXT("full-body FOV"), Stage->GetCamera()->FieldOfView, 45.f, 0.5f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMenuStageYawTurnsCharacterTest, "ShinobiCoop.UI.MenuStageYawTurnsCharacter", ShinobiTestFlags)
+bool FShinobiMenuStageYawTurnsCharacterTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiMenuStage* Stage = W.Spawn<AShinobiMenuStage>();
+	W.Tick(0.5f);
+	const FTransform Camera = Stage->GetCamera()->GetRelativeTransform();
+	Stage->AddYaw(90.f);
+	W.Tick(2.f);
+	TestEqual(TEXT("turned"), Stage->GetYaw(), 90.f, 1.f);
+	TestEqual(TEXT("the character turns"), float(Stage->GetDriver()->GetRelativeRotation().Yaw), 0.f, 1.f);
+	TestTrue(TEXT("the camera stays"), Stage->GetCamera()->GetRelativeTransform().Equals(Camera, 0.1));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMenuStageZoomClampsTest, "ShinobiCoop.UI.MenuStageZoomClamps", ShinobiTestFlags)
+bool FShinobiMenuStageZoomClampsTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiMenuStage* Stage = W.Spawn<AShinobiMenuStage>();
+	Stage->AddZoom(5.f);
+	W.Tick(3.f);
+	TestEqual(TEXT("all the way in"), Stage->GetZoom(), 1.f, 0.01f);
+	Stage->AddZoom(-5.f);
+	W.Tick(3.f);
+	TestEqual(TEXT("all the way out"), Stage->GetZoom(), 0.f, 0.01f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMenuStageResetViewTest, "ShinobiCoop.UI.MenuStageResetView", ShinobiTestFlags)
+bool FShinobiMenuStageResetViewTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiMenuStage* Stage = W.Spawn<AShinobiMenuStage>();
+	Stage->SetAutoZoom(1.f);
+	Stage->AddYaw(120.f);
+	Stage->AddZoom(-0.5f);
+	W.Tick(1.f);
+	Stage->ResetView();
+	W.Tick(3.f);
+	TestEqual(TEXT("facing front"), Stage->GetYaw(), 0.f, 1.f);
+	TestEqual(TEXT("back to the tab's framing"), Stage->GetZoom(), 1.f, 0.01f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMainMenuHintsFollowDeviceTest, "ShinobiCoop.UI.MainMenuHintsFollowDevice", ShinobiTestFlags)
+bool FShinobiMainMenuHintsFollowDeviceTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	UShinobiMainMenuWidget* Menu = CreateWidget<UShinobiMainMenuWidget>(W.World, UShinobiMainMenuWidget::StaticClass());
+	Menu->TakeWidget();
+	Menu->UseGamepadHints(false);
+	const FString Mouse = Menu->GetHintText().ToString();
+	TestTrue(TEXT("mouse hints"), Mouse.Contains(TEXT("Wheel")) && Mouse.Contains(TEXT("Drag")));
+	Menu->UseGamepadHints(true);
+	TestTrue(TEXT("gamepad hints"), Menu->GetHintText().ToString().Contains(TEXT("RS")));
 	return true;
 }
 

@@ -101,6 +101,7 @@ TSharedRef<SWidget> UShinobiMainMenuWidget::RebuildWidget()
 	{
 		SetIsFocusable(true); // tab keys arrive here when nothing inside has focus
 		UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Root"));
+		Root->SetVisibility(ESlateVisibility::Visible); // clicks on the open stage reach the preview
 		WidgetTree->RootWidget = Root;
 
 		Backdrop = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("Backdrop"));
@@ -160,6 +161,24 @@ TSharedRef<SWidget> UShinobiMainMenuWidget::RebuildWidget()
 		MessageText = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 15, FLinearColor(1.f, 0.75f, 0.3f));
 		MessageText->SetJustification(ETextJustify::Center);
 		MainMenuPlace(Root, MessageText, FAnchors(0.5f, 1.f), FMargin(0.f, -24.f, 0.f, 0.f), FVector2D(0.5f, 1.f))->SetAutoSize(true);
+
+		Hints = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+		for (int32 Hint = 0; Hint < 2; ++Hint)
+		{
+			UBorder* Badge = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+			Badge->SetBrush(ShinobiMenuStyle::ColorBrush(FLinearColor(0.f, 0.f, 0.f, 0.6f)));
+			Badge->SetPadding(FMargin(8.f, 3.f));
+			HintTexts.Add(ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 12, ShinobiMenuStyle::Accent));
+			Badge->SetContent(HintTexts.Last());
+			Hints->AddChildToHorizontalBox(Badge)->SetVerticalAlignment(VAlign_Center);
+			HintTexts.Add(ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 13, FLinearColor::White));
+			UHorizontalBoxSlot* Label = Hints->AddChildToHorizontalBox(HintTexts.Last());
+			Label->SetVerticalAlignment(VAlign_Center);
+			Label->SetPadding(FMargin(8.f, 0.f, 24.f, 0.f));
+		}
+		Hints->SetVisibility(ESlateVisibility::Collapsed);
+		MainMenuPlace(Root, Hints, FAnchors(1.f, 1.f), FMargin(-32.f, -20.f, 0.f, 0.f), FVector2D(1.f, 1.f))->SetAutoSize(true);
+		UseGamepadHints(false);
 	}
 	return UUserWidget::RebuildWidget(); // not UShinobiMenuWidget's: this menu has no centred column
 }
@@ -364,7 +383,8 @@ void UShinobiMainMenuWidget::SelectTab(EShinobiMenuTab NewTab)
 	// The stage wears what the tab edits: the made character on CREATE, the roster pick on SHINOBI.
 	if (AShinobiMenuStage* Stage = NewTab != EShinobiMenuTab::Create ? GetStage() : nullptr)
 	{
-		Stage->SetCloseUp(false);
+		Stage->SetAutoZoom(0.f);
+		Stage->ResetView();
 	}
 	if (NewTab == EShinobiMenuTab::Create && CreatorPage)
 	{
@@ -379,6 +399,7 @@ void UShinobiMainMenuWidget::SelectTab(EShinobiMenuTab NewTab)
 		ShowPlayed(); // (not an unsaved edit or a browsed roster card)
 	}
 	UpdateBackdrop();
+	Hints->SetVisibility(GetPreviewStage() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	Shade->SetVisibility(NewTab == EShinobiMenuTab::Play ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	// Session news ("Searching...", "Host left") belongs to PLAY; a failed game drops you there anyway.
 	MessageText->SetVisibility(NewTab == EShinobiMenuTab::Play ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
@@ -441,6 +462,11 @@ AShinobiMenuStage* UShinobiMainMenuWidget::GetStage() const
 void UShinobiMainMenuWidget::NativeTick(const FGeometry& Geometry, float DeltaTime)
 {
 	Super::NativeTick(Geometry, DeltaTime); // focus highlight
+	if (AShinobiMenuStage* Stage = GetPreviewStage(); Stage && !PreviewStick.IsZero())
+	{
+		Stage->AddYaw(PreviewStick.X * 180.f * DeltaTime);
+		Stage->AddZoom(PreviewStick.Y * DeltaTime);
+	}
 	if (FadeIn < 1.f && Pages)
 	{
 		FadeIn = FMath::Min(1.f, FadeIn + DeltaTime / MainMenuFadeSeconds);
@@ -466,6 +492,15 @@ void UShinobiMainMenuWidget::NativeTick(const FGeometry& Geometry, float DeltaTi
 FReply UShinobiMainMenuWidget::NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event)
 {
 	const FKey Key = Event.GetKey();
+	if (Key.IsGamepadKey() != bGamepadHints)
+	{
+		UseGamepadHints(Key.IsGamepadKey());
+	}
+	if (AShinobiMenuStage* Stage = Key == EKeys::Gamepad_RightThumbstick ? GetPreviewStage() : nullptr)
+	{
+		Stage->ResetView();
+		return FReply::Handled();
+	}
 	const int32 Count = int32(EShinobiMenuTab::Num);
 	if (Key == EKeys::Q || Key == EKeys::Gamepad_LeftShoulder)
 	{
@@ -483,6 +518,97 @@ FReply UShinobiMainMenuWidget::NativeOnKeyDown(const FGeometry& Geometry, const 
 		return FReply::Handled();
 	}
 	return Super::NativeOnKeyDown(Geometry, Event);
+}
+
+AShinobiMenuStage* UShinobiMainMenuWidget::GetPreviewStage() const
+{
+	return Tab == EShinobiMenuTab::Shinobi || Tab == EShinobiMenuTab::Create ? GetStage() : nullptr;
+}
+
+void UShinobiMainMenuWidget::UseGamepadHints(bool bGamepad)
+{
+	bGamepadHints = bGamepad;
+	const TCHAR* const Texts[] = { bGamepad ? TEXT("RS \u2195") : TEXT("Wheel"), TEXT("Zoom in/out"),
+		bGamepad ? TEXT("RS \u2194") : TEXT("Drag"), TEXT("Rotate Camera") };
+	for (int32 Index = 0; Index < HintTexts.Num(); ++Index)
+	{
+		HintTexts[Index]->SetText(FText::FromString(Texts[Index]));
+	}
+}
+
+FText UShinobiMainMenuWidget::GetHintText() const
+{
+	TArray<FString> Parts;
+	for (const UTextBlock* Text : HintTexts)
+	{
+		Parts.Add(Text->GetText().ToString());
+	}
+	return FText::FromString(FString::Join(Parts, TEXT(" ")));
+}
+
+FReply UShinobiMainMenuWidget::NativeOnMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event)
+{
+	UseGamepadHints(false);
+	if (GetPreviewStage() && (Event.GetEffectingButton() == EKeys::LeftMouseButton || Event.GetEffectingButton() == EKeys::RightMouseButton))
+	{
+		return FReply::Handled().CaptureMouse(TakeWidget());
+	}
+	return Super::NativeOnMouseButtonDown(Geometry, Event);
+}
+
+FReply UShinobiMainMenuWidget::NativeOnMouseButtonUp(const FGeometry& Geometry, const FPointerEvent& Event)
+{
+	return HasMouseCapture() ? FReply::Handled().ReleaseMouseCapture() : Super::NativeOnMouseButtonUp(Geometry, Event);
+}
+
+FReply UShinobiMainMenuWidget::NativeOnMouseMove(const FGeometry& Geometry, const FPointerEvent& Event)
+{
+	if (bGamepadHints && !Event.GetCursorDelta().IsNearlyZero())
+	{
+		UseGamepadHints(false);
+	}
+	if (AShinobiMenuStage* Stage = HasMouseCapture() ? GetPreviewStage() : nullptr)
+	{
+		Stage->AddYaw(Event.GetCursorDelta().X * 0.4f);
+		return FReply::Handled();
+	}
+	return Super::NativeOnMouseMove(Geometry, Event);
+}
+
+FReply UShinobiMainMenuWidget::NativeOnMouseWheel(const FGeometry& Geometry, const FPointerEvent& Event)
+{
+	if (AShinobiMenuStage* Stage = GetPreviewStage())
+	{
+		Stage->AddZoom(Event.GetWheelDelta() * 0.1f);
+		return FReply::Handled();
+	}
+	return Super::NativeOnMouseWheel(Geometry, Event);
+}
+
+FReply UShinobiMainMenuWidget::NativeOnMouseButtonDoubleClick(const FGeometry& Geometry, const FPointerEvent& Event)
+{
+	if (AShinobiMenuStage* Stage = GetPreviewStage())
+	{
+		Stage->ResetView();
+		return FReply::Handled();
+	}
+	return Super::NativeOnMouseButtonDoubleClick(Geometry, Event);
+}
+
+FReply UShinobiMainMenuWidget::NativeOnAnalogValueChanged(const FGeometry& Geometry, const FAnalogInputEvent& Event)
+{
+	const FKey Key = Event.GetKey();
+	if (Key != EKeys::Gamepad_RightX && Key != EKeys::Gamepad_RightY)
+	{
+		return Super::NativeOnAnalogValueChanged(Geometry, Event);
+	}
+	const float Value = FMath::Abs(Event.GetAnalogValue()) < 0.2f ? 0.f : Event.GetAnalogValue();
+	(Key == EKeys::Gamepad_RightX ? PreviewStick.X : PreviewStick.Y) = Value;
+	if (Value != 0.f && !bGamepadHints)
+	{
+		UseGamepadHints(true);
+	}
+	return FReply::Handled();
 }
 
 void UShinobiMainMenuWidget::OnTabButton(int32 Index)

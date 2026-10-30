@@ -37,7 +37,7 @@ AShinobiMenuStage::AShinobiMenuStage()
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(Root);
-	SetCloseUp(false);
+	PlaceCamera();
 }
 
 void AShinobiMenuStage::BeginPlay()
@@ -133,23 +133,47 @@ float AShinobiMenuStage::HeadHeight() const
 void AShinobiMenuStage::FramePortrait()
 {
 	TargetOffset = 0.f;
-	bCloseUp = false;
-	Driver->SetRelativeLocation(FVector::ZeroVector);
+	Yaw = TargetYaw = Zoom = TargetZoom = AutoZoom = 0.f;
+	bPortrait = true; // (until the view is moved)
+	Driver->SetRelativeLocationAndRotation(FVector::ZeroVector, FRotator(0.f, -90.f, 0.f));
 	// The head bone sits at the skull's base: framed from just above the hair to the chest (tuned on the roster).
 	Camera->SetFieldOfView(24.f);
 	Camera->SetRelativeLocation(FVector(300.f, 0.f, HeadHeight() - 2.f));
 	Camera->SetRelativeRotation(FRotator(0.f, 180.f, 0.f));
 }
 
-void AShinobiMenuStage::SetCloseUp(bool bHead)
+void AShinobiMenuStage::AddYaw(float Degrees)
 {
-	bCloseUp = bHead;
-	Camera->SetRelativeRotation(FRotator(bHead ? 0.f : -3.f, 180.f, 0.f));
-	Camera->SetFieldOfView(bHead ? 22.f : 45.f);
-	if (!bHead)
-	{
-		Camera->SetRelativeLocation(FVector(560.f, 0.f, 115.f)); // (Tick keeps a close-up on the head)
-	}
+	bPortrait = false;
+	TargetYaw += Degrees;
+}
+
+void AShinobiMenuStage::AddZoom(float Delta)
+{
+	bPortrait = false;
+	TargetZoom = FMath::Clamp(TargetZoom + Delta, 0.f, 1.f);
+}
+
+void AShinobiMenuStage::SetAutoZoom(float NewZoom)
+{
+	bPortrait = false;
+	AutoZoom = TargetZoom = FMath::Clamp(NewZoom, 0.f, 1.f);
+}
+
+void AShinobiMenuStage::ResetView()
+{
+	Yaw = FRotator::NormalizeAxis(Yaw); // the short way round to the front
+	TargetYaw = 0.f;
+	TargetZoom = AutoZoom;
+}
+
+void AShinobiMenuStage::PlaceCamera()
+{
+	// The full view (chest height, slightly down) to straight at the face, which then sits mid-screen, clear of a side panel.
+	const FVector Face(330.f, Driver->GetRelativeLocation().Y, Zoom > 0.f ? HeadHeight() + 2.f : 115.f);
+	Camera->SetRelativeLocation(FMath::Lerp(FVector(560.f, 0.f, 115.f), Face, Zoom));
+	Camera->SetRelativeRotation(FRotator(FMath::Lerp(-3.f, 0.f, Zoom), 180.f, 0.f));
+	Camera->SetFieldOfView(FMath::Lerp(45.f, 22.f, Zoom));
 }
 
 void AShinobiMenuStage::SetFocus(EShinobiMenuStageFocus Focus)
@@ -167,9 +191,11 @@ void AShinobiMenuStage::Tick(float DeltaSeconds)
 		Location.Y = FMath::FInterpTo(Location.Y, TargetOffset, DeltaSeconds, 6.f);
 		Driver->SetRelativeLocation(Location);
 	}
-	if (bCloseUp)
+	Yaw = FMath::FInterpTo(Yaw, TargetYaw, DeltaSeconds, 8.f);
+	Zoom = FMath::FInterpTo(Zoom, TargetZoom, DeltaSeconds, 6.f);
+	if (!bPortrait)
 	{
-		// Straight at the face, which then sits mid-screen, clear of a side panel.
-		Camera->SetRelativeLocation(FVector(330.f, Location.Y, HeadHeight() + 2.f));
+		Driver->SetRelativeRotation(FRotator(0.f, -90.f + Yaw, 0.f));
+		PlaceCamera();
 	}
 }
