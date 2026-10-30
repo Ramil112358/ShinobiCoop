@@ -7,8 +7,8 @@
 class UMaterial;
 
 /**
- * Editor-only skin material edits for Scripts/setup_mutable.py (P3b spike, docs/superpowers/plans/2026-10-30-mutable-
- * customisation-p3b-skin.md): layers drawn over a MetaHuman skin material's baked base colour.
+ * Editor-only skin material edits for Scripts/setup_mutable.py (stage skinlayer): layers drawn over a MetaHuman skin
+ * material's baked base colour.
  */
 UCLASS()
 class SHINOBICOOP_API UShinobiSkinLibrary : public UBlueprintFunctionLibrary
@@ -17,11 +17,15 @@ class SHINOBICOOP_API UShinobiSkinLibrary : public UBlueprintFunctionLibrary
 
 public:
 	/**
-	 * Inserts a tattoo layer in front of Material's Material Attributes output (MetaHuman skin materials route everything
-	 * through attributes): texture parameter "Tattoo", placed in UV space by vector "Tattoo Offset" (U, V), scalars
-	 * "Tattoo Scale" (UV size) and "Tattoo Rotation" (turns), blended over the base colour by its alpha times scalar
-	 * "Tattoo Opacity" (default 0: no change). False if Material has no attributes output. Recompiles; the caller saves.
+	 * Inserts the skin layers in front of Material's Material Attributes output (MetaHuman skin materials route everything
+	 * through attributes), each lerping the base colour toward its own, all off by default (opacity 0):
+	 * - three tattoos "Tattoo <i>" (texture), placed in UV space by vector "Tattoo <i> Offset" (U, V), scalars
+	 *   "Tattoo <i> Scale" (UV size) and "Tattoo <i> Rotation" (turns), over the base colour by their alpha times
+	 *   "Tattoo <i> Opacity"; clamped, so a design shows once;
+	 * - "Eye Makeup", "Lips Makeup", "Blush Makeup" and "Freckles" masks (red channel, face UVs) with "<mask> Colour" and
+	 *   "<mask> Opacity".
+	 * False if Material has no attributes output. Recompiles; the caller saves.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|Skin")
-	static bool AddTattooLayer(UMaterial* Material);
+	static bool AddSkinLayers(UMaterial* Material);
 };

@@ -19,6 +19,9 @@ heads (needs run_python.ps1 -Render: FBX export): each roster character's head (
 skintone: M_StaticHead (/Game/Shinobi/Mutable/Heads: base colour texture "BaseColor" times vector "Skin Tint", default
   white; M_Character, tracked and shared, is left alone) under every roster head's materials (its own MI_Head_<Name>_Skin with the donor's texture, and its neck
   MI), so a look's skin tone reaches the head (UShinobiBodyComponent::ApplySkinTone). Run after heads.
+skinlayer: /Game/Shinobi/Skin/M_ShinobiSkin, the project's MetaHuman skin material (M_skin_unified_baked) with the skin
+  layers (UShinobiSkinLibrary::AddSkinLayers: 3 tattoos, eye/lips/blush make-up, freckles; all off), under the shared
+  MetaHumans/Common MI_Head_Baked_LOD0_VT, so every MetaHuman body and face in the project can wear them.
 catalog: DA_CreatorCatalog's Heads (with their tints), the roster MetaHuman faces and a preset per roster character
   (run after setup_creator.py catalog, which rewrites Faces).
 palette: DT_Palette, the wardrobe colours (FShinobiPaletteRow).
@@ -269,6 +272,24 @@ def skintone():
         head.set_editor_property("materials", slots)
         EAL.save_loaded_asset(head, only_if_is_dirty=False)
         log(f"head {name}: {[s.material_interface.get_name() for s in slots]}")
+
+
+SKIN = "/Game/Shinobi/Skin/M_ShinobiSkin"
+_SKIN_DIR = "/Game/Shinobi/MetaHumans/Common/Lookdev_UHM/Skin/Materials"
+SKIN_SOURCE, SKIN_ROOT = f"{_SKIN_DIR}/M_skin_unified_baked", f"{_SKIN_DIR}/Baked/MI_Head_Baked_LOD0_VT"
+
+
+def skinlayer():
+    if not EAL.does_asset_exist(SKIN):  # (delete it to remake: a deleted asset can't be duplicated onto in the same session)
+        material = EAL.duplicate_asset(SKIN_SOURCE, SKIN)
+        if not unreal.ShinobiSkinLibrary.add_skin_layers(material):
+            raise RuntimeError(f"no attributes output on {SKIN_SOURCE}")
+        EAL.save_loaded_asset(material, only_if_is_dirty=False)
+        log(f"made {SKIN}")
+    root = unreal.load_asset(SKIN_ROOT)
+    unreal.MaterialEditingLibrary.set_material_instance_parent(root, unreal.load_asset(SKIN))
+    EAL.save_loaded_asset(root, only_if_is_dirty=False)
+    log(f"{SKIN_ROOT} now under {SKIN}")
 
 
 def catalog():
@@ -637,6 +658,6 @@ def graph():
         raise RuntimeError("CO_Shinobi did not compile")
 
 
-STAGES = {"bases": bases, "faceskin": face_skin, "samplecopy": sample_copy, "fabimport": fab_import, "fits": fits, "heads": heads, "catalog": catalog, "skintone": skintone, "palette": palette, "coverage": coverage, "wardrobe": wardrobe, "graph": graph}
+STAGES = {"bases": bases, "faceskin": face_skin, "samplecopy": sample_copy, "fabimport": fab_import, "fits": fits, "heads": heads, "catalog": catalog, "skintone": skintone, "skinlayer": skinlayer, "palette": palette, "coverage": coverage, "wardrobe": wardrobe, "graph": graph}
 for stage in ONLY or [s for s in STAGES if s != "faceskin"]:
     STAGES[stage]()

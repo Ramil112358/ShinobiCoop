@@ -1509,4 +1509,35 @@ bool FShinobiMutableSkinToneOnFaceTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableSkinLayerMaterialTest, "ShinobiCoop.Mutable.SkinLayerMaterial", ShinobiTestFlags)
+bool FShinobiMutableSkinLayerMaterialTest::RunTest(const FString& Parameters)
+{
+	// Every MetaHuman skin (the bases, the faces) draws through M_ShinobiSkin's layers (Scripts/setup_mutable.py skinlayer).
+	const USkeletalMesh* Base = LoadObject<USkeletalMesh>(nullptr, *ShinobiMutable::BasePath(TEXT("Male")));
+	const UMaterialInterface* Body = Base && Base->GetMaterials().Num() ? Base->GetMaterials()[0].MaterialInterface.Get() : nullptr;
+	if (!TestNotNull(TEXT("the base's body material"), Body))
+	{
+		return false;
+	}
+	TestEqual(TEXT("its material"), GetNameSafe(Body->GetMaterial()), FString(TEXT("M_ShinobiSkin")));
+	TArray<FMaterialParameterInfo> Infos;
+	TArray<FGuid> Ids;
+	Body->GetAllTextureParameterInfo(Infos, Ids);
+	TSet<FName> Names;
+	for (const FMaterialParameterInfo& Info : Infos)
+	{
+		Names.Add(Info.Name);
+	}
+	Body->GetAllScalarParameterInfo(Infos, Ids);
+	for (const FMaterialParameterInfo& Info : Infos)
+	{
+		Names.Add(Info.Name);
+	}
+	for (const TCHAR* Name : {TEXT("Tattoo 1"), TEXT("Tattoo 3 Opacity"), TEXT("Eye Makeup"), TEXT("Lips Makeup Opacity"), TEXT("Blush Makeup"), TEXT("Freckles Opacity")})
+	{
+		TestTrue(FString::Printf(TEXT("has %s"), Name), Names.Contains(Name));
+	}
+	return true;
+}
+
 #endif
