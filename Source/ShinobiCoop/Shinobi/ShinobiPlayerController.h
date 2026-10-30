@@ -182,6 +182,8 @@ private:
 	/** -ShinobiCreatorOutfitShot: each cloak over every creator frame, front and side (ShinobiCreatorSpikeShot.cpp). */
 	void RunCreatorOutfitShot();
 	void RunCreatorMutableShot();
+	/** -ShinobiWardrobeShot: every wardrobe row on each build (ShinobiCreatorSpikeShot.cpp). */
+	void RunWardrobeShot();
 	/** -ShinobiRosterPresetShot: each roster character's own body, then its Mutable preset (ShinobiCreatorSpikeShot.cpp). */
 	void RunRosterPresetShot();
 	/** What RunOutfitShotTest preloads, kept loaded for the run. */

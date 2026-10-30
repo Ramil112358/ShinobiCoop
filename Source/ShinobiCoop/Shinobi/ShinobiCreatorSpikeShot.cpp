@@ -4,6 +4,9 @@
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "Engine/SkeletalMesh.h"
+#include "Shinobi/Hero/ShinobiMutableTypes.h"
+#include "Shinobi/Hero/ShinobiMutableNames.h"
+#include "Engine/DataTable.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
 #include "HAL/IConsoleManager.h"
@@ -591,6 +594,79 @@ void AShinobiPlayerController::RunCreatorMutableShot()
 	Film(T + 5.5f, TEXT("StaticHead_Front"), 0.f, 110.f, 70.f);
 	Film(T + 5.9f, TEXT("StaticHead_Side"), 60.f, 110.f, 70.f);
 	At(T + 6.5f, [this]() { ConsoleCommand(TEXT("quit")); });
+}
+
+// -ShinobiWardrobeShot (shot_chakra.ps1 -Wardrobe): every Top, Bottom, Shoes and Outer row on each sex it has a piece for,
+// on the slim, average, heavy and own builds, with the first piece of the other slots. Shots:
+// ShinobiWardrobeShot_<Slot>_<Row>_<Sex><Build>. -ShinobiWardrobeRows=<prefix>,...: only those rows.
+void AShinobiPlayerController::RunWardrobeShot()
+{
+	auto At = [this](float Seconds, TFunction<void()> Fn)
+	{
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
+	};
+	// -ShinobiWardrobeRows=Cyborg,Mannequin: only rows whose names start with one of these.
+	FString Only;
+	FParse::Value(FCommandLine::Get(), TEXT("ShinobiWardrobeRows="), Only, false); // (false: read past the commas)
+	TArray<FString> Prefixes;
+	Only.ParseIntoArray(Prefixes, TEXT(","));
+	float T = 0.5f;
+	for (const EShinobiWardrobeSlot Slot : {EShinobiWardrobeSlot::Top, EShinobiWardrobeSlot::Bottom, EShinobiWardrobeSlot::Shoes, EShinobiWardrobeSlot::Outer})
+	{
+		const TCHAR* SlotName = ShinobiMutable::SlotNames[int32(Slot)];
+		const UDataTable* Table = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(SlotName), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		const TArray<FName> Rows = Table ? Table->GetRowNames() : TArray<FName>();
+		for (int32 Index = 0; Index < Rows.Num(); ++Index)
+		{
+			const FShinobiWardrobeRow* Row = Table->FindRow<FShinobiWardrobeRow>(Rows[Index], TEXT("RunWardrobeShot"));
+			if (!Prefixes.IsEmpty() && !Prefixes.ContainsByPredicate([&](const FString& Prefix) { return Rows[Index].ToString().StartsWith(Prefix); }))
+			{
+				continue;
+			}
+			for (const EShinobiSex Sex : {EShinobiSex::Male, EShinobiSex::Female})
+			{
+				if ((Sex == EShinobiSex::Male ? Row->MaleMesh : Row->FemaleMesh).IsNull())
+				{
+					continue;
+				}
+				for (const EShinobiBuild Build : {EShinobiBuild::Under, EShinobiBuild::Normal, EShinobiBuild::Over, EShinobiBuild::Own})
+				{
+					FShinobiAppearance Look;
+					Look.Sex = Sex;
+					Look.Build = Build;
+					Look.Top = Look.Bottom = Look.Shoes = 0;
+					Look.Slot(Slot) = uint8(Index);
+					At(T, [this, Look]() { ServerPickAppearance(Look); });
+#if WITH_EDITOR
+					At(T + 3.5f, []() { FAssetCompilingManager::Get().FinishAllCompilation(); if (GShaderCompilingManager) { GShaderCompilingManager->FinishAllCompilation(); } });
+#endif
+					const FString Name = FString::Printf(TEXT("%s_%s_%s%s"), SlotName, *Rows[Index].ToString(),
+						*StaticEnum<EShinobiSex>()->GetNameStringByValue(int64(Sex)), *StaticEnum<EShinobiBuild>()->GetNameStringByValue(int64(Build)));
+					At(T + 4.f, [this]()
+					{
+						const APawn* Shinobi = GetPawn();
+						if (!Shinobi)
+						{
+							return;
+						}
+						const FVector Target = Shinobi->GetActorLocation() + FVector(0.f, 0.f, -5.f);
+						const FVector Eye = Target + Shinobi->GetActorForwardVector() * 420.f;
+						ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Target - Eye).Rotation());
+						Camera->GetCameraComponent()->SetFieldOfView(40.f);
+						Camera->SetLifeSpan(0.5f);
+						SetViewTarget(Camera);
+					});
+					At(T + 4.15f, [Name]()
+					{
+						FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / (TEXT("ShinobiWardrobeShot_") + Name)), false, false);
+					});
+					T += 4.6f;
+				}
+			}
+		}
+	}
+	At(T + 0.5f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
 
 // -ShinobiRosterPresetShot (shot_chakra.ps1 -RosterPresets): each roster character as it was (Shinobi.RosterPresets 0),
