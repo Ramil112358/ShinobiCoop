@@ -51,17 +51,107 @@ namespace
 		/** The closest surface point to Point within MaxDistance, and how far Point is outside (negative: inside). */
 		bool Closest(const FVector& Point, double MaxDistance, FVector& Out, double& Outside) const
 		{
+			int32 Triangle;
+			FVector Bary;
+			return Closest(Point, MaxDistance, Out, Outside, Triangle, Bary);
+		}
+
+		/** ...and the triangle (its corners index the surface's positions) and the point's barycentric coordinates in it. */
+		bool Closest(const FVector& Point, double MaxDistance, FVector& Out, double& Outside, int32& Triangle, FVector& Bary) const
+		{
 			double DistanceSquared = 0.0;
-			const int32 Triangle = Tree.FindNearestTriangle(Point, DistanceSquared, UE::Geometry::IMeshSpatial::FQueryOptions(MaxDistance));
+			Triangle = Tree.FindNearestTriangle(Point, DistanceSquared, UE::Geometry::IMeshSpatial::FQueryOptions(MaxDistance));
 			if (Triangle == IndexConstants::InvalidID)
 			{
 				return false;
 			}
-			Out = UE::Geometry::TMeshQueries<FDynamicMesh3>::TriangleDistance(Mesh, Triangle, Point).ClosestTrianglePoint;
+			const UE::Geometry::FDistPoint3Triangle3d Query = UE::Geometry::TMeshQueries<FDynamicMesh3>::TriangleDistance(Mesh, Triangle, Point);
+			Out = Query.ClosestTrianglePoint;
+			Bary = Query.TriangleBaryCoords;
 			Outside = FVector::DotProduct(Point - Out, Mesh.GetTriNormal(Triangle)) * Sign;
 			return true;
 		}
 	};
+
+	/** Mesh's reference pose in component space. */
+	TArray<FTransform> ComponentPose(const FReferenceSkeleton& Skeleton)
+	{
+		TArray<FTransform> Pose;
+		for (int32 Bone = 0; Bone < Skeleton.GetNum(); ++Bone)
+		{
+			const int32 Parent = Skeleton.GetParentIndex(Bone);
+			Pose.Add(Parent == INDEX_NONE ? Skeleton.GetRefBonePose()[Bone] : Skeleton.GetRefBonePose()[Bone] * Pose[Parent]);
+		}
+		return Pose;
+	}
+
+	/**
+	 * Description's vertex positions (vertex-ID order) with Mesh's body scaled to Target's head height and its limbs turned
+	 * so each bone of LimbChains points to its child as Target's does, through Mesh's own skinning: a source body and its
+	 * pieces then stand like Target (the Mutable Sample's and the UE mannequin's arms are raised higher than a MetaHuman's).
+	 * The bones move as Body's do (by name; Mesh by default), so a piece and the body it was made on move alike.
+	 */
+	TArray<FVector> PoseLike(const FMeshDescription& Description, const USkeletalMesh& Mesh, const USkeletalMesh& Target, const USkeletalMesh* Body = nullptr)
+	{
+		static const TPair<const TCHAR*, const TCHAR*> LimbChains[] = {
+			{TEXT("upperarm_l"), TEXT("lowerarm_l")}, {TEXT("lowerarm_l"), TEXT("hand_l")}, {TEXT("hand_l"), TEXT("middle_01_l")},
+			{TEXT("upperarm_r"), TEXT("lowerarm_r")}, {TEXT("lowerarm_r"), TEXT("hand_r")}, {TEXT("hand_r"), TEXT("middle_01_r")},
+			{TEXT("thigh_l"), TEXT("calf_l")}, {TEXT("calf_l"), TEXT("foot_l")}, {TEXT("thigh_r"), TEXT("calf_r")}, {TEXT("calf_r"), TEXT("foot_r")}};
+		const FReferenceSkeleton& Skeleton = (Body ? *Body : Mesh).GetRefSkeleton();
+		const FReferenceSkeleton& TargetSkeleton = Target.GetRefSkeleton();
+		const TArray<FTransform> Old = ComponentPose(Skeleton);
+		const TArray<FTransform> Wanted = ComponentPose(TargetSkeleton);
+		const int32 Head = Skeleton.FindBoneIndex(TEXT("head")), TargetHead = TargetSkeleton.FindBoneIndex(TEXT("head"));
+		const double Scale = Head != INDEX_NONE && TargetHead != INDEX_NONE && Old[Head].GetLocation().Z > 1.0
+			? Wanted[TargetHead].GetLocation().Z / Old[Head].GetLocation().Z : 1.0;
+		TArray<FTransform> Scaled, New;
+		for (int32 Bone = 0; Bone < Skeleton.GetNum(); ++Bone)
+		{
+			Scaled.Add(FTransform(Old[Bone].GetRotation(), Old[Bone].GetLocation() * Scale));
+			FTransform Local = Skeleton.GetRefBonePose()[Bone];
+			Local.SetLocation(Local.GetLocation() * Scale);
+			const int32 Parent = Skeleton.GetParentIndex(Bone);
+			FTransform Here = Parent == INDEX_NONE ? Local : Local * New[Parent];
+			for (const TPair<const TCHAR*, const TCHAR*>& Chain : LimbChains)
+			{
+				const int32 Child = Skeleton.FindBoneIndex(Chain.Value);
+				const int32 From = TargetSkeleton.FindBoneIndex(Chain.Key), To = TargetSkeleton.FindBoneIndex(Chain.Value);
+				if (Skeleton.GetBoneName(Bone) == Chain.Key && Child != INDEX_NONE && From != INDEX_NONE && To != INDEX_NONE)
+				{
+					const FVector Now = Here.TransformVector(Skeleton.GetRefBonePose()[Child].GetLocation() * Scale);
+					Here.SetRotation(FQuat::FindBetweenVectors(Now, Wanted[To].GetLocation() - Wanted[From].GetLocation()) * Here.GetRotation());
+				}
+			}
+			New.Add(Here);
+		}
+		// Mesh's bone indices in Skeleton (by name).
+		TArray<int32> Map;
+		for (int32 Bone = 0; Bone < Mesh.GetRefSkeleton().GetNum(); ++Bone)
+		{
+			Map.Add(Skeleton.FindBoneIndex(Mesh.GetRefSkeleton().GetBoneName(Bone)));
+		}
+		FSkeletalMeshConstAttributes Attributes(Description);
+		const FSkinWeightsVertexAttributesConstRef Skin = Attributes.GetVertexSkinWeights();
+		const TVertexAttributesConstRef<FVector3f> Points = Description.GetVertexPositions();
+		TArray<FVector> Posed;
+		for (const FVertexID Vertex : Description.Vertices().GetElementIDs())
+		{
+			const FVector Point = FVector(Points[Vertex]) * Scale;
+			FVector Sum = FVector::ZeroVector;
+			float Total = 0.f;
+			for (const UE::AnimationCore::FBoneWeight& Weight : Skin.Get(Vertex))
+			{
+				const int32 Bone = Map.IsValidIndex(Weight.GetBoneIndex()) ? Map[Weight.GetBoneIndex()] : INDEX_NONE;
+				if (Bone != INDEX_NONE)
+				{
+					Sum += New[Bone].TransformPosition(Scaled[Bone].InverseTransformPosition(Point)) * Weight.GetWeight();
+					Total += Weight.GetWeight();
+				}
+			}
+			Posed.Add(Total > 0.f ? Sum / Total : Point);
+		}
+		return Posed;
+	}
 
 	/** A mesh description's vertex positions (plus morph Morph's deltas, when it has it) and triangles, in vertex-ID order. */
 	bool Surface(const FMeshDescription& Description, TArray<FVector>& Positions, TArray<int32>& Triangles, FName Morph = NAME_None)
@@ -180,6 +270,102 @@ bool UShinobiMutableMeshLibrary::ReadMeshSurface(USkeletalMesh* Mesh, TArray<FVe
 	return Mesh && Mesh->CloneMeshDescription(0, Description) && Surface(Description, Positions, Triangles, Morph);
 #else
 	return false;
+#endif
+}
+
+bool UShinobiMutableMeshLibrary::ReadPosedSurface(USkeletalMesh* Mesh, USkeletalMesh* Target, TArray<FVector>& Positions, TArray<int32>& Triangles)
+{
+#if WITH_EDITOR
+	FMeshDescription Description;
+	if (!Target || !Mesh || !Mesh->CloneMeshDescription(0, Description) || !ReadMeshSurface(Mesh, Positions, Triangles))
+	{
+		return false;
+	}
+	Positions = PoseLike(Description, *Mesh, *Target);
+	return true;
+#else
+	return false;
+#endif
+}
+
+int32 UShinobiMutableMeshLibrary::RebindPiece(USkeletalMesh* Out, USkeletalMesh* Base, FName FitMorph, USkeletalMesh* Piece, USkeletalMesh* PoseFrom)
+{
+#if WITH_EDITOR
+	FMeshDescription Body, Description;
+	TArray<FVector> Positions, BasePositions;
+	TArray<int32> Triangles, BaseTriangles;
+	if (!Out || !Base || !Piece || !Base->CloneMeshDescription(0, Body) || !Surface(Body, Positions, Triangles, FitMorph)
+		|| !Surface(Body, BasePositions, BaseTriangles) || !Piece->CloneMeshDescription(0, Description))
+	{
+		return 0;
+	}
+	// The base's skin weights by Surface's vertex order.
+	TArray<FVertexID> Ids;
+	for (const FVertexID Vertex : Body.Vertices().GetElementIDs())
+	{
+		Ids.Add(Vertex);
+	}
+	const FSkinWeightsVertexAttributesConstRef BodySkin = FSkeletalMeshConstAttributes(Body).GetVertexSkinWeights();
+	const FSurface Fit(Positions, Triangles);
+	const bool bPose = PoseFrom != nullptr;
+	const TArray<FVector> Posed = bPose ? PoseLike(Description, *Piece, *Base, PoseFrom) : TArray<FVector>();
+	FSkeletalMeshAttributes Attributes(Description);
+	Attributes.Register();
+	FSkinWeightsVertexAttributesRef Skin = Attributes.GetVertexSkinWeights();
+	TVertexAttributesRef<FVector3f> Points = Description.GetVertexPositions();
+	int32 Index = 0;
+	for (const FVertexID Vertex : Description.Vertices().GetElementIDs())
+	{
+		const FVector Point = bPose ? Posed[Index++] : FVector(Points[Vertex]);
+		Points[Vertex] = FVector3f(Point);
+		FVector Closest, Bary;
+		double Outside = 0.0;
+		int32 Triangle = INDEX_NONE;
+		TMap<int32, float> Blend;
+		if (Fit.Closest(Point, 100.0, Closest, Outside, Triangle, Bary))
+		{
+			const UE::Geometry::FIndex3i Corners = Fit.Mesh.GetTriangle(Triangle);
+			FVector OnBase = FVector::ZeroVector;
+			for (int32 Corner = 0; Corner < 3; ++Corner)
+			{
+				OnBase += BasePositions[Corners[Corner]] * Bary[Corner];
+				for (const UE::AnimationCore::FBoneWeight& Weight : BodySkin.Get(Ids[Corners[Corner]]))
+				{
+					Blend.FindOrAdd(Weight.GetBoneIndex()) += Weight.GetWeight() * float(Bary[Corner]);
+				}
+			}
+			Points[Vertex] = FVector3f(OnBase + (Point - Closest)); // from the fit shape onto the base, its offset kept
+		}
+		Blend.ValueSort([](float A, float B) { return A > B; });
+		TArray<UE::AnimationCore::FBoneWeight> Weights;
+		float Total = 0.f;
+		for (const TPair<int32, float>& Each : Blend)
+		{
+			if (Weights.Num() < 8 && Each.Value > 0.f)
+			{
+				Weights.Emplace(Each.Key, Each.Value);
+				Total += Each.Value;
+			}
+		}
+		for (UE::AnimationCore::FBoneWeight& Weight : Weights)
+		{
+			Weight.SetWeight(Weight.GetWeight() / Total);
+		}
+		Skin.Set(Vertex, Weights);
+	}
+	Out->SetMaterials(Piece->GetMaterials());
+	for (int32 Lod = 0; Lod < Out->GetLODNum(); ++Lod)
+	{
+		FMeshDescription Copy = Description;
+		Out->CreateMeshDescription(Lod, MoveTemp(Copy));
+		USkeletalMesh::FCommitMeshDescriptionParams Params;
+		Params.bMarkPackageDirty = true;
+		Out->CommitMeshDescription(Lod, Params);
+	}
+	Out->Build();
+	return Index ? Index : Description.Vertices().Num();
+#else
+	return 0;
 #endif
 }
 

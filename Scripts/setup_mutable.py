@@ -22,10 +22,13 @@ palette: DT_Palette, the wardrobe colours (FShinobiPaletteRow).
 fits: morph target Fit_<Source> on each sex's base per names.FIT_SOURCES, moving it onto the body that source's pieces
   were made on (UShinobiMutableMeshLibrary::BakeFitMorph), so a piece is reshaped from the body it fits to whatever body
   is built.
+samplecopy: the Mutable Sample's content folders (names.SAMPLE_FOLDERS) copied into Content/ at their own paths, so their
+  references hold (local only, git-ignored), when missing.
 coverage: wardrobe, remaking every row's coverage volume first (/Game/Shinobi/Mutable/Wardrobe/Clips/SK_Clip_<Slot>_<Row>_<Sex>:
   the closed shell under the skin each piece covers, made on its fit shape; UShinobiMutableMeshLibrary::MakeClipVolume).
 wardrobe: DT_Wardrobe_<Slot> per slot (FShinobiWardrobeRow): data the game passes to CO_Shinobi at runtime, so rows can be
-  added without recompiling. Top, Bottom and Shoes hold every City Sample catalog style, index-aligned per sex.
+  added without recompiling. Top, Bottom and Shoes hold every City Sample catalog style, index-aligned per sex, then
+  names.SAMPLE_PIECES (a "pose:" source's pieces rebound onto each base once: UShinobiMutableMeshLibrary::RebindPiece).
 graph: CO_Shinobi, built with UShinobiMutableGraphLibrary. Body parameter -> Build switch over the build morphs (scaled by
   Build Blend) -> pose reshape (the skeleton follows the build) -> each slot's clip (when "<Slot> Hides" is ON) -> each slot's piece merged in (when "<Slot>" is ON), its
   "<Slot> Mesh" reshaped from the base to the built body -> the Body component.
@@ -37,7 +40,7 @@ import sys
 import unreal
 
 sys.path += [os.path.dirname(os.path.abspath(__file__)), os.path.join(os.path.dirname(__file__), "mutable")]
-from names import (BASE, BUILDS, CATALOG, CLIP, CLIP_DEPTH, CLIP_ERODE, CLIP_OUT, CLIP_REACH, FIT_KEEP_BONES, FIT_KEEP_FADE, FIT_PREFIX, FIT_MAX_MOVE, FIT_SMOOTH, FIT_SOURCES, FIT_SUFFIX, HEADS, HEADS_DIR, CLIP_SUFFIX, HIDES_SUFFIX,  # noqa: E402
+from names import (BASE, BUILDS, CATALOG, SAMPLE_CONTENT, SAMPLE_FOLDERS, SAMPLE_PIECES, CLIP, CLIP_DEPTH, CLIP_ERODE, CLIP_OUT, CLIP_REACH, FIT_KEEP_BONES, FIT_KEEP_FADE, FIT_PREFIX, FIT_MAX_MOVE, FIT_SMOOTH, FIT_SOURCES, FIT_SUFFIX, HEADS, HEADS_DIR, CLIP_SUFFIX, HIDES_SUFFIX,  # noqa: E402
                    MESH_SUFFIX, MUTABLE_ROOT, OBJECT, OFF, ON, OWN, OWN_BODIES, PALETTE, PARAM_BODY, PARAM_BUILD, PARAM_BUILD_BLEND,
                    NO_FIT, PARAM_FIT_BASE, PARAM_FIT_STRENGTH, SLOTS, WARDROBE_TABLE)
 
@@ -124,15 +127,17 @@ def fits():
     M = unreal.ShinobiMutableMeshLibrary
     for source, bodies in FIT_SOURCES.items():
         for sex, body in bodies.items():
+            base = unreal.load_asset(BASE.format(sex=sex))
             # (a bool UFUNCTION with out parameters returns the outs, or None when it returns false)
             if body.startswith("dna:"):
                 surface = M.read_dna_body(os.path.join(dna_dir, body[4:] + ".dna"))
+            elif body.startswith("pose:"):
+                surface = M.read_posed_surface(unreal.load_asset(body[5:]), base)
             else:
                 surface = M.read_mesh_surface(unreal.load_asset(body))
             if not surface:
                 raise RuntimeError(f"no surface for {source} {sex}: {body}")
             positions, triangles = surface
-            base = unreal.load_asset(BASE.format(sex=sex))
             report = M.bake_fit_morph(base, FIT_PREFIX + source, positions, triangles, FIT_MAX_MOVE, FIT_SMOOTH, FIT_KEEP_BONES, FIT_KEEP_FADE)
             EAL.save_loaded_asset(base, only_if_is_dirty=False)
             log(f"fit {source} {sex} from {body} ({len(positions)} vertices): {report}")
@@ -350,13 +355,57 @@ def tinted(mesh):
     return copies
 
 
+def sample_copy():
+    import shutil
+    content = unreal.Paths.project_content_dir()
+    for folder in SAMPLE_FOLDERS:
+        target = os.path.join(content, folder)
+        if not os.path.isdir(target):
+            shutil.copytree(os.path.join(SAMPLE_CONTENT, folder), target)
+            log(f"copied {SAMPLE_CONTENT}/{folder}")
+    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([f"/Game/{f}" for f in SAMPLE_FOLDERS], True)
+
+
+def sample_piece(row, sex, mesh, source, remake):
+    """The piece's mesh for the sex and the fit it reshapes from: as it is with its source's fit (MetaHuman skeleton), or
+    rebound onto the sex's base for a "pose:" source (fitted to the base already: no fit)."""
+    if not FIT_SOURCES[source][sex].startswith("pose:"):
+        return asset_path(mesh), source
+    path = f"{MUTABLE_ROOT}/Wardrobe/{source}/SK_{row}_{sex}"
+    if not EAL.does_asset_exist(path) or remake:
+        base = BASE.format(sex=sex)
+        out = unreal.load_asset(path) if EAL.does_asset_exist(path) else EAL.duplicate_asset(base, path)
+        body = unreal.load_asset(FIT_SOURCES[source][sex][len("pose:"):])  # (posed as its body is, so the two stay together)
+        count = unreal.ShinobiMutableMeshLibrary.rebind_piece(out, unreal.load_asset(base), FIT_PREFIX + source, unreal.load_asset(mesh), body)
+        if not count:
+            raise RuntimeError(f"could not rebind {mesh} for {sex}")
+        EAL.save_loaded_asset(out, only_if_is_dirty=False)
+        log(f"rebound {row} {sex}: {count} vertices")
+    return asset_path(path), None
+
+
+def sample_rows(slot, remake):
+    rows = []
+    for row, piece_slot, source, meshes in SAMPLE_PIECES:
+        if piece_slot != slot:
+            continue
+        entry = {"Name": row, "bHasWear": False}
+        for sex, mesh in meshes.items():
+            if EAL.does_asset_exist(mesh):
+                entry[f"{sex}Mesh"], fit = sample_piece(row, sex, mesh, source, remake)
+                if fit:
+                    entry[f"{sex}Fit"] = fit
+        rows.append(entry)
+    return rows
+
+
 def coverage():
     wardrobe(remake=True)
 
 
 def wardrobe(remake=False):
     for slot in SLOTS:
-        rows = wardrobe_rows(slot)
+        rows = wardrobe_rows(slot) + sample_rows(slot, remake)
         for row in rows:
             for sex in SEXES:
                 if row.get(f"{sex}Mesh"):
@@ -494,6 +543,6 @@ def graph():
         raise RuntimeError("CO_Shinobi did not compile")
 
 
-STAGES = {"bases": bases, "faceskin": face_skin, "fits": fits, "heads": heads, "catalog": catalog, "palette": palette, "coverage": coverage, "wardrobe": wardrobe, "graph": graph}
+STAGES = {"bases": bases, "faceskin": face_skin, "samplecopy": sample_copy, "fits": fits, "heads": heads, "catalog": catalog, "palette": palette, "coverage": coverage, "wardrobe": wardrobe, "graph": graph}
 for stage in ONLY or [s for s in STAGES if s != "faceskin"]:
     STAGES[stage]()

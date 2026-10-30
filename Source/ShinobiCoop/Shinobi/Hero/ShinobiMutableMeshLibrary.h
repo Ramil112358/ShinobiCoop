@@ -35,6 +35,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")
 	static bool ReadMeshSurface(USkeletalMesh* Mesh, TArray<FVector>& Positions, TArray<int32>& Triangles, FName Morph = NAME_None);
 
+	/** ReadMeshSurface of Mesh posed like Target (PoseLike): for wardrobe sources made on another body (the Mutable Sample's,
+	 * the UE mannequin's) whose skeleton shares Target's bone names. */
+	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")
+	static bool ReadPosedSurface(USkeletalMesh* Mesh, USkeletalMesh* Target, TArray<FVector>& Positions, TArray<int32>& Triangles);
+
+	/**
+	 * Makes Out (a copy of Base) Piece fitted to Base: Piece's LOD 0 (posed like Base as its body PoseFrom is, when given:
+	 * ReadPosedSurface) moved from its closest point on Base's fit shape (morph FitMorph) to the same point of Base, its
+	 * offset kept, and skinned like that point; with Piece's materials, on every LOD. The row then needs no fit morph:
+	 * CO_Shinobi's own reshape extrapolates a vertex off a sheared fit triangle into a spike (cuffs, hoods). Returns the
+	 * vertex count (0: nothing done). The caller saves Out.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")
+	static int32 RebindPiece(USkeletalMesh* Out, USkeletalMesh* Base, FName FitMorph, USkeletalMesh* Piece, USkeletalMesh* PoseFrom);
+
 	/**
 	 * Adds (or replaces) morph target Morph on every LOD of Base (a Mutable base body), moving each vertex onto the closest
 	 * point of the surface: the body a wardrobe source was made on, in that source's space. The moves are smoothed Smooth

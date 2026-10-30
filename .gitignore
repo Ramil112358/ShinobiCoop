@@ -67,3 +67,8 @@ SourceArt/Creatures/*/*.fbm/
 
 # Fab downloads (licensed content, local only)
 VaultCache/
+
+# Mutable Sample content copied for the wardrobe (Fab-licensed, local only; Scripts/setup_mutable.py stage samplecopy)
+/Content/Character/
+/Content/MetaHumans/
+/Content/Shared/

@@ -3,6 +3,7 @@
 #if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR // (run in the editor only: Mutable graphs and compiles are editor-only)
 
 #include "Algo/Count.h"
+#include "Algo/Find.h"
 #include "AnimationRuntime.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
@@ -1270,6 +1271,72 @@ bool FShinobiMutableUntintedPieceUnchangedTest::RunTest(const FString& Parameter
 		{
 			TestEqual(FString::Printf(TEXT("colour %d: no tinted copies"), Colour), TintedSlots(Wearer->Body).Num(), 0);
 		});
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableVersionOneRowsKeptTest, "ShinobiCoop.Mutable.VersionOneRowsKept", ShinobiTestFlags)
+bool FShinobiMutableVersionOneRowsKeptTest::RunTest(const FString& Parameters)
+{
+	// Version-1 looks index City Sample styles: new sources are appended after the 12 tops, 6 bottoms and 3 shoes.
+	for (const TPair<const TCHAR*, int32>& Slot : {TPair<const TCHAR*, int32>(TEXT("Top"), 12), {TEXT("Bottom"), 6}, {TEXT("Shoes"), 3}})
+	{
+		const UDataTable* Table = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(Slot.Key));
+		const TArray<FName> Rows = Table ? Table->GetRowNames() : TArray<FName>();
+		if (!TestTrue(FString::Printf(TEXT("%s keeps its %d City Sample rows"), Slot.Key, Slot.Value), Rows.Num() >= Slot.Value))
+		{
+			continue;
+		}
+		for (int32 Index = 0; Index < Slot.Value; ++Index)
+		{
+			TestEqual(FString::Printf(TEXT("%s row %d"), Slot.Key, Index), Rows[Index].ToString(), FString::Printf(TEXT("CitySample%02d"), Index + 1));
+		}
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableSamplePiecesTest, "ShinobiCoop.Mutable.SamplePiecesOnMetaHumanSkeleton", ShinobiTestFlags)
+bool FShinobiMutableSamplePiecesTest::RunTest(const FString& Parameters)
+{
+	// The Mutable Sample's Cyborg and MetaHuman clothing and the Fab mannequin jacket: on the MetaHuman skeleton (Mutable
+	// merges by bone), with a fit, sitting on that fit shape.
+	TMap<FString, int32> Sources;
+	for (const TCHAR* Slot : {TEXT("Top"), TEXT("Bottom"), TEXT("Shoes"), TEXT("Outer")})
+	{
+		const UDataTable* Table = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(Slot));
+		if (!Table)
+		{
+			continue;
+		}
+		Table->ForeachRow<FShinobiWardrobeRow>(TEXT("sample test"), [&](const FName& Name, const FShinobiWardrobeRow& Row)
+		{
+			const FString Who = FString(Slot) + TEXT(" ") + Name.ToString();
+			for (const bool bMale : {true, false})
+			{
+				USkeletalMesh* Mesh = (bMale ? Row.MaleMesh : Row.FemaleMesh).LoadSynchronous();
+				const FName Fit = bMale ? Row.MaleFit : Row.FemaleFit; // (none: rebound onto the base already)
+				static const TArray<FString> Prefixes = {TEXT("Cyborg"), TEXT("MHSample"), TEXT("Mannequin")};
+				const FString* Source = Algo::FindByPredicate(Prefixes, [&](const FString& Prefix) { return Name.ToString().StartsWith(Prefix); });
+				if (!Mesh || !Source)
+				{
+					continue;
+				}
+				++Sources.FindOrAdd(*Source);
+				USkeletalMesh* Base = LoadObject<USkeletalMesh>(nullptr, *ShinobiMutable::BasePath(bMale ? TEXT("Male") : TEXT("Female")));
+				TestTrue(Who + TEXT(": on the MetaHuman skeleton"), Mesh->GetRefSkeleton().FindBoneIndex(TEXT("spine_05")) != INDEX_NONE
+					&& Mesh->GetRefSkeleton().FindBoneIndex(TEXT("hand_l")) != INDEX_NONE);
+				const float Inside = Base ? UShinobiMutableMeshLibrary::FractionInside(Mesh, Base, 0.5f, Fit.IsNone() ? NAME_None : FName(*(TEXT("Fit_") + Fit.ToString()))) : 1.f;
+				AddInfo(FString::Printf(TEXT("%s (%s, fit %s): %.1f%% inside"), *Who, bMale ? TEXT("male") : TEXT("female"), *Fit.ToString(), Inside * 100.f));
+				// (a piece rebound onto the base keeps its collar, hood and cuffs where its own body's neck and hands were,
+				// partly inside the base's there, under its coverage volume: judged by the wardrobe shots; 0-20% measured)
+				const float Bar = Fit.IsNone() ? 0.25f : 0.08f;
+				TestTrue(FString::Printf(TEXT("%s sits on its fit shape (%.1f%% inside)"), *Who, Inside * 100.f), Inside >= 0.f && Inside < Bar);
+			}
+		});
+	}
+	for (const TCHAR* Source : {TEXT("Cyborg"), TEXT("MHSample"), TEXT("Mannequin")})
+	{
+		TestTrue(FString::Printf(TEXT("rows from %s"), Source), Sources.Contains(Source));
 	}
 	return true;
 }

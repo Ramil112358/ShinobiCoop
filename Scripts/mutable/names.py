@@ -33,13 +33,44 @@ BASE = f"{MUTABLE_ROOT}/Bases/SK_MutableBase_{{sex}}"  # .format(sex="Male")
 # (setup_mutable.py stage fits); a piece is reshaped from it.
 FIT_PREFIX = "Fit_"
 # Each source's body per sex: "dna:<type>" = a MetaHuman compatibility body (the MetaHuman plugin's FixedCompatibility
-# folder), else a skeletal mesh. The City Sample crowd was made on the tal_nrw bodies; the Mutable Sample's MetaHuman
-# clothing on f_med_nrw (female only: its male fit is the same body).
+# folder); "pose:<mesh>" = a skeletal mesh on another skeleton, posed like the base first (its pieces too:
+# UShinobiMutableMeshLibrary::ReadPosedSurface / RebindPiece); else a MetaHuman skeletal mesh. The City Sample crowd was
+# made on the tal_nrw bodies; the Mutable Sample's MetaHuman clothing on its female MetaHuman (female only), its Cyborg
+# pieces on its male body; the Fab leather jacket on the UE mannequins.
 FIT_SOURCES = {
     "CitySample": {"Male": "dna:m_tal_nrw", "Female": "dna:f_tal_nrw"},
-    "MHSample": {"Male": "dna:f_med_nrw", "Female": "dna:f_med_nrw"},
+    "MHSample": {"Female": "/Game/MetaHumans/Body/SKM_MH_Female_BodyMesh"},
+    "Cyborg": {"Male": "pose:/Game/Character/Body/SK_BaseBody", "Female": "pose:/Game/Character/Body/SK_BaseBody"},
+    "Mannequin": {"Male": "pose:/Game/Jacket/Meshes/SKM_Manny", "Female": "pose:/Game/Jacket/Meshes/SKM_Quinn"},
 }
-FIT_MAX_MOVE, FIT_SMOOTH = 8.0, 2  # cm, passes (UShinobiMutableMeshLibrary::BakeFitMorph)
+# Wardrobe pieces from those sources, appended after the City Sample rows: (row, slot, source, {sex: mesh}). Pieces of a
+# "pose:" source are rebound onto each sex's base (/Game/Shinobi/Mutable/Wardrobe/<Source>/SK_<Row>_<Sex>).
+SAMPLE_CONTENT = "E:/MutableSample/Content"  # the Mutable Sample project (Fab), copied into Content/ by stage samplecopy
+SAMPLE_FOLDERS = ["Character", "MetaHumans", "Shared"]
+_C, _MH = "/Game/Character", "/Game/MetaHumans/Clothing"
+_BOTH = lambda mesh: {"Male": mesh, "Female": mesh}  # noqa: E731
+_FEMALE = lambda mesh: {"Female": mesh}  # noqa: E731  (women's cuts: a male fit can't take their shape)
+SAMPLE_PIECES = [
+    ("CyborgJacketA", "Top", "Cyborg", _BOTH(f"{_C}/Jacket_A/SK_Jacket_A")),
+    ("CyborgJacketB", "Top", "Cyborg", _BOTH(f"{_C}/Jacket_B/SK_Jacket_B")),
+    ("CyborgTShirt", "Top", "Cyborg", _BOTH(f"{_C}/TShirt/SK_TShirt")),
+    ("CyborgTankTop", "Top", "Cyborg", _BOTH(f"{_C}/TankTop/SK_TankTop")),
+    ("MHSampleLongShirt", "Top", "MHSample", _FEMALE(f"{_MH}/Shirts/LongShirt/MH_Female_Outfits_2")),
+    ("MHSampleLongShirt2", "Top", "MHSample", _FEMALE(f"{_MH}/Shirts/LongShirt_2/MH_Female_Outfits_2")),
+    ("MHSampleShortShirt", "Top", "MHSample", _FEMALE(f"{_MH}/Shirts/ShortShirt/MH_Female_Outfits_2")),
+    ("CyborgPants", "Bottom", "Cyborg", _BOTH(f"{_C}/Pants/SK_Pants")),
+    ("CyborgScifiPants", "Bottom", "Cyborg", _BOTH(f"{_C}/ScifiPants/SK_ScifiPants")),
+    ("MHSampleCargoPants", "Bottom", "MHSample", _FEMALE(f"{_MH}/CargoPants/MH_Female_Outfits")),
+    ("MHSampleLongJeans", "Bottom", "MHSample", _FEMALE(f"{_MH}/Jeans/LongJeans/MH_Female_Outfits")),
+    ("MHSampleShortJeans", "Bottom", "MHSample", _FEMALE(f"{_MH}/Jeans/ShortJeans/MH_Female_Outfits")),
+    ("CyborgBoots", "Shoes", "Cyborg", _BOTH(f"{_C}/Boots/SK_Boots")),
+    ("CyborgShoes", "Shoes", "Cyborg", _BOTH(f"{_C}/Shoes/SK_Shoes")),
+    ("CyborgSneakers", "Shoes", "Cyborg", _BOTH(f"{_C}/Sneakers/SK_Shoes")),
+    ("MHSampleBoots", "Shoes", "MHSample", _FEMALE(f"{_MH}/Boots/MH_Female_Outfits_3")),
+    ("MHSampleShoes", "Shoes", "MHSample", _FEMALE(f"{_MH}/Shoes/MH_Female_Outfits_3")),
+    ("MannequinLeatherJacket", "Outer", "Mannequin", {"Male": "/Game/Jacket/Meshes/SKM_Manny_Jacket", "Female": "/Game/Jacket/Meshes/SKM_Quinn_Jacket"}),
+]
+FIT_MAX_MOVE, FIT_SMOOTH = 12.0, 2  # cm (broad mannequin shoulders lie ~10 cm off a MetaHuman), passes (UShinobiMutableMeshLibrary::BakeFitMorph)
 # Left where the base has them (with their children), faded out over FIT_KEEP_FADE rings: the bodies' hands differ in
 # pose and their necks end differently, so projecting there shears triangles, which Reshape turns into spikes.
 FIT_KEEP_BONES, FIT_KEEP_FADE = ["hand_l", "hand_r", "neck_02"], 12
