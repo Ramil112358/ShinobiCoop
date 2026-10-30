@@ -78,6 +78,66 @@ Answers one question: which route puts a UV-placed image on a MetaHuman body and
 
   Write Tasks 3-5 from that choice (tattoo designs and regions; make-up and freckles on MetaHuman faces, plus static heads if the route allows; Aged). Then continue.
 
+### Tasks 3-5 (written 2026-10-30 from the spike and the user's choices)
+
+The user chose:
+- Route B (a layer on our copy of the MetaHuman skin material) for tattoos, make-up and freckles. Make-up and freckles go on MetaHuman faces only; static heads keep their painted faces.
+- Aged is dropped (the field stays in the code, unused).
+- Tattoo designs come from the Mutable Sample (`Content/Character/Skin_Variations/**/T_Tattoo*_alpha`).
+
+The spike's helper is in `ShinobiSkinLibrary` (commit 083b6226).
+
+### Task 3: The skin layer material
+
+**Files:** `ShinobiSkinLibrary.h/.cpp`, `Scripts/setup_mutable.py` (stage `skinlayer`), `ShinobiMutableNames.h` (parameter names), `ShinobiMutableTests.cpp`
+
+**Interfaces:**
+- `UShinobiSkinLibrary::AddSkinLayers(UMaterial*)` replaces `AddTattooLayer`. It adds, before the attributes output:
+  - three tattoo slots `Tattoo <i>` (texture), `Tattoo <i> Offset` (vector U, V), `Tattoo <i> Scale`, `Tattoo <i> Rotation` (turns) and `Tattoo <i> Opacity` (default 0), each masked to its 0..1 square so it never repeats;
+  - make-up: `Eye Makeup`, `Lips Makeup` and `Blush Makeup` mask textures, each with a `<…> Colour` and a `<…> Opacity` (default 0);
+  - `Freckles` (mask texture) with `Freckles Colour` and `Freckles Opacity` (default 0).
+- Stage `skinlayer`:
+  - `/Game/Shinobi/Skin/M_ShinobiSkin` is a copy of the project's `M_skin_unified_baked` with `AddSkinLayers` applied.
+  - The project's shared `MetaHumans/Common/.../Baked/MI_Head_Baked_LOD0_VT` is re-parented to it (local content). So every MetaHuman body and face in the project gets the layers, off by default.
+
+- [ ] **Step 1:** Test `ShinobiCoop.Mutable.SkinLayerMaterial`: the male base's body material resolves to `M_ShinobiSkin`, and has every parameter above. → FAIL.
+- [ ] **Step 2:** Implement; run stage `skinlayer`. → PASS. Default looks are unchanged (`SkinToneNeutral` and the roster shots).
+- [ ] **Step 3: Commit** `feat: a skin layer material for tattoos, make-up and freckles on MetaHuman skin`.
+
+### Task 4: Tattoos
+
+**Files:** `ShinobiMutableTypes.h` (`FShinobiTattooDesign`, `FShinobiTattooRegion` rows), `ShinobiBodyComponent.cpp` (`ApplySkinLayers`), `Scripts/setup_mutable.py` (stage `tattoos`), tests
+
+**Interfaces:**
+- `DT_Tattoos` rows `{Texture, Thumbnail}`: the sample's tattoo alphas.
+- `DT_TattooRegions` rows `{Centre (U, V), Scale, Rotation}`, made by stage `tattoos` from the male base. Each region's centre is the UV of the base vertex nearest a point on the skin over a bone:
+  - chest, back, belly;
+  - left and right upper arms, forearms, thighs and calves;
+  - neck.
+  It logs whether a region's left and right share UVs (a mirrored layout).
+- `ApplySkinLayers(Look)` runs with `ApplySkinTone`. For each of up to three `Look.Tattoos`, it sets the body's `Tattoo <i>` parameters from the design and region:
+  - offset = Centre + (OffsetU, OffsetV) / 127 × Scale;
+  - rotation = Rotation + byte / 255;
+  - scale = Scale × (0.5 + byte / 255).
+  Out-of-range designs and regions are skipped.
+
+- [ ] **Step 1:** Test `ShinobiCoop.Mutable.TattooOnBody` (latent): a look with tattoo {0, chest} has a body MID with `Tattoo 1` = design 0's texture, opacity 1 and the chest region's offset. → FAIL.
+- [ ] **Step 2:** Implement; run stage `tattoos`; take a shot of each region on male and female. → PASS. The user sees the sheet in the phase report.
+- [ ] **Step 3: Commit** `feat: tattoos on the body (DT_Tattoos, DT_TattooRegions)`.
+
+### Task 5: Make-up and freckles on MetaHuman faces
+
+**Files:** `ShinobiMutableTypes.h` (`FShinobiMakeUpRow`), `ShinobiBodyComponent.cpp`, `Scripts/setup_mutable.py` (stage `makeup`), tests
+
+**Interfaces:**
+- `DT_MakeUp` rows `{Eye, Lips, Blush masks; Eye, Lips, Blush colours}`. Row 0 is "None". The masks come from the MetaHuman plugin's `Textures/ArtistDelights` (eye, lips and blush masks).
+- Freckles option 0 is none, and option `k` uses `T_Freckles_00k` (`ArtistDelights/Freckles`) on the face.
+- `ApplySkinLayers` sets these on the MetaHuman face part's skin MIDs.
+
+- [ ] **Step 1:** Test `ShinobiCoop.Mutable.MakeUpOnFace`: a RamilMH preset with MakeUp 1 and Freckles 1 has face MIDs with `Lips Makeup Opacity` > 0 and `Freckles Opacity` > 0. → FAIL.
+- [ ] **Step 2:** Implement; run stage `makeup`; take face close-ups. → PASS.
+- [ ] **Step 3: Commit** `feat: make-up and freckles on MetaHuman faces`.
+
 ### Task 6: Phase close
 
 - [ ] **Step 1:** Run the full suite once → PASS, except the failures that predate P2 (named).
