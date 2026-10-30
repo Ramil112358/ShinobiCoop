@@ -1627,4 +1627,55 @@ bool FShinobiMutableMakeUpOnFaceTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableUpdateSkinWithoutRebuildTest, "ShinobiCoop.Mutable.UpdateSkinWithoutRebuild", ShinobiTestFlags)
+bool FShinobiMutableUpdateSkinWithoutRebuildTest::RunTest(const FString& Parameters)
+{
+	// The CREATE tab's skin tone slider: the worn body, head and neck retint at once, no Mutable build.
+	const FLinearColor Dark = UShinobiBodyComponent::SkinToneMultiplier(0);
+	WearAtTone(*this, TEXT("Ramil"), 128, [this, Dark](TSharedRef<FMutableWearer> Wearer, FLinearColor HeadTint)
+	{
+		FShinobiAppearance Look = *Preset(*this, TEXT("Ramil"));
+		Look.SkinTone = 0;
+		Wearer->Body->UpdateSkin(Look);
+		TestFalse(TEXT("no rebuild"), Wearer->Body->IsMutableBuildPending());
+		TestTrue(TEXT("body = neck tint x tone"), BodyTinted(Wearer->Body, HeadTint * Dark));
+		TestTrue(TEXT("head = tone"), HasVector(Wearer->Body->GetStaticHead(), ShinobiMutable::StaticHeadTintParameter, Dark));
+	});
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableUpdateSkinMovesTattooTest, "ShinobiCoop.Mutable.UpdateSkinMovesTattoo", ShinobiTestFlags)
+bool FShinobiMutableUpdateSkinMovesTattooTest::RunTest(const FString& Parameters)
+{
+	// Dragging a tattoo's offset moves it on the worn body without a Mutable build.
+	FShinobiAppearance Look;
+	Look.Top = Look.Bottom = Look.Shoes = FShinobiAppearance::None;
+	Look.Tattoos.Add({0, 0, 0, 0, 0, 128});
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	Wearer->Body->WearAppearance(Look);
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer, Look]()
+	{
+		const auto OffsetU = [Wearer]()
+		{
+			for (int32 Index = 0; Index < Wearer->Body->GetNumMaterials(); ++Index)
+			{
+				FLinearColor Offset;
+				const UMaterialInstanceDynamic* Material = Cast<UMaterialInstanceDynamic>(Wearer->Body->GetMaterial(Index));
+				if (Material && Material->GetVectorParameterValue(FHashedMaterialParameterInfo(TEXT("Tattoo 1 Offset")), Offset))
+				{
+					return Offset.R;
+				}
+			}
+			return -1.f;
+		};
+		const float Before = OffsetU();
+		FShinobiAppearance Moved = Look;
+		Moved.Tattoos[0].OffsetU = 64;
+		Wearer->Body->UpdateSkin(Moved);
+		TestFalse(TEXT("no rebuild"), Wearer->Body->IsMutableBuildPending());
+		TestTrue(TEXT("the tattoo moved"), Before >= 0.f && OffsetU() > Before + 0.001f);
+	});
+	return true;
+}
+
 #endif

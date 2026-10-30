@@ -109,7 +109,8 @@ void UShinobiBodyComponent::DressBuilt(USkeletalMesh* Built)
 	{
 		// A roster head: its own mesh, no MetaHuman face or grooms, and the body's skin tinted to its neck.
 		WearStaticHead(Head->Mesh.LoadSynchronous());
-		ApplySkinTone(Look, Head->SkinTint);
+		WornHeadTint = Head->SkinTint;
+		ApplySkinTone(Look, WornHeadTint);
 		ApplySkinLayers(Look);
 		Worn = Look;
 		UpdateBody(Look);
@@ -175,7 +176,8 @@ void UShinobiBodyComponent::DressBuilt(USkeletalMesh* Built)
 			Strands->RegisterComponent();
 		}
 	}
-	ApplySkinTone(Look, FLinearColor::White);
+	WornHeadTint = FLinearColor::White;
+	ApplySkinTone(Look, WornHeadTint);
 	ApplySkinLayers(Look);
 	OnBodyBuilt.Broadcast();
 }
@@ -314,6 +316,12 @@ FLinearColor UShinobiBodyComponent::SkinToneMultiplier(uint8 Tone)
 {
 	return Tone <= 128 ? FMath::Lerp(ShinobiMutable::SkinToneDark, FLinearColor::White, Tone / 128.f)
 		: FMath::Lerp(FLinearColor::White, ShinobiMutable::SkinToneLight, (Tone - 128) / 127.f);
+}
+
+void UShinobiBodyComponent::UpdateSkin(const FShinobiAppearance& Look)
+{
+	ApplySkinTone(Look, WornHeadTint);
+	ApplySkinLayers(Look);
 }
 
 void UShinobiBodyComponent::ApplySkinTone(const FShinobiAppearance& Look, const FLinearColor& HeadTint)
