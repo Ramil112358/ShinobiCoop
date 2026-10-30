@@ -188,6 +188,9 @@ private:
 	void RunWardrobeShot();
 	/** -ShinobiRosterPresetShot: each roster character's own body, then its Mutable preset (ShinobiCreatorSpikeShot.cpp). */
 	void RunRosterPresetShot();
+	/** -ShinobiCloakShot: each cloak on every sex and build of a made look, then on the preset roster characters, front and
+	 * back (ShinobiCreatorSpikeShot.cpp). */
+	void RunCloakShot();
 	/** What RunOutfitShotTest preloads, kept loaded for the run. */
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UObject>> OutfitShotAssets;

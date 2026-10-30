@@ -897,3 +897,87 @@ void AShinobiPlayerController::RunCreatorOutfitShot()
 	}
 	At(T + 0.5f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
+
+void AShinobiPlayerController::RunCloakShot()
+{
+	auto At = [this](float Seconds, TFunction<void()> Fn)
+	{
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
+	};
+	// Front then back of the whole character, from chest height.
+	auto Film = [this, At](float When, const FString& Name)
+	{
+		for (const int32 Side : {+1, -1})
+		{
+			const float Offset = Side > 0 ? 0.f : 0.4f;
+			At(When + Offset, [this, Side]()
+			{
+				const AShinobiPlayerCharacter* Shinobi = GetPawn<AShinobiPlayerCharacter>();
+				if (!Shinobi)
+				{
+					return;
+				}
+				const FVector Target = Shinobi->GetActorLocation() + FVector(0.f, 0.f, 10.f);
+				const FVector Eye = Target + Shinobi->GetActorForwardVector() * 380.f * Side;
+				ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Target - Eye).Rotation());
+				Camera->GetCameraComponent()->SetFieldOfView(40.f);
+				Camera->SetLifeSpan(0.5f);
+				SetViewTarget(Camera);
+			});
+			At(When + Offset + 0.15f, [Name, Side]()
+			{
+				FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / (TEXT("ShinobiCloakShot_") + Name + (Side > 0 ? TEXT("_Front") : TEXT("_Back")))), false, false);
+			});
+		}
+	};
+	auto Settle = [At](float When)
+	{
+#if WITH_EDITOR
+		At(When, []() { FAssetCompilingManager::Get().FinishAllCompilation(); if (GShaderCompilingManager) { GShaderCompilingManager->FinishAllCompilation(); } });
+#endif
+	};
+	const TCHAR* const BuildNames[] = { TEXT("Slim"), TEXT("Average"), TEXT("Heavy"), TEXT("Own") };
+	float T = 0.5f;
+	for (const TCHAR* Cloak : { TEXT("Hokage"), TEXT("Akatsuki") })
+	{
+		const int32 Outfit = AShinobiPlayerCharacter::FindOutfitIndex(Cloak);
+		if (Outfit == INDEX_NONE)
+		{
+			continue;
+		}
+		// A made look in its default clothes, on each sex and build.
+		for (const EShinobiSex Sex : { EShinobiSex::Male, EShinobiSex::Female })
+		{
+			for (int32 Build = 0; Build <= int32(EShinobiBuild::Own); ++Build)
+			{
+				FShinobiAppearance Look;
+				Look.Sex = Sex;
+				Look.Build = EShinobiBuild(Build);
+				At(T, [this, Look, Outfit]() { ServerPickAppearance(Look); ServerPickOutfit(uint8(Outfit)); });
+				Settle(T + 4.f);
+				Film(T + 5.f, FString::Printf(TEXT("%s_%s%s"), Cloak, Sex == EShinobiSex::Female ? TEXT("Female") : TEXT("Male"), BuildNames[Build]));
+				T += 6.f;
+			}
+		}
+		// The roster characters that play their Mutable presets.
+		for (int32 Index = 0; Index < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster); ++Index)
+		{
+			if (!AShinobiPlayerCharacter::RosterPreset(Index, 0))
+			{
+				continue;
+			}
+			const TCHAR* Roster = AShinobiPlayerCharacter::Roster[Index].Name;
+			At(T, [this, Index, Outfit]()
+			{
+				ServerPickCharacter(uint8(Index), 0);
+				ServerPickOutfit(uint8(Outfit));
+			});
+			Settle(T + 4.f);
+			Film(T + 5.f, FString::Printf(TEXT("%s_%s"), Cloak, Roster));
+			T += 6.f;
+		}
+	}
+	At(T, [this]() { ConsoleCommand(TEXT("quit")); });
+}
+

@@ -1781,4 +1781,27 @@ bool FShinobiMutableInstantEditDuringBuildTest::RunTest(const FString& Parameter
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableOwnBuildCloakCopyTest, "ShinobiCoop.Mutable.OwnBuildCloakCopy", ShinobiTestFlags)
+bool FShinobiMutableOwnBuildCloakCopyTest::RunTest(const FString& Parameters)
+{
+	// The Own build (RamilMH's and BikaMH's own bodies) wears the heavy crowd frame's cloak copies (judged on the P5 cloak
+	// shots), and those copies exist for every cloak.
+	for (const EShinobiSex Sex : { EShinobiSex::Male, EShinobiSex::Female })
+	{
+		TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+		Wearer->Body->WearAppearance(MutableLook(Sex, EShinobiBuild::Own));
+		WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer, Sex]()
+		{
+			const FString Expected = UShinobiCreatorCatalog::FittingName(Sex, EShinobiBuild::Over);
+			TestEqual(TEXT("Own wears the heavy frame's copies"), Wearer->Body->GetFittingName(), Expected);
+			for (int32 Outfit = 1; Outfit < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Outfits); ++Outfit)
+			{
+				TestNotNull(*FString::Printf(TEXT("%s fitted to %s"), AShinobiPlayerCharacter::Outfits[Outfit].Name, *Expected),
+					LoadObject<USkeletalMesh>(nullptr, *AShinobiPlayerCharacter::OutfitMeshPath(Outfit, Expected), nullptr, LOAD_NoWarn | LOAD_Quiet));
+			}
+		});
+	}
+	return true;
+}
+
 #endif

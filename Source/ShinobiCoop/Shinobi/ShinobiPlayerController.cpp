@@ -151,6 +151,10 @@ void AShinobiPlayerController::BeginPlay()
 	{
 		RunRosterPresetShot();
 	}
+	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiCloakShot")))
+	{
+		RunCloakShot();
+	}
 	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiLookShot")))
 	{
 		RunLookShotTest();
