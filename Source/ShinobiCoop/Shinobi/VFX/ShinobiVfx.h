@@ -70,12 +70,24 @@ namespace ShinobiVfx
 	SHINOBICOOP_API void SetSpriteVariant(UMaterialInstanceDynamic* Material, ESprite Kind, int32 Variant);
 
 	/**
-	 * A charred mark lying on the ground (the SpriteCook scorch texture), radius in world units: it fades in, stays for
+	 * A charred mark lying on the ground (the SpriteCook scorch texture), Radius the radius of the VISIBLE mark in world units (the
+	 * sheets have a margin of 20-25%, which is allowed for: for PushCrackRing it is the radius of the ring): it fades in, stays for
 	 * Linger seconds, fades out, and removes itself. Local and cosmetic (not replicated), so call it on every machine.
 	 * Does nothing without a world or on a dedicated server. Mark swaps the charred texture for another (ChidoriDent,
 	 * RasenganCrater); the material is unlit, so a mark lighter than the char needs a dark Tint or it glows.
+	 * Normal zero: the mark lies on the floor found below Location. Otherwise Location is on a surface with this normal
+	 * (a wall, a slope) and the mark is laid flat against it.
 	 */
-	SHINOBICOOP_API void SpawnScorch(UWorld* World, const FVector& Location, float Radius, const FLinearColor& Tint, float Linger, const TCHAR* Mark = nullptr);
+	SHINOBICOOP_API void SpawnScorch(UWorld* World, const FVector& Location, float Radius, const FLinearColor& Tint, float Linger, const TCHAR* Mark = nullptr, const FVector& Normal = FVector::ZeroVector);
+
+	/**
+	 * The surface a ground effect lands on: the floor within reach below Location (a hit can land at body height), with its
+	 * normal; Location and straight up if there is none. Characters are not floor.
+	 */
+	SHINOBICOOP_API void FindSurface(UWorld* World, const FVector& Location, FVector& OutPoint, FVector& OutNormal);
+
+	/** Rotation that stands an effect on a surface with this normal (its +Z along the normal); identity for none or flat ground. */
+	SHINOBICOOP_API FQuat SurfaceFrame(const FVector& Normal);
 
 	/** Marks for SpawnScorch: the cracked dent Chidori leaves, the spiral crater Rasengan leaves. */
 	inline const TCHAR* ChidoriDent = TEXT("/Game/Shinobi/VFX/T_ChidoriDent.T_ChidoriDent");
@@ -87,8 +99,9 @@ namespace ShinobiVfx
 	 * Count chunks of rock thrown up from the ground under Location, outward at about Speed, each about Size metres
 	 * across: engine physics bounces and rolls them, and after Linger seconds they drop through the floor and go.
 	 * Local and cosmetic like SpawnScorch: call it on every machine. Does nothing without a world or on a dedicated server.
+	 * Normal as for SpawnScorch: zero finds the floor below; otherwise Location is on a surface (a wall) and the rock flies off it.
 	 */
-	SHINOBICOOP_API void SpawnDebris(UWorld* World, const FVector& Location, int32 Count, float Speed, float Size, float Linger);
+	SHINOBICOOP_API void SpawnDebris(UWorld* World, const FVector& Location, int32 Count, float Speed, float Size, float Linger, const FVector& Normal = FVector::ZeroVector);
 
 	/** The Water Wall's flowing-water material (M_WaterWall, built by Scripts/setup_vfx.py) tinted Color: the Water Dragon's body.
 	 * Null, with an ensure, if the asset is missing. */

@@ -1,5 +1,6 @@
 #include "Shinobi/VFX/ShinobiVfx.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Components/DecalComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture2D.h"
@@ -183,27 +184,53 @@ namespace ShinobiVfx
 		return Material;
 	}
 
+	void FindSurface(UWorld* World, const FVector& Location, FVector& OutPoint, FVector& OutNormal)
+	{
+		FHitResult Hit;
+		const FCollisionObjectQueryParams Floor(ECC_TO_BITFIELD(ECC_WorldStatic) | ECC_TO_BITFIELD(ECC_WorldDynamic));
+		const bool bHit = World && World->LineTraceSingleByObjectType(Hit, Location + FVector(0.f, 0.f, 60.f), Location - FVector(0.f, 0.f, 600.f), Floor);
+		OutPoint = bHit ? FVector(Hit.ImpactPoint) : Location;
+		OutNormal = bHit ? FVector(Hit.ImpactNormal) : FVector::UpVector;
+	}
+
+	FQuat SurfaceFrame(const FVector& Normal)
+	{
+		return Normal.IsNearlyZero() || Normal.GetSafeNormal().Equals(FVector::UpVector, 1e-3f) ? FQuat::Identity : FRotationMatrix::MakeFromZ(Normal).ToQuat();
+	}
+
 	namespace
 	{
-		/** The floor under Location (a hit can land at body height); characters are not floor. */
-		FVector GroundBelow(UWorld* World, const FVector& Location)
+		/** How far out each sheet's mark reaches, as a fraction of the sheet's radius: the radius of a disc with the mark's area (measured
+		 * from the alpha of SourceArt/SpriteCook/VFX/*_rgba.png), except the crack ring, which is a ring at 0.77. */
+		float MarkFill(const TCHAR* Mark)
 		{
-			FHitResult Hit;
-			const FCollisionObjectQueryParams Floor(ECC_TO_BITFIELD(ECC_WorldStatic) | ECC_TO_BITFIELD(ECC_WorldDynamic));
-			return World->LineTraceSingleByObjectType(Hit, Location + FVector(0.f, 0.f, 60.f), Location - FVector(0.f, 0.f, 600.f), Floor) ? Hit.ImpactPoint : Location;
+			if (!Mark)
+			{
+				return 0.78f; // the scorch
+			}
+			if (FCString::Strcmp(Mark, ChidoriDent) == 0)
+			{
+				return 0.74f;
+			}
+			return FCString::Strcmp(Mark, RasenganCrater) == 0 ? 0.80f : 0.77f;
 		}
 	}
 
-	void SpawnScorch(UWorld* World, const FVector& Location, float Radius, const FLinearColor& Tint, float Linger, const TCHAR* Mark)
+	void SpawnScorch(UWorld* World, const FVector& Location, float Radius, const FLinearColor& Tint, float Linger, const TCHAR* Mark, const FVector& Normal)
 	{
-		UStaticMesh* Plane = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
-		if (!World || World->GetNetMode() == NM_DedicatedServer || !Plane)
+		Radius /= MarkFill(Mark);
+		if (!World || World->GetNetMode() == NM_DedicatedServer)
 		{
 			return;
 		}
-		const FVector Ground = GroundBelow(World, Location);
+		FVector Ground = Location;
+		FVector Up = Normal.GetSafeNormal();
+		if (Up.IsZero())
+		{
+			FindSurface(World, Location, Ground, Up);
+		}
 		AActor* Scorch = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform(Ground));
-		UMaterialInstanceDynamic* Material = MakeInstance(Scorch, TEXT("/Game/Shinobi/VFX/M_SpriteScorch.M_SpriteScorch"));
+		UMaterialInstanceDynamic* Material = MakeInstance(Scorch, TEXT("/Game/Shinobi/VFX/M_SpriteScorchDecal.M_SpriteScorchDecal"));
 		if (!Scorch || !Material)
 		{
 			return;
@@ -219,18 +246,20 @@ namespace ShinobiVfx
 		Material->SetVectorParameterValue(TEXT("Tint"), Tint);
 		Material->SetScalarParameterValue(TEXT("Start"), static_cast<float>(World->GetTimeSeconds()));
 		Material->SetScalarParameterValue(TEXT("Linger"), Linger);
-		UStaticMeshComponent* Mesh = NewObject<UStaticMeshComponent>(Scorch);
-		Mesh->SetStaticMesh(Plane);
-		Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		Mesh->SetCastShadow(false);
-		Mesh->SetMaterial(0, Material);
-		Scorch->SetRootComponent(Mesh); // a root assigned after spawning starts at the origin: place it explicitly
-		Mesh->SetWorldTransform(FTransform(FRotator(0.f, FMath::FRandRange(0.f, 360.f), 0.f), Ground + FVector(0.f, 0.f, 3.f), FVector(Radius * 2.f / 100.f)));
-		Mesh->RegisterComponent();
+		// A deferred decal: the mark is projected onto whatever surface is within its box, so it follows slopes and walls and stops
+		// where the geometry stops (a flat quad would hang in the air past a kerb or a wall's edge). It projects along its +X, into
+		// the surface, turned at random about that axis. Its box reaches 28 cm under the surface and only 4 cm over it, so the mark
+		// does not stain the feet of whoever stands on it.
+		UDecalComponent* Decal = NewObject<UDecalComponent>(Scorch);
+		Decal->SetDecalMaterial(Material);
+		Decal->DecalSize = FVector(16.f, Radius, Radius);
+		Scorch->SetRootComponent(Decal); // a root assigned after spawning starts at the origin: place it explicitly
+		Decal->SetWorldTransform(FTransform(FRotationMatrix::MakeFromX(-Up).ToQuat() * FQuat(FVector::ForwardVector, FMath::DegreesToRadians(FMath::FRandRange(0.f, 360.f))), Ground - Up * 12.f));
+		Decal->RegisterComponent();
 		Scorch->SetLifeSpan(Linger);
 	}
 
-	void SpawnDebris(UWorld* World, const FVector& Location, int32 Count, float Speed, float Size, float Linger)
+	void SpawnDebris(UWorld* World, const FVector& Location, int32 Count, float Speed, float Size, float Linger, const FVector& Normal)
 	{
 		// ponytail: uneven engine cubes in stone grey stand in until the Tripo debris chunks are imported
 		UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
@@ -239,8 +268,14 @@ namespace ShinobiVfx
 		{
 			return;
 		}
-		const FVector Ground = GroundBelow(World, Location);
-		AActor* Pile = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform(Ground));
+		FVector Ground = Location;
+		FVector Up = Normal.GetSafeNormal();
+		if (Up.IsZero())
+		{
+			FindSurface(World, Location, Ground, Up);
+		}
+		const FQuat Frame = SurfaceFrame(Up); // the rock leaves the surface along its normal, spread round it
+		AActor* Pile =World->SpawnActor<AActor>(AActor::StaticClass(), FTransform(Ground));
 		if (!Pile)
 		{
 			return;
@@ -257,12 +292,12 @@ namespace ShinobiVfx
 		for (int32 Index = 0; Index < Count; ++Index)
 		{
 			const float Angle = Index * 2.f * PI / Count + FMath::FRandRange(-0.3f, 0.3f);
-			const FVector Out(FMath::Cos(Angle), FMath::Sin(Angle), 0.f);
+			const FVector Out = Frame.RotateVector(FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f));
 			UStaticMeshComponent* Chunk = NewObject<UStaticMeshComponent>(Pile);
 			Chunk->SetStaticMesh(Mesh);
 			Chunk->SetMaterial(0, Rock);
 			Chunk->SetupAttachment(Root);
-			Chunk->SetWorldTransform(FTransform(FRotator(FMath::FRandRange(0.f, 360.f), FMath::FRandRange(0.f, 360.f), 0.f), Ground + Out * 25.f + FVector(0.f, 0.f, 15.f), FVector(FMath::FRandRange(0.6f, 1.4f), FMath::FRandRange(0.6f, 1.4f), FMath::FRandRange(0.4f, 1.f)) * Size));
+			Chunk->SetWorldTransform(FTransform(FRotator(FMath::FRandRange(0.f, 360.f), FMath::FRandRange(0.f, 360.f), 0.f), Ground + Out * 25.f + Up * 15.f, FVector(FMath::FRandRange(0.6f, 1.4f), FMath::FRandRange(0.6f, 1.4f), FMath::FRandRange(0.4f, 1.f)) * Size));
 			// Physics only (no traces hit it), and it passes through characters rather than tripping them.
 			Chunk->SetCollisionProfileName(UCollisionProfile::PhysicsActor_ProfileName);
 			Chunk->SetCollisionEnabled(ECollisionEnabled::PhysicsOnly);
@@ -270,7 +305,7 @@ namespace ShinobiVfx
 			Chunk->SetCastShadow(false);
 			Chunk->SetSimulatePhysics(true);
 			Chunk->RegisterComponent();
-			Chunk->SetPhysicsLinearVelocity((Out * FMath::FRandRange(0.6f, 1.f) + FVector(0.f, 0.f, FMath::FRandRange(0.4f, 0.9f))) * Speed);
+			Chunk->SetPhysicsLinearVelocity((Out * FMath::FRandRange(0.6f, 1.f) + Up * FMath::FRandRange(0.4f, 0.9f)) * Speed);
 			Chunk->SetPhysicsAngularVelocityInDegrees(FMath::VRand() * 720.f);
 		}
 		// Near the end they stop colliding and fall through the floor, rather than popping out of sight.

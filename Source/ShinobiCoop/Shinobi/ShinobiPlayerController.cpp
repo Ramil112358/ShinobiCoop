@@ -1,4 +1,9 @@
 #include "Shinobi/ShinobiPlayerController.h"
+#include "Components/DecalComponent.h"
+#include "NiagaraComponent.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
+#include "Engine/StaticMeshActor.h"
 #include "Shinobi/Abilities/ShinobiLoadout.h"
 #include "Shinobi/Abilities/ShinobiJutsuAbility.h"
 #include "Shinobi/UI/ShinobiSkillsWidget.h"
@@ -98,6 +103,14 @@ void AShinobiPlayerController::BeginPlay()
 	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiFireShot")))
 	{
 		RunFireShotTest();
+	}
+	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiMarkShot")))
+	{
+		RunMarkShot();
+	}
+	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiFireCompare")))
+	{
+		RunFireCompareShot();
 	}
 	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiSusanooShot")))
 	{
@@ -959,7 +972,222 @@ void AShinobiPlayerController::RunFireShotTest()
 		// What the hit leaves behind (Chidori's dent, Rasengan's crater and rocks) once the flash is gone.
 		At(When + 1.f, [Index]() { FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / (FString(Bursts[Index].Name) + TEXT("_After"))), false, false); });
 	}
-	At(4.5f + UE_ARRAY_COUNT(Bursts) * 1.2f + 0.5f, [this]() { ConsoleCommand(TEXT("quit")); });
+	// What the fire leaves once it has burned out: its scorch, on the floor ahead and (further on) on the wall behind the dummies.
+	At(6.6f, [Shot = FString(TEXT("ShinobiFireShot_Scorch"))]() { FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Shot), false, false); });
+	At(14.f, [this]()
+	{
+		const APawn* Shinobi = GetPawn();
+		if (!Shinobi)
+		{
+			return;
+		}
+		// A wall 4 m high and 8 m wide, 12 m ahead and facing the pawn: the fire lands on it at chest height.
+		AStaticMeshActor* Block = GetWorld()->SpawnActor<AStaticMeshActor>(Shinobi->GetActorLocation() + Shinobi->GetActorForwardVector() * 1200.f + FVector(0.f, 0.f, 150.f), Shinobi->GetActorRotation());
+		Block->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+		Block->GetStaticMeshComponent()->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")));
+		Block->SetActorScale3D(FVector(0.4f, 8.f, 4.f));
+		Block->SetLifeSpan(14.f);
+		FHitResult Wall;
+		const FVector Chest = Shinobi->GetActorLocation() + FVector(0.f, 0.f, 60.f);
+		if (!GetWorld()->LineTraceSingleByChannel(Wall, Chest, Chest + Shinobi->GetActorForwardVector() * 6000.f, ECC_WorldStatic, FCollisionQueryParams(NAME_None, false, Shinobi)))
+		{
+			return;
+		}
+		const FVector Right = FVector::CrossProduct(FVector::UpVector, Wall.ImpactNormal).GetSafeNormal();
+		AShinobiFirePatch::Spawn(GetWorld(), EShinobiFirePatch::Fire, Wall.ImpactPoint + Wall.ImpactNormal * 2.f - Right * 170.f, nullptr, 1.f, 0.f, Wall.ImpactNormal);
+		AShinobiFirePatch::Spawn(GetWorld(), EShinobiFirePatch::BlackFlame, Wall.ImpactPoint + Wall.ImpactNormal * 2.f + Right * 170.f, nullptr, 1.f, 0.f, Wall.ImpactNormal);
+		ShinobiVfx::SpawnScorch(GetWorld(), Wall.ImpactPoint + Wall.ImpactNormal * 2.f + FVector(0.f, 0.f, 200.f), 150.f, FLinearColor::White, 30.f, nullptr, Wall.ImpactNormal); // a mark on the wall by itself
+		const FVector Eye = Wall.ImpactPoint + Wall.ImpactNormal * 520.f + Right * 520.f + FVector(0.f, 0.f, 200.f); // from the side, as a player passes a wall
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Wall.ImpactPoint + FVector(0.f, 0.f, 80.f) - Eye).Rotation(), Params);
+		Camera->GetCameraComponent()->SetFieldOfView(60.f);
+		Camera->SetLifeSpan(14.f);
+		SetViewTargetWithBlend(Camera, 0.f);
+	});
+	At(15.5f, []() { FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("ShinobiFireShot_Wall")), false, false); });
+	At(19.5f, []() { FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("ShinobiFireShot_WallScorch")), false, false); });
+	At(21.5f, []() { FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("ShinobiFireShot_WallScorch2")), false, false); });
+	// Fire Meteor landing: the Fluids 3D fire over the crater, filmed as it builds and as it thins out.
+	At(24.f, [this]()
+	{
+		const APawn* Shinobi = GetPawn();
+		if (!Shinobi)
+		{
+			return;
+		}
+		const FVector Forward = Shinobi->GetActorForwardVector();
+		const FVector Ground = Shinobi->GetActorLocation() - FVector(0.f, 0.f, 90.f) + Forward * 900.f;
+		AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::MeteorImpact, Ground, 2.f * 1.f);
+		AShinobiFirePatch::Spawn(GetWorld(), EShinobiFirePatch::Fire, Ground, nullptr, 3.f, 0.f);
+		const FVector Eye = Ground - Forward * 1100.f + FVector(0.f, 0.f, 360.f);
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Ground + FVector(0.f, 0.f, 220.f) - Eye).Rotation(), Params);
+		Camera->GetCameraComponent()->SetFieldOfView(70.f);
+		Camera->SetLifeSpan(12.f);
+		SetViewTargetWithBlend(Camera, 0.f);
+	});
+	for (int32 Index = 0; Index < 4; ++Index)
+	{
+		const FString Name = FString::Printf(TEXT("ShinobiFireShot_Meteor%d"), Index);
+		At(24.5f + Index * 1.8f, [Name]() { FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Name), false, false); });
+	}
+	At(32.f, [this]() { ConsoleCommand(TEXT("quit")); });
+}
+
+void AShinobiPlayerController::RunMarkShot()
+{
+	// Each jutsu that leaves a mark, fired at one spot and filmed from straight above: the effect at its height, then the mark it leaves,
+	// to compare how much ground each covers (ShinobiMarkShot_<Name>_Effect / _Mark).
+	auto At = [this](float Seconds, TFunction<void()> Fn)
+	{
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
+	};
+	auto Shot = [](const FString& Name)
+	{
+		FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Name), false, false);
+	};
+	At(2.f, [this]()
+	{
+		const APawn* Shinobi = GetPawn();
+		if (!Shinobi)
+		{
+			return;
+		}
+		const FVector Ground = Shinobi->GetActorLocation() - FVector(0.f, 0.f, 90.f) + Shinobi->GetActorForwardVector() * 420.f;
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Ground + FVector(0.f, 0.f, 1700.f), FRotator(-90.f, 0.f, 0.f), Params);
+		Camera->GetCameraComponent()->SetFieldOfView(70.f);
+		Camera->SetLifeSpan(200.f);
+		SetViewTargetWithBlend(Camera, 0.f);
+	});
+	struct FStep { const TCHAR* Name; float Start; float EffectAt; float MarkAt; };
+	static const FStep Steps[] = {
+		{ TEXT("Fireball"), 6.f, 2.4f, 5.5f },
+		{ TEXT("Amaterasu"), 14.f, 2.6f, 7.5f },
+		{ TEXT("Chidori"), 28.f, 0.25f, 1.6f },
+		{ TEXT("Rasengan"), 34.f, 0.25f, 1.6f },
+		{ TEXT("Push"), 40.f, 0.5f, 2.2f },
+		{ TEXT("Meteor"), 46.f, 0.5f, 9.f },
+		{ TEXT("Dragon"), 60.f, 2.4f, 6.5f },
+	};
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Steps); ++Index)
+	{
+		const FStep Step = Steps[Index];
+		At(Step.Start, [this, Index]()
+		{
+			const APawn* Shinobi = GetPawn();
+			if (!Shinobi)
+			{
+				return;
+			}
+			const FVector Ground = Shinobi->GetActorLocation() - FVector(0.f, 0.f, 90.f) + Shinobi->GetActorForwardVector() * 420.f;
+			UWorld* World = GetWorld();
+			for (TActorIterator<AActor> It(World); It; ++It)
+			{
+				if (It->GetRootComponent() && It->GetRootComponent()->IsA<UDecalComponent>())
+				{
+					It->Destroy(); // the last jutsu's mark is still there: start each from clean floor
+				}
+			}
+			switch (Index)
+			{
+			case 0: AShinobiFirePatch::Spawn(World, EShinobiFirePatch::Fire, Ground, nullptr, 1.f, 0.f); break;
+			case 1: AShinobiFirePatch::Spawn(World, EShinobiFirePatch::BlackFlame, Ground, nullptr, 1.f, 0.f); break;
+			case 2: AShinobiBurst::Spawn(World, EShinobiBurst::Lightning, Ground + FVector(0.f, 0.f, 90.f), 1.f); break;
+			case 3: AShinobiBurst::Spawn(World, EShinobiBurst::Spiral, Ground + FVector(0.f, 0.f, 90.f), 1.f); break;
+			case 4: AShinobiBurst::Spawn(World, EShinobiBurst::AlmightyPush, Ground + FVector(0.f, 0.f, 90.f), 1.f); break;
+			case 5:
+				AShinobiBurst::Spawn(World, EShinobiBurst::MeteorImpact, Ground, 1.f);
+				AShinobiFirePatch::Spawn(World, EShinobiFirePatch::Fire, Ground, nullptr, 3.f, 0.f); // the blast radius, 450 (a Fire Meteor at scale 1)
+				break;
+			default: AShinobiFirePatch::Spawn(World, EShinobiFirePatch::CrimsonFire, Ground, nullptr, 1.3f, 0.f); break;
+			}
+		});
+		At(Step.Start + Step.EffectAt, [Shot, Step]() { Shot(FString::Printf(TEXT("ShinobiMarkShot_%s_Effect"), Step.Name)); });
+		At(Step.Start + Step.MarkAt, [Shot, Step]() { Shot(FString::Printf(TEXT("ShinobiMarkShot_%s_Mark"), Step.Name)); });
+	}
+	At(72.f, [this]() { ConsoleCommand(TEXT("quit")); });
+}
+
+void AShinobiPlayerController::RunFireCompareShot()
+{
+	// Left to right, 9 m ahead, 4 m apart: the Fab fire in orange, black (Amaterasu) and blue-white (Tairn), then the Niagara Fluids
+	// 2D smoke-fire and 3D fire templates, filmed at 7, 11 and 17 s (the Fluids sims take a while to build up).
+	auto At = [this](float Seconds, TFunction<void()> Fn)
+	{
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
+	};
+	At(2.f, [this]()
+	{
+		const APawn* Shinobi = GetPawn();
+		if (!Shinobi)
+		{
+			return;
+		}
+		const FVector Forward = Shinobi->GetActorForwardVector();
+		const FVector Right = Shinobi->GetActorRightVector();
+		const FVector Ground = Shinobi->GetActorLocation() - FVector(0.f, 0.f, 90.f) + Forward * 900.f;
+		struct FEntry { const TCHAR* Path; float Scale; FVector Flames, Smoke, Embers; float Heat = 1.f; };
+		const FEntry Entries[] = {
+			{ TEXT("/Game/M5VFXVOL2/Niagara/Fire/NFire_01.NFire_01"), 0.75f, FVector(1.f), FVector(1.f), FVector(1.f) },
+			{ TEXT("/Game/M5VFXVOL2/Niagara/Fire/NFire_01.NFire_01"), 0.75f, FVector(0.f, 0.f, 0.06f), FVector(0.05f, 0.04f, 0.08f), FVector(0.f, 0.1f, 1.f), 0.f },
+			{ TEXT("/Game/M5VFXVOL2/Niagara/Fire/NFire_03.NFire_03"), 0.75f, FVector(0.f, 0.12f, 2.f), FVector(0.1f, 0.14f, 0.3f), FVector(0.f, 0.2f, 1.5f), 0.f },
+			{ TEXT("/NiagaraFluids/Templates/Gas/2D/Systems/Grid2D_Gas_SmokeFire.Grid2D_Gas_SmokeFire"), 1.f, FVector(1.f), FVector(1.f), FVector(1.f) },
+			{ TEXT("/NiagaraFluids/Templates/Gas/3D/Systems/Grid3D_Gas_Fire.Grid3D_Gas_Fire"), 1.f, FVector(1.f), FVector(1.f), FVector(1.f) },
+		};
+		for (int32 Index = 0; Index < UE_ARRAY_COUNT(Entries); ++Index)
+		{
+			UNiagaraSystem* System = LoadObject<UNiagaraSystem>(nullptr, Entries[Index].Path);
+			UNiagaraComponent* Fire = System ? UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), System, Ground + Right * (Index - 2) * 400.f, FRotator::ZeroRotator, FVector(Entries[Index].Scale), false, false) : nullptr;
+			if (Fire)
+			{
+				Fire->SetVariableVec3(TEXT("User.FireScale"), Entries[Index].Flames);
+				Fire->SetVariableVec3(TEXT("User.SmokeScale"), Entries[Index].Smoke);
+				Fire->SetVariableVec3(TEXT("User.EmberScale"), Entries[Index].Embers);
+				Fire->SetVariableFloat(TEXT("User.SmokeHeat"), Entries[Index].Heat);
+				Fire->Activate(true);
+			}
+		}
+		const FVector Eye = Ground - Forward * 1250.f + FVector(0.f, 0.f, 330.f);
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Ground + FVector(0.f, 0.f, 160.f) - Eye).Rotation(), Params);
+		Camera->GetCameraComponent()->SetFieldOfView(75.f);
+		Camera->SetLifeSpan(40.f);
+		SetViewTargetWithBlend(Camera, 0.f);
+	});
+	const float Times[] = { 7.f, 11.f, 17.f };
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Times); ++Index)
+	{
+		const FString Name = FString::Printf(TEXT("ShinobiFireShot_Compare%d"), Index);
+		At(Times[Index], [Name]() { FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Name), false, false); });
+	}
+	// Close on the black and the blue-white fire (between the 2nd and 3rd), against the arena wall.
+	At(20.f, [this]()
+	{
+		const APawn* Shinobi = GetPawn();
+		if (!Shinobi)
+		{
+			return;
+		}
+		const FVector Forward = Shinobi->GetActorForwardVector();
+		const FVector Right = Shinobi->GetActorRightVector();
+		const FVector Ground = Shinobi->GetActorLocation() - FVector(0.f, 0.f, 90.f) + Forward * 900.f - Right * 200.f;
+		const FVector Eye = Ground - Forward * 650.f + FVector(0.f, 0.f, 140.f);
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Ground + FVector(0.f, 0.f, 90.f) - Eye).Rotation(), Params);
+		Camera->GetCameraComponent()->SetFieldOfView(60.f);
+		Camera->SetLifeSpan(10.f);
+		SetViewTargetWithBlend(Camera, 0.f);
+	});
+	At(22.f, []() { FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("ShinobiFireShot_Compare3")), false, false); });
+	At(24.f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
 
 void AShinobiPlayerController::RunSusanooShotTest()

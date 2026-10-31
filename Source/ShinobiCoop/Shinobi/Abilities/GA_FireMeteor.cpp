@@ -4,6 +4,7 @@
 #include "Shinobi/ShinobiMeteor.h"
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/ShinobiTelegraph.h"
+#include "Shinobi/VFX/ShinobiFirePatch.h"
 #include "Shinobi/VFX/ShinobiVfx.h"
 
 UGA_FireMeteor::UGA_FireMeteor()
@@ -52,7 +53,7 @@ void UGA_FireMeteor::ExecuteJutsu()
 		Impact.Radius = Radius_;
 		Impact.Status = UGE_Burn::StaticClass();
 		Impact.StatusDamagePerTick = UGE_Burn::DamagePerTick * GetDamageScale();
-		Impact.FirePatchScale = 2.f * GetVisualScale();
+		Impact.FirePatchScale = Radius_ / AShinobiFirePatch::BaseRadius; // the flames cover the whole blast (and so does the scorch they leave)
 		AShinobiMeteor::Spawn(Self->GetWorld(), Self, EShinobiMeteor::Fire, Target, FallSeconds, GetVisualScale(), Impact);
 	}
 	EndJutsu();

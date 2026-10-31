@@ -70,7 +70,8 @@ private:
 	void OnHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
 
 	/** Server only. DirectTarget may be null (hit a wall or the floor). */
-	void Explode(AShinobiCharacterBase* DirectTarget, const FVector& Location);
+	/** Surface: the normal of the world surface it hit at Location (the flames cling to a wall, not the floor below it); zero for a character or a damageable wall. */
+	void Explode(AShinobiCharacterBase* DirectTarget, const FVector& Location, const FVector& Surface = FVector::ZeroVector);
 
 protected:
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")

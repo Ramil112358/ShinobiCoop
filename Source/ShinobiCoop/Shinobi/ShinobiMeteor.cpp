@@ -129,6 +129,9 @@ void AShinobiMeteor::Land()
 {
 	UWorld* World = GetWorld();
 	AShinobiCharacterBase* Thrower = Caster.Get();
+	FVector Ground = ImpactPoint; // it lands on the floor at the spot, which may be a slope or a roof: the fire and the crater follow it
+	FVector Surface = FVector::UpVector;
+	ShinobiVfx::FindSurface(World, ImpactPoint, Ground, Surface);
 	if (Thrower)
 	{
 		UAbilitySystemComponent* Source = Thrower->GetAbilitySystemComponent();
@@ -141,8 +144,8 @@ void AShinobiMeteor::Land()
 		}
 		if (Impact.FirePatchScale > 0.f)
 		{
-			AShinobiFirePatch::Spawn(World, EShinobiFirePatch::Fire, ImpactPoint, Thrower, Impact.FirePatchScale, Impact.StatusDamagePerTick);
+			AShinobiFirePatch::Spawn(World, EShinobiFirePatch::Fire, Ground, Thrower, Impact.FirePatchScale, Impact.StatusDamagePerTick, Surface);
 		}
 	}
-	AShinobiBurst::Spawn(World, Kind == EShinobiMeteor::Fire ? EShinobiBurst::MeteorImpact : EShinobiBurst::FrostImpact, ImpactPoint, VisualScale);
+	AShinobiBurst::Spawn(World, Kind == EShinobiMeteor::Fire ? EShinobiBurst::MeteorImpact : EShinobiBurst::FrostImpact, Ground, VisualScale, FRotator::ZeroRotator, Surface);
 }

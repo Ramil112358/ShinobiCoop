@@ -166,16 +166,20 @@ void UGA_DragonBreath::Pulse()
 		const FVector Mouth = AShinobiDragonMount::MouthLocation(*Self, BreathKind);
 		const FVector Aim = AShinobiDragonMount::BreathDirection(*Self); // where the dragon faces, not where the camera looks
 
-		// Where the fire falls on the ground it leaves flames, smoke and embers burning for a few seconds, like a Fireball or Amaterasu: the
-		// floor within a few metres below the end of the jet (a dragon flying high leaves none). Sweeping the fire lays a trail.
+		// Where the fire falls on a surface it leaves flames, smoke and embers burning for a few seconds, like a Fireball or Amaterasu: the
+		// surface the jet strikes (a building's wall holds the fire, rising up it), else the floor within a few metres below the end of
+		// the jet (a dragon flying high leaves none). Sweeping the fire lays a trail.
 		FHitResult Floor;
+		UWorld* World = Self->GetWorld();
 		const FVector End = AShinobiDragonMount::BreathTarget(*Self, BreathKind);
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(BreathGroundFire), false, Self);
-		if (Self->GetWorld()->LineTraceSingleByChannel(Floor, End + FVector(0.f, 0.f, 30.f), End - FVector(0.f, 0.f, 800.f), ECC_WorldStatic, Params) // Tairn at his lowest ends his jet ~6 m up
-			&& Floor.ImpactNormal.Z > 0.5f && FVector::Dist2D(Floor.ImpactPoint, LastPatchAt) > 140.f)
+		const bool bLanded = (World->LineTraceSingleByObjectType(Floor, Mouth, End + Aim * 30.f, FCollisionObjectQueryParams(ECC_WorldStatic), Params) && Floor.ImpactNormal.Z > -0.5f) // not a ceiling
+			|| (World->LineTraceSingleByChannel(Floor, End + FVector(0.f, 0.f, 30.f), End - FVector(0.f, 0.f, 800.f), ECC_WorldStatic, Params) // Tairn at his lowest ends his jet ~6 m up
+				&& Floor.ImpactNormal.Z > 0.5f);
+		if (bLanded && FVector::Dist(Floor.ImpactPoint, LastPatchAt) > 140.f)
 		{
 			LastPatchAt = Floor.ImpactPoint;
-			AShinobiFirePatch::Spawn(Self->GetWorld(), BreathKind == EShinobiDragonKind::Tairn ? EShinobiFirePatch::TairnFire : EShinobiFirePatch::CrimsonFire, Floor.ImpactPoint, Self, 1.3f, UGE_Burn::DamagePerTick);
+			AShinobiFirePatch::Spawn(World, BreathKind == EShinobiDragonKind::Tairn ? EShinobiFirePatch::TairnFire : EShinobiFirePatch::CrimsonFire, Floor.ImpactPoint, Self, 1.3f, UGE_Burn::DamagePerTick, Floor.ImpactNormal);
 		}
 
 		const float Cos = FMath::Cos(FMath::DegreesToRadians(HalfAngle));

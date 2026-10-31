@@ -165,11 +165,11 @@ void AShinobiProjectile::OnHit(UPrimitiveComponent* HitComponent, AActor* OtherA
 {
 	if (HasAuthority())
 	{
-		Explode(nullptr, Hit.ImpactPoint);
+		Explode(nullptr, Hit.ImpactPoint, Hit.ImpactNormal);
 	}
 }
 
-void AShinobiProjectile::Explode(AShinobiCharacterBase* DirectTarget, const FVector& Location)
+void AShinobiProjectile::Explode(AShinobiCharacterBase* DirectTarget, const FVector& Location, const FVector& Surface)
 {
 	if (bExploded)
 	{
@@ -178,13 +178,13 @@ void AShinobiProjectile::Explode(AShinobiCharacterBase* DirectTarget, const FVec
 	bExploded = true;
 	if (bBurstOnImpact)
 	{
-		AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::Fire, Location, Scale);
+		AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::Fire, Location, Scale, FRotator::ZeroRotator, Surface);
 	}
 
 	AShinobiCharacterBase* Caster = Cast<AShinobiCharacterBase>(GetInstigator());
 	if (bGroundFire)
 	{
-		AShinobiFirePatch::Spawn(GetWorld(), EShinobiFirePatch::Fire, Location, Caster, Scale, StatusDamagePerTick);
+		AShinobiFirePatch::Spawn(GetWorld(), EShinobiFirePatch::Fire, Location, Caster, Scale, StatusDamagePerTick, Surface);
 	}
 	if (UAbilitySystemComponent* Source = Caster ? Caster->GetAbilitySystemComponent() : nullptr)
 	{

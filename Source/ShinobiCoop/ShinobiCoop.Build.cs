@@ -47,7 +47,8 @@ public class ShinobiCoop : ModuleRules
 			"ClothingSystemRuntimeInterface", // outfit cloth: simulation data and interactors
 			"ClothingSystemRuntimeCommon", // ...and the clothing assets (tests read their painted maps)
 			"ChaosCloth", // ...and each cloth's own gravity (wall-runs)
-			"CustomizableObject" // Mutable: made characters' generated bodies (CO_Shinobi)
+			"CustomizableObject", // Mutable: made characters' generated bodies (CO_Shinobi)
+			"Niagara" // the Fab fire systems (M5VFXVOL2) on the ground fire
 		});
 
 		if (Target.bBuildEditor)

@@ -7,6 +7,7 @@
 
 class AShinobiCharacterBase;
 class UMaterialInstanceDynamic;
+class UNiagaraComponent;
 class UPointLightComponent;
 class UStaticMeshComponent;
 
@@ -32,8 +33,12 @@ class SHINOBICOOP_API AShinobiFirePatch : public AActor
 public:
 	AShinobiFirePatch();
 
-	/** Server only (does nothing on a client); returns the spawned patch, or null. */
-	static AShinobiFirePatch* Spawn(UWorld* World, EShinobiFirePatch Kind, const FVector& Location, AShinobiCharacterBase* Caster, float Scale, float DamagePerTick);
+	/**
+	 * Server only (does nothing on a client); returns the spawned patch, or null. Normal is the normal of the surface it
+	 * burns on, Location a point on it (a wall the fire landed on: the flames cling to it, rising, and the smoke drifts off
+	 * it). Zero: the floor found below Location. The patch's up is the surface normal, which replicates with its rotation.
+	 */
+	static AShinobiFirePatch* Spawn(UWorld* World, EShinobiFirePatch Kind, const FVector& Location, AShinobiCharacterBase* Caster, float Scale, float DamagePerTick, const FVector& Normal = FVector::ZeroVector);
 
 	static constexpr float BaseRadius = 150.f;
 	static constexpr float TickInterval = 0.5f;
@@ -49,6 +54,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
 	/** Server: the status on every enemy of the caster inside the radius. */
@@ -65,6 +71,7 @@ private:
 	{
 		UStaticMeshComponent* Mesh = nullptr;
 		UMaterialInstanceDynamic* Material = nullptr;
+		FVector2D Spot = FVector2D::ZeroVector; // where it stands in the surface plane, from the patch's centre
 		float Phase = 0.f;    // 0-1, desynchronises the cards
 		float NextSwap = 0.f; // Age at which a flame or ember card switches to another variant
 		int32 Variant = 0;
@@ -73,11 +80,15 @@ private:
 	/** The sprite sheet the flames are cut from: the stock flames, Amaterasu's black ones, or the dragon's own. */
 	ShinobiVfx::ESprite FlameSprite() const;
 
-	FCard MakeCard(UStaticMesh* Plane, UMaterialInstanceDynamic* Material, const FVector& Where, float Phase, int32 Variant);
+	FCard MakeCard(UStaticMesh* Plane, UMaterialInstanceDynamic* Material, const FVector2D& Spot, float Phase, int32 Variant);
 
 	TArray<FCard> Flames;
 	TArray<FCard> Smokes;
 	TArray<FCard> Embers;
+
+	/** The Fab fire (M5 VFX Vol 2) that is the patch's flames, smoke and embers where the kind has one; the cards are for the kinds that do not. */
+	UPROPERTY()
+	TObjectPtr<UNiagaraComponent> Fire;
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UPointLightComponent> Light;

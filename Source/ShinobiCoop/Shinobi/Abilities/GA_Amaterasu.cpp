@@ -25,6 +25,7 @@ UGA_Amaterasu::UGA_Amaterasu()
 bool UGA_Amaterasu::PrepareJutsu()
 {
 	Target = nullptr;
+	AimNormal = FVector::ZeroVector;
 	const AShinobiCharacterBase* Self = GetShinobiCharacter();
 	if (!Self)
 	{
@@ -39,7 +40,8 @@ bool UGA_Amaterasu::PrepareJutsu()
 			Target = Candidate;
 			return true;
 		}
-		AimPoint = Hit.ImpactPoint; // a wall, the ground, a building
+		AimPoint = Hit.ImpactPoint; // a wall, the ground, a building; a character who is no enemy is not a surface: the floor under them
+		AimNormal = Candidate ? FVector::ZeroVector : FVector(Hit.ImpactNormal);
 		return true;
 	}
 	// Aimed above everything: burn the ground below the end of the aim, if there is ground within reach.
@@ -51,6 +53,7 @@ bool UGA_Amaterasu::PrepareJutsu()
 	if (Self->GetWorld()->LineTraceSingleByChannel(Hit, End, End - FVector(0.f, 0.f, Range), ECC_WorldStatic, Params))
 	{
 		AimPoint = Hit.ImpactPoint;
+		AimNormal = Hit.ImpactNormal;
 		return true;
 	}
 	return false;
@@ -69,8 +72,9 @@ void UGA_Amaterasu::ExecuteJutsu()
 		{
 			// No enemy, or it died (or dodged) during the charge: the flames catch on the spot instead.
 			const FVector Spot = Victim ? Victim->GetActorLocation() - FVector(0.f, 0.f, Victim->GetSimpleCollisionHalfHeight()) : AimPoint;
-			AShinobiFirePatch::Spawn(GetWorld(), EShinobiFirePatch::BlackFlame, Spot, GetShinobiCharacter(), GetVisualScale(), UGE_BlackFlame::DamagePerTick * GetDamageScale());
-			AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::BlackFlameIgnite, Spot, GetVisualScale());
+			const FVector Surface = Victim ? FVector::ZeroVector : AimNormal; // the aimed surface (a wall they clung to), else the floor under the spot
+			AShinobiFirePatch::Spawn(GetWorld(), EShinobiFirePatch::BlackFlame, Spot, GetShinobiCharacter(), GetVisualScale(), UGE_BlackFlame::DamagePerTick * GetDamageScale(), Surface);
+			AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::BlackFlameIgnite, Spot, GetVisualScale(), FRotator::ZeroRotator, Surface);
 		}
 	}
 	EndJutsu();

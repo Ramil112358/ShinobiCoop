@@ -160,6 +160,10 @@
 		{
 			"Name": "Mutable",
 			"Enabled": true
+		},
+		{
+			"Name": "NiagaraFluids",
+			"Enabled": true
 		}
 	]
 }

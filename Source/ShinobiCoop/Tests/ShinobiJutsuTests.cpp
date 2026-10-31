@@ -11,6 +11,7 @@
 #include "Engine/StaticMeshActor.h"
 #include "Engine/StaticMesh.h"
 #include "Components/StaticMeshComponent.h"
+#include "NiagaraComponent.h"
 #include "Shinobi/VFX/ShinobiCastFxComponent.h"
 #include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
 #include "Shinobi/VFX/ShinobiVfx.h"
@@ -807,6 +808,35 @@ bool FShinobiFirePatchTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Enemy outside the radius unharmed"), ShinobiTest::HasTag(Outside, ShinobiTags::State_Burning_Normal));
 	W.Tick(2.8f);
 	TestEqual(TEXT("Goes out after 3 s"), ShinobiTest::CountActors<AShinobiFirePatch>(W), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiFirePatchOnWallTest, "ShinobiCoop.Jutsu.FirePatchClingsToTheWallItLandsOn", ShinobiTestFlags)
+bool FShinobiFirePatchOnWallTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* Caster = W.Spawn<AShinobiPlayerCharacter>(FVector(-2000.f, 0.f, 0.f));
+	ShinobiTest::Hover(Caster);
+
+	// A wall at x = 500 facing -X: the fire stands against it, rising, and not inside it.
+	const FVector Wall(500.f, 0.f, 300.f);
+	const AShinobiFirePatch* Patch = AShinobiFirePatch::Spawn(W.World, EShinobiFirePatch::Fire, Wall, Caster, 1.f, UGE_Burn::DamagePerTick, FVector(-1.f, 0.f, 0.f));
+	if (!TestNotNull(TEXT("A patch is burning"), Patch))
+	{
+		return false;
+	}
+	TestTrue(TEXT("The patch stands on the wall"), Patch->GetActorQuat().GetUpVector().Equals(FVector(-1.f, 0.f, 0.f), 1e-3f) && Patch->GetActorLocation().Equals(Wall, 1e-3f));
+	W.Tick(0.5f);
+	const UNiagaraComponent* Fire = Patch->FindComponentByClass<UNiagaraComponent>();
+	if (!TestNotNull(TEXT("It burns with the Fab fire"), Fire))
+	{
+		return false;
+	}
+	TestTrue(TEXT("The fire stands on the wall's side, not inside it"), FVector::DotProduct(Fire->GetComponentLocation() - Wall, FVector(-1.f, 0.f, 0.f)) > 0.f);
+	TestTrue(TEXT("and stays upright"), Fire->GetComponentQuat().GetUpVector().Equals(FVector::UpVector, 1e-3f));
+
+	// On a level floor nothing changes: the patch is not turned, and without a normal it burns on the floor found below.
+	TestTrue(TEXT("Level ground leaves the patch unturned"), ShinobiVfx::SurfaceFrame(FVector::UpVector).IsIdentity() && ShinobiVfx::SurfaceFrame(FVector::ZeroVector).IsIdentity());
 	return true;
 }
 

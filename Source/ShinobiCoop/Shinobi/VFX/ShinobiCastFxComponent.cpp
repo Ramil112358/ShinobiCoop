@@ -6,6 +6,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "AnimationRuntime.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Kismet/GameplayStatics.h"
@@ -536,22 +537,31 @@ void UShinobiCastFxComponent::UpdateArcs(float ChargeScale)
 
 void UShinobiCastFxComponent::UpdateRing(float ChargeScale)
 {
-	// A crackling ring of lightning on the ground round the caster, turning slowly and widening with the charge.
+	// A crackling ring of lightning on the surface under the caster, turning slowly and widening with the charge. The surface is
+	// whatever they stand on: a slope, or a wall while wall-running (the character's up is then the wall's normal).
 	const ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+	const UCharacterMovementComponent* Movement = OwnerCharacter ? OwnerCharacter->GetCharacterMovement() : nullptr;
+	FVector Up = Movement ? -Movement->GetGravityDirection() : FVector::UpVector;
+	if (Movement && Movement->IsMovingOnGround() && Movement->CurrentFloor.IsWalkableFloor())
+	{
+		Up = Movement->CurrentFloor.HitResult.ImpactNormal;
+	}
+	RingUp = FMath::VInterpNormalRotationTo(RingUp, Up.GetSafeNormal(), GetWorld()->GetDeltaSeconds(), 240.f);
+	const FQuat Frame = FRotationMatrix::MakeFromZ(RingUp).ToQuat();
 	const float HalfHeight = OwnerCharacter ? OwnerCharacter->GetSimpleCollisionHalfHeight() : 90.f;
-	const FVector Centre = GetOwner()->GetActorLocation() - FVector(0.f, 0.f, HalfHeight - 3.f);
+	const FVector Centre = GetOwner()->GetActorLocation() - RingUp * (HalfHeight - 3.f);
 	const float Radius = RingRadius * (0.8f + 0.25f * ChargeScale);
 	const float Step = 2.f * PI / RingSegmentCount;
 	for (int32 Index = 0; Index < RingSegmentCount; ++Index)
 	{
 		const float Angle = Index * Step + Age * 1.5f;
-		const FVector From = Centre + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * Radius * FMath::FRandRange(0.94f, 1.06f) + FVector(0.f, 0.f, FMath::FRandRange(0.f, 6.f));
-		const FVector To = Centre + FVector(FMath::Cos(Angle + Step), FMath::Sin(Angle + Step), 0.f) * Radius * FMath::FRandRange(0.94f, 1.06f) + FVector(0.f, 0.f, FMath::FRandRange(0.f, 6.f));
+		const FVector From = Centre + Frame.RotateVector(FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f)) * Radius * FMath::FRandRange(0.94f, 1.06f) + RingUp * FMath::FRandRange(0.f, 6.f);
+		const FVector To = Centre + Frame.RotateVector(FVector(FMath::Cos(Angle + Step), FMath::Sin(Angle + Step), 0.f)) * Radius * FMath::FRandRange(0.94f, 1.06f) + RingUp * FMath::FRandRange(0.f, 6.f);
 		UStaticMeshComponent* Piece = RingSegments[Index];
 		Piece->SetWorldLocationAndRotation((From + To) * 0.5f, FRotationMatrix::MakeFromZ(To - From).Rotator());
 		Piece->SetWorldScale3D(FVector(FMath::FRandRange(0.02f, 0.045f), FMath::FRandRange(0.02f, 0.045f), (To - From).Size() / 100.f));
 	}
-	RingLight->SetWorldLocation(Centre + FVector(0.f, 0.f, 20.f));
+	RingLight->SetWorldLocation(Centre + RingUp * 20.f);
 	RingLight->SetIntensity(3000.f * ChargeScale * FMath::FRandRange(0.6f, 1.4f));
 }
 

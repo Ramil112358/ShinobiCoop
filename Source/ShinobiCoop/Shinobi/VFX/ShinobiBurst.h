@@ -54,8 +54,11 @@ public:
 	static constexpr float BlinkLength = 800.f;
 
 	/** Server only (does nothing on a client); returns the spawned burst, or null. Scale multiplies its size (a charged
-	 * jutsu's burst is bigger); Rotation aims the directional kinds (FireBreath). */
-	static AShinobiBurst* Spawn(UWorld* World, EShinobiBurst Kind, const FVector& Location, float Scale = 1.f, const FRotator& Rotation = FRotator::ZeroRotator);
+	 * jutsu's burst is bigger); Rotation aims the directional kinds (FireBreath). Surface is the normal of the surface it
+	 * lands on when Location is on one (a wall the fireball hit): rings and cracks lie against it, flames and dust spread
+	 * across it and stand clear of it, rock flies off it. Zero: the burst is on level ground, or in the air (the marks it
+	 * leaves then find the floor below). */
+	static AShinobiBurst* Spawn(UWorld* World, EShinobiBurst Kind, const FVector& Location, float Scale = 1.f, const FRotator& Rotation = FRotator::ZeroRotator, const FVector& Surface = FVector::ZeroVector);
 
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -72,6 +75,10 @@ private:
 
 	UPROPERTY(Replicated)
 	float Scale = 1.f;
+
+	/** The normal of the surface the burst lands on; zero when it is on level ground or in the air. */
+	UPROPERTY(Replicated)
+	FVector Surface = FVector::ZeroVector;
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<UStaticMeshComponent> Sphere;
@@ -121,6 +128,11 @@ private:
 	void AddCard(UStaticMesh* Plane, ShinobiVfx::ESprite Sprite, const FLinearColor& Tint, float Glow, const FVector& Offset, const FVector2D& Size, float Rise = 0.f, bool bFlat = false, bool bFlicker = false, float Delay = 0.f);
 
 	TArray<FCard> Cards;
+
+	/** Surface's frame (+Z along it; identity on level ground) and its horizontal part: nothing on the floor, the way out of a wall. */
+	FQuat SurfaceFrame = FQuat::Identity;
+	FVector SurfaceUp = FVector::UpVector;
+	FVector SurfaceAway = FVector::ZeroVector;
 
 	float Age = 0.f;
 	float Duration = 0.4f;

@@ -158,6 +158,8 @@ private:
 	 * Used by `Scripts/shot_chakra.ps1 -Jutsu`. */
 	void RunJutsuShotTest();
 	void RunFireShotTest();
+	void RunFireCompareShot();
+	void RunMarkShot();
 	/** -ShinobiSusanooShot: the Perfect Susanoo from four sides, from the gameplay camera and through a melee slash (Scripts/shot_chakra.ps1 -Susanoo). */
 	void RunSusanooShotTest();
 	/** -ShinobiDragonShot: Tairn mounted and hovering, from the side, the front, behind, above, the gameplay camera and breathing fire (Scripts/shot_chakra.ps1 -Dragon). */

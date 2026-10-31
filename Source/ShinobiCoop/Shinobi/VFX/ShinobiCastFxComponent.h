@@ -113,6 +113,9 @@ private:
 	UPROPERTY()
 	TObjectPtr<UPointLightComponent> RingLight;
 
+	/** The way up from the surface under the caster's feet (the floor's normal; a wall's while wall-running), eased so stairs don't jolt the ring. */
+	FVector RingUp = FVector::UpVector;
+
 	UPROPERTY()
 	TObjectPtr<UStaticMeshComponent> MouthFlame;
 

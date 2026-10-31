@@ -1,6 +1,10 @@
 #include "Shinobi/VFX/ShinobiBurst.h"
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "NiagaraComponent.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
+#include "TimerManager.h"
 #include "Engine/StaticMesh.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Engine/World.h"
@@ -75,7 +79,7 @@ AShinobiBurst::AShinobiBurst()
 	Light->SetVisibility(false);
 }
 
-AShinobiBurst* AShinobiBurst::Spawn(UWorld* World, EShinobiBurst Kind, const FVector& Location, float Scale, const FRotator& Rotation)
+AShinobiBurst* AShinobiBurst::Spawn(UWorld* World, EShinobiBurst Kind, const FVector& Location, float Scale, const FRotator& Rotation, const FVector& Surface)
 {
 	if (!World || World->GetNetMode() == NM_Client)
 	{
@@ -87,6 +91,7 @@ AShinobiBurst* AShinobiBurst::Spawn(UWorld* World, EShinobiBurst Kind, const FVe
 	{
 		Burst->Kind = Kind;
 		Burst->Scale = Scale;
+		Burst->Surface = Surface.GetSafeNormal();
 		Burst->FinishSpawning(Where);
 	}
 	return Burst;
@@ -97,6 +102,7 @@ void AShinobiBurst::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME_CONDITION(AShinobiBurst, Kind, COND_InitialOnly);
 	DOREPLIFETIME_CONDITION(AShinobiBurst, Scale, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AShinobiBurst, Surface, COND_InitialOnly);
 }
 
 void AShinobiBurst::BeginPlay()
@@ -113,6 +119,10 @@ void AShinobiBurst::BeginPlay()
 		EShinobiSfx::Whirr, EShinobiSfx::Poof, EShinobiSfx::Zap, EShinobiSfx::Explosion, EShinobiSfx::Zap };
 	static_assert(UE_ARRAY_COUNT(Sounds) == static_cast<int32>(EShinobiBurst::BlinkStreak) + 1, "a sound for every burst kind");
 	ShinobiSfx::Play(this, Sounds[static_cast<uint8>(Kind)], GetActorLocation(), Kind == EShinobiBurst::Fire ? 0.7f : 1.f);
+
+	SurfaceFrame = ShinobiVfx::SurfaceFrame(Surface);
+	SurfaceUp = Surface.IsNearlyZero() ? FVector::UpVector : Surface;
+	SurfaceAway = SurfaceUp - FVector::UpVector * SurfaceUp.Z;
 
 	// Mostly-rim shells (low Core) at modest intensity: a solid bright sphere blows out to a white wall under bloom.
 	FLinearColor Color = ShinobiVfx::Colors::Fire;
@@ -181,13 +191,33 @@ void AShinobiBurst::BeginPlay()
 	const FLinearColor DirtTint(0.12f, 0.12f, 0.12f);
 	if (Kind == EShinobiBurst::Lightning)
 	{
-		ShinobiVfx::SpawnScorch(GetWorld(), GetActorLocation(), 70.f * Scale, DirtTint, 10.f, ShinobiVfx::ChidoriDent);
-		ShinobiVfx::SpawnDebris(GetWorld(), GetActorLocation(), 6, 320.f, 0.12f, 4.f);
+		ShinobiVfx::SpawnScorch(GetWorld(), GetActorLocation(), 240.f * Scale, DirtTint, 10.f, ShinobiVfx::ChidoriDent, Surface); // as wide as the lightning ring (260 x Scale) it leaves
+		ShinobiVfx::SpawnDebris(GetWorld(), GetActorLocation(), 6, 320.f, 0.12f, 4.f, Surface);
 	}
 	else if (Kind == EShinobiBurst::Spiral)
 	{
-		ShinobiVfx::SpawnScorch(GetWorld(), GetActorLocation(), 130.f * Scale, DirtTint, 12.f, ShinobiVfx::RasenganCrater);
-		ShinobiVfx::SpawnDebris(GetWorld(), GetActorLocation(), 12, 500.f * FMath::Sqrt(Scale), 0.16f, 5.f);
+		ShinobiVfx::SpawnScorch(GetWorld(), GetActorLocation(), 290.f * Scale, DirtTint, 12.f, ShinobiVfx::RasenganCrater, Surface); // as wide as the ring (320 x Scale) that bursts off it
+		ShinobiVfx::SpawnDebris(GetWorld(), GetActorLocation(), 12, 500.f * FMath::Sqrt(Scale), 0.16f, 5.f, Surface);
+	}
+	else if (Kind == EShinobiBurst::MeteorImpact)
+	{
+		// The one standout fire in the game: a Niagara Fluids 3D gas fire simulation rising from the crater, for a few seconds
+		// (the Fab fire patch burns at the foot of it). It is heavy, hence a single Meteor each.
+		const TCHAR* Path = TEXT("/NiagaraFluids/Templates/Gas/3D/Systems/Grid3D_Gas_Fire.Grid3D_Gas_Fire");
+		if (UNiagaraSystem* System = LoadObject<UNiagaraSystem>(nullptr, Path))
+		{
+			UNiagaraComponent* Fluid = UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), System, GetActorLocation(), FRotator::ZeroRotator, FVector::OneVector, true, false);
+			if (Fluid)
+			{
+				Fluid->SetVariableBool(TEXT("User.DrawBounds"), false);
+				Fluid->SetVariableVec3(TEXT("User.WorldSpaceSize"), FVector(300.f, 300.f, 700.f) * Scale); // the simulated box: the fire fills its lower part
+				Fluid->SetVariableInt(TEXT("User.ResolutionMaxAxis"), 96);
+				Fluid->Activate(true);
+				Fluid->AdvanceSimulationByTime(2.f, 1.f / 20.f); // the sim takes seconds to build a flame: start it going (one hitch, under the flash)
+				FTimerHandle Stop;
+				GetWorld()->GetTimerManager().SetTimer(Stop, FTimerDelegate::CreateWeakLambda(Fluid, [Fluid]() { Fluid->Deactivate(); }), 5.f, false); // it then thins out, and the component destroys itself
+			}
+		}
 	}
 	else if (Kind == EShinobiBurst::AlmightyPush)
 	{
@@ -204,8 +234,8 @@ void AShinobiBurst::BeginPlay()
 		Dome->SetMaterial(0, DomeMaterial);
 		Dome->RegisterComponent();
 		const float Edge = PushRadius * Scale * FMath::Sqrt(1.f - FMath::Square(0.2f)); // where the sphere meets the floor
-		ShinobiVfx::SpawnScorch(GetWorld(), GetActorLocation(), Edge / 0.77f, FLinearColor(0.3f, 0.3f, 0.3f), 10.f, ShinobiVfx::PushCrackRing);
-		ShinobiVfx::SpawnDebris(GetWorld(), GetActorLocation(), 6, 700.f * FMath::Sqrt(Scale), 0.07f, 4.f);
+		ShinobiVfx::SpawnScorch(GetWorld(), GetActorLocation(), Edge, FLinearColor(0.3f, 0.3f, 0.3f), 10.f, ShinobiVfx::PushCrackRing, Surface); // the ring of cracks is where the dome met the ground
+		ShinobiVfx::SpawnDebris(GetWorld(), GetActorLocation(), 6, 700.f * FMath::Sqrt(Scale), 0.07f, 4.f, Surface);
 	}
 }
 
@@ -221,7 +251,7 @@ bool AShinobiBurst::BuildCards()
 	const FLinearColor White = FLinearColor::White;
 	const float S = Scale;
 	// Offsets are on the ground plane around the burst; Size is width x height of the quad.
-	const auto Around = [&](float Radius, float Angle) { return FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * Radius; };
+	const auto Around = [&](float Radius, float Angle) { return SurfaceFrame.RotateVector(FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f)) * Radius; };
 	switch (Kind)
 	{
 	case EShinobiBurst::Fire:
@@ -526,8 +556,8 @@ void AShinobiBurst::Tick(float DeltaSeconds)
 			const FVector Origin = GetActorLocation() + Card.Offset * (Card.bRollOut ? FMath::Lerp(0.15f, 1.f, PushSwellAt(Age)) + 0.15f * Local : 1.f);
 			if (Card.bFlat)
 			{
-				Card.Mesh->SetWorldLocation(Origin + FVector(0.f, 0.f, 8.f));
-				Card.Mesh->SetWorldRotation(FRotator(0.f, Card.Spin * Age, 0.f));
+				Card.Mesh->SetWorldLocation(Origin + SurfaceUp * 8.f);
+				Card.Mesh->SetWorldRotation(SurfaceFrame * FQuat(FVector::UpVector, FMath::DegreesToRadians(Card.Spin * Age))); // turning about the surface's normal
 				Card.Mesh->SetWorldScale3D(FVector(Size.X / 100.f, Size.Y / 100.f, 1.f));
 			}
 			else if (Card.bAlongPath)
@@ -548,7 +578,7 @@ void AShinobiBurst::Tick(float DeltaSeconds)
 			else
 			{
 				const float FaceYaw = FMath::RadiansToDegrees(FMath::Atan2(CameraAt.Y - Origin.Y, CameraAt.X - Origin.X)) - 90.f;
-				Card.Mesh->SetWorldLocation(Origin + FVector(0.f, 0.f, Size.Y * 0.5f + Card.Rise * Local));
+				Card.Mesh->SetWorldLocation(Origin + FVector(0.f, 0.f, Size.Y * 0.5f + Card.Rise * Local) + SurfaceAway * Size.X * 0.25f); // flames rise whatever they stand on; on a wall they stand clear of it
 				Card.Mesh->SetWorldRotation(FRotator(0.f, FaceYaw, 90.f));
 				Card.Mesh->SetWorldScale3D(FVector(Size.X / 100.f, Size.Y / 100.f, 1.f));
 			}

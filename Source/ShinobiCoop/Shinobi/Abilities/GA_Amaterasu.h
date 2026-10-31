@@ -34,4 +34,7 @@ private:
 
 	/** Where the flames go when there's no enemy. */
 	FVector AimPoint = FVector::ZeroVector;
+
+	/** The normal of the surface AimPoint is on (a wall the flames cling to); zero: the floor under it. */
+	FVector AimNormal = FVector::ZeroVector;
 };
