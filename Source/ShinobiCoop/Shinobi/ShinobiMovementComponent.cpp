@@ -132,14 +132,15 @@ void UShinobiMovementComponent::UpdateCharacterStateBeforeMovement(float DeltaSe
 	if (bMounted && MovementMode == MOVE_Flying && CharacterOwner)
 	{
 		// Keep the dragon off the ground: from the capsule's floor, look down; too close pushes up, harder the closer it is (so a
-		// mount from the ground is a quick lift-off, and a dive eases out above the floor).
+		// mount from the ground is a quick lift-off, and a dive eases out above the floor). The push is the speed that the flying
+		// brakes stop right at the clearance: a springier push launched Tairn's 7 m lift-off 18 m up.
 		const UCapsuleComponent* Capsule = CharacterOwner->GetCapsuleComponent();
 		const FVector Feet = CharacterOwner->GetActorLocation() - FVector(0.f, 0.f, Capsule->GetScaledCapsuleHalfHeight());
 		FHitResult Hit;
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(MountClearance), false, CharacterOwner);
 		if (GetWorld()->LineTraceSingleByChannel(Hit, Feet, Feet - FVector(0.f, 0.f, MountedGroundClearance * 2.f), ECC_WorldStatic, Params) && Hit.Distance < MountedGroundClearance)
 		{
-			Velocity.Z = FMath::Max(Velocity.Z, (MountedGroundClearance - Hit.Distance) * 8.f);
+			Velocity.Z = FMath::Max(Velocity.Z, FMath::Sqrt(2.f * BrakingDecelerationFlying * (MountedGroundClearance - Hit.Distance)));
 		}
 	}
 	Super::UpdateCharacterStateBeforeMovement(DeltaSeconds);

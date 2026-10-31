@@ -475,12 +475,12 @@ bool FShinobiMountClearanceTest::RunTest(const FString& Parameters)
 	ShinobiTest::ApplyEffect(P, UGE_Mounted::StaticClass());
 	W.Tick(1.5f);
 	const float Gap = P->GetActorLocation().Z - Bottom + 88.f; // the capsule's floor above the ground
-	TestTrue(FString::Printf(TEXT("Mounting lifts the rider clear of the ground (%.0f)"), Gap), Gap >= UShinobiMovementComponent::MountedGroundClearance - 15.f);
+	TestTrue(FString::Printf(TEXT("Mounting lifts the rider clear of the ground (%.0f)"), Gap), Gap >= P->GetCharacterMovement<UShinobiMovementComponent>()->MountedGroundClearance - 15.f);
 
 	P->SetFlightDive(true);
 	W.Tick(2.f);
 	const float Dived = P->GetActorLocation().Z - Bottom + 88.f;
-	TestTrue(FString::Printf(TEXT("and diving cannot push the dragon into it (%.0f)"), Dived), Dived >= UShinobiMovementComponent::MountedGroundClearance - 15.f);
+	TestTrue(FString::Printf(TEXT("and diving cannot push the dragon into it (%.0f)"), Dived), Dived >= P->GetCharacterMovement<UShinobiMovementComponent>()->MountedGroundClearance - 15.f);
 	return true;
 }
 
@@ -709,7 +709,7 @@ bool FShinobiBreathGroundFireTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("Tairn leaves blue-white fire"), It->GetKind(), EShinobiFirePatch::TairnFire);
 		TestTrue(FString::Printf(TEXT("on the ground (z %.0f)"), It->GetActorLocation().Z), FMath::Abs(It->GetActorLocation().Z + 330.f) < 15.f);
 	}
-	TestTrue(FString::Printf(TEXT("a patch, not a heap of them (%d)"), Patches), Patches >= 1 && Patches <= 3);
+	TestTrue(FString::Printf(TEXT("a patch, not a heap of them (%d; the rider %.0f up, the fire ending %.0f up)"), Patches, Tairn->GetActorLocation().Z + 330.f, AShinobiDragonMount::BreathTarget(*Tairn).Z + 330.f), Patches >= 1 && Patches <= 3);
 
 	W.Tick(AShinobiFirePatch::DragonDuration + 0.5f);
 	TestEqual(TEXT("and it burns out"), ShinobiTest::CountActors<AShinobiFirePatch>(W), 0);

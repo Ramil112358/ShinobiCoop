@@ -103,6 +103,10 @@ void AShinobiPlayerController::BeginPlay()
 	{
 		RunSusanooShotTest();
 	}
+	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiDragonShot")))
+	{
+		RunDragonShotTest();
+	}
 	if (FString ShotOutfit; FApp::CanEverRender() && FParse::Value(FCommandLine::Get(), TEXT("ShinobiOutfitShot="), ShotOutfit))
 	{
 		RunOutfitShotTest(ShotOutfit);
@@ -1024,6 +1028,64 @@ void AShinobiPlayerController::RunSusanooShotTest()
 		At(10.8f + Index * 0.6f, [Shot, Index]() { Shot(FString::Printf(TEXT("ShinobiSusanooShot_1%d_Walk"), Index)); });
 	}
 	At(12.6f, [this]() { ConsoleCommand(TEXT("quit")); });
+}
+
+void AShinobiPlayerController::RunDragonShotTest()
+{
+	// Tairn (page 5, slot 1): summoned, lifted a little, then filmed hovering from around him (the body hangs below the seat, so the
+	// cameras aim under the rider) and from the gameplay camera.
+	auto At = [this](float Seconds, TFunction<void()> Fn)
+	{
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
+	};
+	auto Shot = [](const FString& Name)
+	{
+		FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Name), false, false);
+	};
+	auto Orbit = [this](float Yaw, float Height)
+	{
+		const APawn* Shinobi = GetPawn();
+		if (!Shinobi)
+		{
+			return;
+		}
+		const FVector Target = Shinobi->GetActorLocation() - Shinobi->GetActorForwardVector() * 150.f - FVector(0.f, 0.f, 150.f);
+		const FVector Eye = Target + Shinobi->GetActorForwardVector().RotateAngleAxis(Yaw, FVector::UpVector) * 2800.f + FVector(0.f, 0.f, Height);
+		ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Target - Eye).Rotation());
+		Camera->GetCameraComponent()->SetFieldOfView(60.f);
+		Camera->SetLifeSpan(1.f);
+		SetViewTarget(Camera);
+	};
+	auto Climb = [this](bool bHeld) { if (AShinobiPlayerCharacter* P = GetPawn<AShinobiPlayerCharacter>()) { P->SetFlightClimb(bHeld); } };
+	At(1.0f, [this]() { ShinobiEquipPage(5); ShinobiDrainChakra(-100.f); });
+	At(1.2f, [this]() { ShinobiCastHold(1, 0.9f); }); // 0.8 s seals: mounted from about 2.0
+	At(2.6f, [Climb]() { Climb(true); });
+	At(3.4f, [Climb]() { Climb(false); });
+	struct FView { float Yaw; float Height; const TCHAR* Name; };
+	static const FView Views[] = { { 90.f, 0.f, TEXT("ShinobiDragonShot_01_Side") }, { 90.f, 0.f, TEXT("ShinobiDragonShot_02_Side") }, // twice: the first frame after a cut can lag
+		{ 35.f, 300.f, TEXT("ShinobiDragonShot_03_Front") }, { 160.f, 300.f, TEXT("ShinobiDragonShot_04_Behind") }, { 90.f, 2400.f, TEXT("ShinobiDragonShot_05_Above") } };
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Views); ++Index)
+	{
+		const float When = 5.f + Index * 0.5f;
+		At(When, [Orbit, Index]() { Orbit(Views[Index].Yaw, Views[Index].Height); });
+		At(When + 0.25f, [Shot, Index]() { Shot(Views[Index].Name); });
+	}
+	At(7.8f, [this]() { SetViewTarget(GetPawn()); });
+	At(9.0f, [Shot]() { Shot(TEXT("ShinobiDragonShot_06_Gameplay")); });
+	auto Breathe = [this](bool bHeld)
+	{
+		if (AShinobiPlayerCharacter* P = GetPawn<AShinobiPlayerCharacter>())
+		{
+			const int32 Input = static_cast<int32>(EShinobiAbilityInputID::Melee); // mounted, melee breathes fire
+			bHeld ? P->GetAbilitySystemComponent()->AbilityLocalInputPressed(Input) : P->GetAbilitySystemComponent()->AbilityLocalInputReleased(Input);
+		}
+	};
+	At(9.1f, [Breathe]() { Breathe(true); });
+	At(9.9f, [Orbit]() { Orbit(70.f, 300.f); });
+	At(10.15f, [Shot]() { Shot(TEXT("ShinobiDragonShot_07_Breath")); });
+	At(10.3f, [Breathe]() { Breathe(false); });
+	At(10.8f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
 
 void AShinobiPlayerController::RunJutsuShotTest()

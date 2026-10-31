@@ -160,6 +160,8 @@ private:
 	void RunFireShotTest();
 	/** -ShinobiSusanooShot: the Perfect Susanoo from four sides, from the gameplay camera and through a melee slash (Scripts/shot_chakra.ps1 -Susanoo). */
 	void RunSusanooShotTest();
+	/** -ShinobiDragonShot: Tairn mounted and hovering, from the side, the front, behind, above, the gameplay camera and breathing fire (Scripts/shot_chakra.ps1 -Dragon). */
+	void RunDragonShotTest();
 
 	/** With -ShinobiLookShot (arena mode): screenshots of the map, the character and the first wave closing in, fighting
 	 * the nearest enemy, then quits. Used by `Scripts/shot_chakra.ps1 -Look`. */

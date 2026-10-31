@@ -5,6 +5,7 @@
 #             (hand orbs, fireball, burn, black flame, Chidori, Rasengan + Firestorm, Substitution log).
 # Opens a visible window for ~15-60 s; close the GUI editor first.
 #   -Susanoo: -ShinobiSusanooShot: the Perfect Susanoo from four sides, the gameplay camera and a melee slash.
+#   -Dragon:  -ShinobiDragonShot: Tairn mounted and hovering from the side, front, behind, above, the gameplay camera and breathing fire (~11 s).
 #   -Fire:    -ShinobiFireShot: a fire patch and a black-flame patch 5 m ahead, close-ups of the flame cards.
 #   -Look:    -ShinobiLookShot: the arena (-Map, default Training Grounds) in wave mode: the view ahead, the character,
 #             an overview, the first wave closing in and a fight.
@@ -32,7 +33,7 @@
 #   -RosterPresets: -ShinobiRosterPresetShot: each roster character's own body, then its Mutable preset, body and head (~110 s).
 #   -Perf:    the tour at 1920x1080, Epic preset, no vsync, 10 s per point; prints the average frame time at each point.
 #             Keep the game window in the foreground: Windows throttles background windows (about 2x slower).
-param([string]$Outfit = "", [string]$Portrait = "", [switch]$Phone, [switch]$Susanoo, [switch]$Fire, [switch]$Jutsu, [switch]$Look, [switch]$Tour, [switch]$Perf, [switch]$CreatorSpike, [switch]$FaceSliders, [switch]$FacePresets, [switch]$FaceBlend, [switch]$BodySliders, [switch]$CreatorOutfits, [switch]$CreatorMutable, [switch]$RosterPresets, [switch]$Wardrobe, [switch]$Tattoos, [switch]$Cloaks, [string]$Extra = "", [switch]$Packaged, [int]$TimeoutSec = 300, [string]$Map = "/Game/Shinobi/Maps/Lvl_TrainingGrounds")
+param([string]$Outfit = "", [string]$Portrait = "", [switch]$Phone, [switch]$Susanoo, [switch]$Dragon, [switch]$Fire, [switch]$Jutsu, [switch]$Look, [switch]$Tour, [switch]$Perf, [switch]$CreatorSpike, [switch]$FaceSliders, [switch]$FacePresets, [switch]$FaceBlend, [switch]$BodySliders, [switch]$CreatorOutfits, [switch]$CreatorMutable, [switch]$RosterPresets, [switch]$Wardrobe, [switch]$Tattoos, [switch]$Cloaks, [string]$Extra = "", [switch]$Packaged, [int]$TimeoutSec = 300, [string]$Map = "/Game/Shinobi/Maps/Lvl_TrainingGrounds")
 $ErrorActionPreference = "Stop"
 $Editor = "C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe"
 $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
@@ -46,7 +47,7 @@ if ($Packaged) { # the built game (Scripts/package.ps1) instead of the editor
 if ($Perf) { $Tour = $true }
 $Res = if ($Perf) { "-ResX=1920 -ResY=1080 -ExecCmds=`"scalability 3,r.VSync 0,t.MaxFPS 0`" -ShinobiPerf" } else { "-ResX=1280 -ResY=720" }
 if ($CreatorSpike -or $FaceSliders -or $FacePresets -or $FaceBlend -or $BodySliders -or $CreatorOutfits -or $CreatorMutable -or $RosterPresets -or $Wardrobe -or $Tattoos -or $Cloaks) { $Res += " -ExecCmds=`"r.Streaming.FullyLoadUsedTextures 1`"" } # close-ups of fragmented atlases bleed at low mips
-$Flag = if ($Cloaks) { "ShinobiCloakShot" } elseif ($Tattoos) { "ShinobiTattooShot" } elseif ($Wardrobe) { "ShinobiWardrobeShot" } elseif ($RosterPresets) { "ShinobiRosterPresetShot" } elseif ($CreatorMutable) { "ShinobiCreatorMutableShot" } elseif ($CreatorOutfits) { "ShinobiCreatorOutfitShot" } elseif ($BodySliders) { "ShinobiBodySliderShot" } elseif ($FaceBlend) { "ShinobiFaceBlendShot" } elseif ($FacePresets) { "ShinobiFacePresetShot" } elseif ($FaceSliders) { "ShinobiFaceSliderShot" } elseif ($CreatorSpike) { "ShinobiCreatorSpike" } elseif ($Portrait) { "ShinobiPortraitShot" } elseif ($Outfit) { "ShinobiOutfitShot" } elseif ($Tour) { "ShinobiWorldTour" } elseif ($Look) { "ShinobiLookShot" } elseif ($Fire) { "ShinobiFireShot" } elseif ($Susanoo) { "ShinobiSusanooShot" } elseif ($Jutsu) { "ShinobiJutsuShot" } else { "ShinobiShot" }
+$Flag = if ($Cloaks) { "ShinobiCloakShot" } elseif ($Tattoos) { "ShinobiTattooShot" } elseif ($Wardrobe) { "ShinobiWardrobeShot" } elseif ($RosterPresets) { "ShinobiRosterPresetShot" } elseif ($CreatorMutable) { "ShinobiCreatorMutableShot" } elseif ($CreatorOutfits) { "ShinobiCreatorOutfitShot" } elseif ($BodySliders) { "ShinobiBodySliderShot" } elseif ($FaceBlend) { "ShinobiFaceBlendShot" } elseif ($FacePresets) { "ShinobiFacePresetShot" } elseif ($FaceSliders) { "ShinobiFaceSliderShot" } elseif ($CreatorSpike) { "ShinobiCreatorSpike" } elseif ($Portrait) { "ShinobiPortraitShot" } elseif ($Outfit) { "ShinobiOutfitShot" } elseif ($Tour) { "ShinobiWorldTour" } elseif ($Look) { "ShinobiLookShot" } elseif ($Fire) { "ShinobiFireShot" } elseif ($Susanoo) { "ShinobiSusanooShot" } elseif ($Dragon) { "ShinobiDragonShot" } elseif ($Jutsu) { "ShinobiJutsuShot" } else { "ShinobiShot" }
 $Pattern = "$($Flag)_*.png"
 $Level = if ($Cloaks) { "${Map}?game=/Script/ShinobiCoop.ShinobiGameMode" } elseif ($Portrait -or $RosterPresets -or $Wardrobe -or $Tattoos) { $Map } elseif ($Tour) { if ($PSBoundParameters.ContainsKey("Map")) { $Map } else { "/Game/Shinobi/Maps/Lvl_HiddenLeafValley" } } elseif ($Look) { $Map } else { "/Game/ThirdPerson/Lvl_ThirdPerson?game=/Script/ShinobiCoop.ShinobiGameMode" }
 

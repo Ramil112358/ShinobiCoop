@@ -243,6 +243,30 @@ for side in WINGS:
             handed += 1
 print("[build_dragon] shoulder skin handed to the spine:", handed)
 
+# The tail, straightened for flight, was far longer than the body. Each tail bone from Tail_0 to the one before the club is squeezed
+# along its own length (its own scale only, so the squeeze never compounds down the chain; the club keeps its size), the mesh is
+# deformed with it, and that becomes the rest pose: Unreal gets a shorter tail with unscaled bones (scale keyed in the clips does not
+# work there: Unreal composes bone scale axis by axis, ignoring the children's turn, and the tail went thin instead of short).
+TAIL_SHORTEN = 0.5
+select(arm)
+bpy.ops.object.mode_set(mode="POSE")
+squeezed = ["Tail_0", "Tail_1", "Tail_2", "Tail_3"] + NEW_TAIL[:-1]
+tail_before = arm.data.bones[NEW_TAIL[-1]].tail_local.copy()
+for name in squeezed:
+    arm.data.bones[name].inherit_scale = "NONE"
+    arm.pose.bones[name].scale = (1, TAIL_SHORTEN, 1)
+bpy.context.view_layer.update()
+evaluated = body.evaluated_get(bpy.context.evaluated_depsgraph_get())
+deformed = [v.co.copy() for v in evaluated.to_mesh().vertices]
+evaluated.to_mesh_clear()
+for v, co in zip(body.data.vertices, deformed):
+    v.co = co
+bpy.ops.pose.armature_apply(selected=False)
+bpy.ops.object.mode_set(mode="OBJECT")
+for name in squeezed:
+    arm.data.bones[name].inherit_scale = "FULL"
+print("[build_dragon] tail squeezed: the club from", tuple(round(c, 2) for c in tail_before), "to", tuple(round(c, 2) for c in arm.data.bones[NEW_TAIL[-1]].tail_local))
+
 basecolor.scale(2048, 2048)
 basecolor.filepath_raw = os.path.join(OUT, "Tairn.png")
 basecolor.file_format = "PNG"
@@ -274,8 +298,6 @@ LEGS = {  # each leg's bones from the shoulder or hip down (toes follow), with w
 }
 WING_AIMS = ((0.1, 1, 0.05), (0.3, 1, 0.05), ((-0.1, 1, 0), (-0.7, 1, 0), (-1, 0.35, 0)))  # the left wing opened out flat: arm, forearm, fingers
 TAIL = ["bone_64", "Tail_0", "Tail_1", "Tail_2", "Tail_3"] + NEW_TAIL
-TAIL_SHORTEN = 0.5  # the tail's length in flight, as a share of Tripo's (children inherit the scale; the club's bone undoes it for itself)
-TAIL_SCALE = {TAIL[0]: TAIL_SHORTEN, TAIL[-1]: 1 / TAIL_SHORTEN}
 NECK = ["bone_4", "bone_5", "bone_6", "Head_0", "bone_8"]
 
 AIMS = {"bone_2": (1, 0, 0.15), "bone_3": (1, 0, 0.25)}  # the chest, raised at rest, level in flight
@@ -345,9 +367,6 @@ def pose(frame, turns, root_turn=I3, lift=0.0):
         world[name] = delta @ parent
         pb.rotation_quaternion = (REST[name].inverted() @ parent.inverted() @ delta @ parent @ REST[name]).to_quaternion()
         pb.keyframe_insert("rotation_quaternion", frame=frame)
-        if name in TAIL_SCALE:  # the straightened tail is far too long beside the body: squeezed along its length (the club keeps its size)
-            pb.scale = (1, TAIL_SCALE[name], 1)
-            pb.keyframe_insert("scale", frame=frame)
         if name == "Root":
             pivot = HIPS - BONES["Root"].head_local
             pb.location = REST[name].inverted() @ ((pivot - root_turn @ pivot) + Vector((0, 0, lift)))
@@ -471,7 +490,6 @@ arm.animation_data.action = None
 for pb in arm.pose.bones:
     pb.location = (0, 0, 0)
     pb.rotation_quaternion = (1, 0, 0, 0)
-    pb.scale = (1, 1, 1)
 scene.frame_set(0)
 select(arm, body)
 bpy.ops.export_scene.fbx(filepath=os.path.join(OUT, "Tairn.fbx"), use_selection=True, object_types={"ARMATURE", "MESH"}, bake_anim=False, **common)

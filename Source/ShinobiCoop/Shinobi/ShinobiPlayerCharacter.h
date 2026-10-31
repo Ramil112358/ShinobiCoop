@@ -52,6 +52,9 @@ class SHINOBICOOP_API AShinobiPlayerCharacter : public AShinobiCharacterBase
 public:
 	AShinobiPlayerCharacter(const FObjectInitializer& ObjectInitializer);
 
+	/** The camera boom while riding a dragon: each dragon sets its own (AShinobiDragonMount::AttachToRider). */
+	float MountedArmLength = 900.f;
+
 	/** False while charging chakra, shocked, staggered, reviving, downed or dead: move and jump input are ignored. */
 	bool CanMove() const;
 
@@ -301,7 +304,6 @@ private:
 	FRotator CameraFreeLookRotation = FRotator::ZeroRotator;
 
 	static constexpr float FootArmLength = 450.f;
-	static constexpr float MountedArmLength = 900.f;
 	static constexpr float SusanooArmLength = 1600.f; // the camera boom while the Perfect Susanoo stands (12 m tall)
 	static constexpr float SusanooLookHeight = 300.f; // and how far above the character it looks
 	static constexpr float MinCameraArmLength = 200.f;

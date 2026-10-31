@@ -171,7 +171,7 @@ void UGA_DragonBreath::Pulse()
 		FHitResult Floor;
 		const FVector End = AShinobiDragonMount::BreathTarget(*Self, BreathKind);
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(BreathGroundFire), false, Self);
-		if (Self->GetWorld()->LineTraceSingleByChannel(Floor, End + FVector(0.f, 0.f, 30.f), End - FVector(0.f, 0.f, 400.f), ECC_WorldStatic, Params)
+		if (Self->GetWorld()->LineTraceSingleByChannel(Floor, End + FVector(0.f, 0.f, 30.f), End - FVector(0.f, 0.f, 600.f), ECC_WorldStatic, Params) // Tairn at his lowest ends his jet ~3.6 m up
 			&& Floor.ImpactNormal.Z > 0.5f && FVector::Dist2D(Floor.ImpactPoint, LastPatchAt) > 140.f)
 		{
 			LastPatchAt = Floor.ImpactPoint;
