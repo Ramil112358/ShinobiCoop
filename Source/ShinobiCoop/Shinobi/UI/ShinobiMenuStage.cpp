@@ -161,13 +161,13 @@ void AShinobiMenuStage::SetStudio(bool bStudio)
 	}
 	if (!bStudio)
 	{
-		SetActorTransform(Home);
+		SetActorTransform(Home, false, nullptr, ETeleportType::ResetPhysics);
 		bInStudio = false;
 	}
 	else if (const AShinobiStudioSet* Studio = GetStudio())
 	{
 		Home = GetActorTransform();
-		SetActorTransform(Studio->GetActorTransform());
+		SetActorTransform(Studio->GetActorTransform(), false, nullptr, ETeleportType::ResetPhysics);
 		bInStudio = true;
 	}
 }

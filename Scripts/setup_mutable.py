@@ -53,7 +53,7 @@ import sys
 import unreal
 
 sys.path += [os.path.dirname(os.path.abspath(__file__)), os.path.join(os.path.dirname(__file__), "mutable")]
-from names import (BASE, BUILDS, CATALOG, FAB_MAX_INSIDE, FAB_PACKAGES, FAB_PIECES, SAMPLE_CONTENT, SAMPLE_FOLDERS, SAMPLE_PIECES, CLIP, CLIP_DEPTH, CLIP_ERODE, CLIP_OUT, CLIP_REACH, FIT_KEEP_BONES, FIT_KEEP_FADE, FIT_PREFIX, FIT_MAX_MOVE, FIT_SMOOTH, FIT_SOURCES, FIT_SUFFIX, HEADS, HEADS_DIR, CLIP_SUFFIX, HIDES_SUFFIX,  # noqa: E402
+from names import (BASE, BUILDS, CATALOG, FAB_MAX_INSIDE, FAB_PACKAGES, FAB_PIECES, SAMPLE_CONTENT, SAMPLE_FOLDERS, SAMPLE_PIECES, CLIP, CLIP_DEPTH, CLIP_ERODE, CLIP_OUT, CLIP_REACH, CLIP_SHOE_BELOW, CLIP_SHOE_DEPTH, CLIP_SHOE_OUT, CLIP_SHOE_REACH, FIT_KEEP_BONES, FIT_KEEP_FADE, FIT_PREFIX, FIT_MAX_MOVE, FIT_SMOOTH, FIT_SOURCES, FIT_SUFFIX, HEADS, HEADS_DIR, CLIP_SUFFIX, HIDES_SUFFIX,  # noqa: E402
                    MESH_SUFFIX, MUTABLE_ROOT, OBJECT, OFF, ON, OWN, OWN_BODIES, PALETTE, PARAM_BODY, PARAM_BUILD, PARAM_BUILD_BLEND,
                    NO_FIT, PARAM_FIT_BASE, PARAM_FIT_STRENGTH, SLOTS, WARDROBE_TABLE)
 
@@ -475,8 +475,17 @@ def clip(slot, row, sex, mesh, fit, remake):
     base = BASE.format(sex=sex)
     # (kept between runs and remade in place: a deleted asset can't be duplicated onto in the same session)
     volume = unreal.load_asset(path) if EAL.does_asset_exist(path) else EAL.duplicate_asset(base, path)
+    # Shoes hold the whole foot below their top (toes past a short shoe's tip too), a little further out: their clips aren't
+    # reshaped, so a heavier build's foot stays inside.
+    shoes = slot == "Shoes"
     covered = unreal.ShinobiMutableMeshLibrary.make_clip_volume(volume, unreal.load_asset(base), FIT_PREFIX + fit if fit else "None",
-                                                                  unreal.load_asset(mesh), CLIP_REACH, CLIP_ERODE, CLIP_OUT, CLIP_DEPTH)
+                                                                  unreal.load_asset(mesh), CLIP_SHOE_REACH if shoes else CLIP_REACH, CLIP_ERODE,
+                                                                  CLIP_SHOE_OUT if shoes else CLIP_OUT, CLIP_SHOE_DEPTH if shoes else CLIP_DEPTH,
+                                                                  CLIP_SHOE_BELOW if shoes else 0.0)
+    # The built body has one LOD: the clip needs no more (each would hold a full copy of the volume).
+    lods = unreal.get_editor_subsystem(unreal.SkeletalMeshEditorSubsystem)
+    if lods.get_lod_count(volume) > 1:
+        lods.remove_lods(volume, list(range(1, lods.get_lod_count(volume))))
     EAL.save_loaded_asset(volume, only_if_is_dirty=False)
     log(f"clip {slot} {row} {sex}: {covered} triangles")
     return asset_path(path) if covered else None
@@ -598,9 +607,15 @@ def coverage():
 THUMBNAILS = f"{MUTABLE_ROOT}/Thumbnails"
 
 
+def sole(sex, mesh):
+    """How far a shoe mesh reaches below its sex's base body (cm, 0 if not): the body stands that much higher in it."""
+    lowest = lambda path: min(p.z for p in unreal.ShinobiMutableMeshLibrary.read_mesh_surface(unreal.load_asset(path))[0])
+    return round(max(0.0, lowest(BASE.format(sex=sex)) - lowest(mesh)), 2)
+
+
 def thumbnails():
-    """Imports Saved/MenuArt/Thumbnails/T_Thumb_<Slot>_<Row>.png (Scripts/menu_shots.ps1 -Thumbnails), then refills the
-    wardrobe tables so each row points at its picture."""
+    """Imports Saved/MenuArt/Thumbnails/T_Thumb_<Slot>_<Row>.png (Scripts/menu_shots.ps1 -Thumbnails). The wardrobe stage
+    then points each row at its picture: SETUP_MUTABLE_ONLY=thumbnails,wardrobe."""
     source = os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir()), "Saved", "MenuArt", "Thumbnails")
     pngs = sorted(glob.glob(os.path.join(source, "T_Thumb_*.png")))
     for png in pngs:
@@ -618,18 +633,26 @@ def thumbnails():
         texture.set_editor_property("max_texture_size", 256)
         EAL.save_loaded_asset(texture, only_if_is_dirty=False)
     log(f"{len(pngs)} thumbnails from {source}")
-    wardrobe()
+
+
+# Slots whose clips a run remakes (SETUP_MUTABLE_REMAKE=Shoes), besides a remake of all.
+REMAKE_SLOTS = [s for s in os.environ.get("SETUP_MUTABLE_REMAKE", "").split(",") if s]
 
 
 def wardrobe(remake=False):
     for slot in SLOTS:
+        slot_remake = remake or slot in REMAKE_SLOTS
         rows = wardrobe_rows(slot) + sample_rows(slot, remake)
         for row in rows:
             for sex in SEXES:
                 if row.get(f"{sex}Mesh"):
-                    row[f"{sex}Clip"] = clip(slot, row["Name"], sex, row[f"{sex}Mesh"], row.get(f"{sex}Fit"), remake)
+                    row[f"{sex}Clip"] = clip(slot, row["Name"], sex, row[f"{sex}Mesh"], row.get(f"{sex}Fit"), slot_remake)
                     row[f"{sex}Tinted"] = tinted(row[f"{sex}Mesh"])
             row["ColourParameters"] = [CITY_SAMPLE_COLOUR]
+            if slot == "Shoes" or "Shoes" in row.get("Replaces", []):  # (a whole outfit's boots)
+                for sex in SEXES:
+                    if row.get(f"{sex}Mesh"):
+                        row[f"{sex}Sole"] = sole(sex, row[f"{sex}Mesh"])
             thumb = f"{THUMBNAILS}/T_Thumb_{slot}_{row['Name']}"
             if EAL.does_asset_exist(thumb):
                 row["Thumbnail"] = asset_path(thumb)
@@ -734,7 +757,7 @@ def graph():
         link(reshape, "Skeletal Mesh", worn, ON)
         pieces.append(worn)
 
-        # Its coverage volume, as made on the piece's fit shape (close to the average build): reshaping it to the built
+        # Its coverage volume, judged on the piece's fit shape and built around the base's (the average build): reshaping it to the built
         # body tore holes and spikes through the merged pieces (Mutable 5.8 clipping with a reshaped mesh, also reported
         # on the forums), so slim, heavy and own builds hide roughly what the average one would.
         clip_mesh = mesh_parameter(co, slot + CLIP_SUFFIX, CLIP_DEFAULT, -3000, y + 350)
@@ -765,5 +788,5 @@ def graph():
 
 
 STAGES = {"bases": bases, "faceskin": face_skin, "samplecopy": sample_copy, "fabimport": fab_import, "fits": fits, "heads": heads, "catalog": catalog, "skintone": skintone, "skinlayer": skinlayer, "tattoos": tattoos, "makeup": makeup, "palette": palette, "thumbnails": thumbnails, "coverage": coverage, "wardrobe": wardrobe, "graph": graph}
-for stage in ONLY or [s for s in STAGES if s != "faceskin"]:
+for stage in ONLY or [s for s in STAGES if s not in ("faceskin", "coverage")]:  # (coverage remakes every clip: on demand)
     STAGES[stage]()

@@ -44,8 +44,10 @@ bool UShinobiBodyComponent::Wear(const TCHAR* MeshPath, const TCHAR* RetargeterP
 	Retargeter = Found;
 	SetSkeletalMeshAsset(Body);
 	SetAnimInstanceClass(UShinobiRetargetAnimInstance::StaticClass());
+	WornSole = 0.f; // (barefoot: a roster body's feet are its own)
 	UpdateBody(FShinobiAppearance()); // a roster body is worn as made: no creator shapes or height
 	FittingName.Reset();
+	WornHeadTint = FLinearColor::White;
 	EmptyOverrideMaterials(); // the last made body's skin tint
 	WearStaticHead(nullptr);
 	WearMetaHumanParts(MetaHumanClassPath);
@@ -97,6 +99,16 @@ void UShinobiBodyComponent::DressBuilt(USkeletalMesh* Built)
 		return; // the wearer left (its world is gone) while this built
 	}
 	const FShinobiAppearance& Look = PendingLook;
+	// The sole on the floor: the worn shoes', or a whole outfit's that takes the shoes off (UpdateBody lifts by it).
+	WornSole = 0.f;
+	for (int32 Index = 0; Index < ShinobiWardrobeSlotCount; ++Index)
+	{
+		const FShinobiWardrobeRow* Piece = UShinobiMutableLook::WornRow(Look, EShinobiWardrobeSlot(Index));
+		if (Piece && (Index == int32(EShinobiWardrobeSlot::Shoes) || Piece->Replaces.Contains(EShinobiWardrobeSlot::Shoes)))
+		{
+			WornSole = FMath::Max(WornSole, Look.Sex == EShinobiSex::Female ? Piece->FemaleSole : Piece->MaleSole);
+		}
+	}
 	const FShinobiCreatorFace* FacePick = Catalog->FindFace(Look.Sex, Look.Face);
 	// Retargeter first: a new mesh re-initialises the anim instance, which reads it. The Own build is a roster MetaHuman's
 	// body: its own retargeter.
@@ -271,6 +283,7 @@ void UShinobiBodyComponent::UpdateBody(const FShinobiAppearance& Look)
 	// driver mesh moved so the feet stay on the capsule's floor.
 	const float Height = 1.f + HeightReach * Value(0);
 	SetRelativeScale3D(FVector(Height));
+	LiftForSoles(WornSole * Height); // (the body, and its sole, scale about the feet)
 	if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
 	{
 		const ACharacter* Defaults = Character->GetClass()->GetDefaultObject<ACharacter>();
@@ -347,9 +360,15 @@ void UShinobiBodyComponent::UpdateSkin(const FShinobiAppearance& Look)
 			FMemory::Memcpy(Kept->SlotColour, Look.SlotColour, sizeof(Look.SlotColour));
 		}
 	}
+	ColourPieces(Look); // (first, as DressBuilt: a fresh colour copy then takes the tone on top)
 	ApplySkinTone(Look, WornHeadTint);
 	ApplySkinLayers(Look);
-	ColourPieces(Look);
+}
+
+void UShinobiBodyComponent::LiftForSoles(float Lift)
+{
+	AddRelativeLocation(FVector(0.f, 0.f, Lift - SoleLift));
+	SoleLift = Lift;
 }
 
 void UShinobiBodyComponent::ApplySkinTone(const FShinobiAppearance& Look, const FLinearColor& HeadTint)
@@ -460,12 +479,13 @@ void UShinobiBodyComponent::ColourPieces(const FShinobiAppearance& Look)
 	const UDataTable* Palette = LoadObject<UDataTable>(nullptr, ShinobiMutable::PalettePath, nullptr, LOAD_NoWarn | LOAD_Quiet);
 	const TArray<FName> Colours = Palette ? Palette->GetRowNames() : TArray<FName>();
 	const bool bFemale = Look.Sex == EShinobiSex::Female;
+	TSet<int32> Taken; // sections a slot already coloured (or kept Original): two pieces sharing a material, the first wins
 	for (int32 Index = 0; Index < ShinobiWardrobeSlotCount; ++Index)
 	{
 		const EShinobiWardrobeSlot Slot = EShinobiWardrobeSlot(Index);
 		const uint8 Colour = Look.SlotColour[Index];
 		const bool bColoured = Colour > 0 && Colours.IsValidIndex(Colour);
-		const FShinobiWardrobeRow* Row = UShinobiMutableLook::FindRow(Slot, Look.Slot(Slot));
+		const FShinobiWardrobeRow* Row = UShinobiMutableLook::WornRow(Look, Slot); // (not a piece another took off)
 		const USkeletalMesh* Piece = Row ? (bFemale ? Row->FemaleMesh : Row->MaleMesh).LoadSynchronous() : nullptr;
 		const USkeletalMesh* Built = GetSkeletalMeshAsset();
 		if (!Piece || !Built)
@@ -481,10 +501,11 @@ void UShinobiBodyComponent::ColourPieces(const FShinobiAppearance& Look)
 			// The built body keeps the piece's materials: those sections take the colour (or, Original, their own again).
 			for (int32 Section = 0; Copy && Own && Section < Built->GetMaterials().Num(); ++Section)
 			{
-				if (Built->GetMaterials()[Section].MaterialInterface != Own)
+				if (Built->GetMaterials()[Section].MaterialInterface != Own || Taken.Contains(Section))
 				{
 					continue;
 				}
+				Taken.Add(Section);
 				if (!bColoured)
 				{
 					SetMaterial(Section, Own);

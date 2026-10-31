@@ -63,6 +63,14 @@ struct FShinobiWardrobeRow : public FTableRowBase
 	/** Whether the piece's material takes the Wear parameter (the CREATE tab shows a Wear slider for it). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Wardrobe)
 	bool bHasWear = false;
+
+	/** How far each sex's shoe reaches below the base's feet (cm; Scripts/setup_mutable.py wardrobe): a body wearing it
+	 * stands that much higher, so the sole is on the floor, not in it. 0 for other slots. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Wardrobe)
+	float MaleSole = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Wardrobe)
+	float FemaleSole = 0.f;
 };
 
 /** A wardrobe colour (a row of DT_Palette): FShinobiAppearance::SlotColour indexes the rows in order. Row 0 ("Original")

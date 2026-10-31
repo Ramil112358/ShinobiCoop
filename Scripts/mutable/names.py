@@ -117,6 +117,10 @@ WARDROBE_TABLE = f"{MUTABLE_ROOT}/DT_Wardrobe_{{slot}}"  # .format(slot="Top")
 # Coverage volumes (setup_mutable.py stage coverage; UShinobiMutableMeshLibrary::MakeClipVolume).
 CLIP = f"{MUTABLE_ROOT}/Wardrobe/Clips/SK_Clip_{{slot}}_{{row}}_{{sex}}"
 CLIP_REACH, CLIP_ERODE, CLIP_OUT, CLIP_DEPTH = 4.0, 1, 0.3, 3.0  # cm, rings, cm, cm
+# cm: shoes' clips reach further out, hold the foot under the shoe, and go only 0.5 cm in (toes are thinner than 3 cm: a
+# deeper inner layer comes out the other side and the volume crosses itself)
+CLIP_SHOE_OUT, CLIP_SHOE_DEPTH, CLIP_SHOE_BELOW = 1.5, 0.5, 30.0  # (below: the shoe straight above within 30 cm)
+CLIP_SHOE_REACH = 1.5  # cm: a shoe covers skin it hugs (a 4 cm reach caught ankle skin under a higher tongue or collar)
 MAX_TATTOOS = 3
 
 # Roster characters with a grafted static head, and their base sex (catalog Heads order = this order).

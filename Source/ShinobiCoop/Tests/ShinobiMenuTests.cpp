@@ -590,4 +590,15 @@ bool FShinobiMenuStageKeepsHeightOnWideTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPreviewTurnsWithRightMouseTest, "ShinobiCoop.UI.PreviewTurnsWithRightMouse", ShinobiTestFlags)
+bool FShinobiPreviewTurnsWithRightMouseTest::RunTest(const FString& Parameters)
+{
+	// Holding the right mouse button turns the preview (the left one stays for the panels); a drag right turns the
+	// character's front to the right.
+	TestTrue(TEXT("RMB turns"), UShinobiPreviewCatcher::TurnsPreview(EKeys::RightMouseButton));
+	TestFalse(TEXT("LMB doesn't"), UShinobiPreviewCatcher::TurnsPreview(EKeys::LeftMouseButton));
+	TestEqual(TEXT("a drag right turns it right"), UShinobiPreviewCatcher::TurnForDrag(10.f), -4.f, 0.001f);
+	return true;
+}
+
 #endif

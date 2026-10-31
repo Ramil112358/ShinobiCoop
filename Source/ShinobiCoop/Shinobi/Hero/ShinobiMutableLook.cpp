@@ -27,6 +27,19 @@ const FShinobiWardrobeRow* UShinobiMutableLook::FindRow(EShinobiWardrobeSlot Slo
 	return int32(Slot) < ShinobiWardrobeSlotCount ? FindPiece(ShinobiMutable::SlotNames[int32(Slot)], Index) : nullptr;
 }
 
+const FShinobiWardrobeRow* UShinobiMutableLook::WornRow(const FShinobiAppearance& Look, EShinobiWardrobeSlot Slot)
+{
+	for (int32 Index = 0; Index < ShinobiWardrobeSlotCount; ++Index)
+	{
+		const FShinobiWardrobeRow* Other = Index != int32(Slot) ? FindRow(EShinobiWardrobeSlot(Index), Look.Slot(EShinobiWardrobeSlot(Index))) : nullptr;
+		if (Other && Other->Replaces.Contains(Slot))
+		{
+			return nullptr;
+		}
+	}
+	return FindRow(Slot, Look.Slot(Slot));
+}
+
 bool UShinobiMutableLook::Request(const FShinobiAppearance& Look)
 {
 	const FString Path = ObjectPathOverride.IsEmpty() ? FString(ShinobiMutable::ObjectPath) : ObjectPathOverride;

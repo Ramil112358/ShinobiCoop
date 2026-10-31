@@ -14,6 +14,8 @@
 #include "DynamicMesh/DynamicMeshAABBTree3.h"
 #include "MeshDescription.h"
 #include "MeshQueries.h"
+#include "Spatial/FastWinding.h"
+#include "Implicit/Solidify.h"
 #include "SkeletalMeshAttributes.h"
 
 namespace
@@ -515,7 +517,7 @@ FString UShinobiMutableMeshLibrary::BakeFitMorph(USkeletalMesh* Base, FName Morp
 	return Report;
 }
 
-int32 UShinobiMutableMeshLibrary::MakeClipVolume(USkeletalMesh* Clip, USkeletalMesh* Base, FName FitMorph, USkeletalMesh* Piece, float Reach, int32 Erode, float Out, float Depth)
+int32 UShinobiMutableMeshLibrary::MakeClipVolume(USkeletalMesh* Clip, USkeletalMesh* Base, FName FitMorph, USkeletalMesh* Piece, float Reach, int32 Erode, float Out, float Depth, float Below)
 {
 	int32 Covered = 0;
 #if WITH_EDITOR
@@ -555,6 +557,41 @@ int32 UShinobiMutableMeshLibrary::MakeClipVolume(USkeletalMesh* Clip, USkeletalM
 		int32 Triangle = IndexConstants::InvalidID;
 		In[Vertex] = Cloth.Tree.FindNearestHitTriangle(FRay3d(Positions[Vertex] - Normals[Vertex], Normals[Vertex]), Hit, Triangle) && Hit <= Reach + 1.0;
 	}
+	if (Below > 0.f)
+	{
+		// Shoes: skin with the shoe straight above it within Below cm is inside (the whole foot under a shoe, not skin
+		// beside a lower part of it), and so is every toe (skinned mostly to a toe or ball bone) under or near the shoe,
+		// even one rising through a low toe cap.
+		const FReferenceSkeleton& Bones = Base->GetRefSkeleton();
+		FSkinWeightsVertexAttributesConstRef Weighting = FSkeletalMeshConstAttributes(Description).GetVertexSkinWeights();
+		const FBox ShoeBox = FBox(PiecePoints).ExpandBy(FVector(6.0, 6.0, 2.0)); // (toes past a short shoe's tip)
+		for (int32 Vertex = 0; Vertex < Positions.Num(); ++Vertex)
+		{
+			if (In[Vertex] || !ShoeBox.IsInside(Positions[Vertex]))
+			{
+				continue;
+			}
+			double Up = 0.0;
+			int32 Hit = IndexConstants::InvalidID;
+			if (Cloth.Tree.FindNearestHitTriangle(FRay3d(Positions[Vertex], FVector::UnitZ()), Up, Hit) && Up <= Below)
+			{
+				In[Vertex] = true;
+				continue;
+			}
+			FName Strongest;
+			float Most = 0.f;
+			for (const UE::AnimationCore::FBoneWeight& Weight : Weighting.Get(Ids[Vertex]))
+			{
+				if (Weight.GetWeight() > Most && Bones.IsValidIndex(Weight.GetBoneIndex()))
+				{
+					Most = Weight.GetWeight();
+					Strongest = Bones.GetBoneName(Weight.GetBoneIndex());
+				}
+			}
+			const FString Bone = Strongest.ToString();
+			In[Vertex] = Bone.Contains(TEXT("toe")) || Bone.StartsWith(TEXT("ball"));
+		}
+	}
 	// The covered triangles, eroded at the rim: a vertex on a triangle that isn't covered leaves.
 	TArray<int32> Region;
 	for (int32 Pass = 0; Pass <= Erode; ++Pass)
@@ -587,7 +624,28 @@ int32 UShinobiMutableMeshLibrary::MakeClipVolume(USkeletalMesh* Clip, USkeletalM
 	{
 		return 0;
 	}
-	// The shell, wound outward: the region pushed out, a reversed copy pushed in, walls along each rim edge.
+	// The shell, wound outward: the region pushed out, a reversed copy pushed in, walls along each rim edge. Around the
+	// base's own shape, not the fit shape coverage was judged in: clips aren't reshaped, and the built body at the
+	// average build is the base.
+	if (!FitMorph.IsNone())
+	{
+		TArray<int32> Unused;
+		Positions.Reset(); // (Surface appends)
+		Surface(Description, Positions, Unused);
+		Normals.Init(FVector::ZeroVector, Positions.Num());
+		for (int32 Index = 0; Index + 2 < Triangles.Num(); Index += 3)
+		{
+			const FVector Area = FVector::CrossProduct(Positions[Triangles[Index + 2]] - Positions[Triangles[Index]], Positions[Triangles[Index + 1]] - Positions[Triangles[Index]]);
+			for (int32 Corner = 0; Corner < 3; ++Corner)
+			{
+				Normals[Triangles[Index + Corner]] += Area * Body.Sign;
+			}
+		}
+		for (FVector& Normal : Normals)
+		{
+			Normal = Normal.GetSafeNormal();
+		}
+	}
 	FSkeletalMeshAttributes Attributes(Description);
 	FSkinWeightsVertexAttributesRef Skin = Attributes.GetVertexSkinWeights();
 	TArray<TArray<UE::AnimationCore::FBoneWeight>> Weights;
@@ -651,6 +709,73 @@ int32 UShinobiMutableMeshLibrary::MakeClipVolume(USkeletalMesh* Clip, USkeletalM
 			}
 		}
 	}
+	{
+		// The shell's layers cross wherever the skin folds or parts touch (between toes, at a collar, under an arm), and
+		// Mutable, which counts surface hits straight up, reads those parts as outside. Remeshed from its winding number
+		// into one clean closed surface (finer for shoes' toes); each new vertex skinned as the shell's nearest.
+		FDynamicMesh3 Shell;
+		TArray<TArray<UE::AnimationCore::FBoneWeight>> ShellWeights;
+		TMap<FVertexID, int32> ShellIndex;
+		for (const FVertexID Vertex : Description.Vertices().GetElementIDs())
+		{
+			ShellIndex.Add(Vertex, Shell.AppendVertex(FVector3d(Description.GetVertexPositions()[Vertex])));
+			TArray<UE::AnimationCore::FBoneWeight>& Each = ShellWeights.AddDefaulted_GetRef();
+			for (const UE::AnimationCore::FBoneWeight& Weight : Skin.Get(Vertex))
+			{
+				Each.Add(Weight);
+			}
+		}
+		for (const FTriangleID Tri : Description.Triangles().GetElementIDs())
+		{
+			const TArrayView<const FVertexID> Corners = Description.GetTriangleVertices(Tri);
+			Shell.AppendTriangle(ShellIndex[Corners[0]], ShellIndex[Corners[1]], ShellIndex[Corners[2]]);
+		}
+		FDynamicMeshAABBTree3 ShellTree(&Shell, true);
+		UE::Geometry::TFastWindingTree<FDynamicMesh3> ShellWinding(&ShellTree);
+		UE::Geometry::TImplicitSolidify<FDynamicMesh3> Solid(&Shell, &ShellTree, &ShellWinding);
+		Solid.MeshCellSize = Below > 0.f ? 0.5 : 1.0; // (finer is heavier: Mutable reads the clip at every build)
+		Solid.ExtendBounds = 1.0;
+		const UE::Geometry::FMeshShapeGenerator& Remeshed = Solid.Generate();
+		if (Remeshed.Triangles.Num() > 0)
+		{
+			Description.Empty();
+			const FPolygonGroupID Remade = Description.CreatePolygonGroup();
+			Attributes.GetPolygonGroupMaterialSlotNames()[Remade] = Slot;
+			TArray<FVertexID> Made;
+			for (const FVector3d& Point : Remeshed.Vertices)
+			{
+				const FVertexID New = Description.CreateVertex();
+				Description.GetVertexPositions()[New] = FVector3f(Point);
+				double Distance = 0.0;
+				const int32 Nearest = ShellTree.FindNearestTriangle(Point, Distance);
+				int32 Corner = 0;
+				if (Shell.IsTriangle(Nearest))
+				{
+					const UE::Geometry::FIndex3i Tri = Shell.GetTriangle(Nearest);
+					Corner = Tri.A;
+					for (const int32 Other : {Tri.B, Tri.C})
+					{
+						Corner = FVector3d::DistSquared(Shell.GetVertex(Other), Point) < FVector3d::DistSquared(Shell.GetVertex(Corner), Point) ? Other : Corner;
+					}
+				}
+				Skin.Set(New, ShellWeights[Corner]);
+				Made.Add(New);
+			}
+			for (const UE::Geometry::FIndex3i& Tri : Remeshed.Triangles)
+			{
+				if (Tri.A == Tri.B || Tri.B == Tri.C || Tri.A == Tri.C)
+				{
+					continue;
+				}
+				TArray<FVertexInstanceID> Corners;
+				for (const int32 Vertex : {Tri.A, Tri.B, Tri.C})
+				{
+					Corners.Add(Description.CreateVertexInstance(Made[Vertex]));
+				}
+				Description.CreateTriangle(Remade, Corners);
+			}
+		}
+	}
 	for (int32 Lod = 0; Lod < Clip->GetLODNum(); ++Lod)
 	{
 		FMeshDescription Copy = Description;
@@ -662,6 +787,40 @@ int32 UShinobiMutableMeshLibrary::MakeClipVolume(USkeletalMesh* Clip, USkeletalM
 	Clip->Build();
 #endif
 	return Covered;
+}
+
+float UShinobiMutableMeshLibrary::FractionOfPointsInside(const TArray<FVector>& Points, USkeletalMesh* Volume)
+{
+#if WITH_EDITOR
+	TArray<FVector> VolumePoints;
+	TArray<int32> VolumeTriangles;
+	if (Points.Num() == 0 || !ReadMeshSurface(Volume, VolumePoints, VolumeTriangles))
+	{
+		return -1.f;
+	}
+	// As Mutable's Clip Skeletal Mesh With Skeletal Mesh judges it (OpMeshClipWithMesh.cpp): an odd number of surface
+	// hits straight up (+Z), hits at the same distance counted once. (So overlapping parts of a volume cancel out.)
+	FSurface Surface(VolumePoints, VolumeTriangles);
+	int32 Inside = 0;
+	for (const FVector& Point : Points)
+	{
+		TArray<MeshIntersection::FHitIntersectionResult> Hits;
+		Surface.Tree.FindAllHitTriangles(FRay3d(Point, FVector::UnitZ()), Hits);
+		int32 Distinct = Hits.Num() > 0 ? 1 : 0;
+		for (int32 Hit = 1, Compare = 0; Hit < Hits.Num(); ++Hit)
+		{
+			if (FMath::Abs(Hits[Compare].Distance - Hits[Hit].Distance) > UE_DOUBLE_KINDA_SMALL_NUMBER)
+			{
+				++Distinct;
+				Compare = Hit;
+			}
+		}
+		Inside += (Distinct & 1) ? 1 : 0;
+	}
+	return float(Inside) / Points.Num();
+#else
+	return -1.f;
+#endif
 }
 
 float UShinobiMutableMeshLibrary::FractionInside(USkeletalMesh* Piece, USkeletalMesh* Body, float Tolerance, FName Morph)

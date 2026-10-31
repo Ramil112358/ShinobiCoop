@@ -246,14 +246,19 @@ void UShinobiMenuShotSubsystem::StartThumbnails(UWorld& World)
 	RunSteps(MoveTemp(Steps), 0.75f);
 }
 
-TFunction<void()> UShinobiMenuShotSubsystem::ShootThumbnail(TWeakObjectPtr<AShinobiMenuStage> Stage, int32 WardrobeSlot, uint8 Row, FString Name)
+TFunction<void()> UShinobiMenuShotSubsystem::ShootThumbnail(TWeakObjectPtr<AShinobiMenuStage> Stage, int32 WardrobeSlot, uint8 Row, FString Name, int32 Tries)
 {
-	return [this, Stage, WardrobeSlot, Row, Name]()
+	return [this, Stage, WardrobeSlot, Row, Name, Tries]()
 	{
 		UShinobiBodyComponent* Body = Stage.IsValid() ? Stage->GetBody() : nullptr;
 		if (Body && Body->IsMutableBuildPending())
 		{
-			Pending.Insert(ShootThumbnail(Stage, WardrobeSlot, Row, Name), 0); // not built yet: again next step
+			if (Tries >= 120) // 90 s
+			{
+				UE_LOG(LogTemp, Warning, TEXT("%s: the build never landed; no thumbnail"), *Name);
+				return;
+			}
+			Pending.Insert(ShootThumbnail(Stage, WardrobeSlot, Row, Name, Tries + 1), 0); // not built yet: again next step
 			return;
 		}
 		const FShinobiWardrobeRow* Piece = UShinobiMutableLook::FindRow(EShinobiWardrobeSlot(WardrobeSlot), Row);
@@ -267,9 +272,11 @@ TFunction<void()> UShinobiMenuShotSubsystem::ShootThumbnail(TWeakObjectPtr<AShin
 		FBox Box = Mesh->GetBounds().GetBox().TransformBy(Body->GetComponentTransform());
 		if (WardrobeSlot == int32(EShinobiWardrobeSlot::Shoes))
 		{
-			// (shoe meshes' bounds reach far past the feet): the feet, from ankle to toe
-			Box = FBox(TArray<FVector>{ Body->GetBoneLocation(TEXT("foot_l")), Body->GetBoneLocation(TEXT("foot_r")), Body->GetBoneLocation(TEXT("ball_l")),
-				Body->GetBoneLocation(TEXT("ball_r")) }).ExpandBy(FVector(12.f, 12.f, 10.f));
+			// (shoe meshes' bounds reach far past the feet): both feet, ankle to toe, centred between them
+			const FVector Left = Body->GetBoneLocation(TEXT("foot_l")), Right = Body->GetBoneLocation(TEXT("foot_r"));
+			const FVector Middle = (Left + Right) / 2.f;
+			const double Reach = FVector::Dist2D(Left, Right) / 2.0 + 30.0;
+			Box = FBox::BuildAABB(Middle - FVector(0.f, 0.f, 4.f), FVector(Reach, Reach, 12.0));
 		}
 		const float Fov = 30.f;
 		const float Radius = FMath::Max(Box.GetExtent().Z, FMath::Max(Box.GetExtent().X, Box.GetExtent().Y)) * 1.1f;

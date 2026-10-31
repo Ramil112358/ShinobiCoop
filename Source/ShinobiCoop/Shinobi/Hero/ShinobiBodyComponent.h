@@ -113,6 +113,12 @@ private:
 	/** The look's tattoos on the body's skin layer (M_ShinobiSkin; unused slots off, unknown designs or regions skipped),
 	 * and its make-up and freckles on a MetaHuman face's. */
 	void ApplySkinLayers(const FShinobiAppearance& Look);
+	/** Stands the body Lift cm higher than its place (a worn shoe's sole; 0: back on it). */
+	void LiftForSoles(float Lift);
+	/** How far LiftForSoles has the body raised. */
+	float SoleLift = 0.f;
+	/** The worn look's sole (cm at height 1; DressBuilt), which UpdateBody lifts the body by. */
+	float WornSole = 0.f;
 	/** The worn static head's neck match (white without one): UpdateSkin tones the body over it. */
 	FLinearColor WornHeadTint = FLinearColor::White;
 

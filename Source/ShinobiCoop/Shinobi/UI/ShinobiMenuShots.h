@@ -30,7 +30,7 @@ private:
 	void StartThumbnails(UWorld& World);
 	void StartCreatorTour(UWorld& World);
 	/** Frames WardrobeSlot's Row once the stage's build lands (else tries again next step), then shoots it. */
-	TFunction<void()> ShootThumbnail(TWeakObjectPtr<class AShinobiMenuStage> Stage, int32 WardrobeSlot, uint8 Row, FString Name);
+	TFunction<void()> ShootThumbnail(TWeakObjectPtr<class AShinobiMenuStage> Stage, int32 WardrobeSlot, uint8 Row, FString Name, int32 Tries = 0);
 	/** Runs Steps one after another, Interval seconds apart, then quits. */
 	void RunSteps(TArray<TFunction<void()>> Steps, float Interval);
 

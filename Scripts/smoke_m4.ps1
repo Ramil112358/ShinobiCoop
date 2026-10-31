@@ -44,7 +44,8 @@ try {
     Wait-Log $HostLog "plays a made character \($LookCode\)" 30 "host sees the client's made character"
     Wait-Log $ClientLog "plays Hero" 30 "client sees the host's pick"
     Wait-Log $ClientLog "plays a made character \($LookCode\)" 30 "client sees its own made character"
-    # Both machines build that look with Mutable (the host from the replicated appearance alone).
+    # Both machines build that look with Mutable: the host from the client's pick (its RPC), the client from replication.
+    # (The code must match ShinobiMutable::SmokeLookCode: ShinobiCoop.Mutable.SmokeScriptPlaysTheSmokeLook checks.)
     Wait-Log $HostLog "wears its Mutable look \($LookCode\)" 120 "host built the client's made character"
     Wait-Log $ClientLog "wears its Mutable look \($LookCode\)" 120 "client built its own made character"
     # Jutsu loadout: the client asked for Water Wall in slot 1 (-ShinobiLoadoutSmoke); the host takes it and the client's own keys follow.

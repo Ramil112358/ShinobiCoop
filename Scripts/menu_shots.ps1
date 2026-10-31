@@ -4,7 +4,7 @@
 #   -Portraits: -ShinobiMenuPortraits in a 3:4 window: each roster character -> Saved\MenuArt\T_Portrait_<Name>.png
 #   -Creator:   -ShinobiCreatorTour on Lvl_MainMenu: CREATE's tabs, light presets, zooms and turns; -Res "-ResX=2560 -ResY=1080" for another window.
 #   -Thumbnails: -ShinobiThumbnailShot in a square window: each wardrobe piece -> Saved\MenuArt\Thumbnails\T_Thumb_<Slot>_<Row>.png
-#               (import with: SETUP_MUTABLE_ONLY=thumbnails,tattoos Scripts/run_python.ps1 -Script Scripts/setup_mutable.py -Editor)
+#               (import with: SETUP_MUTABLE_ONLY=thumbnails,wardrobe Scripts/run_python.ps1 -Script Scripts/setup_mutable.py -Editor)
 #   -Maps:      -ShinobiMapShot on every Host Game map -> Saved\MenuArt\T_Map_<Id>.png; -Map <Id> shoots just that one.
 # Then import Saved\MenuArt with: powershell -File Scripts/run_python.ps1 -Script Scripts/setup_menu_art.py
 param([switch]$Tour, [switch]$Creator, [string]$Res = "-ResX=1280 -ResY=720", [switch]$Portraits, [switch]$Thumbnails, [switch]$Maps, [string]$Map = "", [switch]$Packaged, [int]$TimeoutSec = 180)

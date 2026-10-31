@@ -40,6 +40,8 @@ public:
 
 	/** Row Index of the slot's wardrobe table (DT_Wardrobe_<Slot>), or null (None, or past the rows). */
 	static const FShinobiWardrobeRow* FindRow(EShinobiWardrobeSlot Slot, uint8 Index);
+	/** Look's row in Slot as worn: null when empty or taken off by another worn piece (a whole outfit's Replaces). */
+	static const FShinobiWardrobeRow* WornRow(const FShinobiAppearance& Look, EShinobiWardrobeSlot Slot);
 
 	/** Tests only: the object to build instead of ShinobiMutable::ObjectPath (empty = that). */
 	static FString ObjectPathOverride;

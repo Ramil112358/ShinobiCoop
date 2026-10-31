@@ -1381,8 +1381,8 @@ bool FShinobiMutableRowReplacesSlotsTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableClipUnderSkinTest, "ShinobiCoop.Mutable.ClipShellUnderTheSkin", ShinobiTestFlags)
 bool FShinobiMutableClipUnderSkinTest::RunTest(const FString& Parameters)
 {
-	// A coverage volume reaches 0.3 cm out of its fit shape and 3 cm into it (so a slimmer built body's skin is still
-	// inside it): no clip vertex lies more than 1 cm outside the fit surface.
+	// A coverage volume reaches 0.3 cm out of the base's shape and 3 cm into it (so a slimmer built body's skin is still
+	// inside it): no clip vertex lies more than 1 cm outside the base surface (the body it clips at the average build).
 	int32 Checked = 0;
 	for (const TCHAR* Slot : {TEXT("Top"), TEXT("Bottom")})
 	{
@@ -1394,8 +1394,8 @@ bool FShinobiMutableClipUnderSkinTest::RunTest(const FString& Parameters)
 		{
 			continue;
 		}
-		const float Within = UShinobiMutableMeshLibrary::FractionInside(Clip, Base, -1.f, *(TEXT("Fit_") + Row->MaleFit.ToString()));
-		TestTrue(FString::Printf(TEXT("%s: %.1f%% of the clip within 1 cm outside its fit shape"), Slot, Within * 100.f), Within > 0.95f); // (inside out: ~50%; a few rim vertices at concave spots measure just outside)
+		const float Within = UShinobiMutableMeshLibrary::FractionInside(Clip, Base, -1.f);
+		TestTrue(FString::Printf(TEXT("%s: %.1f%% of the clip within 1 cm outside the base shape"), Slot, Within * 100.f), Within > 0.95f); // (inside out: ~50%; a few rim vertices at concave spots measure just outside)
 		++Checked;
 	}
 	TestEqual(TEXT("clips checked"), Checked, 2);
@@ -1477,6 +1477,14 @@ bool FShinobiMutableSkinToneNeutralTest::RunTest(const FString& Parameters)
 	{
 		TestTrue(TEXT("body tinted to the neck"), BodyTinted(Wearer->Body, HeadTint));
 		TestTrue(TEXT("head Skin Tint white"), HasVector(Wearer->Body->GetStaticHead(), ShinobiMutable::StaticHeadTintParameter, FLinearColor::White));
+		// (white is also the parameter's default: darken, then back to 128, and white must be set again)
+		FShinobiAppearance Look = *Preset(*this, TEXT("Ramil"));
+		Look.SkinTone = 0;
+		Wearer->Body->UpdateSkin(Look);
+		Look.SkinTone = 128;
+		Wearer->Body->UpdateSkin(Look);
+		TestTrue(TEXT("head white again"), HasVector(Wearer->Body->GetStaticHead(), ShinobiMutable::StaticHeadTintParameter, FLinearColor::White));
+		TestTrue(TEXT("body at its neck tint again"), BodyTinted(Wearer->Body, HeadTint));
 	});
 	return true;
 }
@@ -1832,6 +1840,266 @@ bool FShinobiMutableSmokeLookCodeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("decodes"), FShinobiAppearance::FromCode(ShinobiMutable::SmokeLookCode, Coded));
 	TestTrue(FString::Printf(TEXT("the smoke look (its code: %s)"), *Wanted.ToCode()), Coded == Wanted);
 	TestEqual(TEXT("round-trips"), Coded.ToCode(), FString(ShinobiMutable::SmokeLookCode));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableShoeClipsHoldTheFeetTest, "ShinobiCoop.Mutable.ShoeClipsHoldTheFeet", ShinobiTestFlags)
+bool FShinobiMutableShoeClipsHoldTheFeetTest::RunTest(const FString& Parameters)
+{
+	// Every shoe's coverage volume holds the foot skin a shoe hides: the toes (even past a short shoe's tip) and the sole,
+	// so no skin shows through or in front of the shoe. (Base mesh space: Y toward the toes, Z up, the soles near 0.)
+	int32 Checked = 0;
+	for (const TCHAR* Sex : { TEXT("Male"), TEXT("Female") })
+	{
+		TArray<FVector> Points, Toes, Soles;
+		TArray<int32> Triangles;
+		if (!UShinobiMutableMeshLibrary::ReadMeshSurface(LoadObject<USkeletalMesh>(nullptr, *ShinobiMutable::BasePath(Sex)), Points, Triangles))
+		{
+			continue;
+		}
+		double Front = -1e9;
+		for (const FVector& Point : Points)
+		{
+			Front = Point.Z < 8.0 ? FMath::Max(Front, Point.Y) : Front;
+		}
+		for (const FVector& Point : Points)
+		{
+			if (Point.Z < 6.0 && Point.Y > Front - 4.0) { Toes.Add(Point); }
+			if (Point.Z < 2.0) { Soles.Add(Point); }
+		}
+		const UDataTable* Shoes = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(TEXT("Shoes")));
+		for (const FName Name : Shoes ? Shoes->GetRowNames() : TArray<FName>())
+		{
+			const FShinobiWardrobeRow* Row = Shoes->FindRow<FShinobiWardrobeRow>(Name, TEXT("test"));
+			USkeletalMesh* Clip = (FCString::Strcmp(Sex, TEXT("Female")) == 0 ? Row->FemaleClip : Row->MaleClip).LoadSynchronous();
+			if (!Clip)
+			{
+				continue;
+			}
+			++Checked;
+			const float ToesIn = UShinobiMutableMeshLibrary::FractionOfPointsInside(Toes, Clip);
+			const float SolesIn = UShinobiMutableMeshLibrary::FractionOfPointsInside(Soles, Clip);
+			TestTrue(FString::Printf(TEXT("%s %s: toes inside the clip (%.0f %%)"), Sex, *Name.ToString(), ToesIn * 100.f), ToesIn >= 0.95f);
+			TestTrue(FString::Printf(TEXT("%s %s: soles inside the clip (%.0f %%)"), Sex, *Name.ToString(), SolesIn * 100.f), SolesIn >= 0.95f);
+		}
+	}
+	TestTrue(TEXT("shoe clips checked"), Checked > 4);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableShoesLiftTheBodyTest, "ShinobiCoop.Mutable.ShoesLiftTheBody", ShinobiTestFlags)
+bool FShinobiMutableShoesLiftTheBodyTest::RunTest(const FString& Parameters)
+{
+	// A shoe's sole stands the body on the floor instead of in it; barefoot, and a roster body, stand at their place.
+	const UDataTable* Shoes = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(TEXT("Shoes")));
+	const FShinobiWardrobeRow* First = Shoes ? Shoes->FindRow<FShinobiWardrobeRow>(TEXT("CitySample01"), TEXT("test")) : nullptr;
+	if (!TestNotNull(TEXT("Shoes CitySample01"), First) || !TestTrue(FString::Printf(TEXT("its men's sole measured (%.2f cm)"), First->MaleSole), First->MaleSole > 0.5f))
+	{
+		return false;
+	}
+	for (const FName Name : Shoes->GetRowNames())
+	{
+		const FShinobiWardrobeRow* Row = Shoes->FindRow<FShinobiWardrobeRow>(Name, TEXT("test"));
+		TestTrue(*FString::Printf(TEXT("%s: soles under 5 cm"), *Name.ToString()), Row->MaleSole < 5.f && Row->FemaleSole < 5.f);
+	}
+	const float Sole = First->MaleSole;
+	const uint8 Row = uint8(Shoes->GetRowNames().IndexOfByKey(FName(TEXT("CitySample01"))));
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	FShinobiAppearance Shod = MutableLook(EShinobiSex::Male, EShinobiBuild::Normal);
+	Shod.Shoes = Row;
+	Wearer->Body->WearAppearance(Shod);
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer, Shod, Sole]()
+	{
+		TestEqual(TEXT("raised by the sole"), float(Wearer->Body->GetRelativeLocation().Z), Sole, 0.01f);
+		FShinobiAppearance Barefoot = Shod;
+		Barefoot.Shoes = FShinobiAppearance::None;
+		Barefoot.BuildBlend = 254; // (a different build, so Mutable doesn't skip it as unchanged)
+		Wearer->Body->WearAppearance(Barefoot);
+		WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer]()
+		{
+			TestEqual(TEXT("barefoot at its place"), float(Wearer->Body->GetRelativeLocation().Z), 0.f, 0.01f);
+		});
+	});
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableSmokeScriptLookTest, "ShinobiCoop.Mutable.SmokeScriptPlaysTheSmokeLook", ShinobiTestFlags)
+bool FShinobiMutableSmokeScriptLookTest::RunTest(const FString& Parameters)
+{
+	// Scripts/smoke_m4.ps1 plays ShinobiMutable::SmokeLookCode (the look SmokeLookCodeIsFull checks), not a stale copy.
+	FString Script;
+	TestTrue(TEXT("smoke_m4.ps1 read"), FFileHelper::LoadFileToString(Script, *(FPaths::ProjectDir() / TEXT("Scripts/smoke_m4.ps1"))));
+	TestTrue(TEXT("it plays the smoke look"), Script.Contains(FString::Printf(TEXT("$LookCode = \"%s\""), ShinobiMutable::SmokeLookCode)));
+	return true;
+}
+
+namespace
+{
+	/** Vertices of the worn body's LOD 0 skin with Z under 5 cm and Y past FrontY (mesh space: Y toward the toes), or -1;
+	 * and its front-most such Y in OutFront. */
+	int32 ToeTipVertices(const UShinobiBodyComponent* Body, float FrontY, float* OutFront = nullptr)
+	{
+		const USkeletalMesh* Mesh = Body->GetSkeletalMeshAsset();
+		const FSkeletalMeshRenderData* Render = Mesh ? Mesh->GetResourceForRendering() : nullptr;
+		if (!Render || Render->LODRenderData.Num() == 0 || !Render->LODRenderData[0].StaticVertexBuffers.PositionVertexBuffer.GetVertexData())
+		{
+			return -1;
+		}
+		// The body's skin sections only (its material is the MetaHuman body's, not a piece's).
+		const FPositionVertexBuffer& Positions = Render->LODRenderData[0].StaticVertexBuffers.PositionVertexBuffer;
+		int32 Tips = 0;
+		for (const FSkelMeshRenderSection& Section : Render->LODRenderData[0].RenderSections)
+		{
+			const UMaterialInterface* Material = Mesh->GetMaterials().IsValidIndex(Section.MaterialIndex) ? Mesh->GetMaterials()[Section.MaterialIndex].MaterialInterface.Get() : nullptr;
+			if (!Material || !Material->GetName().Contains(TEXT("Body")))
+			{
+				continue;
+			}
+			for (uint32 Index = Section.BaseVertexIndex; Index < Section.BaseVertexIndex + Section.NumVertices; ++Index)
+			{
+				const FVector3f Point = Positions.VertexPosition(Index);
+				Tips += Point.Z < 5.f && Point.Y > FrontY ? 1 : 0;
+				if (OutFront && Point.Z < 5.f)
+				{
+					*OutFront = FMath::Max(*OutFront, Point.Y);
+				}
+			}
+		}
+		return Tips;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableShoesHideTheToesTest, "ShinobiCoop.Mutable.ShoesHideTheToes", ShinobiTestFlags)
+bool FShinobiMutableShoesHideTheToesTest::RunTest(const FString& Parameters)
+{
+	// The built body has no skin at the toe tips under a shoe (its clip removed them), but has them barefoot.
+	const UDataTable* Shoes = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(TEXT("Shoes")));
+	const int32 Row = Shoes ? Shoes->GetRowNames().IndexOfByKey(FName(TEXT("CyborgShoes"))) : INDEX_NONE;
+	if (!TestTrue(TEXT("Shoes CyborgShoes"), Row != INDEX_NONE))
+	{
+		return false;
+	}
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	FShinobiAppearance Look = MutableLook(EShinobiSex::Male, EShinobiBuild::Normal);
+	Look.Top = Look.Bottom = FShinobiAppearance::None;
+	Look.Shoes = FShinobiAppearance::None;
+	Wearer->Body->WearAppearance(Look);
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer, Look, Row]()
+	{
+		float Front = -1e9f;
+		ToeTipVertices(Wearer->Body, 1e9f, &Front);
+		const int32 Barefoot = ToeTipVertices(Wearer->Body, Front - 4.f);
+		TestEqual(TEXT("the built body has one LOD (the clips keep only LOD 0)"), Wearer->Body->GetSkeletalMeshAsset()->GetLODNum(), 1);
+		FShinobiAppearance Shod = Look;
+		Shod.Shoes = uint8(Row);
+		Wearer->Body->WearAppearance(Shod);
+		WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer, Barefoot, Front]()
+		{
+			const int32 Shod = ToeTipVertices(Wearer->Body, Front - 4.f);
+			AddInfo(FString::Printf(TEXT("toe-tip vertices: barefoot %d, shod %d"), Barefoot, Shod));
+			TestTrue(TEXT("barefoot has toe tips"), Barefoot > 50);
+			TestTrue(TEXT("the shoe hides them"), Shod >= 0 && Shod < Barefoot / 20);
+		});
+	});
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableShoeClipsLeaveSkinAboveTest, "ShinobiCoop.Mutable.ShoeClipsLeaveSkinAboveTheRim", ShinobiTestFlags)
+bool FShinobiMutableShoeClipsLeaveSkinAboveTest::RunTest(const FString& Parameters)
+{
+	// A shoe's clip stops at the shoe: ankle and heel skin a little above its rim (in the shoe's own footprint, its back
+	// half: toes rising through a low vamp are clipped on purpose) stays, so short trousers or a dress show no see-through
+	// gap above a low shoe.
+	int32 Checked = 0;
+	for (const TCHAR* Sex : { TEXT("Male"), TEXT("Female") })
+	{
+		TArray<FVector> Points;
+		TArray<int32> Triangles;
+		if (!UShinobiMutableMeshLibrary::ReadMeshSurface(LoadObject<USkeletalMesh>(nullptr, *ShinobiMutable::BasePath(Sex)), Points, Triangles))
+		{
+			continue;
+		}
+		const UDataTable* Shoes = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(TEXT("Shoes")));
+		for (const FName Name : Shoes ? Shoes->GetRowNames() : TArray<FName>())
+		{
+			const FShinobiWardrobeRow* Row = Shoes->FindRow<FShinobiWardrobeRow>(Name, TEXT("test"));
+			const bool bFemale = FCString::Strcmp(Sex, TEXT("Female")) == 0;
+			USkeletalMesh* Clip = (bFemale ? Row->FemaleClip : Row->MaleClip).LoadSynchronous();
+			TArray<FVector> ShoePoints;
+			TArray<int32> ShoeTriangles;
+			if (!Clip || !UShinobiMutableMeshLibrary::ReadMeshSurface((bFemale ? Row->FemaleMesh : Row->MaleMesh).LoadSynchronous(), ShoePoints, ShoeTriangles))
+			{
+				continue;
+			}
+			// Skin 3.5 to 7 cm above the shoe's top in its column (past the clip's 1.5 cm outward reach and its 1 cm remesh cell).
+			TMap<FIntPoint, double> Top;
+			for (const FVector& Point : ShoePoints)
+			{
+				double& Highest = Top.FindOrAdd(FIntPoint(FMath::FloorToInt(Point.X / 2.0), FMath::FloorToInt(Point.Y / 2.0)), -1e9);
+				Highest = FMath::Max(Highest, Point.Z);
+			}
+			const double Middle = FBox(ShoePoints).GetCenter().Y;
+			TArray<FVector> Above;
+			for (const FVector& Point : Points)
+			{
+				const double* Highest = Top.Find(FIntPoint(FMath::FloorToInt(Point.X / 2.0), FMath::FloorToInt(Point.Y / 2.0)));
+				if (Highest && Point.Y < Middle && Point.Z > *Highest + 3.5 && Point.Z < *Highest + 7.0)
+				{
+					Above.Add(Point);
+				}
+			}
+			if (Above.Num() < 20)
+			{
+				continue;
+			}
+			++Checked;
+			const float Inside = UShinobiMutableMeshLibrary::FractionOfPointsInside(Above, Clip);
+			TestTrue(FString::Printf(TEXT("%s %s: skin above the rim stays (%.0f %% clipped of %d)"), Sex, *Name.ToString(), Inside * 100.f, Above.Num()), Inside <= 0.08f); // (loafers: ~5 %, a few vertices at the remeshed heel, unseen in the shots)
+		}
+	}
+	TestTrue(TEXT("shoe rims checked"), Checked > 4);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableOutfitSoleTest, "ShinobiCoop.Mutable.WholeOutfitLiftsBySoleItWears", ShinobiTestFlags)
+bool FShinobiMutableOutfitSoleTest::RunTest(const FString& Parameters)
+{
+	// A whole outfit that takes the shoes off lifts the body by its own boots' sole, not by the shoe it replaced.
+	const UDataTable* Shoes = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(TEXT("Shoes")));
+	const int32 ShoeRow = Shoes ? Shoes->GetRowNames().IndexOfByKey(FName(TEXT("CitySample01"))) : INDEX_NONE;
+	int32 OutfitSlot = INDEX_NONE, OutfitRow = INDEX_NONE;
+	float OutfitSole = 0.f;
+	EShinobiSex Sex = EShinobiSex::Male;
+	for (int32 Slot = 0; Slot < ShinobiWardrobeSlotCount && OutfitRow == INDEX_NONE; ++Slot)
+	{
+		const UDataTable* Table = LoadObject<UDataTable>(nullptr, *ShinobiMutable::WardrobeTablePath(ShinobiMutable::SlotNames[Slot]), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		const TArray<FName> Names = Table ? Table->GetRowNames() : TArray<FName>();
+		for (int32 Row = 0; Row < Names.Num() && OutfitRow == INDEX_NONE; ++Row)
+		{
+			const FShinobiWardrobeRow* Piece = Table->FindRow<FShinobiWardrobeRow>(Names[Row], TEXT("test"));
+			if (Piece->Replaces.Contains(EShinobiWardrobeSlot::Shoes))
+			{
+				OutfitSlot = Slot;
+				OutfitRow = Row;
+				Sex = Piece->MaleMesh.IsNull() ? EShinobiSex::Female : EShinobiSex::Male;
+				OutfitSole = Sex == EShinobiSex::Female ? Piece->FemaleSole : Piece->MaleSole;
+			}
+		}
+	}
+	if (!TestTrue(TEXT("a whole outfit replacing the shoes, and Shoes CitySample01"), OutfitRow != INDEX_NONE && ShoeRow != INDEX_NONE))
+	{
+		return false;
+	}
+	TestTrue(FString::Printf(TEXT("the outfit's sole measured (%.2f cm)"), OutfitSole), OutfitSole > 0.f && OutfitSole < 5.f);
+	FShinobiAppearance Look = MutableLook(Sex, EShinobiBuild::Normal);
+	Look.Slot(EShinobiWardrobeSlot(OutfitSlot)) = uint8(OutfitRow);
+	Look.Shoes = uint8(ShoeRow);
+	TSharedRef<FMutableWearer> Wearer = MakeShared<FMutableWearer>();
+	Wearer->Body->WearAppearance(Look);
+	WaitThen(*this, [Wearer]() { return !Wearer->Body->IsMutableBuildPending(); }, [this, Wearer, OutfitSole]()
+	{
+		TestEqual(TEXT("lifted by the outfit's own sole"), float(Wearer->Body->GetRelativeLocation().Z), OutfitSole, 0.01f);
+	});
 	return true;
 }
 

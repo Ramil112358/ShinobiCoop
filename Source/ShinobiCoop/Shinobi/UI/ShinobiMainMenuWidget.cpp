@@ -430,6 +430,7 @@ void UShinobiMainMenuWidget::SelectTab(EShinobiMenuTab NewTab)
 	}
 	UpdateBackdrop();
 	Hints->SetVisibility(GetPreviewStage() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	PreviewStick = FVector2D::ZeroVector; // (a release missed on the last tab mustn't keep turning this one)
 	const AShinobiMenuStage* Shown = GetStage();
 	bWantStudio = NewTab == EShinobiMenuTab::Create && Shown && Shown->GetStudio();
 	LightPresets->SetVisibility(bWantStudio ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
@@ -498,7 +499,7 @@ void UShinobiMainMenuWidget::NativeTick(const FGeometry& Geometry, float DeltaTi
 	TickStudioFade(DeltaTime);
 	if (AShinobiMenuStage* Stage = GetPreviewStage(); Stage && !PreviewStick.IsZero())
 	{
-		Stage->AddYaw(PreviewStick.X * 180.f * DeltaTime);
+		Stage->AddYaw(UShinobiPreviewCatcher::TurnForDrag(PreviewStick.X) / 0.4f * 180.f * DeltaTime); // (as a drag: right turns it right)
 		Stage->AddZoom(PreviewStick.Y * DeltaTime);
 	}
 	if (FadeIn < 1.f && Pages)
@@ -591,7 +592,7 @@ void UShinobiMainMenuWidget::UseGamepadHints(bool bGamepad)
 {
 	bGamepadHints = bGamepad;
 	const TCHAR* const Texts[] = { bGamepad ? TEXT("RS \u2195") : TEXT("Wheel"), TEXT("Zoom in/out"),
-		bGamepad ? TEXT("RS \u2194") : TEXT("Drag"), TEXT("Rotate Camera") };
+		bGamepad ? TEXT("RS \u2194") : TEXT("RMB drag"), TEXT("Rotate Camera") };
 	for (int32 Index = 0; Index < HintTexts.Num(); ++Index)
 	{
 		HintTexts[Index]->SetText(FText::FromString(Texts[Index]));
@@ -631,7 +632,7 @@ TSharedRef<SWidget> UShinobiPreviewCatcher::RebuildWidget()
 
 FReply UShinobiPreviewCatcher::NativeOnMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event)
 {
-	if (Menu.IsValid() && Menu->GetPreviewStage() && (Event.GetEffectingButton() == EKeys::LeftMouseButton || Event.GetEffectingButton() == EKeys::RightMouseButton))
+	if (Menu.IsValid() && Menu->GetPreviewStage() && TurnsPreview(Event.GetEffectingButton()))
 	{
 		Menu->UseGamepadHints(false);
 		return FReply::Handled().CaptureMouse(TakeWidget());
@@ -648,7 +649,7 @@ FReply UShinobiPreviewCatcher::NativeOnMouseMove(const FGeometry& Geometry, cons
 {
 	if (AShinobiMenuStage* Stage = HasMouseCapture() && Menu.IsValid() ? Menu->GetPreviewStage() : nullptr)
 	{
-		Stage->AddYaw(Event.GetCursorDelta().X * 0.4f);
+		Stage->AddYaw(TurnForDrag(Event.GetCursorDelta().X));
 		return FReply::Handled();
 	}
 	return Super::NativeOnMouseMove(Geometry, Event);
@@ -677,9 +678,9 @@ FReply UShinobiPreviewCatcher::NativeOnMouseButtonDoubleClick(const FGeometry& G
 FReply UShinobiMainMenuWidget::NativeOnAnalogValueChanged(const FGeometry& Geometry, const FAnalogInputEvent& Event)
 {
 	const FKey Key = Event.GetKey();
-	if (Key != EKeys::Gamepad_RightX && Key != EKeys::Gamepad_RightY)
+	if ((Key != EKeys::Gamepad_RightX && Key != EKeys::Gamepad_RightY) || !GetPreviewStage())
 	{
-		return Super::NativeOnAnalogValueChanged(Geometry, Event);
+		return Super::NativeOnAnalogValueChanged(Geometry, Event); // (other tabs keep the right stick)
 	}
 	const float Value = FMath::Abs(Event.GetAnalogValue()) < 0.2f ? 0.f : Event.GetAnalogValue();
 	(Key == EKeys::Gamepad_RightX ? PreviewStick.X : PreviewStick.Y) = Value;

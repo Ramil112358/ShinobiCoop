@@ -25,6 +25,11 @@ class SHINOBICOOP_API UShinobiPreviewCatcher : public UUserWidget
 public:
 	TWeakObjectPtr<UShinobiMainMenuWidget> Menu;
 
+	/** Holding this mouse button turns the character. */
+	static bool TurnsPreview(const FKey& Button) { return Button == EKeys::RightMouseButton; }
+	/** Degrees the character turns for a drag of DeltaX pixels: dragging right turns its front to the right. */
+	static float TurnForDrag(float DeltaX) { return -DeltaX * 0.4f; }
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event) override;

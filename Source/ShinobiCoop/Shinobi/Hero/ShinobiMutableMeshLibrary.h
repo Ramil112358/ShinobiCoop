@@ -74,16 +74,25 @@ public:
 	 * Makes Clip (a copy of Base) the coverage volume of Piece: the closed shell under the part of Base (with its morph
 	 * FitMorph: the piece's fit shape, when given) that Piece covers, for CO_Shinobi's Clip With Mesh to hide that skin.
 	 * A vertex is covered when its outward normal (from 1 cm inside) hits Piece within Reach cm; triangles with all three
-	 * corners covered, eroded by Erode rings so skin stays at the hems, are pushed Out cm outward and joined by side walls
-	 * to a copy pushed Depth cm inward. Skinned like Base, on every LOD. Returns the covered triangles (0: Clip unchanged,
-	 * nothing covered). The caller saves Clip.
+	 * corners covered, eroded by Erode rings so skin stays at the hems, are taken on Base's own shape (the fit shape only
+	 * judges coverage: clips aren't reshaped, and the average built body is Base), pushed Out cm outward and joined by side walls
+	 * to a copy pushed Depth cm inward. Skinned like Base, on every LOD (the caller may drop all but LOD 0). With Below (cm,
+	 * shoes), a vertex is also covered when Piece is straight above it within Below cm, and every toe near the shoe is:
+	 * the whole foot inside a shoe, toes past a short shoe's tip included. The volume is then remeshed from its winding number into one clean closed surface (the
+	 * layers cross where skin folds; Mutable judges inside by hits straight up). Returns the covered triangles (0: Clip
+	 * unchanged, nothing covered). The caller saves Clip.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")
 	static int32 MakeClipVolume(USkeletalMesh* Clip, USkeletalMesh* Base, FName FitMorph, USkeletalMesh* Piece, float Reach = 4.f, int32 Erode = 1,
-		float Out = 0.3f, float Depth = 3.f);
+		float Out = 0.3f, float Depth = 3.f, float Below = 0.f);
 
 	/** The share of Piece's LOD 0 vertices more than Tolerance cm inside Body's LOD 0 surface (with Body's morph Morph
 	 * applied, when given), by the closest triangle's outward side. -1 without mesh descriptions. */
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")
 	static float FractionInside(USkeletalMesh* Piece, USkeletalMesh* Body, float Tolerance = 0.5f, FName Morph = NAME_None);
+
+	/** The share of Points inside the closed volume Volume's LOD 0 surface as Mutable's clipping judges it (an odd number
+	 * of hits straight up: overlapping parts cancel). -1 without a mesh description or points. */
+	UFUNCTION(BlueprintCallable, Category = "Shinobi|Mutable")
+	static float FractionOfPointsInside(const TArray<FVector>& Points, USkeletalMesh* Volume);
 };
