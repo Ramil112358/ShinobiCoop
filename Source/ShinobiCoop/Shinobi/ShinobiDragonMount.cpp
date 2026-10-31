@@ -27,7 +27,7 @@ namespace
 	struct FDragonLook
 	{
 		const TCHAR* Name;       // /Game/Shinobi/Creatures/<Name>/SK_<Name> and ANIM_<Name>_<Clip>
-		float Scale;
+		FVector Scale;           // per axis (X length, Y width, Z height)
 		FVector Saddle;
 		float MouthAhead;        // the mouth in the breath's open-jawed pose, from the seated rider's capsule centre
 		float MouthHeight;
@@ -43,9 +43,9 @@ namespace
 	// The mouths and necks were measured on the meshes in Blender (the crimson rest pose has its head turned, hence the mouth's Y).
 	const FDragonLook& DragonLookFor(EShinobiDragonKind Kind)
 	{
-		static const FDragonLook Tairn = { TEXT("Tairn"), 4.5f, FVector(18.f, 0.f, 37.f), 252.f, -128.f, // his long neck holds the head low
+		static const FDragonLook Tairn = { TEXT("Tairn"), FVector(6.5f), FVector(18.f, 0.f, 37.f), 364.f, -142.f, // his long neck holds the head low (mouth offsets follow the scale)
 			TEXT("bone_9"), FVector(50.f, 0.f, 56.f), TEXT("bone_4"), TEXT("bone_5"), 0.7f, 5.7f, -3.6f };
-		static const FDragonLook Crimson = { TEXT("CrimsonDragon"), 3.5f, FVector(22.f, 0.f, 50.f), 247.f, -117.f, // its head reaches forward, below the seat
+		static const FDragonLook Crimson = { TEXT("CrimsonDragon"), FVector(3.5f), FVector(22.f, 0.f, 50.f), 247.f, -117.f, // its head reaches forward, below the seat
 			TEXT("Head_5"), FVector(68.3f, -21.f, 63.1f), TEXT("Head_1"), TEXT("Head_2"), 0.3f, 7.5f, 0.f };
 		return Kind == EShinobiDragonKind::Tairn ? Tairn : Crimson;
 	}
@@ -161,7 +161,7 @@ void AShinobiDragonMount::BeginPlay()
 		{
 			Body->SetSkeletalMeshAsset(Model);
 			Body->SetAnimationMode(EAnimationMode::AnimationSingleNode);
-			Body->SetRelativeScale3D(FVector(Look.Scale));
+			Body->SetRelativeScale3D(Look.Scale);
 			Body->SetRelativeLocation(-Look.Saddle * Look.Scale); // the saddle is at the actor's origin: the actor leans, the dragon hangs from the seat
 			const int32 Skull = Model->GetRefSkeleton().FindBoneIndex(Look.SkullBone);
 			if (Skull != INDEX_NONE)
@@ -313,8 +313,8 @@ void AShinobiDragonMount::UpdateReins()
 	const FVector Axis = (To - From).GetSafeNormal();
 	const FVector Up = (Body->GetUpVector() - Axis * (Body->GetUpVector() | Axis)).GetSafeNormal();
 	const FVector Side = Axis ^ Up;
-	const FVector Centre = FMath::Lerp(From, To, Look.CollarAt) - Up * (Look.CollarDrop * Look.Scale);
-	const float Radius = Look.CollarRadius * Look.Scale;
+	const FVector Centre = FMath::Lerp(From, To, Look.CollarAt) - Up * (Look.CollarDrop * Look.Scale.Z);
+	const float Radius = Look.CollarRadius * Look.Scale.Y;
 	auto Ring = [&](int32 Index) { const float Angle = 2.f * UE_PI * Index / CollarSegments; return Centre + (Up * FMath::Cos(Angle) + Side * FMath::Sin(Angle)) * Radius; };
 	for (int32 Index = 0; Index < CollarSegments; ++Index)
 	{

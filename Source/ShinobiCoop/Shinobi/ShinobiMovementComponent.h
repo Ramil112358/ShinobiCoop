@@ -32,7 +32,7 @@ public:
 
 	/** The lowest a mounted rider's capsule floor may be above the ground: the dragon's legs hang below the rider, so it can lift off
 	 * from the ground and never lowers into it. */
-	static constexpr float MountedGroundClearance = 310.f;
+	static constexpr float MountedGroundClearance = 420.f; // Tairn at height scale 6.5 hangs ~45% lower than at 4.5 (was 310)
 	virtual void UpdateFromCompressedFlags(uint8 Flags) override;
 	virtual FNetworkPredictionData_Client* GetPredictionData_Client() const override;
 	virtual bool ClientUpdatePositionAfterServerUpdate() override;
