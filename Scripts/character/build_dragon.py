@@ -538,9 +538,30 @@ def wanted(s):
     return thickest + (end - thickest) * max(0.0, min(1.0, (s - first * STEP_S) / ((last - first) * STEP_S)))
 
 
+def point_at(s):
+    """The point s along the posed tail's bones."""
+    for n, a, b in chain:
+        if s <= starts[n] + (b - a).length:
+            return a + (b - a).normalized() * max(0.0, s - starts[n])
+    return chain[-1][2]
+
+
+# The rings' middles sagged 6 cm (model) two fifths of the way along, below the line from the tail's start to its end: each ring's
+# middle is moved onto that straight line (nothing moves at either end).
+line_from, line_to = (first + 0.5) * STEP_S, (last + 0.5) * STEP_S
+start_at, end_at = point_at(line_from) + ring_at(line_from)[0], point_at(line_to) + ring_at(line_to)[0]
+
+
+def straighten(s):
+    if not line_from < s < line_to:
+        return Vector()
+    return start_at + (end_at - start_at) * ((s - line_from) / (line_to - line_from)) - (point_at(s) + ring_at(s)[0])
+
+
 club_axis = (chain[-1][2] - chain[-1][1]).normalized()
 core = [(p, area[v.index]) for v, p in zip(body.data.vertices, posed) if share[v.index][1] > 0.9]
 club_middle = by_area(core, 0.8)
+standing_out = {}  # tail vertex -> how far out of its ring it is, in ring thicknesses (spikes stand 2 or more out), and if on top
 for v, p in zip(body.data.vertices, posed):
     if v.index not in place:
         continue
@@ -548,7 +569,8 @@ for v, p in zip(body.data.vertices, posed):
     s, foot = place[v.index]
     middle, size = ring_at(min(s, club_from))
     q = p - foot
-    shaped = foot + middle + (q - middle) * max(0.6, min(2.0, wanted(min(s, club_from)) / max(size, 1e-4)))
+    standing_out[v.index] = ((q - middle).length / max(size, 1e-4), (q - middle).z > 0)
+    shaped = foot + middle + straighten(min(s, club_from)) + (q - middle) * max(0.6, min(2.0, wanted(min(s, club_from)) / max(size, 1e-4)))
     hidden = club_middle + (p - club_middle) * 0.4  # Tripo's club, shrunk inside the new ball
     move = (shaped - p) * (tail_share - club_share) + (hidden - p) * club_share
     total = sum(g.weight for g in v.groups) or 1.0
@@ -558,21 +580,42 @@ print(f"[build_dragon] tail: {thickest:.3f} thick at its start tapering to {end:
 print("[build_dragon] tail rings (thickness):", " ".join(f"{ring[k][1]:.3f}" for k in bins))
 
 # The club: a ball BALL_RADIUS across (the tail's start is 0.046 thick) set with conical spikes, one from each face of an icosahedron
-# and each of its corners (none into the tail), on the club bone alone, textured with the middle of Tripo's club's patch of the skin.
+# and each of its corners (none into the tail), on the club bone alone. Each face of the ball takes the texture of a face of the tail's
+# own skin, and each spike's of a face of the tail's spikes, so the club is the tail's black (Tripo's club patch has pale streaks).
 BALL_RADIUS, SPIKE_LENGTH, SPIKE_WIDTH = 0.07, 0.06, 0.016
 club_bone = arm.data.bones[CLUB]
 centre = deform[CLUB].inverted() @ club_middle  # in the rest pose
 to_rest = club_bone.matrix_local.to_3x3() @ arm.pose.bones[CLUB].matrix.to_3x3().inverted()  # posed directions into rest ones
 inward = (to_rest @ -club_axis).normalized()  # towards the tail
 uv_name = body.data.uv_layers.active.name
-club_uvs = [body.data.uv_layers.active.data[loop.index].uv.copy() for face in body.data.polygons for loop in (body.data.loops[i] for i in face.loop_indices)
-            if share[loop.vertex_index][1] > 0.9]
-us, vs = sorted(uv.x for uv in club_uvs), sorted(uv.y for uv in club_uvs)
-u0, u1, v0, v1 = us[len(us) * 2 // 5], us[len(us) * 3 // 5], vs[len(vs) * 2 // 5], vs[len(vs) * 3 // 5]  # the middle: its edges are pale
+uvs = body.data.uv_layers.active.data
+
+
+def tail_faces(keep):
+    """The texture corners of the tail's faces (off the club) whose corners all stand out of their rings as `keep` says."""
+    return [[uvs[i].uv.copy() for i in face.loop_indices] for face in body.data.polygons
+            if all(share[i][0] > 0.9 and share[i][1] < 0.05 and i in standing_out and keep(*standing_out[i]) for i in face.vertices)]
+
+
+texels = np.empty(basecolor.size[0] * basecolor.size[1] * 4, np.float32)
+basecolor.pixels.foreach_get(texels)
+texels = texels.reshape(basecolor.size[1], basecolor.size[0], 4)
+
+
+def darkest_half(faces):
+    """The darker half of the faces, by the texture at each one's middle: the club must be the tail's black, not its paler scales."""
+    def shade(corners):
+        u, v = sum(c.x for c in corners) / len(corners), sum(c.y for c in corners) / len(corners)
+        return float(texels[int((v % 1) * (basecolor.size[1] - 1)), int((u % 1) * (basecolor.size[0] - 1)), :3].mean())
+    return sorted(faces, key=shade)[: max(1, len(faces) // 2)]
+
+
+# the top's skin (the belly's scales are paler)
+skin_faces = darkest_half(tail_faces(lambda out, top: out < 1.2 and top))
+spike_faces = darkest_half(tail_faces(lambda out, top: out > 2.0))
 bm = bmesh.new()
 bmesh.ops.create_icosphere(bm, subdivisions=3, radius=BALL_RADIUS)
-for face in bm.faces:
-    face.smooth = True
+sphere = set(bm.faces)
 ico = bmesh.new()
 bmesh.ops.create_icosphere(ico, subdivisions=1, radius=1.0)
 ico.faces.ensure_lookup_table()
@@ -587,10 +630,12 @@ for aim in aims:
                           matrix=turn @ Matrix.Translation((0, 0, BALL_RADIUS * 0.85 + SPIKE_LENGTH / 2)))
     spikes += 1
 uv_layer = bm.loops.layers.uv.new(uv_name)
-for face in bm.faces:
-    for loop in face.loops:
-        d = loop.vert.co.normalized()
-        loop[uv_layer].uv = (u0 + (u1 - u0) * (math.atan2(d.y, d.x) / (2 * math.pi) + 0.5), v0 + (v1 - v0) * (math.acos(max(-1.0, min(1.0, d.z))) / math.pi))
+for index, face in enumerate(bm.faces):
+    face.smooth = True
+    source = skin_faces if face in sphere else spike_faces
+    corners = source[(index * 7919) % len(source)]  # scattered over the tail, not one patch
+    for j, loop in enumerate(face.loops):
+        loop[uv_layer].uv = corners[min(j, len(corners) - 1)]
 bm.transform(Matrix.Translation(centre) @ Vector((0, 0, -1)).rotation_difference(inward).to_matrix().to_4x4())
 ball_mesh = bpy.data.meshes.new("Club")
 bm.to_mesh(ball_mesh)
@@ -602,7 +647,8 @@ scene.collection.objects.link(ball)
 ball.vertex_groups.new(name=CLUB).add(list(range(len(ball_mesh.vertices))), 1.0, "REPLACE")
 select(body, ball)
 bpy.ops.object.join()
-print(f"[build_dragon] club: a ball {BALL_RADIUS} across with {spikes} spikes {SPIKE_LENGTH} long")
+print(f"[build_dragon] club: a ball {BALL_RADIUS} across with {spikes} spikes {SPIKE_LENGTH} long, textured from {len(skin_faces)} skin and "
+      f"{len(spike_faces)} spike faces of the tail")
 
 # --- previews -----------------------------------------------------------------------------------------------------------------
 if PREVIEW:
