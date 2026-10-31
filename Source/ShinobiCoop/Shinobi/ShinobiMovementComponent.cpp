@@ -133,7 +133,7 @@ void UShinobiMovementComponent::UpdateCharacterStateBeforeMovement(float DeltaSe
 	{
 		// Keep the dragon off the ground: from the capsule's floor, look down; too close pushes up, harder the closer it is (so a
 		// mount from the ground is a quick lift-off, and a dive eases out above the floor). The push is the speed that the flying
-		// brakes stop right at the clearance: a springier push launched Tairn's 7 m lift-off 18 m up.
+		// brakes stop right at the clearance: a springier push launched Tairn's lift-off far past it.
 		const UCapsuleComponent* Capsule = CharacterOwner->GetCapsuleComponent();
 		const FVector Feet = CharacterOwner->GetActorLocation() - FVector(0.f, 0.f, Capsule->GetScaledCapsuleHalfHeight());
 		FHitResult Hit;

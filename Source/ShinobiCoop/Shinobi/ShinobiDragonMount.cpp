@@ -46,8 +46,8 @@ namespace
 	// The mouths and necks were measured on the meshes in Blender (the crimson rest pose has its head turned, hence the mouth's Y).
 	const FDragonLook& DragonLookFor(EShinobiDragonKind Kind)
 	{
-		static const FDragonLook Tairn = { TEXT("Tairn"), 10.f, FVector(18.f, 0.f, 37.f), 560.f, -167.f, // his long neck holds the head low
-			TEXT("bone_9"), FVector(50.f, 0.f, 56.f), TEXT("bone_4"), TEXT("bone_5"), 0.7f, 5.7f, -3.6f, 690.f, 1500.f }; // ~15 m long, 16.6 m across the wings
+		static const FDragonLook Tairn = { TEXT("Tairn"), 14.f, FVector(18.f, 0.f, 37.f), 784.f, -196.f, // his long neck holds the head low
+			TEXT("bone_9"), FVector(50.f, 0.f, 56.f), TEXT("bone_4"), TEXT("bone_5"), 0.7f, 5.7f, -3.6f, 965.f, 2100.f }; // ~21 m long, 23 m across the wings
 		static const FDragonLook Crimson = { TEXT("CrimsonDragon"), 3.5f, FVector(22.f, 0.f, 50.f), 247.f, -117.f, // its head reaches forward, below the seat
 			TEXT("Head_5"), FVector(68.3f, -21.f, 63.1f), TEXT("Head_1"), TEXT("Head_2"), 0.3f, 7.5f, 0.f, 310.f, 900.f };
 		return Kind == EShinobiDragonKind::Tairn ? Tairn : Crimson;

@@ -417,7 +417,7 @@ hang below the rider, so a mount from the ground is a quick lift-off and a dive 
 - **The dragon** is `AShinobiDragonMount`, a replicated actor with no collision or health, attached to the rider's mesh so it is smoothed on clients
   with the rider (the transform uses the mesh's default offset, not its current network-smoothed one).
 - **The kind** (`EShinobiDragonKind`, replicated with the dragon and its flame) picks the model, the scale, the saddle, the mouth and the fire: a `FDragonLook`
-  table at the top of `ShinobiDragonMount.cpp` (Tairn 10x, about 15 m long and 16.6 m across the wings; the crimson dragon 3.5x; each also sets its rider's ground clearance and mounted camera boom) and the particle recipes in `AShinobiDragonFlame::BeginPlay`. Dismounting
+  table at the top of `ShinobiDragonMount.cpp` (Tairn 14x, about 21 m long and 23 m across the wings; the crimson dragon 3.5x; each also sets its rider's ground clearance and mounted camera boom) and the particle recipes in `AShinobiDragonFlame::BeginPlay`. Dismounting
   and the breath work the same for both; the breath's hit burst is lightning for Tairn and fire for the crimson one. Adding a third dragon is a new
   kind, a look row, a recipe and a jutsu subclass.
 - **Tairn's model** is a Tripo Studio model, auto-rigged there (`SourceArt/Tripo/Tairn`: `tairn_rigged.glb`/`.zip` as downloaded, the FBX
@@ -427,7 +427,9 @@ hang below the rider, so a mount from the ground is a quick lift-off and a dive 
   wings half raised, the tail curled round to its left. `Scripts/character/build_dragon.py` keeps Tripo's rig and weights (trimmed like the crimson
   dragon's), cuts the mouth and adds a jaw bone, and re-bones the tail: Tripo's tail bones stopped at the top of the curl and cut its corner, so the
   tail from Tail_2 to the club is marched along the mesh's centre line (12 bones) and re-weighted by distance, then squeezed to half its length
-  in the rest pose (`TAIL_SHORTEN`; straightened, it was longer than the body; scale keyed in the clips thins the tail in Unreal instead). The flying pose levels the chest,
+  in the rest pose (`TAIL_SHORTEN`; straightened, it was longer than the body; scale keyed in the clips thins the tail in Unreal instead), its rings re-thickened
+  to an even taper (measured in the flying pose: Tripo's tail pinched behind the hips and bulged a third along) and its flat club replaced by a
+  built spiked ball (`BALL_RADIUS`, Tripo's club shrunk inside it). The flying pose levels the chest,
   reaches the neck forward, straightens the tail and opens the folded wings bone by bone (arm, forearm, three fingers fanned flat, each rolled
   so the membrane around it lies level: aimed alone, the left wing's membrane hung down the leg); the clips are
   the crimson dragon's (Idle, Flap, Glide, Breath). One material slot (M_Character on `Tairn.png`: Tripo gave no normal or roughness map).
