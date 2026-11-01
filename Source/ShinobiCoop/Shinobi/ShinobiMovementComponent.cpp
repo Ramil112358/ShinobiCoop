@@ -129,21 +129,196 @@ void UShinobiMovementComponent::UpdateCharacterStateBeforeMovement(float DeltaSe
 		SetMovementMode(MOVE_Falling);
 	}
 	bWasMounted = bMounted;
+	bMountedGrounded = false;
+	MountedGroundBelow = UE_BIG_NUMBER;
 	if (bMounted && MovementMode == MOVE_Flying && CharacterOwner)
 	{
-		// Keep the dragon off the ground: from the capsule's floor, look down; too close pushes up, harder the closer it is (so a
-		// mount from the ground is a quick lift-off, and a dive eases out above the floor). The push is the speed that the flying
-		// brakes stop right at the clearance: a springier push launched Tairn's lift-off far past it.
-		const UCapsuleComponent* Capsule = CharacterOwner->GetCapsuleComponent();
-		const FVector Feet = CharacterOwner->GetActorLocation() - FVector(0.f, 0.f, Capsule->GetScaledCapsuleHalfHeight());
-		FHitResult Hit;
-		FCollisionQueryParams Params(SCENE_QUERY_STAT(MountClearance), false, CharacterOwner);
-		if (GetWorld()->LineTraceSingleByChannel(Hit, Feet, Feet - FVector(0.f, 0.f, MountedGroundClearance * 2.f), ECC_WorldStatic, Params) && Hit.Distance < MountedGroundClearance)
+		// Near the ground (or a roof) and not climbing, the dragon lands: PhysFlying settles the seat to its standing height. Climbing
+		// close to it pushes up, harder the closer it is (a quick lift-off). The push is the speed that the flying brakes stop right
+		// at the clearance: a springier push launched Tairn's lift-off far past it.
+		MountedGroundBelow = GroundBelowSeat(MountedGroundClearance * 2.f);
+		bMountedGrounded = MountedStandHeight > 0.f && Acceleration.Z <= UE_KINDA_SMALL_NUMBER && MountedGroundBelow < MountedGroundClearance;
+		MountedSteer = bMountedGrounded ? FVector(Acceleration.X, Acceleration.Y, 0.f) : FVector::ZeroVector;
+		if (!bMountedGrounded && MountedGroundBelow < MountedGroundClearance)
 		{
-			Velocity.Z = FMath::Max(Velocity.Z, FMath::Sqrt(2.f * BrakingDecelerationFlying * (MountedGroundClearance - Hit.Distance)));
+			Velocity.Z = FMath::Max(Velocity.Z, FMath::Sqrt(2.f * BrakingDecelerationFlying * (MountedGroundClearance - MountedGroundBelow)));
 		}
 	}
 	Super::UpdateCharacterStateBeforeMovement(DeltaSeconds);
+}
+
+float UShinobiMovementComponent::GroundBelowSeat(float Reach) const
+{
+	const FVector Seat = CharacterOwner->GetActorLocation() - FVector(0.f, 0.f, CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+	FHitResult Hit;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(MountClearance), false, CharacterOwner);
+	return GetWorld()->LineTraceSingleByChannel(Hit, Seat, Seat - FVector(0.f, 0.f, Reach), ECC_WorldStatic, Params) ? Hit.Distance : UE_BIG_NUMBER;
+}
+
+void UShinobiMovementComponent::PhysFlying(float DeltaTime, int32 Iterations)
+{
+	if (!bMountedGrounded)
+	{
+		Super::PhysFlying(DeltaTime, Iterations);
+		return;
+	}
+	// On the ground: walk level (no climbing or diving) and only the way it faces (PhysicsRotation turns it toward the steer; steered
+	// behind, it turns on the spot), then settle the seat to its standing height over whatever is below now.
+	Acceleration.Z = 0.f;
+	Velocity.Z = 0.f;
+	if (MountedTurnRate > 0.f && UpdatedComponent)
+	{
+		const FVector Heading = UpdatedComponent->GetForwardVector().GetSafeNormal2D();
+		Acceleration = Heading * Acceleration.Size2D() * FMath::Max(0.f, Acceleration.GetSafeNormal2D() | Heading);
+	}
+	Super::PhysFlying(DeltaTime, Iterations);
+	const float Below = GroundBelowSeat(MountedGroundClearance * 2.f);
+	if (Below < UE_BIG_NUMBER && DeltaTime > 0.f && UpdatedComponent)
+	{
+		const float Rise = FMath::Clamp(MountedStandHeight - Below, -LandingSpeed * DeltaTime, StandingRiseSpeed * DeltaTime);
+		FHitResult Hit;
+		SafeMoveUpdatedComponent(FVector(0.f, 0.f, Rise), UpdatedComponent->GetComponentQuat(), true, Hit);
+		Velocity.Z = Rise / DeltaTime; // honest for the dragon's clips on other machines (sinking: landing)
+	}
+}
+
+void UShinobiMovementComponent::PhysicsRotation(float DeltaTime)
+{
+	if (!bMountedGrounded || MountedTurnRate <= 0.f || !UpdatedComponent || MovementMode != MOVE_Flying)
+	{
+		Super::PhysicsRotation(DeltaTime); // flying: it faces the camera (bUseControllerDesiredRotation)
+		return;
+	}
+	const FRotator Current = UpdatedComponent->GetComponentRotation();
+	if (MountedSteer.IsNearlyZero())
+	{
+		return; // no steer: it keeps its heading
+	}
+	const FRotator Turned(0.f, FMath::FixedTurn(Current.Yaw, MountedSteer.Rotation().Yaw, MountedTurnRate * DeltaTime), 0.f);
+	// Up against something (its snout at a wall), the turn would swing it in: it steps back (or aside) first, as far as the turn needs.
+	const FVector Seat = UpdatedComponent->GetComponentLocation() - FVector(0.f, 0.f, CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+	FHitResult Hit;
+	if (FindRoomHit(*GetWorld(), MountedRoom(), Seat, Seat, Turned.Quaternion(), MountedGroundBelow, CharacterOwner, Hit))
+	{
+		const FVector Ahead = Current.Vector().GetSafeNormal2D();
+		const FVector Side = FVector::CrossProduct(FVector::UpVector, Ahead);
+		bool bRoom = false;
+		for (const float Step : { 25.f, 50.f, 100.f })
+		{
+			for (const FVector& Away : { -Ahead, Side, -Side, Ahead })
+			{
+				if (!bRoom && !FindRoomHit(*GetWorld(), MountedRoom(), Seat + Away * Step, Seat + Away * Step, Turned.Quaternion(), MountedGroundBelow, CharacterOwner, Hit))
+				{
+					SafeMoveUpdatedComponent(Away * Step, Current, true, Hit);
+					bRoom = true;
+				}
+			}
+		}
+	}
+	MoveUpdatedComponent(FVector::ZeroVector, Turned, false); // its room boxes still hold the turn if there was no room to be made
+}
+
+bool UShinobiMovementComponent::FindRoomHit(const UWorld& World, TConstArrayView<FBox> Room, const FVector& From, const FVector& To, const FQuat& Rotation, float GroundBelow, const AActor* Ignore, FHitResult& OutHit)
+{
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(DragonRoom), false, Ignore);
+	if (Ignore)
+	{
+		TArray<AActor*> Attached;
+		Ignore->GetAttachedActors(Attached, true, true);
+		Params.AddIgnoredActors(Attached);
+	}
+	// What a character bumps into (buildings, props, the ground), but not characters or loose debris.
+	FCollisionResponseParams Responses;
+	Responses.CollisionResponse.SetResponse(ECC_Pawn, ECR_Ignore);
+	Responses.CollisionResponse.SetResponse(ECC_PhysicsBody, ECR_Ignore);
+	Responses.CollisionResponse.SetResponse(ECC_Vehicle, ECR_Ignore);
+	Responses.CollisionResponse.SetResponse(ECC_Destructible, ECR_Ignore);
+	OutHit = FHitResult();
+	for (const FBox& Part : Room)
+	{
+		FVector Min = Part.Min;
+		Min.Z = FMath::Max(Min.Z, MountedStepClearance - GroundBelow);
+		if (!Part.IsValid || Min.Z >= Part.Max.Z)
+		{
+			continue;
+		}
+		const FVector Centre = Rotation.RotateVector((Min + Part.Max) * 0.5f);
+		const FCollisionShape Box = FCollisionShape::MakeBox((Part.Max - Min) * 0.5f);
+		if (From.Equals(To))
+		{
+			if (World.OverlapBlockingTestByChannel(From + Centre, Rotation, ECC_Pawn, Box, Params, Responses))
+			{
+				OutHit.bBlockingHit = OutHit.bStartPenetrating = true;
+				return true;
+			}
+			continue;
+		}
+		FHitResult Hit;
+		if (World.SweepSingleByChannel(Hit, From + Centre, To + Centre, Rotation, ECC_Pawn, Box, Params, Responses)
+			&& (Hit.bStartPenetrating || !OutHit.bBlockingHit || Hit.Time < OutHit.Time))
+		{
+			OutHit = Hit; // the first box to meet something (a box already in something: that one, at once)
+			if (Hit.bStartPenetrating)
+			{
+				return true;
+			}
+		}
+	}
+	return OutHit.bBlockingHit;
+}
+
+bool UShinobiMovementComponent::MoveUpdatedComponentImpl(const FVector& Delta, const FQuat& NewRotation, bool bSweep, FHitResult* OutHit, ETeleportType Teleport)
+{
+	const TArray<FBox>& Room = MountedRoom();
+	if (!bWasMounted || Room.IsEmpty() || MovementMode != MOVE_Flying || !UpdatedComponent || !CharacterOwner || !GetWorld())
+	{
+		return Super::MoveUpdatedComponentImpl(Delta, NewRotation, bSweep, OutHit, Teleport);
+	}
+	// The rider's capsule is small; the dragon under it is not. Its boxes go first: a turn that would swing it into something is held,
+	// and a move stops (and slides) where the box meets something, as the capsule's own would.
+	const FVector Seat = UpdatedComponent->GetComponentLocation() - FVector(0.f, 0.f, CharacterOwner->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+	const FQuat Current = UpdatedComponent->GetComponentQuat();
+	FQuat Rotation = NewRotation;
+	FHitResult Probe;
+	if (!Rotation.Equals(Current, 1e-5f) && FindRoomHit(*GetWorld(), Room, Seat, Seat, Rotation, MountedGroundBelow, CharacterOwner, Probe)
+		&& !FindRoomHit(*GetWorld(), Room, Seat, Seat, Current, MountedGroundBelow, CharacterOwner, Probe))
+	{
+		Rotation = Current;
+	}
+	FVector Move = Delta;
+	float Fraction = 1.f;
+	FHitResult RoomHit;
+	if (bSweep && !Move.IsNearlyZero() && FindRoomHit(*GetWorld(), Room, Seat, Seat + Move, Rotation, MountedGroundBelow, CharacterOwner, RoomHit))
+	{
+		if (RoomHit.bStartPenetrating)
+		{
+			// Already in something (it moved into the dragon, or the bigger flying box on take-off): any move that doesn't go deeper.
+			if ((Move | RoomHit.Normal) < 0.f)
+			{
+				Move = FVector::VectorPlaneProject(Move, RoomHit.Normal);
+			}
+			RoomHit = FHitResult();
+		}
+		else
+		{
+			Fraction = FMath::Max(0.f, RoomHit.Time - 1.f / Move.Size()); // a centimetre short
+			Move *= Fraction;
+		}
+	}
+	const bool bMoved = Super::MoveUpdatedComponentImpl(Move, Rotation, bSweep, OutHit, Teleport);
+	if (OutHit && RoomHit.bBlockingHit)
+	{
+		if (OutHit->bBlockingHit)
+		{
+			OutHit->Time *= Fraction; // the capsule met something sooner: its time, of the whole move
+		}
+		else
+		{
+			*OutHit = RoomHit;
+			OutHit->Time = Fraction;
+		}
+	}
+	return bMoved;
 }
 
 float UShinobiMovementComponent::GetMaxSpeed() const
@@ -156,7 +331,9 @@ float UShinobiMovementComponent::GetMaxSpeed() const
 	}
 	if (MovementMode == MOVE_Flying && Character && Character->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Mounted))
 	{
-		Speed = FlightSpeed;
+		// Shift (UGA_Sprint, stamina and all) runs on the ground and flies faster, as it sprints on foot.
+		Speed = !bMountedGrounded || MountedWalkSpeed <= 0.f ? (bWantsToSprint ? FlightSprintSpeed : FlightSpeed)
+			: bWantsToSprint && MountedRunSpeed > 0.f ? MountedRunSpeed : MountedWalkSpeed;
 	}
 	if (Character && Character->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Chilled))
 	{

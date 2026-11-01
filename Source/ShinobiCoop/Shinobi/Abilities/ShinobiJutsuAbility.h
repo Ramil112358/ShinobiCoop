@@ -18,6 +18,8 @@ struct FShinobiJutsuSlotState
 	float CooldownRemaining = 0.f;
 	float CooldownDuration = 0.f;
 	bool bAffordable = true;
+	/** Riding a dragon: the jutsu can't be cast (the HUD dims it). */
+	bool bLocked = false;
 };
 
 /**
@@ -57,6 +59,9 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
 	float ChakraCost = 0.f;
+
+	/** Its slot stays lit while riding a dragon (the dragon summons: on a dragon their key climbs down). Every jutsu is locked then. */
+	bool bLitWhileMounted = false;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
 	float Cooldown = 0.f;

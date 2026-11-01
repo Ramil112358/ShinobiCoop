@@ -1288,6 +1288,8 @@ void AShinobiPlayerController::RunDragonShotTest()
 	auto Climb = [this](bool bHeld) { if (AShinobiPlayerCharacter* P = GetPawn<AShinobiPlayerCharacter>()) { P->SetFlightClimb(bHeld); } };
 	At(1.0f, [this]() { ShinobiEquipPage(5); ShinobiDrainChakra(-100.f); });
 	At(1.2f, [this]() { ShinobiCastHold(1, 0.9f); }); // 0.8 s seals: mounted from about 2.0
+	At(2.3f, [Orbit]() { Orbit(90.f, 0.f); });
+	At(2.55f, [Shot]() { Shot(TEXT("ShinobiDragonShot_00_Summoned")); }); // standing where it was summoned
 	At(2.6f, [Climb]() { Climb(true); });
 	At(3.4f, [Climb]() { Climb(false); });
 	struct FView { float Yaw; float Height; const TCHAR* Name; };
@@ -1313,7 +1315,29 @@ void AShinobiPlayerController::RunDragonShotTest()
 	At(9.9f, [Orbit]() { Orbit(70.f, 300.f); });
 	At(10.15f, [Shot]() { Shot(TEXT("ShinobiDragonShot_07_Breath")); });
 	At(10.3f, [Breathe]() { Breathe(false); });
-	At(10.8f, [this]() { ConsoleCommand(TEXT("quit")); });
+	// Down again: it lands below its clearance, stands, then walks.
+	auto Dive = [this](bool bHeld) { if (AShinobiPlayerCharacter* P = GetPawn<AShinobiPlayerCharacter>()) { P->SetFlightDive(bHeld); } };
+	At(10.5f, [Dive]() { Dive(true); });
+	At(11.6f, [Orbit]() { Orbit(90.f, 0.f); });
+	At(11.85f, [Shot]() { Shot(TEXT("ShinobiDragonShot_08_Landing")); });
+	At(12.2f, [Dive]() { Dive(false); });
+	At(14.0f, [Orbit]() { Orbit(60.f, 200.f); });
+	At(14.25f, [Shot]() { Shot(TEXT("ShinobiDragonShot_09_Standing")); });
+	At(14.3f, [this]()
+	{
+		FTimerHandle Walk;
+		const double Until = GetWorld()->GetTimeSeconds() + 2.0;
+		GetWorldTimerManager().SetTimer(Walk, FTimerDelegate::CreateWeakLambda(this, [this, Until]()
+		{
+			if (APawn* Shinobi = GetPawn(); Shinobi && GetWorld()->GetTimeSeconds() < Until)
+			{
+				Shinobi->AddMovementInput(Shinobi->GetActorForwardVector(), 1.f);
+			}
+		}), 0.01f, true);
+	});
+	At(15.6f, [Orbit]() { Orbit(90.f, 0.f); });
+	At(15.85f, [Shot]() { Shot(TEXT("ShinobiDragonShot_10_Walking")); });
+	At(16.4f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
 
 void AShinobiPlayerController::RunJutsuShotTest()

@@ -78,6 +78,7 @@ namespace ShinobiTags
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Blink, "Cooldown.Blink");
 
 	UE_DEFINE_GAMEPLAY_TAG(Fail_NoTarget, "Fail.NoTarget");
+	UE_DEFINE_GAMEPLAY_TAG(Fail_NoRoom, "Fail.NoRoom");
 }
 
 namespace

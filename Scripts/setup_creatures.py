@@ -9,14 +9,15 @@ import os
 import unreal
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+DRAGON_CLIPS = ["Idle", "Flap", "Glide", "Breath", "BreathStand", "Stand", "Walk", "Run", "Land", "TakeOff"]  # build_dragon.py and build_dragon_crimson.py
 CREATURES = {
     # name: (colour or None, clips, base-colour PNG, or None, or a list with one entry per material slot: a PNG, or a flat colour).
     # With a PNG the creature wears M_Character (the heroes' lit material), or M_Creature when <png>_Normal.png and <png>_Roughness.png are beside it.
     # The files are SourceArt/Creatures/<name>/<name>*.fbx.
     "Owl": (None, ["Hover", "Strike"], "Owl.png"),  # Scripts/character/build_owl.py (Tripo); she took the toad's slot
     "Misha": (None, ["Idle", "Move", "Bark", "Hit", "Death"], "Misha.png"),  # Scripts/character/build_misha.py; he replaced the snake (still in /Game/Shinobi/Creatures/Snake, unused)
-    "Tairn": (None, ["Idle", "Flap", "Glide", "Breath"], "Tairn.png"),  # Scripts/character/build_dragon.py (Tripo)
-    "CrimsonDragon": (None, ["Idle", "Flap", "Glide", "Breath"], "CrimsonDragon.png"),  # Scripts/character/build_dragon_crimson.py (Tripo)
+    "Tairn": (None, DRAGON_CLIPS, "Tairn.png"),  # Scripts/character/build_dragon.py (Tripo)
+    "CrimsonDragon": (None, DRAGON_CLIPS, "CrimsonDragon.png"),  # Scripts/character/build_dragon_crimson.py (Tripo)
     "Pabu": (None, ["Idle", "Walk", "Run", "Bite", "Hit", "Death"], "Pabu.png"),  # Scripts/character/build_pabu.py
     "Pusho": (None, ["Idle", "Walk", "Run", "Pounce", "Hit", "Death"], "Pusho.png"),  # Scripts/character/build_pusho.py
 }

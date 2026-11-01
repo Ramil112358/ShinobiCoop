@@ -93,4 +93,5 @@ namespace ShinobiTags
 
 	// Activation failure reasons
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Fail_NoTarget);
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(Fail_NoRoom); // a dragon has no room to land or fly where it is summoned
 }

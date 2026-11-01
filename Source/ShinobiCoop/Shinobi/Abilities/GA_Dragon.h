@@ -17,6 +17,8 @@ public:
 	UGA_SummonDragonBase();
 
 protected:
+	/** Fails for free, with Fail.NoRoom (the HUD says so), where the dragon has no room (AShinobiDragonMount::HasRoom). */
+	virtual bool PrepareJutsu() override;
 	virtual void ExecuteJutsu() override;
 
 	EShinobiDragonKind DragonKind = EShinobiDragonKind::Tairn;

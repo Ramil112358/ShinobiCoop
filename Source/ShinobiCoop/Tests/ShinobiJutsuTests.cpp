@@ -827,13 +827,13 @@ bool FShinobiFirePatchOnWallTest::RunTest(const FString& Parameters)
 	}
 	TestTrue(TEXT("The patch stands on the wall"), Patch->GetActorQuat().GetUpVector().Equals(FVector(-1.f, 0.f, 0.f), 1e-3f) && Patch->GetActorLocation().Equals(Wall, 1e-3f));
 	W.Tick(0.5f);
-	const UNiagaraComponent* Fire = Patch->FindComponentByClass<UNiagaraComponent>();
-	if (!TestNotNull(TEXT("It burns with the Fab fire"), Fire))
+	const UNiagaraComponent* Flames = Patch->FindComponentByClass<UNiagaraComponent>();
+	if (!TestNotNull(TEXT("It burns with the Fab fire"), Flames))
 	{
 		return false;
 	}
-	TestTrue(TEXT("The fire stands on the wall's side, not inside it"), FVector::DotProduct(Fire->GetComponentLocation() - Wall, FVector(-1.f, 0.f, 0.f)) > 0.f);
-	TestTrue(TEXT("and stays upright"), Fire->GetComponentQuat().GetUpVector().Equals(FVector::UpVector, 1e-3f));
+	TestTrue(TEXT("The fire stands on the wall's side, not inside it"), FVector::DotProduct(Flames->GetComponentLocation() - Wall, FVector(-1.f, 0.f, 0.f)) > 0.f);
+	TestTrue(TEXT("and stays upright"), Flames->GetComponentQuat().GetUpVector().Equals(FVector::UpVector, 1e-3f));
 
 	// On a level floor nothing changes: the patch is not turned, and without a normal it burns on the floor found below.
 	TestTrue(TEXT("Level ground leaves the patch unturned"), ShinobiVfx::SurfaceFrame(FVector::UpVector).IsIdentity() && ShinobiVfx::SurfaceFrame(FVector::ZeroVector).IsIdentity());

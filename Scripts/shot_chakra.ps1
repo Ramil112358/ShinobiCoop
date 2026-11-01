@@ -5,7 +5,7 @@
 #             (hand orbs, fireball, burn, black flame, Chidori, Rasengan + Firestorm, Substitution log).
 # Opens a visible window for ~15-60 s; close the GUI editor first.
 #   -Susanoo: -ShinobiSusanooShot: the Perfect Susanoo from four sides, the gameplay camera and a melee slash.
-#   -Dragon:  -ShinobiDragonShot: Tairn mounted and hovering from the side, front, behind, above, the gameplay camera and breathing fire (~11 s).
+#   -Dragon:  -ShinobiDragonShot: Tairn standing where summoned, hovering from the side, front, behind, above, the gameplay camera, breathing fire, landing, standing and walking (~17 s).
 #   -Fire:    -ShinobiFireShot: a fire patch and a black-flame patch 5 m ahead, close-ups of the flame cards.
 #   -Look:    -ShinobiLookShot: the arena (-Map, default Training Grounds) in wave mode: the view ahead, the character,
 #             an overview, the first wave closing in and a fight.

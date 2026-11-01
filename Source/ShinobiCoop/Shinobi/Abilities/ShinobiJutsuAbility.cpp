@@ -25,6 +25,7 @@ UShinobiJutsuAbility::UShinobiJutsuAbility()
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Dodging);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_ChakraCharging);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Phased); // Kamui: no attacking from the other side
+	ActivationBlockedTags.AddTag(ShinobiTags::State_Mounted); // on a dragon: its breath, the dismount and the flight keys only
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Melee); // a jutsu can finish a combo
 	BlockAbilitiesWithTag.AddTag(ShinobiTags::Ability_Jutsu);
@@ -446,6 +447,7 @@ FShinobiJutsuSlotState UShinobiJutsuAbility::GetSlotState(const UAbilitySystemCo
 		}
 	}
 	State.bAffordable = ASC.GetNumericAttribute(UShinobiAttributeSet::GetChakraAttribute()) >= ChakraCost;
+	State.bLocked = !bLitWhileMounted && ASC.HasMatchingGameplayTag(ShinobiTags::State_Mounted);
 	return State;
 }
 

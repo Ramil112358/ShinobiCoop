@@ -64,6 +64,14 @@ public:
 	/** Where the fire ends: BreathRange ahead of the mouth, or the first thing it meets. The HUD's crosshair marks this point. */
 	static FVector BreathTarget(const AShinobiCharacterBase& Rider, EShinobiDragonKind Kind = EShinobiDragonKind::Tairn);
 
+	/** The dragon's boxes about the seat (the rider's capsule floor), in the rider's frame, for UShinobiMovementComponent: the reach of each
+	 * part of the model (Tairn: body, wings, tail) in every clip, leaning as far as it banks and pitches (flying) or leans into a turn
+	 * (on the ground), their floors MountedStepClearance above its feet when standing. */
+	static TArray<FBox> Room(EShinobiDragonKind Kind, bool bFlying);
+
+	/** Whether Kind fits where Rider is: standing on the ground below, or flying if there is none near. The summon fails without it. */
+	static bool HasRoom(const AShinobiCharacterBase& Rider, EShinobiDragonKind Kind);
+
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -74,7 +82,14 @@ protected:
 	void OnRep_Rider();
 
 private:
-	void Play(UAnimSequence* Clip, bool bLoop);
+	/** Flying, landing (once), on the ground (standing or walking), taking off (once). Each machine decides from the ground below the
+	 * seat and the rider's velocity. */
+	enum class EGait : uint8 { Fly, Land, Ground, TakeOff };
+
+	void Play(UAnimSequence* Clip, bool bLoop, float Rate = 1.f, float BlendSeconds = 0.35f);
+
+	/** Picks the gait and its clip. */
+	void UpdateClip();
 
 	/** Rides the rider's mesh (smoothed on clients). Retried each tick until the rider is known: its channel can open after ours. */
 	void AttachToRider();
@@ -82,7 +97,8 @@ private:
 	/** Leans the dragon about the seat: the right wing drops in a right turn, the nose rises in a climb. Cosmetic, computed on each machine. */
 	void UpdateBank(float DeltaSeconds);
 
-	/** Cancels the clips' body bob at the seat, so the rider stays on the dragon's back. Cosmetic, on each machine with a mesh. */
+	/** Hangs the dragon from the seat by its back (the saddle on its spine bone), so the rider stays on it whatever the clip: the body's
+	 * bob, landing, the raised chest standing. Cosmetic, on each machine with a mesh. */
 	void KeepSeatStill();
 
 	/** Lays the reins: a rope collar round the neck and a line from it to each of the rider's fists. Cosmetic, on each machine with a mesh. */
@@ -98,18 +114,19 @@ private:
 	UPROPERTY(ReplicatedUsing = OnRep_Rider)
 	TObjectPtr<AShinobiCharacterBase> Rider;
 
+	/** The clips, by name (Idle, Flap, Glide, Breath, BreathStand, Stand, Walk, Run, Land, TakeOff); a missing one is null. */
 	UPROPERTY()
-	TObjectPtr<UAnimSequence> IdleClip;
-	UPROPERTY()
-	TObjectPtr<UAnimSequence> BreathClip;
-	UPROPERTY()
-	TObjectPtr<UAnimSequence> FlapClip;
-	UPROPERTY()
-	TObjectPtr<UAnimSequence> Playing;
+	TMap<FName, TObjectPtr<UAnimSequence>> Clips;
+
+	EGait Gait = EGait::Fly;
 
 	/** The collar's segments, then the left and right reins. */
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMeshComponent>> Rope;
+
+	/** The saddle in its spine bone's frame, from the flying pose; INDEX_NONE: hang by the fixed Saddle. */
+	int32 SaddleBone = INDEX_NONE;
+	FVector SaddleInBone = FVector::ZeroVector;
 
 	/** The mouth in the skull bone's frame, from the reference pose. */
 	FVector MouthInSkull = FVector::ZeroVector;
@@ -118,5 +135,6 @@ private:
 	float LastRiderYaw = 0.f;
 	bool bHaveRiderYaw = false;
 	float BankRoll = 0.f;
+	float YawRate = 0.f; // the rider's turn, degrees a second (UpdateBank)
 	float BankPitch = 0.f;
 };

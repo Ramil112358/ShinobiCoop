@@ -14,6 +14,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiCharacterBase.h"
+#include "Shinobi/ShinobiCrossfadeAnimInstance.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiTags.h"
 
@@ -41,15 +42,30 @@ namespace
 		float CollarDrop;        // how far below the joint the neck's middle is there (negative: Tairn's bones run under his neck), model centimetres
 		float GroundClearance;   // the rider's lowest above the ground (UShinobiMovementComponent::MountedGroundClearance): the body and legs hang below the seat
 		float ArmLength;         // the camera boom while riding (AShinobiPlayerCharacter::MountedArmLength): the wings in view
+		const TCHAR* SaddleBone; // the spine bone the saddle rides on (nearest it in the flying pose)
+		float StandHeight;       // the seat above the feet standing, model centimetres
+		float WalkClipSpeed;     // how fast the Walk clip carries the body at rate 1, model centimetres a second
+		float WalkSpeed;         // on the ground (UShinobiMovementComponent::MountedWalkSpeed); the Walk clip is sped up to match
+		float RunClipSpeed;      // the Run clip (a trot) at rate 1, model centimetres a second
+		float RunSpeed;          // on the ground holding Shift (UShinobiMovementComponent::MountedRunSpeed)
+		float TurnRate;          // degrees a second on the ground (UShinobiMovementComponent::MountedTurnRate): the bigger, the slower
+		int32 RoomParts;         // the boxes round the model about the seat over every clip (body, wings, tail; or one round it all),
+		FVector Room[3][2];      // lowest and highest corners, model centimetres (Y flipped from Blender)
 	};
 
-	// The mouths and necks were measured on the meshes in Blender (the crimson rest pose has its head turned, hence the mouth's Y).
+	// The mouths and necks were measured on the meshes in Blender (the crimson rest pose has its head turned, hence the mouth's Y); the
+	// saddle bones, standing heights, walk speeds and rooms are printed by each build script ("[build_dragon] saddle bone", "walk", "room").
 	const FDragonLook& DragonLookFor(EShinobiDragonKind Kind)
 	{
 		static const FDragonLook Tairn = { TEXT("Tairn"), 14.f, FVector(18.f, 0.f, 37.f), 784.f, -196.f, // his long neck holds the head low
-			TEXT("bone_9"), FVector(50.f, 0.f, 56.f), TEXT("bone_4"), TEXT("bone_5"), 0.7f, 5.7f, -3.6f, 965.f, 2100.f }; // ~21 m long, 23 m across the wings
+			TEXT("bone_9"), FVector(50.f, 0.f, 56.f), TEXT("bone_4"), TEXT("bone_5"), 0.7f, 5.7f, -3.6f, 965.f, 2100.f, // ~21 m long, 23 m across the wings
+			TEXT("bone_2"), 34.5f, 19.43f, 350.f, 50.53f, 700.f, 75.f, 3, {
+				{ FVector(-32.f, -17.4f, -45.f), FVector(59.4f, 15.9f, 35.9f) },      // body, head, neck and legs
+				{ FVector(-30.5f, -87.6f, -59.1f), FVector(26.1f, 87.6f, 57.9f) },    // wings
+				{ FVector(-96.8f, -16.f, -37.6f), FVector(-16.9f, 15.f, -10.7f) } } }; // tail and club
 		static const FDragonLook Crimson = { TEXT("CrimsonDragon"), 3.5f, FVector(22.f, 0.f, 50.f), 247.f, -117.f, // its head reaches forward, below the seat
-			TEXT("Head_5"), FVector(68.3f, -21.f, 63.1f), TEXT("Head_1"), TEXT("Head_2"), 0.3f, 7.5f, 0.f, 310.f, 900.f };
+			TEXT("Head_5"), FVector(68.3f, -21.f, 63.1f), TEXT("Head_1"), TEXT("Head_2"), 0.3f, 7.5f, 0.f, 310.f, 900.f,
+			TEXT("Spine_1"), 50.f, 25.45f, 200.f, 66.16f, 400.f, 140.f, 1, { { FVector(-169.7f, -62.6f, -60.5f), FVector(74.1f, 77.f, 34.2f) } } };
 		return Kind == EShinobiDragonKind::Tairn ? Tairn : Crimson;
 	}
 
@@ -57,9 +73,16 @@ namespace
 	constexpr float SeatBelowCapsuleCentre = 96.f;
 	constexpr float BankPerYawRate = 0.12f; // degrees of roll per degree a second of turn: a 300 degree a second turn banks 36 degrees
 	constexpr float MaxBank = 35.f;
+	constexpr float GroundBankPerYawRate = 0.06f; // on the ground: a slight lean into the turn (Tairn's 75 degrees a second leans 4.5)
+	constexpr float MaxGroundBank = 6.f;
 	constexpr float MaxPitch = 25.f;        // at full flight speed straight up or down
+	constexpr float ForwardTilt = 8.f;      // nose down at full flight speed ahead: leaning into it
+	constexpr float BackwardTilt = 15.f;    // nose up flying backwards: back-winging, the belly ahead
+	constexpr float SideTilt = 12.f;        // the wing on the side it slides to drops
 	constexpr float BankSpeed = 4.f;        // how quickly the lean follows
 	constexpr float HoverSpeed = 150.f;
+	constexpr float GlideSinkSpeed = 200.f; // sinking faster than this, the wings hold out instead of beating
+	constexpr float OnGroundSlack = 60.f;   // the seat within this of its standing height: on the ground
 	constexpr int32 CollarSegments = 14;
 	constexpr float RopeThickness = 3.f;
 	const FLinearColor RopeColour(0.2f, 0.12f, 0.06f); // weathered hemp
@@ -157,19 +180,38 @@ void AShinobiDragonMount::BeginPlay()
 		const FString Folder = FString::Printf(TEXT("/Game/Shinobi/Creatures/%s/"), Look.Name);
 		auto Clip = [&Folder, &Look](const TCHAR* Name) { return LoadObject<UAnimSequence>(nullptr, *FString::Printf(TEXT("%sANIM_%s_%s.ANIM_%s_%s"), *Folder, Look.Name, Name, Look.Name, Name), nullptr, LOAD_NoWarn | LOAD_Quiet); };
 		USkeletalMesh* Model = LoadObject<USkeletalMesh>(nullptr, *FString::Printf(TEXT("%sSK_%s.SK_%s"), *Folder, Look.Name, Look.Name), nullptr, LOAD_NoWarn | LOAD_Quiet);
-		IdleClip = Clip(TEXT("Idle"));
-		FlapClip = Clip(TEXT("Flap"));
-		BreathClip = Clip(TEXT("Breath"));
+		for (const TCHAR* Name : { TEXT("Idle"), TEXT("Flap"), TEXT("Glide"), TEXT("Breath"), TEXT("BreathStand"), TEXT("Stand"), TEXT("Walk"), TEXT("Run"), TEXT("Land"), TEXT("TakeOff") })
+		{
+			Clips.Add(Name, Clip(Name));
+		}
 		if (Model)
 		{
 			Body->SetSkeletalMeshAsset(Model);
-			Body->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+			Body->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+			Body->SetAnimInstanceClass(UShinobiCrossfadeAnimInstance::StaticClass()); // the clips fade into each other
 			Body->SetRelativeScale3D(FVector(Look.Scale));
 			Body->SetRelativeLocation(-Look.Saddle * Look.Scale); // the saddle is at the actor's origin: the actor leans, the dragon hangs from the seat
-			const int32 Skull = Model->GetRefSkeleton().FindBoneIndex(Look.SkullBone);
+			const FReferenceSkeleton& Bones = Model->GetRefSkeleton();
+			const int32 Skull = Bones.FindBoneIndex(Look.SkullBone);
 			if (Skull != INDEX_NONE)
 			{
-				MouthInSkull = FAnimationRuntime::GetComponentSpaceTransformRefPose(Model->GetRefSkeleton(), Skull).InverseTransformPosition(Look.MouthRest);
+				MouthInSkull = FAnimationRuntime::GetComponentSpaceTransformRefPose(Bones, Skull).InverseTransformPosition(Look.MouthRest);
+			}
+			// The saddle in its bone's frame, from the first frame of Idle (the flying pose, where the saddle was measured).
+			const UAnimSequence* Idle = Clips.FindRef(TEXT("Idle"));
+			const int32 Saddle = Bones.FindBoneIndex(Look.SaddleBone);
+			if (Idle && Idle->GetSkeleton() && Saddle != INDEX_NONE)
+			{
+				FTransform Flying = FTransform::Identity;
+				for (int32 Index = Saddle; Index != INDEX_NONE; Index = Bones.GetParentIndex(Index))
+				{
+					FTransform Local;
+					const int32 SkeletonIndex = Idle->GetSkeleton()->GetReferenceSkeleton().FindBoneIndex(Bones.GetBoneName(Index));
+					Idle->GetBoneTransform(Local, FSkeletonPoseBoneIndex(SkeletonIndex), FAnimExtractContext(0.0), false);
+					Flying = Flying * Local;
+				}
+				SaddleBone = Saddle;
+				SaddleInBone = Flying.InverseTransformPosition(Look.Saddle);
 			}
 			UStaticMesh* Cylinder = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 			UMaterialInterface* Basic = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
@@ -219,7 +261,14 @@ void AShinobiDragonMount::AttachToRider()
 	// leans the dragon about the seat, and the rider stays on it.
 	MeshDefaultInverse = MeshDefault.Inverse();
 	const FDragonLook& Look = DragonLookFor(Kind); // on every machine: the server and the rider's client must agree on the clearance
-	Rider->GetCharacterMovement<UShinobiMovementComponent>()->MountedGroundClearance = Look.GroundClearance;
+	UShinobiMovementComponent* Movement = Rider->GetCharacterMovement<UShinobiMovementComponent>();
+	Movement->MountedGroundClearance = Look.GroundClearance;
+	Movement->MountedStandHeight = Look.StandHeight * Look.Scale;
+	Movement->MountedWalkSpeed = Look.WalkSpeed;
+	Movement->MountedRunSpeed = Look.RunSpeed;
+	Movement->MountedTurnRate = Look.TurnRate;
+	Movement->MountedRoomStanding = Room(Kind, false);
+	Movement->MountedRoomFlying = Room(Kind, true);
 	if (AShinobiPlayerCharacter* Player = Cast<AShinobiPlayerCharacter>(Rider))
 	{
 		Player->MountedArmLength = Look.ArmLength;
@@ -235,23 +284,102 @@ void AShinobiDragonMount::UpdateBank(float DeltaSeconds)
 		return;
 	}
 	const float Yaw = Rider->GetActorRotation().Yaw;
-	const float YawRate = bHaveRiderYaw ? FRotator::NormalizeAxis(Yaw - LastRiderYaw) / DeltaSeconds : 0.f; // degrees a second, positive turning right
+	YawRate = bHaveRiderYaw ? FRotator::NormalizeAxis(Yaw - LastRiderYaw) / DeltaSeconds : 0.f; // degrees a second, positive turning right
 	LastRiderYaw = Yaw;
 	bHaveRiderYaw = true;
-	const float TargetRoll = FMath::Clamp(YawRate * BankPerYawRate, -MaxBank, MaxBank);
-	const float TargetPitch = FMath::Clamp(Rider->GetVelocity().Z / UShinobiMovementComponent::FlightSpeed * MaxPitch, -MaxPitch, MaxPitch);
+	const bool bFlying = Gait == EGait::Fly; // landing and taking off: level; on the ground: a slight lean (the standing room allows it)
+	float TargetRoll = bFlying ? FMath::Clamp(YawRate * BankPerYawRate, -MaxBank, MaxBank)
+		: Gait == EGait::Ground ? FMath::Clamp(YawRate * GroundBankPerYawRate, -MaxGroundBank, MaxGroundBank) : 0.f;
+	// Leaning with its flight: nose up climbing and down diving; nose down flying ahead and up flying backwards; rolled toward a side it
+	// slides to (on top of the bank into a turn).
+	const FVector Velocity = Rider->GetVelocity() / UShinobiMovementComponent::FlightSpeed;
+	const FVector Ahead = Rider->GetActorForwardVector().GetSafeNormal2D();
+	const float Forward = Velocity | Ahead;
+	const float Sideways = Velocity | FVector::CrossProduct(FVector::UpVector, Ahead);
+	const float TargetPitch = bFlying ? FMath::Clamp(Velocity.Z * MaxPitch - Forward * (Forward > 0.f ? ForwardTilt : BackwardTilt), -MaxPitch, MaxPitch) : 0.f;
+	TargetRoll = bFlying ? FMath::Clamp(TargetRoll + Sideways * SideTilt, -MaxBank, MaxBank) : TargetRoll;
 	BankRoll = FMath::FInterpTo(BankRoll, TargetRoll, DeltaSeconds, BankSpeed);
 	BankPitch = FMath::FInterpTo(BankPitch, TargetPitch, DeltaSeconds, BankSpeed);
 	SetActorRelativeTransform(FTransform(FRotator(BankPitch, 0.f, BankRoll), FVector(0.f, 0.f, -SeatBelowCapsuleCentre)) * MeshDefaultInverse);
 }
 
-void AShinobiDragonMount::Play(UAnimSequence* Clip, bool bLoop)
+void AShinobiDragonMount::Play(UAnimSequence* Clip, bool bLoop, float Rate, float BlendSeconds)
 {
-	if (Clip && Clip != Playing)
+	if (UShinobiCrossfadeAnimInstance* Anim = Cast<UShinobiCrossfadeAnimInstance>(Body->GetAnimInstance()); Anim && Clip)
 	{
-		Playing = Clip;
-		Body->PlayAnimation(Clip, bLoop);
-		Body->SetPlayRate(Clip == BreathClip ? BreathPlayRate : 1.f);
+		Anim->Play(Clip, bLoop, Rate, BlendSeconds);
+	}
+}
+
+void AShinobiDragonMount::UpdateClip()
+{
+	const UShinobiCrossfadeAnimInstance* Anim = Cast<UShinobiCrossfadeAnimInstance>(Body->GetAnimInstance());
+	if (!Anim)
+	{
+		return;
+	}
+	const FDragonLook& Look = DragonLookFor(Kind);
+	const float StandHeight = Look.StandHeight * Look.Scale;
+	const FVector Seat = Rider->GetActorLocation() - FVector(0.f, 0.f, Rider->GetSimpleCollisionHalfHeight());
+	FHitResult Hit;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(DragonGait), false, Rider);
+	const float Below = GetWorld()->LineTraceSingleByChannel(Hit, Seat, Seat - FVector(0.f, 0.f, Look.GroundClearance * 2.f), ECC_WorldStatic, Params) ? Hit.Distance : UE_BIG_NUMBER;
+	const FVector Velocity = Rider->GetVelocity();
+	const bool bOnGround = Below < StandHeight + OnGroundSlack;
+	const bool bNearGround = Below < Look.GroundClearance;
+	switch (Gait)
+	{
+	case EGait::Fly:
+		Gait = bOnGround ? EGait::Ground : bNearGround && Velocity.Z < -10.f ? EGait::Land : EGait::Fly;
+		break;
+	case EGait::Land:
+		Gait = Velocity.Z > 10.f && !bOnGround ? EGait::TakeOff : !bNearGround ? EGait::Fly : bOnGround && Anim->IsFinished() ? EGait::Ground : EGait::Land;
+		break;
+	case EGait::Ground:
+		Gait = bOnGround ? EGait::Ground : Velocity.Z > 10.f ? EGait::TakeOff : !bNearGround ? EGait::Fly : EGait::Ground; // up, or off an edge
+		break;
+	case EGait::TakeOff:
+		Gait = !Anim->IsFinished() ? EGait::TakeOff : bOnGround ? EGait::Ground : EGait::Fly;
+		break;
+	}
+	auto Get = [this](const TCHAR* Name) { return Clips.FindRef(Name).Get(); };
+	// Breathing fire rears the head back and thrusts it forward (once per breath); standing, the feet stay on the ground.
+	if (Rider->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_DragonBreathing))
+	{
+		Play(Gait == EGait::Ground && Get(TEXT("BreathStand")) ? Get(TEXT("BreathStand")) : Get(TEXT("Breath")), false, BreathPlayRate, 0.15f);
+		return;
+	}
+	const float GroundSpeed = Velocity.Size2D();
+	switch (Gait)
+	{
+	case EGait::Land:
+		Play(Get(TEXT("Land")), false, 1.f, 0.25f);
+		break;
+	case EGait::TakeOff:
+		Play(Get(TEXT("TakeOff")), false, 1.f, 0.25f);
+		break;
+	case EGait::Ground:
+		if (GroundSpeed > (Look.WalkSpeed + Look.RunSpeed) * 0.5f && Get(TEXT("Run")))
+		{
+			Play(Get(TEXT("Run")), true, FMath::Clamp(GroundSpeed / (Look.RunClipSpeed * Look.Scale), 0.3f, 3.f), 0.25f); // Shift: a trot
+		}
+		else if (GroundSpeed > 30.f && Look.WalkClipSpeed > 0.f)
+		{
+			Play(Get(TEXT("Walk")), true, FMath::Clamp(GroundSpeed / (Look.WalkClipSpeed * Look.Scale), 0.3f, 3.f)); // the feet keep pace with the ground
+		}
+		else if (FMath::Abs(YawRate) > 15.f && Look.TurnRate > 0.f)
+		{
+			Play(Get(TEXT("Walk")), true, FMath::Clamp(FMath::Abs(YawRate) / Look.TurnRate, 0.4f, 1.f)); // turning on the spot: it steps round
+		}
+		else
+		{
+			Play(Get(TEXT("Stand")), true);
+		}
+		break;
+	default:
+		// Hover with slow beats; beat the wings hard when moving (climbing, diving or flying level), hold them out when sinking.
+		Play(Velocity.Size() < HoverSpeed ? Get(TEXT("Idle")) : Velocity.Z < -GlideSinkSpeed ? Get(TEXT("Glide")) : Get(TEXT("Flap")), true);
+		break;
 	}
 }
 
@@ -274,38 +402,66 @@ void AShinobiDragonMount::Tick(float DeltaSeconds)
 	}
 	if (!IsNetMode(NM_DedicatedServer))
 	{
+		UpdateClip();
 		UpdateBank(DeltaSeconds);
 		KeepSeatStill();
 		UpdateReins();
 	}
-	// Breathing fire rears the head back and thrusts it forward (once per breath); otherwise hover with slow beats, and beat the wings
-	// hard whenever moving: climbing, diving or flying level.
-	if (Rider->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_DragonBreathing) && BreathClip)
-	{
-		Play(BreathClip, false);
-		return;
-	}
-	Play(Rider->GetVelocity().Size() < HoverSpeed ? IdleClip.Get() : FlapClip.Get(), true);
 }
 
 void AShinobiDragonMount::KeepSeatStill()
 {
-	// Every clip bobs the whole dragon by moving its root bone (14 cm on an idle beat, 42 cm on a hard one) and is unbobbed at its first
-	// frame, where the saddle was measured. The rider doesn't bob, so hang the body that much the other way: the back stays under the seat.
 	// The pose read is last frame's, a frame behind: too little to see.
 	const TArray<FTransform>& Pose = Body->GetComponentSpaceTransforms();
-	const int32 Bone = Body->GetBoneIndex(TEXT("Root"));
-	if (!Playing || !Body->GetSkeletalMeshAsset() || !Pose.IsValidIndex(Bone))
+	if (Pose.IsValidIndex(SaddleBone))
 	{
-		return;
+		Body->SetRelativeLocation(-Pose[SaddleBone].TransformPosition(SaddleInBone) * DragonLookFor(Kind).Scale);
 	}
-	const int32 Parent = Body->GetSkeletalMeshAsset()->GetRefSkeleton().GetParentIndex(Bone);
-	const int32 SkeletonBone = Playing->GetSkeleton()->GetReferenceSkeleton().FindBoneIndex(Body->GetBoneName(Bone));
-	FTransform First;
-	Playing->GetBoneTransform(First, FSkeletonPoseBoneIndex(SkeletonBone), FAnimExtractContext(0.0), false);
-	const FVector Unbobbed = (Pose.IsValidIndex(Parent) ? First * Pose[Parent] : First).GetLocation();
+}
+
+TArray<FBox> AShinobiDragonMount::Room(EShinobiDragonKind Kind, bool bFlying)
+{
 	const FDragonLook& Look = DragonLookFor(Kind);
-	Body->SetRelativeLocation((-Look.Saddle - (Pose[Bone].GetLocation() - Unbobbed)) * Look.Scale);
+	TArray<FBox> Boxes;
+	for (int32 Part = 0; Part < Look.RoomParts; ++Part)
+	{
+		const FBox Model(Look.Room[Part][0] * Look.Scale, Look.Room[Part][1] * Look.Scale);
+		FBox Box(ForceInit);
+		for (const float Pitch : { -MaxPitch, 0.f, MaxPitch })
+		{
+			for (const float Roll : { -MaxBank, -MaxGroundBank, 0.f, MaxGroundBank, MaxBank })
+			{
+				// UpdateBank leans the dragon about the seat: far in flight, a little on the ground
+				if (bFlying ? FMath::Abs(Roll) != MaxGroundBank : Pitch == 0.f && FMath::Abs(Roll) != MaxBank)
+				{
+					Box += Model.TransformBy(FTransform(FRotator(Pitch, 0.f, Roll)));
+				}
+			}
+		}
+		Box.Min.Z = FMath::Max(Box.Min.Z, UShinobiMovementComponent::MountedStepClearance - Look.StandHeight * Look.Scale);
+		Boxes.Add(Box);
+	}
+	return Boxes;
+}
+
+bool AShinobiDragonMount::HasRoom(const AShinobiCharacterBase& Rider, EShinobiDragonKind Kind)
+{
+	const UWorld* World = Rider.GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+	const FDragonLook& Look = DragonLookFor(Kind);
+	const float StandHeight = Look.StandHeight * Look.Scale;
+	const FVector Feet = Rider.GetActorLocation() - FVector(0.f, 0.f, Rider.GetSimpleCollisionHalfHeight());
+	FHitResult Ground;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(DragonSummonRoom), false, &Rider);
+	// Summoned over the ground (or a roof) it lands there, the rider on its back; with nothing near below it flies where the rider is.
+	const bool bStanding = World->LineTraceSingleByChannel(Ground, Feet + FVector(0.f, 0.f, 10.f), Feet - FVector(0.f, 0.f, Look.GroundClearance), ECC_WorldStatic, Params);
+	const FVector Seat = bStanding ? Ground.ImpactPoint + FVector(0.f, 0.f, StandHeight) : Feet;
+	FHitResult Hit;
+	return !UShinobiMovementComponent::FindRoomHit(*World, Room(Kind, !bStanding), Seat, Seat, FRotator(0.f, Rider.GetActorRotation().Yaw, 0.f).Quaternion(),
+		bStanding ? StandHeight : UE_BIG_NUMBER, &Rider, Hit);
 }
 
 void AShinobiDragonMount::UpdateReins()

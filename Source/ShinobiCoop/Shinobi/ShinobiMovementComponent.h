@@ -29,10 +29,41 @@ public:
 	virtual void UpdateCharacterStateBeforeMovement(float DeltaSeconds) override;
 
 	static constexpr float FlightSpeed = 1500.f;
+	static constexpr float FlightSprintSpeed = 2250.f; // holding Shift (UGA_Sprint), like sprinting on foot
 
 	/** The lowest a mounted rider's capsule floor may be above the ground: the dragon's legs hang below the rider, so it can lift off
 	 * from the ground and never lowers into it. Each dragon sets its own (AShinobiDragonMount::AttachToRider). */
 	float MountedGroundClearance = 310.f;
+
+	// ---- The dragon on the ground and its room (each dragon sets these: AShinobiDragonMount::AttachToRider) ----
+
+	/** How high the seat (the capsule's floor) is above the ground when the dragon stands. Within MountedGroundClearance of the ground
+	 * and not climbing, the dragon lands: the seat settles to this height and follows the ground, at MountedWalkSpeed. 0: never lands. */
+	float MountedStandHeight = 0.f;
+	float MountedWalkSpeed = 0.f;
+	float MountedRunSpeed = 0.f; // on the ground holding Shift
+
+	/** The dragon's boxes about the seat in the rider's frame (body, wings, tail), standing and flying (AShinobiDragonMount::Room). While
+	 * mounted every swept move and every turn of the rider is also checked with them, so the dragon stops at walls and props instead of
+	 * passing into them. Their floors are kept MountedStepClearance above the ground below the seat. Empty: no boxes. */
+	TArray<FBox> MountedRoomStanding;
+	TArray<FBox> MountedRoomFlying;
+
+	/** On the ground the dragon turns toward where the rider steers (not the camera) at this many degrees a second, and walks only the
+	 * way it faces: it walks round in an arc instead of sliding sideways. */
+	float MountedTurnRate = 0.f;
+	static constexpr float MountedStepClearance = 100.f; // kerbs and steps pass under the dragon's belly
+	static constexpr float LandingSpeed = 600.f;  // how fast the seat sinks to its standing height
+	static constexpr float StandingRiseSpeed = 1500.f;
+
+	/** Mounted and on the ground (standing, walking, or settling onto it): decided in each move from the climb input and the ground. */
+	bool IsMountedGrounded() const { return bMountedGrounded; }
+
+	/** Where the dragon's room boxes (about Seat, turned by Rotation) first meet blocking world geometry going From -> To (a sweep), or at
+	 * From (From == To: an overlap test, reported as a start-penetrating hit). Characters and physics debris don't count. GroundBelow
+	 * (from the seat) raises each box's floor to MountedStepClearance above it. */
+	static bool FindRoomHit(const UWorld& World, TConstArrayView<FBox> Room, const FVector& From, const FVector& To, const FQuat& Rotation, float GroundBelow, const AActor* Ignore, FHitResult& OutHit);
+
 	virtual void UpdateFromCompressedFlags(uint8 Flags) override;
 	virtual FNetworkPredictionData_Client* GetPredictionData_Client() const override;
 	virtual bool ClientUpdatePositionAfterServerUpdate() override;
@@ -110,4 +141,15 @@ private:
 	/** Other machines' copies of a character follow the replicated gravity only; they never decide wall state. */
 	bool IsSimulatedProxy() const;
 	bool bWasMounted = false;
+
+	virtual bool MoveUpdatedComponentImpl(const FVector& Delta, const FQuat& NewRotation, bool bSweep, FHitResult* OutHit = nullptr, ETeleportType Teleport = ETeleportType::None) override;
+	virtual void PhysFlying(float DeltaTime, int32 Iterations) override;
+	virtual void PhysicsRotation(float DeltaTime) override;
+	/** The ground below the seat (cm), or a big number; traced at the start of each mounted move. */
+	float GroundBelowSeat(float Reach) const;
+	const TArray<FBox>& MountedRoom() const { return bMountedGrounded ? MountedRoomStanding : MountedRoomFlying; }
+	/** On the ground: where the rider steers (this move's input, before it is turned onto the dragon's heading). */
+	FVector MountedSteer = FVector::ZeroVector;
+	bool bMountedGrounded = false;
+	float MountedGroundBelow = UE_BIG_NUMBER;
 };

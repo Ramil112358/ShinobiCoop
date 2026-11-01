@@ -17,6 +17,7 @@ UGA_SummonDragonBase::UGA_SummonDragonBase()
 	Cooldown = 60.f;
 	WindUp = 0.8f;
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Mounted); // one dragon at a time
+	bLitWhileMounted = true; // mounted, the same key climbs down (UGA_DragonDismount)
 	SealMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Summon_Seal.AM_Summon_Seal")));
 	ReleaseMontage = TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(TEXT("/Game/Shinobi/Anims/AM_Summon_Release.AM_Summon_Release")));
 }
@@ -37,6 +38,20 @@ UGA_SummonCrimsonDragon::UGA_SummonCrimsonDragon()
 	Icon = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/Shinobi/UI/T_Jutsu_SummonCrimson.T_Jutsu_SummonCrimson")));
 	CooldownTags.AddTag(ShinobiTags::Cooldown_Jutsu_SummonCrimsonDragon);
 	DragonKind = EShinobiDragonKind::Crimson;
+}
+
+bool UGA_SummonDragonBase::PrepareJutsu()
+{
+	const AShinobiCharacterBase* Self = GetShinobiCharacter();
+	if (Self && !AShinobiDragonMount::HasRoom(*Self, DragonKind))
+	{
+		if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo())
+		{
+			ASC->NotifyAbilityFailed(GetCurrentAbilitySpecHandle(), this, FGameplayTagContainer(ShinobiTags::Fail_NoRoom));
+		}
+		return false;
+	}
+	return true;
 }
 
 void UGA_SummonDragonBase::ExecuteJutsu()

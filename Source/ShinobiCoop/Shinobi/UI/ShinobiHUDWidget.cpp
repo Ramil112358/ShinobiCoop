@@ -72,6 +72,7 @@ namespace
 	constexpr float PipSize = 22.f;
 	constexpr float StatusSize = 30.f;
 	constexpr double FlashSeconds = 0.3;
+	constexpr double NoticeSeconds = 3.0;
 	constexpr double TrailHoldSeconds = 0.5;
 	constexpr float TrailDrainPerSecond = 0.6f;
 	constexpr int32 NumPips = 3; // MaxSubstitutionCharges
@@ -1030,6 +1031,10 @@ void UShinobiHUDWidget::UpdateArena(const AShinobiPlayerCharacter* Player)
 				Hint = FString::Printf(TEXT("Reviving... %d%%"), FMath::RoundToInt(Instance->GetProgress() * 100.f));
 			}
 		}
+		if (Hint.IsEmpty() && GetWorld() && GetWorld()->GetTimeSeconds() < NoticeUntil)
+		{
+			Hint = Notice;
+		}
 		if (Hint.IsEmpty() && Player->GetLockTarget())
 		{
 			Hint = TEXT("[ LOCKED ]");
@@ -1160,8 +1165,9 @@ void UShinobiHUDWidget::UpdateJutsuSlots(const UAbilitySystemComponent& ASC, con
 		}
 		const FShinobiJutsuSlotState State = Jutsu->GetSlotState(ASC);
 		const bool bCooling = State.CooldownRemaining > 0.f && State.CooldownDuration > 0.f;
-		SlotIcons[Index]->SetColorAndOpacity(State.bAffordable ? FLinearColor::White : DimIconColor);
-		SlotFallbacks[Index]->SetRenderOpacity(State.bAffordable ? 1.f : 0.35f);
+		const bool bUsable = State.bAffordable && !State.bLocked;
+		SlotIcons[Index]->SetColorAndOpacity(bUsable ? FLinearColor::White : DimIconColor);
+		SlotFallbacks[Index]->SetRenderOpacity(bUsable ? 1.f : 0.35f);
 		SlotCosts[Index]->SetColorAndOpacity(FSlateColor(State.bAffordable ? CostColor : NoChakraColor));
 		SlotCooldownTexts[Index]->SetText(bCooling ? FText::AsNumber(FMath::CeilToInt(State.CooldownRemaining)) : FText::GetEmpty());
 		SlotShades[Index]->SetHeightOverride(bCooling ? (SlotSize - 2.f * SlotBorder) * State.CooldownRemaining / State.CooldownDuration : 0.f);
@@ -1210,6 +1216,11 @@ void UShinobiHUDWidget::OnAbilityFailed(const UGameplayAbility* Ability, const F
 	if (SlotFlashUntil.IsValidIndex(Index) && GetWorld())
 	{
 		SlotFlashUntil[Index] = GetWorld()->GetTimeSeconds() + FlashSeconds;
+	}
+	if (Reasons.HasTagExact(ShinobiTags::Fail_NoRoom) && GetWorld())
+	{
+		Notice = FString::Printf(TEXT("Not enough room to summon %s here"), *Jutsu->DisplayName.ToString());
+		NoticeUntil = GetWorld()->GetTimeSeconds() + NoticeSeconds;
 	}
 }
 

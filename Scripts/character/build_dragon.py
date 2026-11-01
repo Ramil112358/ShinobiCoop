@@ -160,21 +160,29 @@ def segment_distance(p, a, b):
     return (p - (a + ab * max(0.0, min(1.0, (p - a).dot(ab) / max(ab.length_squared, 1e-9))))).length
 
 
-# The tail's vertices go to the chain from its root to the club, by distance (the nearest two bones share each one): Tripo's own tail
-# weights followed its curl, so the straightened tail kinked where the curl began.
+# The tail's vertices go to the chain from its root to the club (Tripo's own tail weights followed its curl, so the straightened tail
+# kinked where the curl began). Each is shared between its nearest bone and the neighbour on its side, blending linearly from one bone's
+# middle to the next: by distance alone (the nearest two, sharply weighted) each stretch moved nearly rigidly, and the tail creased at
+# every joint once it swayed and drooped.
 chain = ["bone_64", "Tail_0", "Tail_1", "Tail_2", "Tail_3"] + NEW_TAIL
 chain_groups = [body.vertex_groups.get(n) or body.vertex_groups.new(name=n) for n in chain]
-owned = {body.vertex_groups[n].index for n in chain[1:]}
+owned = {body.vertex_groups[n].index for n in chain}
+hip = arm.data.bones[chain[0]].parent.name  # the tail's root blends into the spine bone it hangs from
+hip_group = body.vertex_groups.get(hip) or body.vertex_groups.new(name=hip)
 for v in body.data.vertices:
     if not v.groups or max(v.groups, key=lambda g: g.weight).group not in owned:
         continue
     d = [segment_distance(v.co, arm.data.bones[n].head_local, arm.data.bones[n].tail_local) for n in chain]
-    nearest = sorted(range(len(chain)), key=d.__getitem__)[:2]
-    inv = [1 / max(d[i], 1e-4) ** 4 for i in nearest]
+    i = min(range(len(chain)), key=d.__getitem__)
+    a, b = arm.data.bones[chain[i]].head_local, arm.data.bones[chain[i]].tail_local
+    t = max(0.0, min(1.0, (v.co - a).dot(b - a) / max((b - a).length_squared, 1e-9)))  # along its bone
+    j = i - 1 if t < 0.5 else i + 1
+    share = abs(t - 0.5) if j < len(chain) else 0.0  # the neighbour's: 0 at the bone's middle, a half at the joint
     for g in list(v.groups):
         body.vertex_groups[g.group].remove([v.index])
-    for i, w in zip(nearest, inv):
-        chain_groups[i].add([v.index], w / sum(inv), "REPLACE")
+    chain_groups[i].add([v.index], 1.0 - share, "REPLACE")
+    if share > 0:
+        (chain_groups[j] if j >= 0 else hip_group).add([v.index], share, "REPLACE")
 
 # Tripo's weights are mostly sound, but a few bones reach far: the front feet's toes own each other's toes and share the left hind
 # toes, a wing's shoulder owns part of the thigh below it. Each vertex keeps only the bones of its own part and of the spine; a spine
@@ -293,9 +301,9 @@ def rz(deg):   # about world Z: positive turns the nose to the left (+Y)
     return Matrix.Rotation(math.radians(deg), 3, "Z")
 
 
-LEGS = {  # each leg's bones from the shoulder or hip down (toes follow), with where each points in flight: thighs back and down, feet trailing
+LEGS = {  # each leg's bones from the shoulder or hip down (toes follow), with where each points in flight: front legs tucked, hind legs folded under the hips
     "front": (["bone_14", "bone_15", "bone_16"], ["bone_22", "bone_23", "bone_24"], ((-0.6, 0, -1), (1, 0, 0.15), (0.2, 0, -1))),
-    "hind": (["bone_53", "bone_54", "bone_55", "bone_56"], ["bone_58", "bone_59", "bone_60", "bone_61"], ((-0.5, 0, -1), (-1, 0, -0.5), (-1, 0, -0.1), (-1, 0, 0))),
+    "hind": (["bone_53", "bone_54", "bone_55", "bone_56"], ["bone_58", "bone_59", "bone_60", "bone_61"], ((0.35, 0, -1), (-1, 0, -0.55), (-0.35, 0, -1), (-1, 0, -0.15))),  # folded under the hips (trailing straight back, they reached the wings)
 }
 WING_AIMS = ((0.1, 1, 0.05), (0.3, 1, 0.05), ((-0.1, 1, 0), (-0.7, 1, 0), (-1, 0.35, 0)))  # the left wing opened out flat: arm, forearm, fingers
 TAIL = ["bone_64", "Tail_0", "Tail_1", "Tail_2", "Tail_3"] + NEW_TAIL
@@ -306,7 +314,7 @@ for left, right, targets in LEGS.values():
     for bones in (left, right):
         AIMS.update(zip(bones, targets))
 for i, name in enumerate(TAIL):
-    AIMS[name] = (-1, 0, -0.3 if i == 0 else -0.05)
+    AIMS[name] = (-1, 0, -max(0.05, 0.3 - 0.08 * i))  # sloping down from the hips, easing level over the first bones: no kink
 AIMS.update(zip(NECK, ((1, 0, 0.45), (1, 0, 0.35), (1, 0, 0.25), (1, 0, 0.05), (1, 0, -0.3))))
 # Tairn's wings are folded at rest (the wrist high above the shoulder): each bone is aimed out, the fingers fanned flat behind the forearm.
 for side, s in (("L", 1), ("R", -1)):
@@ -332,37 +340,55 @@ for side, s in (("L", 1), ("R", -1)):
             MEMBRANE[bone.name] = Vector(np.linalg.eigh(np.cov((points - points.mean(axis=0)).T))[1][:, 0])
 
 
-BASE, BASE_DELTA = {}, {}  # each bone's world rotation in the flying pose, and the turn that takes it there from its parent's
-for name in ORDER:
-    parent = BASE[PARENT[name]] if PARENT[name] else I3
-    delta = I3
-    if name in AIMS:
-        delta = (parent @ DIR[name]).rotation_difference(Vector(AIMS[name]).normalized()).to_matrix()
-    if name in MEMBRANE and name in AIMS:  # the bone onto its aim, its membrane level (the side of level nearest the shortest turn: no flips)
-        d, n, aim = parent @ DIR[name], parent @ MEMBRANE[name], Vector(AIMS[name]).normalized()
-        up = Vector((0, 0, 1))
-        up = (up - aim * up.dot(aim)).normalized()
-        if (delta @ n).dot(up) < 0:
-            up = -up
-        n = (n - d * n.dot(d)).normalized()
-        delta = Matrix((aim, up, aim.cross(up))).transposed() @ Matrix((d, n, d.cross(n)))
-    BASE_DELTA[name] = delta
-    BASE[name] = delta @ parent
+def make_base(aims, like=None):
+    """Each bone's world rotation in a base pose (the bones in `aims` pointed there, the rest as at rest), and the turn that takes it
+    there from its parent's."""
+    base, base_delta = {}, {}
+    for name in ORDER:
+        parent = base[PARENT[name]] if PARENT[name] else I3
+        delta = I3
+        if name in aims:
+            delta = (parent @ DIR[name]).rotation_difference(Vector(aims[name]).normalized()).to_matrix()
+            if like:  # turned from that base pose's bone (its twist kept), not from the rest pose's: the coiled tail's bones came out each
+                # twisted its own way about its length, and the skin between them wrung
+                delta = (like[name] @ DIR[name]).rotation_difference(Vector(aims[name]).normalized()).to_matrix() @ like[name] @ parent.inverted()
+        if name in MEMBRANE and name in aims:  # the bone onto its aim, its membrane level (the side of level nearest the shortest turn: no flips)
+            d, n, aim = parent @ DIR[name], parent @ MEMBRANE[name], Vector(aims[name]).normalized()
+            up = Vector((0, 0, 1))
+            up = (up - aim * up.dot(aim)).normalized()
+            if (delta @ n).dot(up) < 0:
+                up = -up
+            n = (n - d * n.dot(d)).normalized()
+            delta = Matrix((aim, up, aim.cross(up))).transposed() @ Matrix((d, n, d.cross(n)))
+        base_delta[name] = delta
+        base[name] = delta @ parent
+    return base, base_delta
+
+
+BASE, BASE_DELTA = make_base(AIMS)  # flying
+# Standing: Tripo's rest pose is a quadruped on all fours (legs under it, feet on the ground, wings folded, neck up); only the coiled tail
+# is laid out behind, sloping down to the ground.
+STAND_AIMS = {name: (-1, 0, -max(0.02, 0.32 - 0.05 * i)) for i, name in enumerate(TAIL)}  # the droop eases off bone by bone: no kink
+STAND, STAND_DELTA = make_base(STAND_AIMS, like=BASE)
 
 # --- animation ----------------------------------------------------------------------------------------------------------------
 for pb in arm.pose.bones:
     pb.rotation_mode = "QUATERNION"
 
 
-def pose(frame, turns, root_turn=I3, lift=0.0):
-    """Keys the flying pose at `frame` with `turns` (bone -> world rotation about its head) on top; children follow their parents and
-    keep their own bend of the flying pose. root_turn tips the whole dragon about the hips; lift raises it."""
-    world = {}
+def pose(frame, turns, root_turn=I3, lift=0.0, stand=0.0):
+    """Keys the base pose at `frame` with `turns` (bone -> world rotation about its head) on top; children follow their parents and
+    keep their own bend of the base pose. root_turn tips the whole dragon about the hips; lift raises it. The base pose is the flying
+    one at stand 0 and the standing one at 1, each bone's turn from its parent's blended between the two."""
+    world, base = {}, {}
     for name in ORDER:
         pb = arm.pose.bones[name]
         parent = world[PARENT[name]] if PARENT[name] else I3
-        extra = parent @ (BASE[PARENT[name]] if PARENT[name] else I3).inverted()
-        delta = turns.get(name, I3) @ extra @ BASE_DELTA[name] @ extra.inverted()
+        base_parent = base[PARENT[name]] if PARENT[name] else I3
+        base_delta = BASE_DELTA[name].to_quaternion().slerp(STAND_DELTA[name].to_quaternion(), stand).to_matrix() if stand else BASE_DELTA[name]
+        base[name] = base_delta @ base_parent
+        extra = parent @ base_parent.inverted()
+        delta = turns.get(name, I3) @ extra @ base_delta @ extra.inverted()
         if name == "Root":
             delta = root_turn
         world[name] = delta @ parent
@@ -374,22 +400,57 @@ def pose(frame, turns, root_turn=I3, lift=0.0):
             pb.keyframe_insert("location", frame=frame)
 
 
-def flying(flap=0.0, fold=0.0, sweep=0.0, neck=0.0, head=0.0, jaw=0.0, tail_wave=0.0, legs=0.0, lift=0.0, pitch=0.0):
+# Walking: a lateral-sequence walk (left hind, left front, right hind, right front, a quarter cycle apart); running (Shift): a trot
+# (diagonal pairs together, half a cycle apart). Each foot is planted for `stance` of the cycle while its leg swings back about the hip,
+# then lifted (the lower leg folds) and swung forward; every foot moves `stride` back along the ground while planted, so a longer leg
+# swings through a smaller angle. The feet stay level.
+LEG_LENGTH = [BONES[left[0]].head_local.z for left, _, _ in LEGS.values()]  # hip to ground, standing
+WALK = dict(offsets=((0.25, 0.75), (0.0, 0.5)), stance=0.65, stride=0.8 * min(LEG_LENGTH), frames=48, fold=45)  # front left, right; hind left, right
+RUN = dict(offsets=((0.0, 0.5), (0.5, 0.0)), stance=0.5, stride=0.8 * min(LEG_LENGTH), frames=24, fold=60)
+for gait, label in ((WALK, "walk"), (RUN, "run")):
+    gait["angles"] = [math.degrees(math.asin(gait["stride"] / 2 / length)) for length in LEG_LENGTH]
+    print(f"[build_dragon] {label}: legs {[round(l, 3) for l in LEG_LENGTH]} m, stride {gait['stride']:.3f} m, swing {[round(a, 1) for a in gait['angles']]} deg; "
+          f"at rate 1 the body moves {100 * gait['stride'] / (gait['stance'] * gait['frames'] / FPS):.2f} model cm/s")
+
+
+def step(u, angle, gait):
+    """A leg's swing about its hip (degrees, + back) and its lower leg's fold at `u` (0-1) through its own cycle."""
+    stance = gait["stance"]
+    if u < stance:
+        swing, fold = 2 * u / stance - 1, 0.0
+    else:
+        v = (u - stance) / (1 - stance)
+        swing, fold = 1 - 2 * smooth(v), gait["fold"] * math.sin(math.pi * v)
+    return angle * swing, fold
+
+
+def flying(flap=0.0, fold=0.0, sweep=0.0, neck=0.0, head=0.0, jaw=0.0, tail_wave=0.0, tail_lift=0.0, legs=0.0, leg_swing=0.0, lift=0.0,
+           pitch=0.0, phase=0.0, stand=0.0, stride=None, gait=WALK):
     """flap: wings up (+) or down (-) in degrees; fold: the forearm bends up (+) from the arm; sweep: the fingers swing back (+);
-    neck/head: extra nose-up; jaw: mouth open; tail_wave: side to side; legs: tucked tighter (+); pitch: nose-down of the body."""
+    neck/head: extra nose-up; jaw: mouth open; tail_wave/tail_lift: the tail side to side / up and down, a wave running out to its tip
+    with phase (radians); legs: tucked tighter (+); leg_swing: the legs swing loose with phase, the lower leg after the upper, the hind
+    after the front; pitch: nose-down of the body; stand: 0 flying, 1 standing; stride: on foot, the gait's cycle fraction (0-1)."""
     turns = {"jaw": ry(jaw), NECK[0]: ry(-neck * 0.5), NECK[2]: ry(-neck * 0.5), NECK[4]: ry(-head)}
+    bend = 2.5 / (len(TAIL) - 1)  # spread along the tail: the same sway whatever its bone count
     for i, name in enumerate(TAIL[1:]):
-        turns[name] = rz(tail_wave * math.sin(i * 0.6) / 4)
+        wave = phase - 0.5 * i
+        turns[name] = rz(tail_wave * bend * math.sin(wave)) @ ry(tail_lift * bend * math.sin(wave + 1.2))
     for side, s in (("L", 1), ("R", -1)):
         arm_bone, forearm, fingers = WINGS[side]
         turns[arm_bone] = rx(s * flap)
         turns[forearm] = rx(s * (flap * 0.5 + fold))
         for i, finger in enumerate(fingers):
             turns[finger] = rz(-s * sweep * (1 - i * 0.2)) @ rx(s * flap * 0.3)
-    for left, right, _ in LEGS.values():
-        for bones in (left, right):
-            turns[bones[0]] = ry(-legs)
-    return dict(turns=turns, root_turn=ry(pitch), lift=lift)
+    for k, (left, right, _) in enumerate(LEGS.values()):
+        for j, bones in enumerate((left, right)):
+            if stride is not None:
+                swing, knee = step((stride + gait["offsets"][k][j]) % 1.0, gait["angles"][k], gait)
+                turns[bones[0]], turns[bones[1]], turns[bones[-1]] = ry(swing), ry(knee), ry(-swing - knee)
+            else:
+                lag = phase - 0.9 * k - 0.4 * j
+                turns[bones[0]] = ry(-legs + leg_swing * math.sin(lag))
+                turns[bones[1]] = ry(leg_swing * 0.8 * math.sin(lag - 0.9))
+    return dict(turns=turns, root_turn=ry(pitch), lift=lift, stand=stand)
 
 
 def key(frame, **kwargs):
@@ -411,38 +472,83 @@ def use_action(action):
         arm.animation_data.action_slot = action.slots[0]
 
 
-def idle():   # a hover: slow, shallow beats
+def straight():  # the flying pose, still (not exported: the saddle and the mouth are measured in it)
+    key(0, flap=-6, fold=-4, sweep=-6)
+
+
+def idle():   # a hover: slow, shallow beats, the legs hanging loose and the tail swaying
     for f in range(0, 61, 3):
-        s = math.sin(2 * math.pi * f / 60)
-        key(f, flap=14 * s, fold=-8 * s, sweep=4 * s, neck=3 * s, tail_wave=8 * s, lift=0.04 * s)
+        p = 2 * math.pi * f / 60
+        s = math.sin(p)
+        key(f, flap=14 * s, fold=-8 * s, sweep=4 * s, neck=3 * s, tail_wave=10, tail_lift=5, leg_swing=7, lift=0.04 * s, phase=p)
 
 
-def flap():   # the working beat: wings high to low, the body rising on the downstroke
-    for f in range(0, 19):
-        s = math.sin(2 * math.pi * f / 18)
-        key(f, flap=38 * s, fold=-22 * s, sweep=10 * s, neck=-4 * s, legs=-6 * s, tail_wave=5 * s, lift=-0.12 * s)
+def flap():   # the working beat, three to a loop: wings high to low, the body rising on the downstroke; the legs and tail swing once
+    for f in range(0, 55):
+        p = 2 * math.pi * f / 54
+        s = math.sin(3 * p)
+        key(f, flap=38 * s, fold=-22 * s, sweep=10 * s, neck=-4 * s, legs=-6 * s, tail_wave=8, tail_lift=6, leg_swing=6, lift=-0.12 * s, phase=p)
 
 
-def glide():  # wings out and steady, a slow sway
+def glide():  # wings out and steady, a slow sway; the tail steers in long waves, the legs trail
     for f in range(0, 49, 2):
-        s = math.sin(2 * math.pi * f / 48)
-        key(f, flap=4 * s - 6, fold=3 * s - 4, sweep=-6, tail_wave=10 * s)
+        p = 2 * math.pi * f / 48
+        s = math.sin(p)
+        key(f, flap=4 * s - 6, fold=3 * s - 4, sweep=-6, tail_wave=12, tail_lift=4, leg_swing=4, phase=p)
 
 
-def breath():  # rears the head back and opens wide (0-10), thrusts and holds the mouth open for the flames (10-40), then closes
+def breath(stand=0.0):  # rears the head back and opens wide (0-10), thrusts and holds the mouth open for the flames (10-40), then closes
     for f in range(0, 49, 2):
         draw = smooth(f / 10) * (1 - smooth((f - 40) / 8))
         thrust = smooth((f - 10) / 3) * (1 - smooth((f - 40) / 8))
-        key(f, flap=3 * math.sin(f / 6.0), neck=30 * (draw - thrust), head=20 * draw - 25 * thrust, jaw=22 * draw + 10 * thrust, lift=0.02 * thrust)
+        key(f, flap=3 * math.sin(f / 6.0) * (1 - stand), neck=30 * (draw - thrust), head=20 * draw - 25 * thrust, jaw=22 * draw + 10 * thrust,
+            lift=0.02 * thrust * (1 - stand), stand=stand)
 
 
-CLIPS = (("Idle", 60, idle), ("Flap", 18, flap), ("Glide", 48, glide), ("Breath", 48, breath))
+def folded_wings(p):
+    """The folded wings stir (each joint a little after the one before), like the tail: phase p."""
+    return dict(flap=2.5 * math.sin(p), fold=3 * math.sin(p - 0.8), sweep=2.5 * math.sin(p - 1.6))
+
+
+def stand():  # on all fours, wings folded: the head looks about, the tail sways, the wings stir
+    for f in range(0, 91, 3):
+        p = 2 * math.pi * f / 90
+        key(f, stand=1, neck=4 * math.sin(p), head=-3 * math.sin(2 * p), tail_wave=6, tail_lift=2, phase=p, **folded_wings(p))
+
+
+def on_foot(gait, nod):  # a walk or run cycle (above); the head nods with each front step
+    for f in range(0, gait["frames"] + 1):
+        u = f / gait["frames"]
+        key(f, stand=1, stride=u, gait=gait, neck=nod * math.sin(4 * math.pi * u), tail_wave=8, tail_lift=2, phase=2 * math.pi * u,
+            **folded_wings(2 * math.pi * u))
+
+
+def land():  # flight onto all fours (played once, then Stand): the legs reach down and forward, two braking beats, the wings fold
+    for f in range(0, 31):
+        w = smooth(f / 26)
+        s = math.sin(2 * math.pi * f / 15)
+        key(f, stand=w, flap=(30 * s + 10) * (1 - w), fold=-15 * s * (1 - w), sweep=-10 * (1 - w), legs=20 * math.sin(math.pi * w),
+            tail_wave=6, tail_lift=6 * (1 - w), phase=2 * math.pi * f / 30)
+
+
+def take_off():  # all fours into flight (played once, then Flap): the wings open and beat hard, the legs push off and trail
+    for f in range(0, 25):
+        w = 1 - smooth(f / 14)
+        s = math.sin(2 * math.pi * f / 12)
+        key(f, stand=w, flap=40 * s * (1 - w), fold=-22 * s * (1 - w), sweep=10 * s * (1 - w), tail_wave=8 * (1 - w), tail_lift=6 * (1 - w),
+            leg_swing=6 * (1 - w), phase=2 * math.pi * f / 24)
+
+
+CLIPS = (("Idle", 60, idle), ("Flap", 54, flap), ("Glide", 48, glide), ("Breath", 48, breath), ("BreathStand", 48, lambda: breath(1.0)),
+         ("Stand", 90, stand), ("Walk", WALK["frames"], lambda: on_foot(WALK, 3)), ("Run", RUN["frames"], lambda: on_foot(RUN, 5)), ("Land", 30, land), ("TakeOff", 24, take_off))
 actions = {}
 for name, frames, build in CLIPS:
     action = new_action(name, frames)
     build()
     actions[name] = action
     print(f"[build_dragon] clip {name}: {frames} frames")
+actions["Straight"] = new_action("Straight", 0)
+straight()
 
 # --- the tail's shape ----------------------------------------------------------------------------------------------------------
 # Tripo's tail pinched just behind the hips and bulged a third of the way along (where its curl began), and its club was a flattened
@@ -451,7 +557,7 @@ for name, frames, build in CLIPS:
 # about its ring's middle to a thickness tapering evenly from the thickest of the tail's first half to the end before the club, and each
 # move is taken back to the rest pose through the vertex's own skinning. Tripo's club is shrunk inside a new spiked ball (below).
 CLUB = NEW_TAIL[-1]
-use_action(actions["Glide"])
+use_action(actions["Straight"])
 scene.frame_set(0)
 bpy.context.view_layer.update()
 evaluated = body.evaluated_get(bpy.context.evaluated_depsgraph_get())
@@ -494,7 +600,7 @@ for v, p in zip(body.data.vertices, posed):
     if share[v.index][0] > 0.02:
         s, foot = on_tail(p)
         place[v.index] = (s, foot)
-        if share[v.index][0] > 0.9 and s < club_from:
+        if share[v.index][0] > 0.5 and s < club_from:
             rings.setdefault(int(s / STEP_S), []).append((p - foot, area[v.index]))
 
 
@@ -518,20 +624,57 @@ def median_size(points, middle):
             return (q - middle).length
 
 
-ring = {}  # bin -> (its middle, off the bones, and its thickness)
+def weighted_median(pairs, at=0.5):
+    part, seen = sum(a for _, a in pairs) * at, 0.0
+    for value, a in sorted(pairs):
+        seen += a
+        if seen >= part:
+            return value
+    return 0.0
+
+
+ring = {}  # bin -> (its middle, off the bones, its thickness, and its half-width and half-height without the spikes)
 for k, points in rings.items():
     middle = by_area(points, 0.8)
-    ring[k] = (middle, median_size(points, middle))
+    size = median_size(points, middle)
+    skin = [(q - middle, a) for q, a in points if (q - middle).length < 1.6 * size]
+    # its middle across and up: halfway between its skin's sides (the middle of the skin's spread was pulled to the denser side, the spikes
+    # on top or the belly's plates, and ring by ring that rippled the tail once each was moved onto the line)
+    for axis in (1, 2):
+        middle[axis] += (weighted_median([(o[axis], a) for o, a in skin], 0.1) + weighted_median([(o[axis], a) for o, a in skin], 0.9)) / 2
+    skin = [(q - middle, a) for q, a in points if (q - middle).length < 1.6 * size]
+    ring[k] = (middle, size, weighted_median([(abs(o.y), a) for o, a in skin]), weighted_median([(abs(o.z), a) for o, a in skin]))
 bins = sorted(ring)
 first, last = bins[0], bins[-1]
 thickest = max(ring[k][1] for k in bins if k <= (first + last) // 2)
 end = ring[last][1]
 
 
+def ring_of(k):
+    k = min(max(k, first), last)
+    while k not in ring:
+        k += 1
+    return ring[k]
+
+
 def ring_at(s):
-    k = min(max(int(s / STEP_S), first), last)
-    near = [ring[j] for j in (k - 1, k, k + 1) if j in ring]  # smoothed over its neighbours
-    return sum((m for m, _ in near), Vector()) / len(near), sum(t for _, t in near) / len(near)
+    """The ring s along: between the two nearest rings' middles (each ring's own: averaged with its neighbours, a step in the tail was
+    only halved when its rings were moved onto the line), its sizes smoothed over their neighbours."""
+    u = s / STEP_S - 0.5
+    k = math.floor(u)
+    f = min(max(u - k, 0.0), 1.0)
+
+    def sizes(j):
+        near = [ring_of(i) for i in (j - 1, j, j + 1)]
+        return [sum(r[i] for r in near) / 3 for i in (1, 2, 3)]
+    return (ring_of(k)[0].lerp(ring_of(k + 1)[0], f),) + tuple(a + (b - a) * f for a, b in zip(sizes(k), sizes(k + 1)))
+
+
+# Tripo's tail was flat in places and deep in others (from the side its belly rose and fell): its width and its height are each brought
+# to the even taper, in the tail's own average proportion.
+SPIKE_REACH = 2.2  # in girths: the tail's spikes' usual height
+WIDE = sum(ring[k][2] / ring[k][1] for k in bins) / len(bins)
+DEEP = sum(ring[k][3] / ring[k][1] for k in bins) / len(bins)
 
 
 def wanted(s):
@@ -567,12 +710,18 @@ for v, p in zip(body.data.vertices, posed):
         continue
     tail_share, club_share = share[v.index]
     s, foot = place[v.index]
-    middle, size = ring_at(min(s, club_from))
+    middle, size, half_wide, half_deep = ring_at(min(s, club_from))
     q = p - foot
     standing_out[v.index] = ((q - middle).length / max(size, 1e-4), (q - middle).z > 0)
-    shaped = foot + middle + straighten(min(s, club_from)) + (q - middle) * max(0.6, min(2.0, wanted(min(s, club_from)) / max(size, 1e-4)))
+    girth = wanted(min(s, club_from))
+    o = q - middle  # the tail runs along X: its width is Y, its depth Z
+    o = Vector((o.x, o.y * max(0.6, min(2.0, girth * WIDE / max(half_wide, 1e-4))), o.z * max(0.6, min(2.0, girth * DEEP / max(half_deep, 1e-4)))))
+    if o.z > 0 and o.length > SPIKE_REACH * girth:  # the odd spike twice the others' height is brought down towards theirs
+        o *= (SPIKE_REACH * girth + (o.length - SPIKE_REACH * girth) * 0.35) / o.length
+    shaped = foot + middle + straighten(min(s, club_from)) + o
     hidden = club_middle + (p - club_middle) * 0.4  # Tripo's club, shrunk inside the new ball
-    move = (shaped - p) * (tail_share - club_share) + (hidden - p) * club_share
+    reach = smooth((tail_share - 0.2) / 0.3)  # the whole move from half on the tail: by share alone, the root (shared with the hips) kept its pinch
+    move = (shaped - p) * max(0.0, reach - club_share) + (hidden - p) * club_share
     total = sum(g.weight for g in v.groups) or 1.0
     skin = sum((deform[names[g.group]] * (g.weight / total) for g in v.groups if names[g.group] in deform), Matrix.Diagonal((0, 0, 0, 0)))
     v.co += skin.to_3x3().inverted_safe() @ move
@@ -650,6 +799,65 @@ bpy.ops.object.join()
 print(f"[build_dragon] club: a ball {BALL_RADIUS} across with {spikes} spikes {SPIKE_LENGTH} long, textured from {len(skin_faces)} skin and "
       f"{len(spike_faces)} spike faces of the tail")
 
+SADDLE = Vector((0.18, 0.0, 0.37))  # ShinobiDragonMount.cpp's FDragonLook Saddle, in metres
+# --- numbers for ShinobiDragonMount.cpp -----------------------------------------------------------------------------------------
+# The rider sits at SADDLE in the flying pose. The saddle rides the spine bone nearest it, so it follows the back in every clip (the
+# rest pose's chest is raised: standing, the seat is higher). Printed: that bone, the seat's height above the feet when standing, and
+# the box round the dragon about the seat (lowest corner, highest corner) in flight and on the ground: the room it needs. Model cm.
+def posed(clip, frame):
+    use_action(actions[clip])
+    scene.frame_set(frame)
+    bpy.context.view_layer.update()
+    return {pb.name: arm.matrix_world @ pb.matrix for pb in arm.pose.bones}
+
+
+def posed_points():
+    evaluated = body.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    mesh = evaluated.to_mesh()
+    co = np.empty(len(mesh.vertices) * 3)
+    mesh.vertices.foreach_get("co", co)
+    evaluated.to_mesh_clear()
+    return co.reshape(-1, 3) @ np.array(body.matrix_world.to_3x3()).T + np.array(body.matrix_world.translation)
+
+
+fly = posed("Straight", 0)
+saddle_bone = min((b.name for b in BONES[NECK[0]].parent_recursive),
+                  key=lambda n: segment_distance(SADDLE, fly[n].translation, fly[n] @ Vector((0, BONES[n].length, 0))))
+saddle_local = fly[saddle_bone].inverted() @ SADDLE
+seat = posed("Stand", 0)[saddle_bone] @ saddle_local
+feet = posed_points()[:, 2].min()
+print(f"[build_dragon] saddle bone {saddle_bone}; standing, the seat is {100 * (seat.z - feet):.1f} above the feet (lowest {100 * feet:.1f}), "
+      f"at {tuple(round(100 * c, 1) for c in seat)}")
+
+
+def room(clips, mask=None):
+    lo, hi = np.full(3, 1e9), np.full(3, -1e9)
+    for clip in clips:
+        for frame in range(0, int(actions[clip].frame_range[1]) + 1, 3):
+            seat = np.array(posed(clip, frame)[saddle_bone] @ saddle_local)
+            points = posed_points() - seat
+            points = points if mask is None else points[mask]
+            lo, hi = np.minimum(lo, points.min(axis=0)), np.maximum(hi, points.max(axis=0))
+    return tuple(round(100 * c, 1) for c in lo), tuple(round(100 * c, 1) for c in hi)
+
+
+print("[build_dragon] room flying (about the seat):", *room(["Idle", "Flap", "Glide", "Breath", "Land", "TakeOff"]))
+print("[build_dragon] room standing (about the seat):", *room(["Stand", "Walk", "BreathStand"]))
+# By part, every clip: a box each for the body (head, neck and legs too), the wings and the tail lets him nearer walls than one box round
+# all of him (ShinobiDragonMount.cpp's room boxes). Each vertex goes with its strongest bone's part.
+names = {g.index: g.name for g in body.vertex_groups}
+
+
+def body_part(v):
+    part = part_of.get(names[max(v.groups, key=lambda g: g.weight).group], "spine") if v.groups else "spine"
+    return "wings" if part.startswith("wing") else "tail" if part == "tail" else "body"
+
+
+parts = [body_part(v) for v in body.data.vertices]
+every = [name for name, _, _ in CLIPS]
+for part in ("body", "wings", "tail"):
+    print(f"[build_dragon] room {part} (about the seat):", *room(every, np.array([p == part for p in parts])))
+
 # --- previews -----------------------------------------------------------------------------------------------------------------
 if PREVIEW:
     scene.render.engine = "BLENDER_WORKBENCH"
@@ -659,7 +867,8 @@ if PREVIEW:
     cams = {}
     for name, loc, rot, ortho in (("side", (0.0, -5.0, 0.3), (math.radians(90), 0, 0), 3.2), ("front", (5.5, 0.0, 0.3), (math.radians(90), 0, math.radians(90)), 2.0),
                                   ("top", (0.0, 0.0, 6.0), (0, 0, 0), 3.2), ("three", (2.6, -2.6, 1.8), (math.radians(65), 0, math.radians(45)), 0),
-                                  ("head", (0.6, -3.0, 0.45), (math.radians(90), 0, 0), 0.6)):
+                                  ("head", (0.6, -3.0, 0.45), (math.radians(90), 0, 0), 0.6),
+                                  ("tail", (-0.5, -3.0, 0.25), (math.radians(90), 0, 0), 0.9), ("tailtop", (-0.5, 0.0, 6.0), (0, 0, 0), 0.9)):
         cam = bpy.data.objects.new("cam_" + name, bpy.data.cameras.new("cam_" + name))
         scene.collection.objects.link(cam)
         cam.location, cam.rotation_euler = loc, rot
@@ -677,7 +886,7 @@ if PREVIEW:
             scene.render.filepath = os.path.join(ROOT, "Saved", f"dragon_{clip}_{frame}_{view}.png")
             bpy.ops.render.render(write_still=True)
     # Where a rider sits and where the mouth is, in the glide pose, for the constants in ShinobiDragonMount.cpp.
-    use_action(actions["Glide"])
+    use_action(actions["Straight"])
     scene.frame_set(0)
     mesh = body.evaluated_get(bpy.context.evaluated_depsgraph_get()).to_mesh()
     points = [body.matrix_world @ v.co for v in mesh.vertices]

@@ -20,7 +20,7 @@ import sys
 
 import bmesh
 import bpy
-
+import numpy as np
 from mathutils import Matrix, Vector
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -203,9 +203,9 @@ def rz(deg):   # about world Z: positive turns the nose to the left (+Y)
     return Matrix.Rotation(math.radians(deg), 3, "Z")
 
 
-LEGS = {  # each leg's bones from the hip down (toes follow), with where each points in flight: thighs back and down, feet trailing
+LEGS = {  # each leg's bones from the hip down (toes follow), with where each points in flight: front legs tucked, hind legs folded under the hips
     "front": (["bone_13", "bone_14", "bone_15"], ["bone_17", "bone_18", "bone_19"], ((-0.6, 0, -1), (1, 0, 0.15), (0.2, 0, -1))),
-    "hind": (["bone_52", "bone_53", "bone_54", "bone_55"], ["bone_65", "bone_66", "bone_67", "bone_68"], ((-0.5, 0, -1), (-1, 0, -0.5), (-1, 0, -0.1), (-1, 0, 0))),
+    "hind": (["bone_52", "bone_53", "bone_54", "bone_55"], ["bone_65", "bone_66", "bone_67", "bone_68"], ((0.35, 0, -1), (-1, 0, -0.55), (-0.35, 0, -1), (-1, 0, -0.15))),  # folded under the hips (trailing straight back, they reached the wings)
 }
 WINGS = {"L": ("bone_21", "bone_22", ["bone_25", "bone_28", "bone_31", "bone_34"]), "R": ("bone_37", "bone_38", ["bone_41", "bone_44", "bone_47", "bone_50"])}
 TAIL = ["bone_78"] + [f"Tail_{i}" for i in range(13)] + ["bone_92"]
@@ -238,32 +238,51 @@ def spread(side, s):
     return target @ source.transposed()
 
 
-BASE, BASE_DELTA = {}, {}  # each bone's world rotation in the flying pose, and the turn that takes it there from its parent's
-for name in ORDER:
-    parent = BASE[PARENT[name]] if PARENT[name] else I3
-    delta = I3
-    if name in AIMS:
-        delta = (parent @ DIR[name]).rotation_difference(Vector(AIMS[name]).normalized()).to_matrix()
-    for side, s in (("L", 1), ("R", -1)):
-        if name == WINGS[side][0]:
-            delta = spread(side, s)
-    BASE_DELTA[name] = delta
-    BASE[name] = delta @ parent
+def make_base(aims, spread_wings, like=None):
+    """Each bone's world rotation in a base pose (the bones in `aims` pointed there, the wings spread or not, the rest as at rest), and
+    the turn that takes it there from its parent's."""
+    base, base_delta = {}, {}
+    for name in ORDER:
+        parent = base[PARENT[name]] if PARENT[name] else I3
+        delta = I3
+        if name in aims:
+            delta = (parent @ DIR[name]).rotation_difference(Vector(aims[name]).normalized()).to_matrix()
+            if like:  # turned from that base pose's bone (its twist kept), not from the rest pose's: the coiled tail's bones came out each
+                # twisted its own way about its length, and the skin between them wrung
+                delta = (like[name] @ DIR[name]).rotation_difference(Vector(aims[name]).normalized()).to_matrix() @ like[name] @ parent.inverted()
+        for side, s in (("L", 1), ("R", -1)):
+            if spread_wings and name == WINGS[side][0]:
+                delta = spread(side, s)
+        base_delta[name] = delta
+        base[name] = delta @ parent
+    return base, base_delta
+
+
+BASE, BASE_DELTA = make_base(AIMS, True)  # flying
+# Standing: Tripo's rest pose is a quadruped on all fours (legs under it, feet on the ground); its raised wings are folded back along the
+# body, its turned head straightened and its coiled tail laid out behind, sloping down to the ground.
+STAND_AIMS = {name: (-1, 0, -0.55 if i == 0 else -0.2 if i < 4 else -0.02) for i, name in enumerate(TAIL)}
+STAND_AIMS.update(zip(NECK, ((1, 0, 1.2), (1, 0, 0.9), (1, 0, 0.6), (1, 0, 0.25), (1, 0, -0.1))))
+STAND, STAND_DELTA = make_base(STAND_AIMS, False, like=BASE)
 
 # --- animation ----------------------------------------------------------------------------------------------------------------
 for pb in arm.pose.bones:
     pb.rotation_mode = "QUATERNION"
 
 
-def pose(frame, turns, root_turn=I3, lift=0.0):
-    """Keys the flying pose at `frame` with `turns` (bone -> world rotation about its head) on top; children follow their parents and
-    keep their own bend of the flying pose. root_turn tips the whole dragon about the hips; lift raises it."""
-    world = {}
+def pose(frame, turns, root_turn=I3, lift=0.0, stand=0.0):
+    """Keys the base pose at `frame` with `turns` (bone -> world rotation about its head) on top; children follow their parents and
+    keep their own bend of the base pose. root_turn tips the whole dragon about the hips; lift raises it. The base pose is the flying
+    one at stand 0 and the standing one at 1, each bone's turn from its parent's blended between the two."""
+    world, base = {}, {}
     for name in ORDER:
         pb = arm.pose.bones[name]
         parent = world[PARENT[name]] if PARENT[name] else I3
-        extra = parent @ (BASE[PARENT[name]] if PARENT[name] else I3).inverted()
-        delta = turns.get(name, I3) @ extra @ BASE_DELTA[name] @ extra.inverted()
+        base_parent = base[PARENT[name]] if PARENT[name] else I3
+        base_delta = BASE_DELTA[name].to_quaternion().slerp(STAND_DELTA[name].to_quaternion(), stand).to_matrix() if stand else BASE_DELTA[name]
+        base[name] = base_delta @ base_parent
+        extra = parent @ base_parent.inverted()
+        delta = turns.get(name, I3) @ extra @ base_delta @ extra.inverted()
         if name == "Root":
             delta = root_turn
         world[name] = delta @ parent
@@ -275,23 +294,60 @@ def pose(frame, turns, root_turn=I3, lift=0.0):
             pb.keyframe_insert("location", frame=frame)
 
 
-def flying(flap=0.0, fold=0.0, sweep=0.0, neck=0.0, head=0.0, jaw=0.0, tail_wave=0.0, legs=0.0, lift=0.0, pitch=0.0):
+# Walking: a lateral-sequence walk (left hind, left front, right hind, right front, a quarter cycle apart); running (Shift): a trot
+# (diagonal pairs together, half a cycle apart). Each foot is planted for `stance` of the cycle while its leg swings back about the hip,
+# then lifted (the lower leg folds) and swung forward; every foot moves `stride` back along the ground while planted, so a longer leg
+# swings through a smaller angle. The feet stay level.
+LEG_LENGTH = [BONES[left[0]].head_local.z for left, _, _ in LEGS.values()]  # hip to ground, standing
+WALK = dict(offsets=((0.25, 0.75), (0.0, 0.5)), stance=0.65, stride=0.8 * min(LEG_LENGTH), frames=48, fold=45)  # front left, right; hind left, right
+RUN = dict(offsets=((0.0, 0.5), (0.5, 0.0)), stance=0.5, stride=0.8 * min(LEG_LENGTH), frames=24, fold=60)
+for gait, label in ((WALK, "walk"), (RUN, "run")):
+    gait["angles"] = [math.degrees(math.asin(gait["stride"] / 2 / length)) for length in LEG_LENGTH]
+    print(f"[build_dragon] {label}: legs {[round(l, 3) for l in LEG_LENGTH]} m, stride {gait['stride']:.3f} m, swing {[round(a, 1) for a in gait['angles']]} deg; "
+          f"at rate 1 the body moves {100 * gait['stride'] / (gait['stance'] * gait['frames'] / FPS):.2f} model cm/s")
+
+
+def step(u, angle, gait):
+    """A leg's swing about its hip (degrees, + back) and its lower leg's fold at `u` (0-1) through its own cycle."""
+    stance = gait["stance"]
+    if u < stance:
+        swing, fold = 2 * u / stance - 1, 0.0
+    else:
+        v = (u - stance) / (1 - stance)
+        swing, fold = 1 - 2 * smooth(v), gait["fold"] * math.sin(math.pi * v)
+    return angle * swing, fold
+
+
+def flying(flap=0.0, fold=0.0, sweep=0.0, neck=0.0, head=0.0, jaw=0.0, tail_wave=0.0, tail_lift=0.0, legs=0.0, leg_swing=0.0, lift=0.0,
+           pitch=0.0, phase=0.0, stand=0.0, stride=None, gait=WALK):
     """flap: wings up (+) or down (-) in degrees; fold: the forearm bends up (+) from the arm; sweep: the fingers swing back (+);
-    neck/head: extra nose-up; jaw: mouth open; tail_wave: side to side; legs: tucked tighter (+); pitch: nose-down of the body."""
+    neck/head: extra nose-up; jaw: mouth open; tail_wave/tail_lift: the tail side to side / up and down, a wave running out to its tip
+    with phase (radians); legs: tucked tighter (+); leg_swing: the legs swing loose with phase, the lower leg after the upper, the hind
+    after the front; pitch: nose-down of the body; stand: 0 flying, 1 standing; stride: on foot, the gait's cycle fraction (0-1)."""
     turns = {"jaw": ry(jaw), NECK[0]: ry(-neck * 0.5), NECK[2]: ry(-neck * 0.5), NECK[4]: ry(-head)}
+    bend = 2.5 / (len(TAIL) - 1)  # spread along the tail: the same sway whatever its bone count
     for i, name in enumerate(TAIL[1:]):
-        turns[name] = rz(tail_wave * math.sin(i * 0.6) / 4)
+        wave = phase - 0.5 * i
+        turns[name] = rz(tail_wave * bend * math.sin(wave)) @ ry(tail_lift * bend * math.sin(wave + 1.2))
     for side, s in (("L", 1), ("R", -1)):
         arm_bone, forearm, fingers = WINGS[side]
         turns[arm_bone] = rx(s * flap)
         turns[forearm] = rx(s * (flap * 0.5 + fold))
         for i, finger in enumerate(fingers):
             turns[finger] = rz(-s * sweep * (1 - i * 0.2)) @ rx(s * flap * 0.3)
-    for left, right, _ in LEGS.values():
-        for bones in (left, right):
-            turns[bones[0]] = ry(-legs)
-    turns["bone_93"] = turns[LEGS["hind"][0][0]]
-    return dict(turns=turns, root_turn=ry(pitch), lift=lift)
+    for k, (left, right, _) in enumerate(LEGS.values()):
+        for j, bones in enumerate((left, right)):
+            if stride is not None:
+                swing, knee = step((stride + gait["offsets"][k][j]) % 1.0, gait["angles"][k], gait)
+                turns[bones[0]], turns[bones[1]], turns[bones[-1]] = ry(swing), ry(knee), ry(-swing - knee)
+            else:
+                lag = phase - 0.9 * k - 0.4 * j
+                turns[bones[0]] = ry(-legs + leg_swing * math.sin(lag))
+                turns[bones[1]] = ry(leg_swing * 0.8 * math.sin(lag - 0.9))
+    for twin, bone in zip(["bone_93", "bone_94", "bone_95", "bone_96"], LEGS["hind"][0]):  # Tripo gave the left hind leg two overlapping chains
+        if bone in turns:
+            turns[twin] = turns[bone]
+    return dict(turns=turns, root_turn=ry(pitch), lift=lift, stand=stand)
 
 
 def key(frame, **kwargs):
@@ -313,38 +369,128 @@ def use_action(action):
         arm.animation_data.action_slot = action.slots[0]
 
 
-def idle():   # a hover: slow, shallow beats
+def straight():  # the flying pose, still (not exported: the saddle and the mouth are measured in it)
+    key(0, flap=-6, fold=-4, sweep=-6)
+
+
+def idle():   # a hover: slow, shallow beats, the legs hanging loose and the tail swaying
     for f in range(0, 61, 3):
-        s = math.sin(2 * math.pi * f / 60)
-        key(f, flap=14 * s, fold=-8 * s, sweep=4 * s, neck=3 * s, tail_wave=8 * s, lift=0.04 * s)
+        p = 2 * math.pi * f / 60
+        s = math.sin(p)
+        key(f, flap=14 * s, fold=-8 * s, sweep=4 * s, neck=3 * s, tail_wave=10, tail_lift=5, leg_swing=7, lift=0.04 * s, phase=p)
 
 
-def flap():   # the working beat: wings high to low, the body rising on the downstroke
-    for f in range(0, 19):
-        s = math.sin(2 * math.pi * f / 18)
-        key(f, flap=38 * s, fold=-22 * s, sweep=10 * s, neck=-4 * s, legs=-6 * s, tail_wave=5 * s, lift=-0.12 * s)
+def flap():   # the working beat, three to a loop: wings high to low, the body rising on the downstroke; the legs and tail swing once
+    for f in range(0, 55):
+        p = 2 * math.pi * f / 54
+        s = math.sin(3 * p)
+        key(f, flap=38 * s, fold=-22 * s, sweep=10 * s, neck=-4 * s, legs=-6 * s, tail_wave=8, tail_lift=6, leg_swing=6, lift=-0.12 * s, phase=p)
 
 
-def glide():  # wings out and steady, a slow sway
+def glide():  # wings out and steady, a slow sway; the tail steers in long waves, the legs trail
     for f in range(0, 49, 2):
-        s = math.sin(2 * math.pi * f / 48)
-        key(f, flap=4 * s - 6, fold=3 * s - 4, sweep=-6, tail_wave=10 * s)
+        p = 2 * math.pi * f / 48
+        s = math.sin(p)
+        key(f, flap=4 * s - 6, fold=3 * s - 4, sweep=-6, tail_wave=12, tail_lift=4, leg_swing=4, phase=p)
 
 
-def breath():  # rears the head back and opens wide (0-10), thrusts and holds the mouth open for the flames (10-40), then closes
+def breath(stand=0.0):  # rears the head back and opens wide (0-10), thrusts and holds the mouth open for the flames (10-40), then closes
     for f in range(0, 49, 2):
         draw = smooth(f / 10) * (1 - smooth((f - 40) / 8))
         thrust = smooth((f - 10) / 3) * (1 - smooth((f - 40) / 8))
-        key(f, flap=3 * math.sin(f / 6.0), neck=30 * (draw - thrust), head=20 * draw - 25 * thrust, jaw=10 * draw + 4 * thrust, lift=0.02 * thrust)
+        key(f, flap=3 * math.sin(f / 6.0) * (1 - stand), neck=30 * (draw - thrust), head=20 * draw - 25 * thrust, jaw=10 * draw + 4 * thrust,
+            lift=0.02 * thrust * (1 - stand), stand=stand)
 
 
-CLIPS = (("Idle", 60, idle), ("Flap", 18, flap), ("Glide", 48, glide), ("Breath", 48, breath))
+def folded_wings(p):
+    """The folded wings stir (each joint a little after the one before), like the tail: phase p."""
+    return dict(flap=2.5 * math.sin(p), fold=3 * math.sin(p - 0.8), sweep=2.5 * math.sin(p - 1.6))
+
+
+def stand():  # on all fours, wings folded: the head looks about, the tail sways, the wings stir
+    for f in range(0, 91, 3):
+        p = 2 * math.pi * f / 90
+        key(f, stand=1, neck=4 * math.sin(p), head=-3 * math.sin(2 * p), tail_wave=6, tail_lift=2, phase=p, **folded_wings(p))
+
+
+def on_foot(gait, nod):  # a walk or run cycle (above); the head nods with each front step
+    for f in range(0, gait["frames"] + 1):
+        u = f / gait["frames"]
+        key(f, stand=1, stride=u, gait=gait, neck=nod * math.sin(4 * math.pi * u), tail_wave=8, tail_lift=2, phase=2 * math.pi * u,
+            **folded_wings(2 * math.pi * u))
+
+
+def land():  # flight onto all fours (played once, then Stand): the legs reach down and forward, two braking beats, the wings fold
+    for f in range(0, 31):
+        w = smooth(f / 26)
+        s = math.sin(2 * math.pi * f / 15)
+        key(f, stand=w, flap=(30 * s + 10) * (1 - w), fold=-15 * s * (1 - w), sweep=-10 * (1 - w), legs=20 * math.sin(math.pi * w),
+            tail_wave=6, tail_lift=6 * (1 - w), phase=2 * math.pi * f / 30)
+
+
+def take_off():  # all fours into flight (played once, then Flap): the wings open and beat hard, the legs push off and trail
+    for f in range(0, 25):
+        w = 1 - smooth(f / 14)
+        s = math.sin(2 * math.pi * f / 12)
+        key(f, stand=w, flap=40 * s * (1 - w), fold=-22 * s * (1 - w), sweep=10 * s * (1 - w), tail_wave=8 * (1 - w), tail_lift=6 * (1 - w),
+            leg_swing=6 * (1 - w), phase=2 * math.pi * f / 24)
+
+
+CLIPS = (("Idle", 60, idle), ("Flap", 54, flap), ("Glide", 48, glide), ("Breath", 48, breath), ("BreathStand", 48, lambda: breath(1.0)),
+         ("Stand", 90, stand), ("Walk", WALK["frames"], lambda: on_foot(WALK, 3)), ("Run", RUN["frames"], lambda: on_foot(RUN, 5)), ("Land", 30, land), ("TakeOff", 24, take_off))
 actions = {}
 for name, frames, build in CLIPS:
     action = new_action(name, frames)
     build()
     actions[name] = action
     print(f"[build_dragon] clip {name}: {frames} frames")
+actions["Straight"] = new_action("Straight", 0)
+straight()
+
+SADDLE = Vector((0.22, 0.0, 0.50))  # ShinobiDragonMount.cpp's FDragonLook Saddle, in metres
+# --- numbers for ShinobiDragonMount.cpp -----------------------------------------------------------------------------------------
+# The rider sits at SADDLE in the flying pose. The saddle rides the spine bone nearest it, so it follows the back in every clip (the
+# rest pose's chest is raised: standing, the seat is higher). Printed: that bone, the seat's height above the feet when standing, and
+# the box round the dragon about the seat (lowest corner, highest corner) in flight and on the ground: the room it needs. Model cm.
+def posed(clip, frame):
+    use_action(actions[clip])
+    scene.frame_set(frame)
+    bpy.context.view_layer.update()
+    return {pb.name: arm.matrix_world @ pb.matrix for pb in arm.pose.bones}
+
+
+def posed_points():
+    evaluated = body.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    mesh = evaluated.to_mesh()
+    co = np.empty(len(mesh.vertices) * 3)
+    mesh.vertices.foreach_get("co", co)
+    evaluated.to_mesh_clear()
+    return co.reshape(-1, 3) @ np.array(body.matrix_world.to_3x3()).T + np.array(body.matrix_world.translation)
+
+
+fly = posed("Straight", 0)
+saddle_bone = min((b.name for b in BONES[NECK[0]].parent_recursive),
+                  key=lambda n: segment_distance(SADDLE, fly[n].translation, fly[n] @ Vector((0, BONES[n].length, 0))))
+saddle_local = fly[saddle_bone].inverted() @ SADDLE
+seat = posed("Stand", 0)[saddle_bone] @ saddle_local
+feet = posed_points()[:, 2].min()
+print(f"[build_dragon] saddle bone {saddle_bone}; standing, the seat is {100 * (seat.z - feet):.1f} above the feet (lowest {100 * feet:.1f}), "
+      f"at {tuple(round(100 * c, 1) for c in seat)}")
+
+
+def room(clips, mask=None):
+    lo, hi = np.full(3, 1e9), np.full(3, -1e9)
+    for clip in clips:
+        for frame in range(0, int(actions[clip].frame_range[1]) + 1, 3):
+            seat = np.array(posed(clip, frame)[saddle_bone] @ saddle_local)
+            points = posed_points() - seat
+            points = points if mask is None else points[mask]
+            lo, hi = np.minimum(lo, points.min(axis=0)), np.maximum(hi, points.max(axis=0))
+    return tuple(round(100 * c, 1) for c in lo), tuple(round(100 * c, 1) for c in hi)
+
+
+print("[build_dragon] room flying (about the seat):", *room(["Idle", "Flap", "Glide", "Breath", "Land", "TakeOff"]))
+print("[build_dragon] room standing (about the seat):", *room(["Stand", "Walk", "BreathStand"]))
 
 # --- previews -----------------------------------------------------------------------------------------------------------------
 if PREVIEW:
@@ -373,7 +519,7 @@ if PREVIEW:
             scene.render.filepath = os.path.join(ROOT, "Saved", f"dragon_{clip}_{frame}_{view}.png")
             bpy.ops.render.render(write_still=True)
     # Where a rider sits and where the mouth is, in the glide pose, for the constants in ShinobiDragonMount.cpp.
-    use_action(actions["Glide"])
+    use_action(actions["Straight"])
     scene.frame_set(0)
     mesh = body.evaluated_get(bpy.context.evaluated_depsgraph_get()).to_mesh()
     points = [body.matrix_world @ v.co for v in mesh.vertices]

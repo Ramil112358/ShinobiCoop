@@ -265,6 +265,10 @@ private:
 	/** World time until which each slot shows the red flash. */
 	TArray<double> SlotFlashUntil;
 
+	/** A failed jutsu's reason, shown under the crosshair until NoticeUntil (world time). */
+	FString Notice;
+	double NoticeUntil = 0.0;
+
 	/** For the wave-start gong and the victory chime. */
 	uint8 LastPhase = 0;
 

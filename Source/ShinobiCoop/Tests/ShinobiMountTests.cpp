@@ -17,6 +17,7 @@
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiDragonMount.h"
+#include "Shinobi/ShinobiCrossfadeAnimInstance.h"
 #include "Shinobi/VFX/ShinobiDragonFlame.h"
 #include "Shinobi/VFX/ShinobiFirePatch.h"
 #include "Shinobi/Abilities/GA_Dodge.h"
@@ -161,8 +162,8 @@ namespace
 
 	FString DragonClip(const AShinobiDragonMount* Dragon)
 	{
-		UAnimSingleNodeInstance* Instance = Dragon->GetBody()->GetSingleNodeInstance();
-		return Instance && Instance->GetCurrentAsset() ? Instance->GetCurrentAsset()->GetName() : FString();
+		const UShinobiCrossfadeAnimInstance* Instance = Cast<UShinobiCrossfadeAnimInstance>(Dragon->GetBody()->GetAnimInstance());
+		return Instance && Instance->GetClip() ? Instance->GetClip()->GetName() : FString();
 	}
 }
 
@@ -392,15 +393,15 @@ bool FShinobiBreathGatesTest::RunTest(const FString& Parameters)
 	ShinobiTest::Press(Ghost, EShinobiAbilityInputID::Melee);
 	TestFalse(TEXT("A phased rider cannot breathe"), ShinobiTest::IsActive(Ghost, UGA_DragonBreath::StaticClass()));
 
-	// Starting a jutsu cancels the breath, like a melee combo.
+	// Jutsu are locked while riding: a jutsu key neither casts nor puts the breath out.
 	AShinobiPlayerCharacter* Caster = Rider(W, FVector(0.f, 3000.f, 0.f));
 	ShinobiTest::Hover(Caster);
 	ShinobiTest::Press(Caster, EShinobiAbilityInputID::Melee);
 	TestTrue(TEXT("Breathing"), ShinobiTest::IsActive(Caster, UGA_DragonBreath::StaticClass()));
 	ShinobiTest::Release(Caster, EShinobiAbilityInputID::Melee);
 	ShinobiTest::Tap(Caster, EShinobiAbilityInputID::Jutsu1); // page 1: Fireball
-	TestTrue(TEXT("The Fireball is being cast"), ShinobiTest::IsActive(Caster, UGA_Fireball::StaticClass()));
-	TestFalse(TEXT("and the breath stopped"), ShinobiTest::IsActive(Caster, UGA_DragonBreath::StaticClass()));
+	TestFalse(TEXT("No Fireball from a dragon's back"), ShinobiTest::IsActive(Caster, UGA_Fireball::StaticClass()));
+	TestTrue(TEXT("and the breath goes on"), ShinobiTest::IsActive(Caster, UGA_DragonBreath::StaticClass()));
 
 	// A staggering hit puts the breath out.
 	AShinobiPlayerCharacter* Hurt = Rider(W, FVector(0.f, -3000.f, 0.f));
@@ -787,6 +788,264 @@ bool FShinobiDragonPitchTest::RunTest(const FString& Parameters)
 	P->SetFlightDive(true);
 	W.Tick(0.8f);
 	TestTrue(FString::Printf(TEXT("Diving, it drops (%.2f)"), Dragon->GetActorForwardVector().Z), Dragon->GetActorForwardVector().Z < -0.1f);
+	return true;
+}
+
+namespace
+{
+	/** A BlockAll engine cube: Centre, Size in centimetres. */
+	AStaticMeshActor* Block(FShinobiTestWorld& W, const FVector& Centre, const FVector& Size)
+	{
+		AStaticMeshActor* Wall = W.World->SpawnActor<AStaticMeshActor>(Centre, FRotator::ZeroRotator);
+		Wall->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+		Wall->GetStaticMeshComponent()->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")));
+		Wall->SetActorScale3D(Size / 100.f);
+		Wall->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+		return Wall;
+	}
+
+	/** How far ahead of the seat the dragon reaches. */
+	float Ahead(const TArray<FBox>& Room)
+	{
+		float Most = 0.f;
+		for (const FBox& Part : Room)
+		{
+			Most = FMath::Max(Most, Part.Max.X);
+		}
+		return Most;
+	}
+
+	/** How far the dragon reaches along world +X, its boxes turned by Rider's heading. */
+	float ReachAlongX(const TArray<FBox>& Room, const AActor* Rider)
+	{
+		float Most = 0.f;
+		for (const FBox& Part : Room)
+		{
+			Most = FMath::Max(Most, Part.TransformBy(FTransform(FRotator(0.f, Rider->GetActorRotation().Yaw, 0.f))).Max.X);
+		}
+		return Most;
+	}
+
+	/** The capsule's floor (where the rider kneels) above the floor at Z = -88 (FloorAt(W, -88)). */
+	float SeatHeight(const AShinobiPlayerCharacter* P)
+	{
+		return P->GetActorLocation().Z - P->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 88.f;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDragonStandsTest, "ShinobiCoop.Mount.OnTheGroundTheDragonStandsWalksAndTakesOff", ShinobiTestFlags)
+bool FShinobiDragonStandsTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	FloorAt(W, -88.f);
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	W.Tick(0.3f); // lands
+	ShinobiTest::ApplyEffect(P, UGE_Mounted::StaticClass());
+	AShinobiDragonMount* Dragon = AShinobiDragonMount::Spawn(P);
+	if (!TestNotNull(TEXT("dragon"), Dragon) || !TestTrue(TEXT("with its model (run Scripts/setup_creatures.py if not)"), Dragon->GetBody()->GetSkeletalMeshAsset() != nullptr))
+	{
+		return false;
+	}
+	const UShinobiMovementComponent* Movement = P->GetCharacterMovement<UShinobiMovementComponent>();
+	W.Tick(1.5f);
+	TestTrue(FString::Printf(TEXT("Summoned on the ground it stands, the rider on its back (%.0f, standing %.0f)"), SeatHeight(P), Movement->MountedStandHeight),
+		FMath::Abs(SeatHeight(P) - Movement->MountedStandHeight) < 20.f);
+	TestEqual(TEXT("standing still"), DragonClip(Dragon), FString(TEXT("ANIM_Tairn_Stand")));
+
+	for (int32 Step = 0; Step < 30; ++Step)
+	{
+		P->AddMovementInput(FVector::ForwardVector, 1.f);
+		W.Tick(0.05f);
+	}
+	TestEqual(TEXT("It walks"), DragonClip(Dragon), FString(TEXT("ANIM_Tairn_Walk")));
+	TestTrue(FString::Printf(TEXT("at a walk (%.0f)"), P->GetVelocity().Size2D()), P->GetVelocity().Size2D() <= Movement->MountedWalkSpeed + 1.f && P->GetVelocity().Size2D() > 100.f);
+	TestTrue(FString::Printf(TEXT("its feet on the ground (%.0f)"), SeatHeight(P)), FMath::Abs(SeatHeight(P) - Movement->MountedStandHeight) < 20.f);
+
+	P->GetCharacterMovement<UShinobiMovementComponent>()->SetSprinting(true); // Shift
+	for (int32 Step = 0; Step < 30; ++Step)
+	{
+		P->AddMovementInput(FVector::ForwardVector, 1.f);
+		W.Tick(0.05f);
+	}
+	TestEqual(TEXT("Shift: it runs"), DragonClip(Dragon), FString(TEXT("ANIM_Tairn_Run")));
+	TestTrue(FString::Printf(TEXT("faster than it walks (%.0f)"), P->GetVelocity().Size2D()),
+		P->GetVelocity().Size2D() > Movement->MountedWalkSpeed + 50.f && P->GetVelocity().Size2D() <= Movement->MountedRunSpeed + 1.f);
+	P->GetCharacterMovement<UShinobiMovementComponent>()->SetSprinting(false);
+
+	P->SetFlightClimb(true);
+	bool bTookOff = false;
+	for (int32 Step = 0; Step < 30; ++Step)
+	{
+		W.Tick(0.05f);
+		bTookOff |= DragonClip(Dragon) == TEXT("ANIM_Tairn_TakeOff");
+	}
+	TestTrue(TEXT("Space takes off"), bTookOff);
+	W.Tick(1.f);
+	TestTrue(FString::Printf(TEXT("up past its flying clearance (%.0f)"), SeatHeight(P)), SeatHeight(P) > Movement->MountedGroundClearance);
+	P->SetFlightClimb(false);
+	P->SetFlightDive(true); // down: below its clearance, it lands instead
+	bool bLanded = false;
+	for (int32 Step = 0; Step < 120 && !bLanded; ++Step)
+	{
+		W.Tick(0.05f);
+		bLanded = DragonClip(Dragon) == TEXT("ANIM_Tairn_Land");
+	}
+	P->SetFlightDive(false);
+	TestTrue(TEXT("Below its clearance it lands"), bLanded);
+	W.Tick(3.f);
+	TestTrue(FString::Printf(TEXT("and stands again (%.0f)"), SeatHeight(P)), FMath::Abs(SeatHeight(P) - Movement->MountedStandHeight) < 20.f);
+	TestEqual(TEXT("on its feet"), DragonClip(Dragon), FString(TEXT("ANIM_Tairn_Stand")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDragonRoomTest, "ShinobiCoop.Mount.TheDragonNeedsRoomToBeSummoned", ShinobiTestFlags)
+bool FShinobiDragonRoomTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	FloorAt(W, -88.f);
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	W.Tick(0.3f);
+	TestTrue(TEXT("Room on open ground"), AShinobiDragonMount::HasRoom(*P, EShinobiDragonKind::Tairn));
+	TestTrue(TEXT("for either dragon"), AShinobiDragonMount::HasRoom(*P, EShinobiDragonKind::Crimson));
+	// A wall 6 m ahead: inside Tairn's reach (his head and wings), outside the crimson dragon's.
+	Block(W, FVector(650.f, 0.f, 500.f), FVector(100.f, 4000.f, 1200.f));
+	TestFalse(TEXT("No room for Tairn by a wall"), AShinobiDragonMount::HasRoom(*P, EShinobiDragonKind::Tairn));
+	TestTrue(TEXT("but room for the smaller crimson dragon"), AShinobiDragonMount::HasRoom(*P, EShinobiDragonKind::Crimson));
+
+	ShinobiTest::EquipPage(P, 5);
+	const float Chakra = ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute());
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(1.3f);
+	TestFalse(TEXT("The summon fails"), ShinobiTest::HasTag(P, ShinobiTags::State_Mounted));
+	TestEqual(TEXT("for free"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), Chakra);
+	TestEqual(TEXT("no dragon"), ShinobiTest::CountActors<AShinobiDragonMount>(W), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDragonWallTest, "ShinobiCoop.Mount.TheDragonStopsAtWallsInsteadOfPassingIntoThem", ShinobiTestFlags)
+bool FShinobiDragonWallTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	FloorAt(W, -88.f);
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	W.Tick(0.3f);
+	ShinobiTest::ApplyEffect(P, UGE_Mounted::StaticClass());
+	AShinobiDragonMount::Spawn(P);
+	W.Tick(1.5f); // standing
+	const float WallFace = 3000.f;
+	Block(W, FVector(WallFace + 50.f, 0.f, 3900.f), FVector(100.f, 8000.f, 8000.f)); // too tall to fly over
+	const float Reach = Ahead(AShinobiDragonMount::Room(EShinobiDragonKind::Tairn, false));
+	for (int32 Step = 0; Step < 200; ++Step) // 10 s walking at it: far enough to reach it
+	{
+		P->AddMovementInput(FVector::ForwardVector, 1.f);
+		W.Tick(0.05f);
+	}
+	TestTrue(FString::Printf(TEXT("Walking, it stops with its snout short of the wall (%.0f + %.0f vs %.0f)"), P->GetActorLocation().X, Reach, WallFace),
+		P->GetActorLocation().X + Reach <= WallFace + 1.f && P->GetActorLocation().X + Reach > WallFace - 100.f);
+
+	// Flying at it, too: back off (the flying room leans with the banks: it is bigger; on the ground it turns round to walk away), up,
+	// then forward at flight speed.
+	for (int32 Step = 0; Step < 80; ++Step)
+	{
+		P->AddMovementInput(-FVector::ForwardVector, 1.f);
+		W.Tick(0.05f);
+	}
+	P->SetFlightClimb(true);
+	W.Tick(1.5f);
+	P->SetFlightClimb(false);
+	const float FlyReach = ReachAlongX(AShinobiDragonMount::Room(EShinobiDragonKind::Tairn, true), P); // it turned round to back off
+	for (int32 Step = 0; Step < 60; ++Step)
+	{
+		P->AddMovementInput(FVector::ForwardVector, 1.f);
+		W.Tick(0.05f);
+	}
+	TestTrue(FString::Printf(TEXT("Flying, it stops short of the wall too (%.0f + %.0f vs %.0f)"), P->GetActorLocation().X, FlyReach, WallFace),
+		P->GetActorLocation().X + FlyReach <= WallFace + 1.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDragonSteerTest, "ShinobiCoop.Mount.OnTheGroundTheDragonTurnsSmoothlyAndWalksTheWayItFaces", ShinobiTestFlags)
+bool FShinobiDragonSteerTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	FloorAt(W, -88.f);
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	W.Tick(0.3f);
+	ShinobiTest::ApplyEffect(P, UGE_Mounted::StaticClass());
+	AShinobiDragonMount::Spawn(P);
+	W.Tick(1.5f); // standing, facing +X
+	const float TurnRate = P->GetCharacterMovement<UShinobiMovementComponent>()->MountedTurnRate;
+	const float StartYaw = P->GetActorRotation().Yaw;
+	float MostSideways = 0.f;
+	for (int32 Step = 0; Step < 10; ++Step) // steered to its right for half a second
+	{
+		P->AddMovementInput(FVector::RightVector, 1.f);
+		W.Tick(0.05f);
+		if (P->GetVelocity().Size2D() > 50.f) // (it lags the heading a little through the turn, like a skid)
+		{
+			MostSideways = FMath::Max(MostSideways, FMath::Abs(P->GetVelocity().GetSafeNormal2D() | P->GetActorRightVector()));
+		}
+	}
+	const float Turned = FRotator::NormalizeAxis(P->GetActorRotation().Yaw - StartYaw);
+	TestTrue(FString::Printf(TEXT("It turns toward the steer at its own pace (%.0f in 0.5 s at %.0f a second)"), Turned, TurnRate),
+		Turned > 0.f && Turned <= TurnRate * 0.5f + 5.f);
+	TestTrue(FString::Printf(TEXT("walking the way it faces, not sideways (%.2f)"), MostSideways), MostSideways < 0.4f);
+	for (int32 Step = 0; Step < 80; ++Step)
+	{
+		P->AddMovementInput(FVector::RightVector, 1.f);
+		W.Tick(0.05f);
+	}
+	TestTrue(FString::Printf(TEXT("and comes round to it (%.0f)"), P->GetActorRotation().Yaw), FMath::Abs(FRotator::NormalizeAxis(P->GetActorRotation().Yaw - 90.f)) < 5.f);
+	TestTrue(FString::Printf(TEXT("walking that way (%.0f, %.0f)"), P->GetVelocity().X, P->GetVelocity().Y), P->GetVelocity().Y > 100.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiDragonTiltTest, "ShinobiCoop.Mount.TheDragonLeansWithItsFlightForwardBackAndSideways", ShinobiTestFlags)
+bool FShinobiDragonTiltTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = Rider(W);
+	AShinobiDragonMount* Dragon = AShinobiDragonMount::Spawn(P, EShinobiDragonKind::Tairn);
+	W.Tick(0.5f);
+	auto Fly = [&](const FVector& Way)
+	{
+		for (int32 Step = 0; Step < 30; ++Step)
+		{
+			P->AddMovementInput(Way, 1.f);
+			W.Tick(0.05f);
+		}
+	};
+	const FVector Ahead = P->GetActorForwardVector();
+	Fly(Ahead);
+	TestTrue(FString::Printf(TEXT("Flying ahead, the nose dips (%.2f)"), Dragon->GetActorForwardVector().Z), Dragon->GetActorForwardVector().Z < -0.05f);
+	Fly(-Ahead);
+	Fly(-Ahead);
+	TestTrue(FString::Printf(TEXT("flying backwards, it rears up (%.2f)"), Dragon->GetActorForwardVector().Z), Dragon->GetActorForwardVector().Z > 0.1f);
+	Fly(P->GetActorRightVector());
+	Fly(P->GetActorRightVector());
+	TestTrue(FString::Printf(TEXT("sliding right, the right wing drops (%.2f)"), Dragon->GetActorRightVector().Z), Dragon->GetActorRightVector().Z < -0.1f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMountedJutsuLockTest, "ShinobiCoop.Mount.JutsuAreLockedWhileRiding", ShinobiTestFlags)
+bool FShinobiMountedJutsuLockTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = Rider(W);
+	AShinobiDragonMount::Spawn(P, EShinobiDragonKind::Tairn);
+	ShinobiTest::EquipPage(P, 1);
+	const float Chakra = ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute());
+	ShinobiTest::Tap(P, EShinobiAbilityInputID::Jutsu1);
+	W.Tick(1.f);
+	TestEqual(TEXT("A jutsu key does nothing while riding"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), Chakra);
+	const TSubclassOf<UShinobiJutsuAbility> First = P->GetLoadout().IsValidIndex(0) ? P->GetLoadout()[0] : nullptr;
+	if (TestNotNull(TEXT("a jutsu in the first slot"), First.Get()))
+	{
+		TestFalse(TEXT("it never starts"), ShinobiTest::IsActive(P, First));
+		TestTrue(TEXT("and its slot shows locked"), First.GetDefaultObject()->GetSlotState(*P->GetAbilitySystemComponent()).bLocked);
+	}
+	TestFalse(TEXT("The dragon's own slot stays lit (its key climbs down)"),
+		GetDefault<UGA_SummonDragon>()->GetSlotState(*P->GetAbilitySystemComponent()).bLocked);
 	return true;
 }
 
