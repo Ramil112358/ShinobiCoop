@@ -77,6 +77,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 
 	UFUNCTION()
 	void OnRep_Rider();
@@ -103,6 +104,10 @@ private:
 
 	/** Lays the reins: a rope collar round the neck and a line from it to each of the rider's fists. Cosmetic, on each machine with a mesh. */
 	void UpdateReins();
+
+	/** The rider answers the dragon: the torso leans into a turn and with the climb or dive, the rein on the turning side is drawn back (both
+	 * back climbing, eased forward diving), and breathing fire braces them (forward, both fists drawn in). Cosmetic, on each machine with a mesh. */
+	void UpdateRiderPose(float DeltaSeconds);
 
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TObjectPtr<USkeletalMeshComponent> Body;
@@ -137,4 +142,6 @@ private:
 	float BankRoll = 0.f;
 	float YawRate = 0.f; // the rider's turn, degrees a second (UpdateBank)
 	float BankPitch = 0.f;
+	float ReinPull[2] = { 0.f, 0.f }; // the rider's left and right rein, as UpdateRiderPose last set them
+	float Brace = 0.f;                // 0..1: the rider braced against the breath
 };

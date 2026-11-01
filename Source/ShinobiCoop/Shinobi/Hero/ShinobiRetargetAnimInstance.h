@@ -57,6 +57,10 @@ private:
 	 * whatever the proportions the retarget carried over. */
 	void KeepHandOnFace(FPoseContext& Output) const;
 
+	/** Riding a dragon (UShinobiBodyComponent::GetRidePose): the spine leans (RideLean, shared out along the Spine chain) and each
+	 * fist draws back or eases forward by its RidePull (two-bone IK, the hand keeps its rotation, the elbow stays where the pose has it). */
+	void KeepRiderPose(FPoseContext& Output) const;
+
 	/** Fills Index and Arm ([left, right][upper arm, forearm, hand], component space); false if the rig lacks them. */
 	bool GetArms(const FPoseContext& Output, FCSPose<FCompactPose>& Pose, FCompactPoseBoneIndex (&Index)[2][3], FTransform (&Arm)[2][3]) const;
 
@@ -78,6 +82,12 @@ private:
 	float OrbRadius = 0.f; // world
 	float FaceWeight = 0.f;
 	FVector FaceKnuckles = FVector::ZeroVector; // world
+	bool bRiding = false;
+	FQuat RideLean = FQuat::Identity;                     // component space
+	FVector RidePull[2] = { FVector::ZeroVector, FVector::ZeroVector }; // each fist's move, component space
+
+	/** The hero's Spine chain, root to tip, from the retargeter. */
+	TArray<FBoneReference> SpineBones;
 
 	/** The hero's arms, [left, right][upper arm, forearm, hand], from the retargeter's LeftArm and RightArm chains. */
 	FBoneReference ArmBones[2][3];

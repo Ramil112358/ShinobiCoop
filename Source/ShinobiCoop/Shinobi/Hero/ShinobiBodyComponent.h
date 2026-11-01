@@ -7,6 +7,16 @@
 
 class UIKRetargeter;
 
+/** How a rider reacts to the dragon under it (AShinobiDragonMount::UpdateRiderPose), laid over the seated pose by UShinobiRetargetAnimInstance. */
+struct FShinobiRidePose
+{
+	float Pull[2] = { 0.f, 0.f }; // left, right rein: 1 draws that fist back a hand's length, negative lets it forward
+	float Roll = 0.f;             // the torso leans to the right, degrees
+	float Forward = 0.f;          // the torso leans forward, degrees (negative: back)
+
+	bool IsRest() const { return FMath::IsNearlyZero(Pull[0], 0.01f) && FMath::IsNearlyZero(Pull[1], 0.01f) && FMath::IsNearlyZero(Roll, 0.1f) && FMath::IsNearlyZero(Forward, 0.1f); }
+};
+
 /**
  * A character's visible body: a skeletal mesh attached to the character's own mesh (the "driver", a mannequin that
  * keeps running every animation, hidden) that copies the driver's pose every frame through an IK retargeter
@@ -84,6 +94,10 @@ public:
 	void SetBoneShape(FName Bone, const FVector& Scale);
 	const TMap<FName, FVector>& GetBoneShapes() const { return BoneShapes; }
 
+	/** The rider's lean and rein pull on top of the pose (all at rest: none); set each frame while a dragon carries this body. */
+	void SetRidePose(const FShinobiRidePose& Pose) { RidePose = Pose; }
+	const FShinobiRidePose& GetRidePose() const { return RidePose; }
+
 	/** Sets a face slider (UShinobiFaceShapeAnimInstance) on the MetaHuman face worn with this body; the first call puts
 	 * the face on that native graph (body pose, RigLogic, slider offsets) in place of its blueprints. False without a
 	 * MetaHuman face or for an unknown slider. */
@@ -135,6 +149,7 @@ private:
 	TObjectPtr<class UShinobiMutableLook> MutableLook;
 
 	TMap<FName, FVector> BoneShapes;
+	FShinobiRidePose RidePose;
 
 	FShinobiAppearance Worn;
 

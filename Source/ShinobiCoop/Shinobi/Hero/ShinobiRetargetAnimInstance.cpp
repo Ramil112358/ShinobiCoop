@@ -13,6 +13,9 @@ namespace
 	/** Where Amaterasu's index and middle knuckles rest, from the right eye: cm on the face's forward, right, up (the
 	 * pose's "face" in Scripts/character/build_jutsu_anims.py). */
 	const FVector FaceKnuckleOffset(0.5, 1.3, -4.3);
+
+	/** How far a fist goes back at a full rein pull, cm. */
+	constexpr float RidePullReach = 24.f;
 }
 
 bool ShinobiIsJutsuCast(const UAnimMontage* Montage)
@@ -40,11 +43,14 @@ void FShinobiRetargetAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance,
 	ContactWeight = 0.f;
 	OrbWeight = 0.f;
 	FaceWeight = 0.f;
+	bRiding = false;
 	const USkeletalMeshComponent* Mesh = InAnimInstance->GetSkelMeshComponent();
 	BoneShapes.Reset();
+	FShinobiRidePose Ride;
 	if (const UShinobiBodyComponent* Body = Cast<UShinobiBodyComponent>(Mesh))
 	{
 		BoneShapes = Body->GetBoneShapes().Array();
+		Ride = Body->GetRidePose();
 	}
 	const USkeletalMeshComponent* Source = Mesh ? Cast<USkeletalMeshComponent>(Mesh->GetAttachParent()) : nullptr;
 	const UAnimInstance* SourceAnim = Source ? Source->GetAnimInstance() : nullptr;
@@ -88,6 +94,19 @@ void FShinobiRetargetAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance,
 	ComponentToWorld = Mesh->GetComponentTransform();
 	const float Close = 1.f - FMath::SmoothStep(ContactNear, ContactFar, static_cast<float>(SourceHandOffset.Size()));
 	ContactWeight = FMath::Min(MontageWeight, 1.f) * Close;
+	if (Owner && !Ride.IsRest())
+	{
+		// The lean is about the rider's own axes (forward, right), whatever way the mesh is turned.
+		const FQuat Heading = FRotator(0.f, Owner->GetActorRotation().Yaw, 0.f).Quaternion();
+		const FQuat ToComponent = ComponentToWorld.GetRotation().Inverse();
+		RideLean = ToComponent * Heading * FRotator(-Ride.Forward, 0.f, Ride.Roll).Quaternion() * Heading.Inverse() * ComponentToWorld.GetRotation();
+		const float Reach = RidePullReach * static_cast<float>(Mesh->GetComponentScale().Z);
+		for (int32 Side = 0; Side < 2; ++Side)
+		{
+			RidePull[Side] = ComponentToWorld.InverseTransformVector(-Heading.GetForwardVector() * (Reach * Ride.Pull[Side]));
+		}
+		bRiding = true;
+	}
 }
 
 void FShinobiRetargetAnimInstanceProxy::CacheBones()
@@ -144,6 +163,22 @@ void FShinobiRetargetAnimInstanceProxy::CacheBones()
 			++Found;
 		}
 		KnuckleLocal /= FMath::Max(Found, 1);
+
+		// The Spine chain, root to tip.
+		SpineBones.Reset();
+		const FBoneChain* Spine = Rig ? Rig->GetRetargetChainByName(TEXT("Spine")) : nullptr;
+		for (int32 Bone = Spine ? RefSkeleton.FindBoneIndex(Spine->EndBone.BoneName) : INDEX_NONE; Bone != INDEX_NONE; Bone = RefSkeleton.GetParentIndex(Bone))
+		{
+			SpineBones.Insert(FBoneReference(RefSkeleton.GetBoneName(Bone)), 0);
+			if (RefSkeleton.GetBoneName(Bone) == Spine->StartBone.BoneName)
+			{
+				break;
+			}
+		}
+		for (FBoneReference& Bone : SpineBones)
+		{
+			Bone.Initialize(Bones);
+		}
 	}
 }
 
@@ -153,6 +188,10 @@ bool FShinobiRetargetAnimInstanceProxy::Evaluate(FPoseContext& Output)
 	if (BoneShapes.Num())
 	{
 		ShapeBones(Output);
+	}
+	if (bRiding)
+	{
+		KeepRiderPose(Output);
 	}
 	if (ContactWeight > UE_KINDA_SMALL_NUMBER)
 	{
@@ -268,6 +307,60 @@ void FShinobiRetargetAnimInstanceProxy::KeepHandOnFace(FPoseContext& Output) con
 	AnimationCore::SolveTwoBoneIK(Upper, Lower, Hand, Lower.GetLocation(), Wrist, false, 1.0, 1.0);
 	Hand.SetRotation(HandRotation);
 	TArray<FBoneTransform, TInlineAllocator<3>> Solved = {FBoneTransform(Index[1][0], Upper), FBoneTransform(Index[1][1], Lower), FBoneTransform(Index[1][2], Hand)};
+	Pose.SafeSetCSBoneTransforms(Solved);
+	FCSPose<FCompactPose>::ConvertComponentPosesToLocalPoses(MoveTemp(Pose), Output.Pose);
+}
+
+void FShinobiRetargetAnimInstanceProxy::KeepRiderPose(FPoseContext& Output) const
+{
+	// The lean, shared out along the spine: each bone turns about its own joint by an equal part, so the head rides the sum. Edited on the
+	// local pose, so everything above the spine (arms, neck, head) follows.
+	const FBoneContainer& Bones = Output.Pose.GetBoneContainer();
+	TArray<FCompactPoseBoneIndex, TInlineAllocator<8>> Spine;
+	for (const FBoneReference& Bone : SpineBones)
+	{
+		if (Bone.IsValidToEvaluate(Bones))
+		{
+			Spine.Add(Bone.GetCompactPoseIndex(Bones));
+		}
+	}
+	if (Spine.Num())
+	{
+		FCSPose<FCompactPose> Pose;
+		Pose.InitPose(Output.Pose);
+		const FCompactPoseBoneIndex Root = Bones.GetParentBoneIndex(Spine[0]);
+		FTransform ParentSpace = Root.IsValid() ? Pose.GetComponentSpaceTransform(Root) : FTransform::Identity;
+		const FQuat Part = FQuat::Slerp(FQuat::Identity, RideLean, 1.f / Spine.Num());
+		for (const FCompactPoseBoneIndex Bone : Spine)
+		{
+			FTransform& Local = Output.Pose[Bone];
+			const FQuat Parent = ParentSpace.GetRotation();
+			Local.SetRotation((Parent.Inverse() * Part * Parent * Local.GetRotation()).GetNormalized());
+			ParentSpace = Local * ParentSpace;
+		}
+	}
+
+	// The fists: each drawn back (or let forward) by its rein's pull.
+	FCSPose<FCompactPose> Pose;
+	FCompactPoseBoneIndex Index[2][3] = {{FCompactPoseBoneIndex(INDEX_NONE), FCompactPoseBoneIndex(INDEX_NONE), FCompactPoseBoneIndex(INDEX_NONE)},
+		{FCompactPoseBoneIndex(INDEX_NONE), FCompactPoseBoneIndex(INDEX_NONE), FCompactPoseBoneIndex(INDEX_NONE)}};
+	FTransform Arm[2][3];
+	if (!GetArms(Output, Pose, Index, Arm))
+	{
+		return;
+	}
+	TArray<FBoneTransform, TInlineAllocator<6>> Solved;
+	for (int32 Side = 0; Side < 2; ++Side)
+	{
+		FTransform Upper = Arm[Side][0], Lower = Arm[Side][1], Hand = Arm[Side][2];
+		const FQuat HandRotation = Hand.GetRotation();
+		AnimationCore::SolveTwoBoneIK(Upper, Lower, Hand, Lower.GetLocation(), Hand.GetLocation() + RidePull[Side], false, 1.0, 1.0);
+		Hand.SetRotation(HandRotation);
+		Solved.Add(FBoneTransform(Index[Side][0], Upper));
+		Solved.Add(FBoneTransform(Index[Side][1], Lower));
+		Solved.Add(FBoneTransform(Index[Side][2], Hand));
+	}
+	Solved.Sort(FCompareBoneTransformIndex());
 	Pose.SafeSetCSBoneTransforms(Solved);
 	FCSPose<FCompactPose>::ConvertComponentPosesToLocalPoses(MoveTemp(Pose), Output.Pose);
 }

@@ -794,7 +794,7 @@ bool FShinobiDragonPitchTest::RunTest(const FString& Parameters)
 namespace
 {
 	/** A BlockAll engine cube: Centre, Size in centimetres. */
-	AStaticMeshActor* Block(FShinobiTestWorld& W, const FVector& Centre, const FVector& Size)
+	AStaticMeshActor* MountBlock(FShinobiTestWorld& W, const FVector& Centre, const FVector& Size)
 	{
 		AStaticMeshActor* Wall = W.World->SpawnActor<AStaticMeshActor>(Centre, FRotator::ZeroRotator);
 		Wall->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
@@ -908,7 +908,7 @@ bool FShinobiDragonRoomTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Room on open ground"), AShinobiDragonMount::HasRoom(*P, EShinobiDragonKind::Tairn));
 	TestTrue(TEXT("for either dragon"), AShinobiDragonMount::HasRoom(*P, EShinobiDragonKind::Crimson));
 	// A wall 6 m ahead: inside Tairn's reach (his head and wings), outside the crimson dragon's.
-	Block(W, FVector(650.f, 0.f, 500.f), FVector(100.f, 4000.f, 1200.f));
+	MountBlock(W, FVector(650.f, 0.f, 500.f), FVector(100.f, 4000.f, 1200.f));
 	TestFalse(TEXT("No room for Tairn by a wall"), AShinobiDragonMount::HasRoom(*P, EShinobiDragonKind::Tairn));
 	TestTrue(TEXT("but room for the smaller crimson dragon"), AShinobiDragonMount::HasRoom(*P, EShinobiDragonKind::Crimson));
 
@@ -933,7 +933,7 @@ bool FShinobiDragonWallTest::RunTest(const FString& Parameters)
 	AShinobiDragonMount::Spawn(P);
 	W.Tick(1.5f); // standing
 	const float WallFace = 3000.f;
-	Block(W, FVector(WallFace + 50.f, 0.f, 3900.f), FVector(100.f, 8000.f, 8000.f)); // too tall to fly over
+	MountBlock(W, FVector(WallFace + 50.f, 0.f, 3900.f), FVector(100.f, 8000.f, 8000.f)); // too tall to fly over
 	const float Reach = Ahead(AShinobiDragonMount::Room(EShinobiDragonKind::Tairn, false));
 	for (int32 Step = 0; Step < 200; ++Step) // 10 s walking at it: far enough to reach it
 	{

@@ -1286,6 +1286,11 @@ void AShinobiPlayerController::RunDragonShotTest()
 		SetViewTarget(Camera);
 	};
 	auto Climb = [this](bool bHeld) { if (AShinobiPlayerCharacter* P = GetPawn<AShinobiPlayerCharacter>()) { P->SetFlightClimb(bHeld); } };
+	FString Who; // -ShinobiShotCharacter=Bika: ride as that roster character
+	if (FParse::Value(FCommandLine::Get(), TEXT("ShinobiShotCharacter="), Who))
+	{
+		At(0.2f, [this, Who]() { ShinobiCharacter(Who); });
+	}
 	At(1.0f, [this]() { ShinobiEquipPage(5); ShinobiDrainChakra(-100.f); });
 	At(1.2f, [this]() { ShinobiCastHold(1, 0.9f); }); // 0.8 s seals: mounted from about 2.0
 	At(2.3f, [Orbit]() { Orbit(90.f, 0.f); });
@@ -1302,6 +1307,52 @@ void AShinobiPlayerController::RunDragonShotTest()
 		At(When + 0.25f, [Shot, Index]() { Shot(Views[Index].Name); });
 	}
 	At(7.8f, [this]() { SetViewTarget(GetPawn()); });
+	// The rider close up from behind and to the side: leaning and drawing a rein in a right turn, then a left one, then braced while breathing.
+	auto RiderView = [this]()
+	{
+		const APawn* Shinobi = GetPawn();
+		if (!Shinobi)
+		{
+			return;
+		}
+		const FVector Target = Shinobi->GetActorLocation() - FVector(0.f, 0.f, 30.f);
+		const FVector Eye = Target + Shinobi->GetActorForwardVector().RotateAngleAxis(-140.f, FVector::UpVector) * 330.f + FVector(0.f, 0.f, 70.f);
+		ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Target - Eye).Rotation());
+		Camera->GetCameraComponent()->SetFieldOfView(50.f);
+		Camera->SetLifeSpan(0.6f);
+		SetViewTarget(Camera);
+	};
+	auto Turn = [this, At](float DegreesPerSecond, float From, float Seconds)
+	{
+		At(From, [this, DegreesPerSecond, Seconds]()
+		{
+			FTimerHandle Spin;
+			const double Until = GetWorld()->GetTimeSeconds() + Seconds;
+			GetWorldTimerManager().SetTimer(Spin, FTimerDelegate::CreateWeakLambda(this, [this, DegreesPerSecond, Until]()
+			{
+				if (GetWorld()->GetTimeSeconds() < Until)
+				{
+					SetControlRotation(GetControlRotation() + FRotator(0.f, DegreesPerSecond * 0.01f, 0.f));
+				}
+			}), 0.01f, true);
+		});
+	};
+	for (int32 Index = 0; Index < 4; ++Index) // at rest, twice apart: does the seated pose itself move a hand?
+	{
+		At(3.9f + Index * 0.4f, RiderView);
+		At(4.0f + Index * 0.4f, [Shot, Index]() { Shot(FString::Printf(TEXT("ShinobiDragonShot_14_RiderRest%d"), Index)); });
+	}
+	Turn(150.f, 7.9f, 0.6f);
+	At(8.3f, RiderView);
+	At(8.5f, [this]() { SetViewTarget(GetPawn()); });
+	At(8.45f, [Shot]() { Shot(TEXT("ShinobiDragonShot_11_RiderTurnRight")); });
+	Turn(-150.f, 8.5f, 0.6f);
+	At(8.7f, RiderView);
+	At(8.85f, [Shot]() { Shot(TEXT("ShinobiDragonShot_12_RiderTurnLeft")); });
+	At(8.9f, [this]() { SetViewTarget(GetPawn()); });
+	At(9.5f, RiderView);
+	At(9.62f, [Shot]() { Shot(TEXT("ShinobiDragonShot_13_RiderBrace")); });
+	At(9.7f, [this]() { SetViewTarget(GetPawn()); });
 	At(9.0f, [Shot]() { Shot(TEXT("ShinobiDragonShot_06_Gameplay")); });
 	auto Breathe = [this](bool bHeld)
 	{

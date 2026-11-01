@@ -15,6 +15,7 @@
 #include "Shinobi/ShinobiMovementComponent.h"
 #include "Shinobi/ShinobiCharacterBase.h"
 #include "Shinobi/ShinobiCrossfadeAnimInstance.h"
+#include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiTags.h"
 
@@ -83,6 +84,13 @@ namespace
 	constexpr float HoverSpeed = 150.f;
 	constexpr float GlideSinkSpeed = 200.f; // sinking faster than this, the wings hold out instead of beating
 	constexpr float OnGroundSlack = 60.f;   // the seat within this of its standing height: on the ground
+	constexpr float FullPullYawRate = 35.f; // a turn this fast (degrees a second) draws its rein all the way back
+	constexpr float ClimbPull = 0.5f;       // both reins' pull climbing at full pitch (eased forward diving)
+	constexpr float BracePull = 0.5f;       // both reins' pull breathing fire
+	constexpr float LeanPerBank = 0.9f;     // the rider leans this much of the dragon's bank (35 degrees: 31)
+	constexpr float LeanPerPitch = 0.8f;    // and forward this much of its dive (back of its climb)
+	constexpr float BraceLean = 20.f;       // degrees forward breathing fire
+	constexpr float RiderPoseSpeed = 8.f;   // how quickly the rider's pull and brace follow
 	constexpr int32 CollarSegments = 14;
 	constexpr float RopeThickness = 3.f;
 	const FLinearColor RopeColour(0.2f, 0.12f, 0.06f); // weathered hemp
@@ -404,9 +412,45 @@ void AShinobiDragonMount::Tick(float DeltaSeconds)
 	{
 		UpdateClip();
 		UpdateBank(DeltaSeconds);
+		UpdateRiderPose(DeltaSeconds);
 		KeepSeatStill();
 		UpdateReins();
 	}
+}
+
+void AShinobiDragonMount::EndPlay(const EEndPlayReason::Type Reason)
+{
+	if (IsValid(Rider))
+	{
+		if (UShinobiBodyComponent* Hero = Cast<UShinobiBodyComponent>(Rider->GetBodyMesh()))
+		{
+			Hero->SetRidePose(FShinobiRidePose()); // back to sitting plain
+		}
+	}
+	Super::EndPlay(Reason);
+}
+
+void AShinobiDragonMount::UpdateRiderPose(float DeltaSeconds)
+{
+	UShinobiBodyComponent* Hero = DeltaSeconds > 0.f ? Cast<UShinobiBodyComponent>(Rider->GetBodyMesh()) : nullptr;
+	if (!Hero)
+	{
+		return;
+	}
+	const bool bBreathing = Rider->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_DragonBreathing);
+	Brace = FMath::FInterpTo(Brace, bBreathing ? 1.f : 0.f, DeltaSeconds, RiderPoseSpeed);
+	const float Turn = FMath::Clamp(YawRate / FullPullYawRate, -1.f, 1.f);
+	const float Both = BankPitch / MaxPitch * ClimbPull + Brace * BracePull;
+	const float Target[2] = { FMath::Max(-Turn, 0.f) + Both, FMath::Max(Turn, 0.f) + Both }; // a right turn draws the right rein
+	FShinobiRidePose Pose;
+	for (int32 Side = 0; Side < 2; ++Side)
+	{
+		ReinPull[Side] = FMath::FInterpTo(ReinPull[Side], FMath::Clamp(Target[Side], -1.f, 1.f), DeltaSeconds, RiderPoseSpeed);
+		Pose.Pull[Side] = ReinPull[Side];
+	}
+	Pose.Roll = BankRoll * LeanPerBank;
+	Pose.Forward = -BankPitch * LeanPerPitch + Brace * BraceLean; // nose up leans back, down leans forward
+	Hero->SetRidePose(Pose);
 }
 
 void AShinobiDragonMount::KeepSeatStill()
@@ -478,6 +522,7 @@ void AShinobiDragonMount::UpdateReins()
 	const FVector Axis = (To - From).GetSafeNormal();
 	const FVector Up = (Body->GetUpVector() - Axis * (Body->GetUpVector() | Axis)).GetSafeNormal();
 	const FVector Side = Axis ^ Up;
+	const bool bSideIsRight = (Side | Body->GetRightVector()) > 0.f;
 	const FVector Centre = FMath::Lerp(From, To, Look.CollarAt) - Up * (Look.CollarDrop * Look.Scale);
 	const float Radius = Look.CollarRadius * Look.Scale;
 	auto Ring = [&](int32 Index) { const float Angle = 2.f * UE_PI * Index / CollarSegments; return Centre + (Up * FMath::Cos(Angle) + Side * FMath::Sin(Angle)) * Radius; };
@@ -485,16 +530,13 @@ void AShinobiDragonMount::UpdateReins()
 	{
 		LayRope(Rope[Index], Ring(Index), Ring(Index + 1));
 	}
-	// Each rein runs from the collar's nearest point to its fist.
+	// Each rein runs from its own side of the collar, one point off the top, to its fist. (Not the nearest point: the neck's sway moved the
+	// nearest one back and forth between two points and the rein jumped a metre with it.)
 	for (int32 Hand = 0; Hand < 2; ++Hand)
 	{
-		const FVector Grip = Fist(*Hands, Hand == 0);
-		int32 Nearest = 0;
-		for (int32 Index = 1; Index < CollarSegments; ++Index)
-		{
-			Nearest = FVector::DistSquared(Ring(Index), Grip) < FVector::DistSquared(Ring(Nearest), Grip) ? Index : Nearest;
-		}
-		LayRope(Rope[CollarSegments + Hand], Ring(Nearest), Grip);
+		const bool bRight = Hand == 1;
+		const int32 Anchor = bRight == bSideIsRight ? 1 : CollarSegments - 1;
+		LayRope(Rope[CollarSegments + Hand], Ring(Anchor), Fist(*Hands, Hand == 0));
 	}
 }
 
