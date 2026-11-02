@@ -692,11 +692,17 @@ def build_action(arm_obj, name, keys):
     arm_obj.animation_data_create()
     arm_obj.animation_data.action = action
     eases = {}
+    last = {}
     for seconds, pose, ease in keys:
         frame = round(seconds * FPS)
         eases[frame] = EASES[ease]
         apply_pose(arm_obj, pose)
         for pb in arm_obj.pose.bones:
+            # q and -q are the same rotation, but the curves interpolate per channel: a key on the far side from the last
+            # swings the bone the long way round between them (the seated loop's left arm yanked back twice a loop).
+            if pb.name in last and pb.rotation_quaternion.dot(last[pb.name]) < 0:
+                pb.rotation_quaternion = -pb.rotation_quaternion
+            last[pb.name] = pb.rotation_quaternion.copy()
             pb.keyframe_insert("rotation_quaternion", frame=frame)
             pb.keyframe_insert("location", frame=frame)
     # Shape each move: the interpolation on a key governs the segment that starts at it.

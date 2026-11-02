@@ -139,6 +139,17 @@ void UShinobiPhysicalReactionComponent::SetStrength(float Strength, bool bWorldS
 	}
 }
 
+bool UShinobiPhysicalReactionComponent::IsAnimationOnly() const
+{
+	return Profile == KinematicProfile;
+}
+
+bool UShinobiPhysicalReactionComponent::IsRiding() const
+{
+	const UAbilitySystemComponent* ASC = CastChecked<AShinobiCharacterBase>(GetOwner())->GetAbilitySystemComponent();
+	return ASC && ASC->HasMatchingGameplayTag(ShinobiTags::State_Mounted);
+}
+
 void UShinobiPhysicalReactionComponent::Hit(const FVector& Direction, float Damage)
 {
 	MulticastHit(Direction.GetSafeNormal(), Damage);
@@ -146,6 +157,12 @@ void UShinobiPhysicalReactionComponent::Hit(const FVector& Direction, float Dama
 
 void UShinobiPhysicalReactionComponent::MulticastHit_Implementation(FVector_NetQuantizeNormal Direction, float Damage)
 {
+	// A rider is animation only but for a hit's moment (Tick); the profile takes on the control's next tick, so the impulse waits for it.
+	const bool bWasAnimationOnly = Physics && IsRiding() && Profile == KinematicProfile;
+	if (bWasAnimationOnly)
+	{
+		SetProfile(PhysicalAnimationProfile);
+	}
 	if (Physics && !bDead && !bKnockedDown && Profile == PhysicalAnimationProfile)
 	{
 		// The profile's controls hold the pose too stiffly for an impulse to show: slacken them, then ease back (Tick). The
@@ -153,9 +170,19 @@ void UShinobiPhysicalReactionComponent::MulticastHit_Implementation(FVector_NetQ
 		HitTime = GetWorld()->GetTimeSeconds();
 		SetStrength(HitStrength, true);
 		const float Impulse = FMath::Min(Damage * HitImpulsePerDamage, MaxHitImpulse);
-		// The whole upper body (chest, arms, head) as one, or the joints to the pinned pelvis soak it up.
-		CastChecked<ACharacter>(GetOwner())->GetMesh()->AddImpulseToAllBodiesBelow(FVector(Direction) * Impulse, ChestBone, true, true);
+		PendingHitImpulse = FVector(Direction) * Impulse;
+		if (!bWasAnimationOnly)
+		{
+			ApplyHitImpulse();
+		}
 	}
+}
+
+void UShinobiPhysicalReactionComponent::ApplyHitImpulse()
+{
+	// The whole upper body (chest, arms, head) as one, or the joints to the pinned pelvis soak it up.
+	CastChecked<ACharacter>(GetOwner())->GetMesh()->AddImpulseToAllBodiesBelow(PendingHitImpulse, ChestBone, true, true);
+	PendingHitImpulse = FVector::ZeroVector;
 }
 
 void UShinobiPhysicalReactionComponent::Knockdown(const FVector& Velocity)
@@ -241,15 +268,20 @@ void UShinobiPhysicalReactionComponent::TickComponent(float DeltaTime, ELevelTic
 	}
 	// Animation only while the animation moves the capsule (root motion: vaults, mantles), since a simulated pelvis drags
 	// the mesh and with it the root motion off course, on a wall, where the world's gravity would pull the limbs off, and
-	// through a jutsu cast, where sprung arms lag the hand seals and the hands' bodies keep each other apart.
+	// through a jutsu cast, where sprung arms lag the hand seals and the hands' bodies keep each other apart, and on a dragon
+	// but for a hit's recovery, since flight dragged the sprung arms off the reins by up to a metre.
 	const UShinobiMovementComponent* Movement = Cast<UShinobiMovementComponent>(Character->GetCharacterMovement());
 	const UAnimInstance* AnimInstance = Character->GetMesh()->GetAnimInstance();
+	const float SinceHit = static_cast<float>(Now - HitTime);
 	const bool bAnimationOnly = Character->IsPlayingRootMotion() || (Movement && Movement->IsWallTraversing()) ||
-		(AnimInstance && ShinobiIsJutsuCast(AnimInstance->GetCurrentActiveMontage()));
+		(AnimInstance && ShinobiIsJutsuCast(AnimInstance->GetCurrentActiveMontage())) || (IsRiding() && SinceHit > HitRecoverySeconds);
 	SetProfile(bAnimationOnly ? KinematicProfile : PhysicalAnimationProfile);
+	if (!PendingHitImpulse.IsZero() && Profile == PhysicalAnimationProfile && SinceHit < HitRecoverySeconds)
+	{
+		ApplyHitImpulse(); // a rider's, held a tick for the profile to take
+	}
 	// Every tick, not only inside the recovery window: a cast or dash that starts mid-recovery switches to Kinematic, and
 	// the body came back at HitStrength for good (legs buckled, torso slumped).
-	const float SinceHit = static_cast<float>(Now - HitTime);
 	if (Profile == PhysicalAnimationProfile)
 	{
 		SetStrength(FMath::Lerp(HitStrength, 1.f, FMath::Clamp(SinceHit / HitRecoverySeconds, 0.f, 1.f)), true);

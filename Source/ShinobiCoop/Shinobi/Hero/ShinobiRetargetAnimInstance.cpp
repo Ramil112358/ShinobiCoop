@@ -15,7 +15,7 @@ namespace
 	const FVector FaceKnuckleOffset(0.5, 1.3, -4.3);
 
 	/** How far a fist goes back at a full rein pull, cm. */
-	constexpr float RidePullReach = 24.f;
+	constexpr float RidePullReach = 36.f;
 }
 
 bool ShinobiIsJutsuCast(const UAnimMontage* Montage)

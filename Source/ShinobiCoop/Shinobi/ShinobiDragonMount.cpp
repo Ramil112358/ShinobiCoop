@@ -85,11 +85,11 @@ namespace
 	constexpr float GlideSinkSpeed = 200.f; // sinking faster than this, the wings hold out instead of beating
 	constexpr float OnGroundSlack = 60.f;   // the seat within this of its standing height: on the ground
 	constexpr float FullPullYawRate = 35.f; // a turn this fast (degrees a second) draws its rein all the way back
-	constexpr float ClimbPull = 0.5f;       // both reins' pull climbing at full pitch (eased forward diving)
+	constexpr float ClimbPull = 0.7f;       // both reins' pull climbing at full pitch (eased forward diving)
 	constexpr float BracePull = 0.5f;       // both reins' pull breathing fire
-	constexpr float LeanPerBank = 0.9f;     // the rider leans this much of the dragon's bank (35 degrees: 31)
-	constexpr float LeanPerPitch = 0.8f;    // and forward this much of its dive (back of its climb)
-	constexpr float BraceLean = 20.f;       // degrees forward breathing fire
+	constexpr float LeanPerBank = 1.5f;     // the rider leans into a turn past the dragon's bank (35 degrees: 52, 17 more than its back)
+	constexpr float LeanPerPitch = 1.5f;    // and forward past its dive, back past its climb (25 degrees: 37, 12 more than its back)
+	constexpr float BraceLean = 30.f;       // degrees forward breathing fire
 	constexpr float RiderPoseSpeed = 8.f;   // how quickly the rider's pull and brace follow
 	constexpr int32 CollarSegments = 14;
 	constexpr float RopeThickness = 3.f;

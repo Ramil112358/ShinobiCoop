@@ -1002,7 +1002,7 @@ void AShinobiPlayerCharacter::UpdateLoopPose(TObjectPtr<UAnimMontage>& Montage, 
 	}
 	if (AbilitySystem->HasMatchingGameplayTag(Tag))
 	{
-		if (!Anim->IsAnyMontagePlaying()) // another montage (a jutsu) takes the pose for its moment, then the loop comes back
+		if (!Anim->GetCurrentActiveMontage()) // another montage (a jutsu) takes the pose for its moment, then the loop fades in over its fade out
 		{
 			Anim->Montage_Play(Montage);
 			Anim->Montage_SetNextSection(TEXT("Default"), TEXT("Default"), Montage); // a loop

@@ -11,6 +11,7 @@
 #include "PhysicsControlComponent.h"
 #include "Retargeter/IKRetargeter.h"
 #include "Shinobi/Hero/ShinobiPhysicalReactionComponent.h"
+#include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 
 namespace
@@ -49,6 +50,32 @@ bool FShinobiReactionsHitTest::RunTest(const FString& Parameters)
 	const FVector Offset = P->GetMesh()->GetRelativeLocation();
 	TestTrue(FString::Printf(TEXT("The body settles back on the capsule (mesh offset %s)"), *Offset.ToCompactString()),
 		FVector::Dist(Offset, FVector(0.f, 0.f, -96.f)) < 5.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiReactionsRidingHitTest, "ShinobiCoop.Reactions.ARiderFlinchesOnlyWhenHit", ShinobiTestFlags)
+bool FShinobiReactionsRidingHitTest::RunTest(const FString& Parameters)
+{
+	// Sprung arms in flight swung the fists up to a metre off the reins: a rider is animation only, but for a hit's moment.
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = ReactionTestPlayer(W);
+	UShinobiPhysicalReactionComponent* Reactions = P->GetPhysicalReactions();
+	if (!TestTrue(TEXT("Players react physically"), Reactions && Reactions->IsPhysical()))
+	{
+		return false;
+	}
+	ShinobiTest::ApplyEffect(P, UGE_Mounted::StaticClass());
+	W.Tick(0.1f);
+	TestTrue(TEXT("Riding: animation only"), Reactions->IsAnimationOnly());
+	auto Head = [P]() { return P->GetMesh()->GetBodyInstance(TEXT("head"))->GetUnrealWorldTransform().GetLocation(); };
+	const FVector Before = Head();
+	Reactions->Hit(FVector(1.f, 0.f, 0.f), 30.f);
+	TestFalse(TEXT("A hit lets the body give"), Reactions->IsAnimationOnly());
+	W.Tick(0.1f);
+	const float Shoved = Head().X - Before.X;
+	TestTrue(FString::Printf(TEXT("The rider flinches along the hit (head %.1f cm)"), Shoved), Shoved > 3.f);
+	W.Tick(1.f);
+	TestTrue(TEXT("and is animation only again once recovered"), Reactions->IsAnimationOnly());
 	return true;
 }
 

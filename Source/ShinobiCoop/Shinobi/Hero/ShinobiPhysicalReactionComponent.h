@@ -54,6 +54,9 @@ public:
 
 	bool IsKnockedDown() const { return bKnockedDown; }
 
+	/** Whether the body plays the animation as is, with no physics (root motion, a wall, a jutsu cast, riding between hits). */
+	bool IsAnimationOnly() const;
+
 	/** Launches at least this fast knock the character down (the melee finisher is ~630, Rasengan ~1500). */
 	UPROPERTY(EditDefaultsOnly, Category = "Shinobi")
 	float KnockdownSpeed = 600.f;
@@ -101,6 +104,11 @@ private:
 	void MulticastKnockdown(FVector_NetQuantize Velocity);
 
 	void SetProfile(FName Profile);
+
+	/** On a dragon (State.Mounted). */
+	bool IsRiding() const;
+	void ApplyHitImpulse();
+
 	/** Scales the parent-space controls, and with bWorldSpace the world-space ones too (they pin each body to the animation). */
 	void SetStrength(float Strength, bool bWorldSpace = false);
 	void GetUp();
@@ -129,6 +137,7 @@ private:
 	bool bDowned = false;
 	double KnockdownTime = 0.0;
 	double HitTime = -1.e9;
+	FVector PendingHitImpulse = FVector::ZeroVector;
 	double CollapseTime = 0.0; // dying or downed
 	FTimerHandle HoldTimer;
 };

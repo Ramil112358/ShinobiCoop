@@ -1369,6 +1369,17 @@ void AShinobiPlayerController::RunDragonShotTest()
 	// Down again: it lands below its clearance, stands, then walks.
 	auto Dive = [this](bool bHeld) { if (AShinobiPlayerCharacter* P = GetPawn<AShinobiPlayerCharacter>()) { P->SetFlightDive(bHeld); } };
 	At(10.5f, [Dive]() { Dive(true); });
+	At(11.2f, [this]() // the rider from the side, leaning forward past the dragon's dive
+	{
+		const APawn* Shinobi = GetPawn();
+		const FVector Target = Shinobi->GetActorLocation() - FVector(0.f, 0.f, 30.f);
+		const FVector Eye = Target - Shinobi->GetActorRightVector() * 330.f + FVector(0.f, 0.f, 330.f); // above the wing
+		ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Target - Eye).Rotation());
+		Camera->GetCameraComponent()->SetFieldOfView(50.f);
+		Camera->SetLifeSpan(0.4f);
+		SetViewTarget(Camera);
+	});
+	At(11.35f, [Shot]() { Shot(TEXT("ShinobiDragonShot_15_RiderDive")); });
 	At(11.6f, [Orbit]() { Orbit(90.f, 0.f); });
 	At(11.85f, [Shot]() { Shot(TEXT("ShinobiDragonShot_08_Landing")); });
 	At(12.2f, [Dive]() { Dive(false); });
