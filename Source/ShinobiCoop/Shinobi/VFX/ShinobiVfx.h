@@ -50,7 +50,6 @@ namespace ShinobiVfx
 		TairnFire,  // tall jets of blue-white lightning fire, additive (8): Tairn's breath
 		CrimsonFire, // tall jets of orange dragon fire with embers, additive (8): the crimson dragon's breath
 		ChakraWisp, // soft rising wisp of blue chakra, additive (4): the chakra charge
-		ChakraSwirl, // curved blue chakra stream, head on the left, additive (4): the chakra charge
 		ChidoriOrb,  // crackling ball of lightning centred in a tall cell, additive (8): Chidori in the hand
 		RasenganOrb, // swirling chakra sphere centred in a tall cell, additive (8): Rasengan in the hand
 		Dust,        // billowing pale dust cloud standing on the cell's bottom, translucent and shaded (8): Almighty Push

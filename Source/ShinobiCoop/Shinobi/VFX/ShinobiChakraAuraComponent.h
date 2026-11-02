@@ -16,8 +16,8 @@ class UStaticMeshComponent;
  * (UMeshComponent::SetOverlayMaterial draws the mesh a second time with it), inflated along the vertex normals
  * so it hugs the silhouette, plus a soft light at the capsule centre. It shows the owner's most important
  * state, in this order: black flame (dark purple), burn (orange), shock (flickering white-blue), chakra
- * charge (blue). While charging, chakra also flows around the body: soft wisps rise off it, streams spiral up
- * around it and a swirl turns on the ground (camera-facing / orbiting SpriteCook cards, T_ChakraFlow). Purely cosmetic and not replicated: it follows gameplay tags, which GAS replicates to every
+ * charge (cyan). While charging, a soft column of rising chakra surrounds the body, as in the Storm games
+ * (M_ChakraPillar), with flame tongues licking up at its sides (camera-facing SpriteCook wisp cards, T_ChakraFlow). Purely cosmetic and not replicated: it follows gameplay tags, which GAS replicates to every
  * machine, and it always matches the current pose because it is drawn from the same skinned mesh.
  *
  * The overlay is applied once at BeginPlay and left in place for the component's lifetime; showing and
@@ -46,7 +46,7 @@ public:
 	/** 0 = hidden, 1 = fully faded in. */
 	float GetFade() const { return Fade; }
 
-	/** How many of the flowing chakra cards (wisps, streams, ground swirl) are visible. */
+	/** How many of the chakra flame cards are visible. */
 	int32 NumVisibleFlowCards() const;
 
 	/** The dynamic overlay material instance, or nullptr if the aura material asset is missing. */
@@ -83,20 +83,26 @@ private:
 	UPROPERTY()
 	TObjectPtr<UPointLightComponent> Light;
 
-	/** Chakra flow while charging: wisps first, then the orbiting streams, then the ground swirl. */
+	/** The column of chakra around the body while charging (M_ChakraPillar on a cylinder). */
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> Pillar;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> PillarMaterial;
+
+	/** Chakra flames while charging. */
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMeshComponent>> FlowCards;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UMaterialInstanceDynamic>> FlowMaterials;
 
-	/** Per card (not the ground swirl): life 0-1, life length in seconds, orbit angle (degrees), radius and start height. */
+	/** Per flame: life 0-1, life length in seconds, sideways offset as seen from the camera and start height. */
 	struct FFlowCard
 	{
 		float Life = 1.f;
 		float Duration = 1.f;
-		float Angle = 0.f;
-		float Radius = 0.f;
+		float Side = 0.f;
 		float Height = 0.f;
 	};
 	TArray<FFlowCard> Flow;

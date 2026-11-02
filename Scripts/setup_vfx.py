@@ -1,4 +1,4 @@
-"""Jutsu VFX materials. Idempotent: rebuilds M_ChakraBodyAura, M_Flame, M_FlameDark, M_Streak, M_Phased, M_WaterWall, M_Susanoo and M_PushDome from scratch each run.
+"""Jutsu VFX materials. Idempotent: rebuilds M_ChakraBodyAura, M_Flame, M_FlameDark, M_Streak, M_Phased, M_WaterWall, M_Susanoo, M_PushDome and M_ChakraPillar from scratch each run.
 
 Close the GUI editor before running: an editor that has this material loaded would silently
 overwrite the regenerated asset on its next Save All.
@@ -693,6 +693,60 @@ def build_susanoo_blade():
     finish(m, emissive, transmittance)
 
 
+def build_chakra_pillar():
+    """M_ChakraPillar: the chakra charge column, as in the Storm games: a soft additive column of chakra rising in
+    vertical streaks around the charging character, ragged at the top, faded at the floor and at its silhouette (so the
+    cylinder it is drawn on never shows an edge). Two-sided. Params: Color, Intensity, Fade, Height (world units of the
+    column; its pivot is at its centre)."""
+    m = fresh_material("M_ChakraPillar", two_sided=True)
+    color = node(m, unreal.MaterialExpressionVectorParameter, -1400, -400, parameter_name="Color", default_value=unreal.LinearColor(0.15, 0.7, 1.0, 1.0))
+    intensity = node(m, unreal.MaterialExpressionScalarParameter, -1400, -250, parameter_name="Intensity", default_value=0.35)
+    fade = node(m, unreal.MaterialExpressionScalarParameter, -1400, -150, parameter_name="Fade", default_value=1.0)
+    height = node(m, unreal.MaterialExpressionScalarParameter, -1400, 600, parameter_name="Height", default_value=240.0)
+
+    def op(cls, a, b=None, x=0, y=0, **k):
+        out = node(m, cls, x, y, **k)
+        link(a, out, "A")
+        if b is not None:
+            link(b, out, "B")
+        return out
+
+    def one(cls, src, x=0, y=0, **k):
+        out = node(m, cls, x, y, **k)
+        link(src, out, "")
+        return out
+
+    M, A, S = unreal.MaterialExpressionMultiply, unreal.MaterialExpressionAdd, unreal.MaterialExpressionSubtract
+    # Offset from the column's centre, in world units (not mesh UVs, so the streaks keep their size at any scale).
+    local = op(S, node(m, unreal.MaterialExpressionWorldPosition, -1400, 300), node(m, unreal.MaterialExpressionObjectPositionWS, -1400, 400), -1200, 350)
+    # Height up the column, 0 at the floor and 1 at the top.
+    z = one(unreal.MaterialExpressionComponentMask, local, -1050, 550, r=False, g=False, b=True, a=False)
+    h = op(A, op(unreal.MaterialExpressionDivide, z, height, -900, 550), None, -750, 550, const_b=0.5)
+
+    # Streaks: noise squashed sideways (~14 cm across, ~1 m tall), rising fast.
+    stretched = op(M, local, node(m, unreal.MaterialExpressionConstant3Vector, -1200, 200, constant=unreal.LinearColor(0.07, 0.07, 0.01, 0.0)), -1050, 250)
+    rise = node(m, unreal.MaterialExpressionAppendVector, -1050, 400)
+    link(node(m, unreal.MaterialExpressionConstant2Vector, -1200, 450, r=0.0, g=0.0), rise, "A")
+    link(op(M, node(m, unreal.MaterialExpressionTime, -1400, 500), None, -1200, 500, const_b=1.6), rise, "B")
+    noise = node(m, unreal.MaterialExpressionNoise, -750, 300, scale=1.0, levels=3, output_min=0.0, output_max=1.0)
+    link(op(S, stretched, rise, -900, 300), noise, "World Position")
+    streak = node(m, unreal.MaterialExpressionLinearInterpolate, -550, 300, const_a=0.45, const_b=1.3)
+    link(noise, streak, "Alpha")
+
+    # Top: solid low down, breaking into ragged tongues near the top: saturate((1 - h) * 2.2 - (1 - noise) * 0.9).
+    top = one(unreal.MaterialExpressionSaturate,
+              op(S, op(M, one(unreal.MaterialExpressionOneMinus, h, -600, 550), None, -450, 550, const_b=2.2),
+                 op(M, one(unreal.MaterialExpressionOneMinus, noise, -600, 450), None, -450, 450, const_b=0.9), -300, 500), -150, 500)
+    # Floor: fades in over the lowest sixth.
+    floor = one(unreal.MaterialExpressionSaturate, op(M, h, None, -450, 650, const_b=6.0), -300, 650)
+    # Silhouette: 0 at the cylinder's edge, so no outline shows.
+    soft = one(unreal.MaterialExpressionOneMinus, node(m, unreal.MaterialExpressionFresnel, -600, 150, exponent=1.5, base_reflect_fraction=0.0), -450, 150)
+
+    mask = op(M, op(M, op(M, streak, top, -150, 300), floor, 0, 350), soft, 150, 250)
+    emissive = op(M, op(M, op(M, color, intensity, -900, -350), fade, -700, -300), mask, 300, 0)
+    finish(m, emissive)
+
+
 if __name__ == "__main__":  # Scripts/setup_susanoo.py imports this module for build_susanoo
     remove_if_exists(f"{VFX_DIR}/M_ChakraAura")
     remove_if_exists(f"{VFX_DIR}/M_ChakraRing")
@@ -704,3 +758,4 @@ if __name__ == "__main__":  # Scripts/setup_susanoo.py imports this module for b
     build_water_wall()
     build_susanoo()
     build_push_dome()
+    build_chakra_pillar()

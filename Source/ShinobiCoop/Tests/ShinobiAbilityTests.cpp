@@ -382,7 +382,7 @@ bool FShinobiChakraAuraTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Aura faded in"), Aura->GetFade(), 1.f);
 	TestTrue(TEXT("Overlay stays applied while charging"), Body->GetOverlayMaterial() == AuraMaterial);
 	TestEqual(TEXT("Fade param 1 while charging"), AuraMaterial->K2_GetScalarParameterValue(TEXT("Fade")), 1.f);
-	TestEqual(TEXT("Chakra flows around the body while charging (wisps, streams, ground swirl)"), Aura->NumVisibleFlowCards(), 19);
+	TestEqual(TEXT("Chakra flames rise around the body while charging"), Aura->NumVisibleFlowCards(), 20);
 
 	ShinobiTest::Release(P, EShinobiAbilityInputID::ChakraCharge);
 	TestFalse(TEXT("Aura stops with the charge"), Aura->IsCharging());

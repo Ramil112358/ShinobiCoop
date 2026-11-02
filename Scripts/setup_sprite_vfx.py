@@ -39,7 +39,7 @@ SHEETS = {
     "scorch_rgba.png": "T_Scorch",
     "tairn_fire_sheet.png": "T_TairnFire",      # 8 tall jets of blue-white lightning fire (Tairn's breath)
     "crimson_fire_sheet.png": "T_CrimsonFire",  # 8 tall jets of orange dragon fire with embers (the crimson dragon's breath)
-    "chakra_flow_sheet.png": "T_ChakraFlow",    # chakra charge: 4 rising wisps, 4 swirl arcs (ESprite::ChakraWisp / ChakraSwirl)
+    "chakra_flow_sheet.png": "T_ChakraFlow",    # chakra charge: 4 rising wisps (ESprite::ChakraWisp); the bottom-row swirl arcs are unused
     "chidori_orb_sheet.png": "T_ChidoriOrb",
     "rasengan_orb_sheet.png": "T_RasenganOrb",
     "chidori_dent_rgba.png": "T_ChidoriDent",

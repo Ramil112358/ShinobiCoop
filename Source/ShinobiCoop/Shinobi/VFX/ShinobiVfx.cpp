@@ -141,7 +141,6 @@ namespace ShinobiVfx
 				{Add, TairnFire, 0, 8},     // TairnFire
 				{Add, CrimsonFire, 0, 8},   // CrimsonFire
 				{Add, ChakraFlow, 0, 4},    // ChakraWisp
-				{Add, ChakraFlow, 4, 4},    // ChakraSwirl
 				{Add, TEXT("/Game/Shinobi/VFX/T_ChidoriOrb.T_ChidoriOrb"), 0, 8},   // ChidoriOrb
 				{Add, TEXT("/Game/Shinobi/VFX/T_RasenganOrb.T_RasenganOrb"), 0, 8}, // RasenganOrb
 				{TEXT("/Game/Shinobi/VFX/M_SpriteDust.M_SpriteDust"), TEXT("/Game/Shinobi/VFX/T_PushDust.T_PushDust"), 0, 8}, // Dust
