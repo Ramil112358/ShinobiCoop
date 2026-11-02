@@ -858,6 +858,18 @@ every = [name for name, _, _ in CLIPS]
 for part in ("body", "wings", "tail"):
     print(f"[build_dragon] room {part} (about the seat):", *room(every, np.array([p == part for p in parts])))
 
+# The material is one-sided (the open mouth, above), and a wing's membrane is one sheet: from the front and below only its bones showed.
+# The wings get a back face each: their faces copied (same weights and UVs) with the normals turned round.
+bm = bmesh.new()
+bm.from_mesh(body.data)
+bm.verts.ensure_lookup_table()
+wing_faces = [f for f in bm.faces if any(parts[v.index] == "wings" for v in f.verts)]
+backs = [g for g in bmesh.ops.duplicate(bm, geom=wing_faces)["geom"] if isinstance(g, bmesh.types.BMFace)]
+bmesh.ops.reverse_faces(bm, faces=backs)
+bm.to_mesh(body.data)
+bm.free()
+print("[build_dragon] wing faces given a back:", len(backs))
+
 # --- previews -----------------------------------------------------------------------------------------------------------------
 if PREVIEW:
     scene.render.engine = "BLENDER_WORKBENCH"
