@@ -189,7 +189,7 @@ void AShinobiFirePatch::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		const bool bBlack = Kind == EShinobiFirePatch::BlackFlame;
 		const bool bTairn = Kind == EShinobiFirePatch::TairnFire;
-		ShinobiVfx::SpawnScorch(GetWorld(), GetActorLocation(), GetRadius(), bBlack ? FLinearColor(0.75f, 0.65f, 1.f) : bTairn ? FLinearColor(0.8f, 0.88f, 1.f) : FLinearColor::White, bBlack ? 14.f : 9.f, nullptr, GetActorQuat().GetUpVector());
+		ShinobiVfx::SpawnScorch(GetWorld(), GetActorLocation(), GetRadius() * 0.6f, bBlack ? FLinearColor(0.75f, 0.65f, 1.f) : bTairn ? FLinearColor(0.8f, 0.88f, 1.f) : FLinearColor::White, bBlack ? 14.f : 9.f, nullptr, GetActorQuat().GetUpVector());
 	}
 	Super::EndPlay(EndPlayReason);
 }
