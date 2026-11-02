@@ -21,6 +21,9 @@
 #include "Shinobi/VFX/ShinobiBurst.h"
 #include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
 #include "Shinobi/VFX/ShinobiFirePatch.h"
+#include "Shinobi/VFX/ShinobiVfx.h"
+#include "PhysicsEngine/BodySetup.h"
+#include "Materials/MaterialInstanceDynamic.h"
 
 namespace
 {
@@ -330,6 +333,37 @@ bool FShinobiIceShardTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiIceFreezeTest, "ShinobiCoop.Meteor.IceShowerFreezesEachEnemyOnce", ShinobiTestFlags)
+bool FShinobiIceFreezeTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	AShinobiCharacterBase* Hit = W.Spawn<AShinobiCharacterBase>(FVector(800.f, 0.f, 0.f));
+	for (AShinobiCharacterBase* Each : { static_cast<AShinobiCharacterBase*>(P), Hit })
+	{
+		ShinobiTest::Hover(Each);
+	}
+	FShinobiMeteorImpact Impact;
+	Impact.Damage = 3.f;
+	Impact.Radius = 140.f;
+	Impact.Status = UGE_Chill::StaticClass();
+	Impact.FirstHitStatus = UGE_Frozen::StaticClass();
+	Impact.FirstHitVictims = MakeShared<TSet<TWeakObjectPtr<AShinobiCharacterBase>>>();
+	AShinobiMeteor::Spawn(W.World, P, EShinobiMeteor::Ice, FVector(800.f, 0.f, 0.f), 0.5f, 1.f, Impact, 0.f);
+	AShinobiMeteor::Spawn(W.World, P, EShinobiMeteor::Ice, FVector(800.f, 0.f, 0.f), 0.5f, 1.f, Impact, 2.6f); // lands after the thaw
+
+	W.Tick(0.7f);
+	TestTrue(TEXT("The first shard freezes the enemy"), ShinobiTest::HasTag(Hit, ShinobiTags::State_Frozen));
+	TestEqual(TEXT("which roots them"), Hit->GetCharacterMovement()->GetMaxSpeed(), 0.f);
+	W.Tick(2.f);
+	TestFalse(TEXT("The ice thaws after 2 s"), ShinobiTest::HasTag(Hit, ShinobiTags::State_Frozen));
+	W.Tick(0.6f);
+	TestEqual(TEXT("The second shard landed"), ShinobiTest::CountActors<AShinobiMeteor>(W), 0);
+	TestFalse(TEXT("but does not freeze them again"), ShinobiTest::HasTag(Hit, ShinobiTags::State_Frozen));
+	TestTrue(TEXT("it only chills"), ShinobiTest::HasTag(Hit, ShinobiTags::State_Chilled));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiIceShowerTest, "ShinobiCoop.Meteor.IceShowerScattersShardsOverFourSeconds", ShinobiTestFlags)
 bool FShinobiIceShowerTest::RunTest(const FString& Parameters)
 {
@@ -349,7 +383,8 @@ bool FShinobiIceShowerTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Cost 45 paid up front"), ShinobiTest::Get(P, UShinobiAttributeSet::GetChakraAttribute()), 55.f);
 	W.Tick(0.9f);
 	TestEqual(TEXT("A ring marks the area"), ShinobiTest::CountActors<AShinobiTelegraph>(W), 1);
-	TestEqual(TEXT("Fourteen shards are queued"), ShinobiTest::CountActors<AShinobiMeteor>(W), 14);
+	const int32 Shards = GetDefault<UGA_IceMeteor>()->ShardCount;
+	TestEqual(TEXT("Every shard is queued"), ShinobiTest::CountActors<AShinobiMeteor>(W), Shards);
 	for (TActorIterator<AShinobiMeteor> It(W.World); It; ++It)
 	{
 		TestTrue(FString::Printf(TEXT("every shard lands inside the 500 circle (%.0f from the centre)"), FVector::Dist2D(It->GetImpactPoint(), FVector(1450.f, 0.f, 0.f))),
@@ -362,7 +397,7 @@ bool FShinobiIceShowerTest::RunTest(const FString& Parameters)
 
 	W.Tick(2.0f);
 	const int32 Midway = ShinobiTest::CountActors<AShinobiMeteor>(W);
-	TestTrue(FString::Printf(TEXT("Some have landed, some still fall (%d left)"), Midway), Midway > 0 && Midway < 14);
+	TestTrue(FString::Printf(TEXT("Some have landed, some still fall (%d left)"), Midway), Midway > 0 && Midway < Shards);
 	W.Tick(3.0f);
 	TestEqual(TEXT("All have landed after about 4.5 s"), ShinobiTest::CountActors<AShinobiMeteor>(W), 0);
 	TestEqual(TEXT("The ring is gone"), ShinobiTest::CountActors<AShinobiTelegraph>(W), 0);
@@ -438,6 +473,15 @@ bool FShinobiElementalAssetsTest::RunTest(const FString& Parameters)
 		TestNotNull(*(Name + TEXT(" release montage")), Jutsu->ReleaseMontage.LoadSynchronous());
 		TestNotNull(*(Name + TEXT(" icon")), Jutsu->Icon.LoadSynchronous());
 	}
+	// The Ice Meteor's hail (Scripts/setup_ice_hail.py): shard meshes that are also physics chips, so they need collision.
+	for (const TCHAR* Shard : { TEXT("/Game/Shinobi/VFX/SM_IceShard_0.SM_IceShard_0"), TEXT("/Game/Shinobi/VFX/SM_IceShard_1.SM_IceShard_1"), TEXT("/Game/Shinobi/VFX/SM_IceShard_2.SM_IceShard_2") })
+	{
+		const UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, Shard);
+		TestTrue(FString::Printf(TEXT("%s exists with simple collision"), Shard), Mesh && Mesh->GetBodySetup() && Mesh->GetBodySetup()->AggGeom.GetElementCount() > 0);
+	}
+	TestNotNull(TEXT("Ice trail mesh"), LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Shinobi/VFX/SM_IceTrail.SM_IceTrail")));
+	TestNotNull(TEXT("Ice shard material"), LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Shinobi/VFX/M_IceShard.M_IceShard")));
+	TestNotNull(TEXT("Ice shatter sprite"), ShinobiVfx::MakeSprite(GetTransientPackage(), ShinobiVfx::ESprite::IceShatter, 0, FLinearColor::White, 1.f));
 	return true;
 }
 

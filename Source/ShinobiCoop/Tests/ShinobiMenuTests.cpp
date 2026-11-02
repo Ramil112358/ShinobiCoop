@@ -22,6 +22,9 @@
 #include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Shinobi/UI/ShinobiSettings.h"
+#include "Shinobi/ShinobiGameState.h"
+#include "NiagaraComponent.h"
+#include "NiagaraSystem.h"
 
 // The main menu (docs/superpowers/specs/2026-10-20-main-menu-polish-design.md): its data, the stage and the tabs.
 
@@ -103,6 +106,32 @@ bool FShinobiMenuSettingsRowsTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("main menu: no Outfit row"), Menu.Contains(ERow::Outfit));
 	TestEqual(TEXT("main menu rows"), Menu.Num(), int32(ERow::Num) - 3);
 	TestEqual(TEXT("pause menu rows"), ShinobiSettings::RowsFor(false).Num(), int32(ERow::Num));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSnowWeatherTest, "ShinobiCoop.UI.SnowWeatherFollowsTheHostsPick", ShinobiTestFlags)
+bool FShinobiSnowWeatherTest::RunTest(const FString& Parameters)
+{
+	// (run Scripts/setup_snow_weather.py if the weather systems are missing)
+	FShinobiTestWorld W;
+	AShinobiGameState* Session = W.Spawn<AShinobiGameState>();
+	for (const EShinobiSnow Snow : { EShinobiSnow::Light, EShinobiSnow::Blizzard })
+	{
+		Session->SetSnow(EShinobiSnow::Off);
+		Session->SetSnow(Snow);
+		TestTrue(FString::Printf(TEXT("snow %d: the host's pick is the session's"), int32(Snow)), Session->GetSnow() == Snow);
+		if (FApp::CanEverRender()) // Niagara spawns nothing in a -nullrhi test run
+		{
+			TestNotNull(FString::Printf(TEXT("snow %d: it snows round the camera"), int32(Snow)), Session->GetSnowEffect());
+		}
+	}
+	Session->SetSnow(EShinobiSnow::Off);
+	TestNull(TEXT("Off: no snow"), Session->GetSnowEffect());
+	for (const TCHAR* System : { TEXT("/Game/Shinobi/VFX/Weather/NS_SnowLight.NS_SnowLight"), TEXT("/Game/Shinobi/VFX/Weather/NS_SnowBlizzard.NS_SnowBlizzard"),
+		TEXT("/Game/Shinobi/VFX/Freeze/NS_FreezeIce.NS_FreezeIce"), TEXT("/Game/Shinobi/VFX/Freeze/NS_FreezeAura.NS_FreezeAura") })
+	{
+		TestNotNull(System, LoadObject<UNiagaraSystem>(nullptr, System));
+	}
 	return true;
 }
 

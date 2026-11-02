@@ -40,7 +40,7 @@ namespace
 				ShinobiTags::State_PvpHold.GetTag(), ShinobiTags::State_Mounted.GetTag(), ShinobiTags::State_Susanoo.GetTag(),
 				ShinobiTags::State_Phased.GetTag(), ShinobiTags::State_TeleportMarked.GetTag(), ShinobiTags::State_Burning.GetTag(),
 				ShinobiTags::State_Shocked.GetTag(), ShinobiTags::State_ShockBonus.GetTag(), ShinobiTags::State_Staggered.GetTag(),
-				ShinobiTags::State_Chilled.GetTag(), ShinobiTags::State_AttackBoost.GetTag(), ShinobiTags::State_SpeedBoost.GetTag(),
+				ShinobiTags::State_Chilled.GetTag(), ShinobiTags::State_Frozen.GetTag(), ShinobiTags::State_AttackBoost.GetTag(), ShinobiTags::State_SpeedBoost.GetTag(),
 				ShinobiTags::State_Shield.GetTag() })
 			{
 				Container.AddTag(Tag);

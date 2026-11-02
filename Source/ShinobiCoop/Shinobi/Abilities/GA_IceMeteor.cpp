@@ -53,6 +53,8 @@ void UGA_IceMeteor::ExecuteJutsu()
 		Impact.Damage = ShardDamage * GetDamageScale();
 		Impact.Radius = ShardRadius;
 		Impact.Status = UGE_Chill::StaticClass();
+		Impact.FirstHitStatus = UGE_Frozen::StaticClass(); // the first shard to hit someone freezes them; the rest only chill
+		Impact.FirstHitVictims = MakeShared<TSet<TWeakObjectPtr<AShinobiCharacterBase>>>();
 
 		// Evenly spread points (a sunflower spiral, turned by a random amount), landing in a random order.
 		const float Turn = FMath::FRandRange(0.f, 2.f * PI);

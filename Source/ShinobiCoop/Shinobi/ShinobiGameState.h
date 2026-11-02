@@ -5,6 +5,17 @@
 #include "Shinobi/Pvp/ShinobiPvpMatch.h"
 #include "ShinobiGameState.generated.h"
 
+class UNiagaraComponent;
+
+/** Snow weather (the host's Settings row): the Fab Celebrations pack's snow round each player's camera. */
+UENUM()
+enum class EShinobiSnow : uint8
+{
+	Off,
+	Light,    // NS_SnowLight: gentle scattered flakes
+	Blizzard, // NS_SnowBlizzard: dense windblown flakes and haze
+};
+
 UENUM(BlueprintType)
 enum class EShinobiArenaPhase : uint8
 {
@@ -27,7 +38,15 @@ class SHINOBICOOP_API AShinobiGameState : public AGameStateBase
 	GENERATED_BODY()
 
 public:
+	AShinobiGameState();
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	virtual void Tick(float DeltaSeconds) override;
+
+	/** Server: the weather for everyone in the session (the host's Settings row; at the start, the host's saved pick). */
+	void SetSnow(EShinobiSnow NewSnow);
+	EShinobiSnow GetSnow() const { return Snow; }
+	/** The snow drawn round this machine's camera (null when Off, on a dedicated server, or if the asset is missing). */
+	UNiagaraComponent* GetSnowEffect() const { return SnowEffect; }
 
 	/** Seconds until the current phase ends (Break, Wiped; a PvP phase); 0 for open-ended phases. */
 	float GetPhaseTimeRemaining() const;
@@ -92,7 +111,20 @@ public:
 	UPROPERTY(Replicated)
 	EShinobiRoundResult PvpRoundResult = EShinobiRoundResult::Ongoing;
 
+protected:
+	virtual void BeginPlay() override;
+
 private:
+	UPROPERTY(ReplicatedUsing = OnRep_Snow)
+	EShinobiSnow Snow = EShinobiSnow::Off;
+
+	UPROPERTY()
+	TObjectPtr<UNiagaraComponent> SnowEffect;
+
+	/** Every machine: (re)starts the snow for Snow round this machine's camera. */
+	UFUNCTION()
+	void OnRep_Snow();
+
 	/** Clients only: logs the score, which Scripts/smoke_pvp.ps1 reads to prove the state reached the client. */
 	UFUNCTION()
 	void OnRep_PvpWins();

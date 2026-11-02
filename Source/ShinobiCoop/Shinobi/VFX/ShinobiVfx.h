@@ -3,7 +3,9 @@
 #include "CoreMinimal.h"
 
 class UMaterialInstanceDynamic;
+class UMaterialInterface;
 class UObject;
+class UStaticMesh;
 class UWorld;
 
 /** Shared look for all glowing effects: every one is a dynamic instance of M_ChakraBodyAura (built by Scripts/setup_vfx.py). */
@@ -53,6 +55,8 @@ namespace ShinobiVfx
 		ChidoriOrb,  // crackling ball of lightning centred in a tall cell, additive (8): Chidori in the hand
 		RasenganOrb, // swirling chakra sphere centred in a tall cell, additive (8): Rasengan in the hand
 		Dust,        // billowing pale dust cloud standing on the cell's bottom, translucent and shaded (8): Almighty Push
+		IceShatter,  // ice bursting into chips and glitter, centred, additive (6): an Ice Meteor shard landing
+		FrostCrack,  // round web of frost cracks, additive (2): laid flat under a landing shard
 	};
 
 	/** How many variants the sprite has (the Variant argument below wraps around this). */
@@ -99,8 +103,9 @@ namespace ShinobiVfx
 	 * across: engine physics bounces and rolls them, and after Linger seconds they drop through the floor and go.
 	 * Local and cosmetic like SpawnScorch: call it on every machine. Does nothing without a world or on a dedicated server.
 	 * Normal as for SpawnScorch: zero finds the floor below; otherwise Location is on a surface (a wall) and the rock flies off it.
+	 * Mesh and Material replace the grey rock (Size is then a scale of that mesh): an Ice Meteor's shard throws ice chips.
 	 */
-	SHINOBICOOP_API void SpawnDebris(UWorld* World, const FVector& Location, int32 Count, float Speed, float Size, float Linger, const FVector& Normal = FVector::ZeroVector);
+	SHINOBICOOP_API void SpawnDebris(UWorld* World, const FVector& Location, int32 Count, float Speed, float Size, float Linger, const FVector& Normal = FVector::ZeroVector, UStaticMesh* Mesh = nullptr, UMaterialInterface* Material = nullptr);
 
 	/** The Water Wall's flowing-water material (M_WaterWall, built by Scripts/setup_vfx.py) tinted Color: the Water Dragon's body.
 	 * Null, with an ensure, if the asset is missing. */

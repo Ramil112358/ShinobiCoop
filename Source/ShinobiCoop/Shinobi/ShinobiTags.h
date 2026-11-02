@@ -49,6 +49,7 @@ namespace ShinobiTags
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Mounted); // riding a summoned dragon: flying, a farther camera, breath instead of melee
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Susanoo); // the armour is up: damage taken halved, dealt x1.3, chakra comes back faster
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Chilled); // Ice Meteor Shower: moves slower
+	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Frozen); // Ice Meteor Shower's first hit: rooted in ice (can still guard and cast)
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_TeleportMarked);
 	UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_PvpHold); // a PvP round's countdown: no moving, no abilities
 	// PvP pickups (AShinobiPickup): hits harder, moves faster, a shield that soaks damage before health.

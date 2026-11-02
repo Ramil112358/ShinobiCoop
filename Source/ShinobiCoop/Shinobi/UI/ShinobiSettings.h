@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 
 class UWorld;
+enum class EShinobiSnow : uint8;
 
 /**
  * The player's character and outfit picks and graphics settings (settings menu): each row cycles through fixed values, applies at once and is saved
@@ -10,7 +11,7 @@ class UWorld;
  */
 namespace ShinobiSettings
 {
-	enum class ERow : uint8 { Character, Face, Outfit, Quality, RenderScale, WindowMode, FrameCap, VSync, Outline, Num };
+	enum class ERow : uint8 { Character, Face, Outfit, Quality, RenderScale, WindowMode, FrameCap, VSync, Outline, Snow, Num };
 
 	/** "Graphics quality: High" etc. */
 	SHINOBICOOP_API FString Label(ERow Row);
@@ -31,6 +32,9 @@ namespace ShinobiSettings
 
 	/** The rows the settings panel shows: the main menu leaves out Character, Face and Outfit (its SHINOBI tab has them). */
 	SHINOBICOOP_API TArray<ERow> RowsFor(bool bMainMenu);
+
+	/** Snow weather this machine picks when it hosts (Off by default). In a session the host's pick applies to everyone. */
+	SHINOBICOOP_API EShinobiSnow GetSavedSnow();
 
 	SHINOBICOOP_API float GetRenderScale();
 	SHINOBICOOP_API void SetRenderScale(float Percent);

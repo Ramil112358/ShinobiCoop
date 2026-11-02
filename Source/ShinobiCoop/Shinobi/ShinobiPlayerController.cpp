@@ -29,6 +29,8 @@
 #include "Shinobi/ShinobiEffects.h"
 #include "Shinobi/ShinobiMarkerKunai.h"
 #include "Shinobi/ShinobiMeteor.h"
+#include "Shinobi/ShinobiGameState.h"
+#include "Shinobi/Abilities/GA_IceMeteor.h"
 #include "Shinobi/Enemies/ShinobiSummon.h"
 #include "Shinobi/Enemies/ShinobiOwl.h"
 #include "Shinobi/ShinobiDragonMount.h"
@@ -107,6 +109,10 @@ void AShinobiPlayerController::BeginPlay()
 	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiMarkShot")))
 	{
 		RunMarkShot();
+	}
+	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiHailShot")))
+	{
+		RunHailShot();
 	}
 	if (FApp::CanEverRender() && FParse::Param(FCommandLine::Get(), TEXT("ShinobiFireCompare")))
 	{
@@ -1034,6 +1040,198 @@ void AShinobiPlayerController::RunFireShotTest()
 		At(24.5f + Index * 1.8f, [Name]() { FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Name), false, false); });
 	}
 	At(32.f, [this]() { ConsoleCommand(TEXT("quit")); });
+}
+
+void AShinobiPlayerController::RunHailShot()
+{
+	auto At = [this](float Seconds, TFunction<void()> Fn)
+	{
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, MoveTemp(Fn)), Seconds, false);
+	};
+	auto Shot = [](const FString& Name) { FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / Name), false, false); };
+	auto View = [this](const FVector& Eye, const FVector& Target, float Fov)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Eye, (Target - Eye).Rotation(), Params);
+		Camera->GetCameraComponent()->SetFieldOfView(Fov);
+		Camera->SetLifeSpan(12.f);
+		SetViewTargetWithBlend(Camera, 0.f);
+	};
+	// The floor ahead of the pawn, Forward metres out and Right metres to the side (the dummy stands straight ahead).
+	auto Floor = [this](float Forward, float Right)
+	{
+		const APawn* Shinobi = GetPawn();
+		return Shinobi ? Shinobi->GetActorLocation() - FVector(0.f, 0.f, 90.f) + Shinobi->GetActorForwardVector() * Forward + Shinobi->GetActorRightVector() * Right : FVector::ZeroVector;
+	};
+	// A whole Ice Meteor shower as GA_IceMeteor drops it: ShardCount shards over Duration in its 500 circle, in random order.
+	auto Shower = [this](const FVector& Centre)
+	{
+		const UGA_IceMeteor* Ice = GetDefault<UGA_IceMeteor>();
+		for (int32 Index = 0; Index < Ice->ShardCount; ++Index)
+		{
+			const float Angle = Index * 2.39996323f;
+			const FVector Where = Centre + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * Ice->AreaRadius * FMath::Sqrt((Index + 0.5f) / Ice->ShardCount);
+			AShinobiMeteor::Spawn(GetWorld(), nullptr, EShinobiMeteor::Ice, Where, Ice->ShardFall, 1.f, FShinobiMeteorImpact(), FMath::FRandRange(0.f, Ice->Duration));
+		}
+	};
+
+	// Close-up: one shard falling over 8 s (normally 0.9 s), filmed from 3 m beside its path a third of the way down.
+	At(1.5f, [this, View, Floor]()
+	{
+		const FVector Forward = GetPawn() ? GetPawn()->GetActorForwardVector() : FVector::ForwardVector;
+		const FVector Right = GetPawn() ? GetPawn()->GetActorRightVector() : FVector::RightVector;
+		const FVector Ground = Floor(900.f, 0.f);
+		AShinobiMeteor* Meteor = AShinobiMeteor::Spawn(GetWorld(), nullptr, EShinobiMeteor::Ice, Ground, 8.f, 1.f, FShinobiMeteorImpact());
+		if (!Meteor)
+		{
+			return;
+		}
+		const FVector Third = FMath::Lerp(Meteor->GetActorLocation(), Ground, FMath::Pow(3.5f / 8.f, 1.6f));
+		View(Third + FVector(0.f, 0.f, -60.f) + Right * 300.f - Forward * 80.f, Third, 50.f);
+	});
+	At(4.9f, [Shot]() { Shot(TEXT("ShinobiHailShot_0_Close")); });
+	// A full shower off to the side, filmed from 10 m at head height while it is at its thickest.
+	At(10.5f, [this, View, Floor, Shower]()
+	{
+		const FVector Forward = GetPawn() ? GetPawn()->GetActorForwardVector() : FVector::ForwardVector;
+		const FVector Ground = Floor(700.f, 700.f); // clear of the dummy
+		Shower(Ground);
+		View(Ground - Forward * 1000.f + FVector(0.f, 0.f, 220.f), Ground + FVector(0.f, 0.f, 250.f), 70.f);
+	});
+	for (int32 Index = 0; Index < 3; ++Index)
+	{
+		At(11.7f + Index * 1.1f, [Shot, Index]() { Shot(FString::Printf(TEXT("ShinobiHailShot_1_Shower%d"), Index)); });
+	}
+	// One landing: the burst alone, 8 m from the camera, from the flash to the chips settling.
+	At(16.f, [this, View, Floor]()
+	{
+		const FVector Forward = GetPawn() ? GetPawn()->GetActorForwardVector() : FVector::ForwardVector;
+		const FVector Ground = Floor(500.f, 700.f);
+		AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::FrostImpact, Ground, 1.f);
+		View(Ground - Forward * 800.f + FVector(0.f, 0.f, 250.f), Ground + FVector(0.f, 0.f, 60.f), 60.f);
+	});
+	static const float Moments[] = { 0.05f, 0.3f, 1.2f };
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Moments); ++Index)
+	{
+		At(16.f + Moments[Index], [Shot, Index]() { Shot(FString::Printf(TEXT("ShinobiHailShot_2_Impact%d"), Index)); });
+	}
+
+	// The Fab Celebrations pack's Niagara systems, each beside a hail shower: the shower on the left, the system 9 m to its right.
+	struct FPackSystem { const TCHAR* Name; float Up; };
+	static const FPackSystem Compare[] = { { TEXT("NS_Freez_Ice"), 0.f }, { TEXT("NS_Cristmas_Sparking"), 100.f }, { TEXT("NS_Snow_Aura"), 100.f }, { TEXT("NS_Snowing_Storm_GPU"), 0.f } };
+	auto Pack = [this](const TCHAR* Name, const FVector& Where) -> UNiagaraComponent*
+	{
+		UNiagaraSystem* System = LoadObject<UNiagaraSystem>(nullptr, *FString::Printf(TEXT("/Game/Celebrations_All_In_One/Christmas_All_In_One/VFX/%s.%s"), Name, Name));
+		UNiagaraComponent* Fx = System ? UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), System, Where, FRotator::ZeroRotator, FVector::OneVector, true, true) : nullptr;
+		if (Fx)
+		{
+			Fx->SetVariablePosition(TEXT("Actor Location"), Where); // NS_Snow_Aura circles this point
+		}
+		UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiHailShot %s: %s"), Name, Fx ? TEXT("spawned") : TEXT("MISSING"));
+		return Fx;
+	};
+	// Each system on its own up close (5 m, 0.3 to 3 s after it starts), then again beside a hail shower from 8 m.
+	auto Expire = [this](UNiagaraComponent* Fx, float Seconds)
+	{
+		TWeakObjectPtr<UNiagaraComponent> Weak(Fx);
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, [Weak]() { if (Weak.IsValid()) { Weak->DestroyComponent(); } }, Seconds, false);
+	};
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Compare); ++Index)
+	{
+		const float Start = 19.f + Index * 10.f;
+		At(Start, [this, View, Pack, Floor, Expire, Index]()
+		{
+			const FVector Forward = GetPawn() ? GetPawn()->GetActorForwardVector() : FVector::ForwardVector;
+			const FVector Ground = Floor(800.f, 700.f);
+			if (UNiagaraComponent* Fx = Pack(Compare[Index].Name, Ground + FVector(0.f, 0.f, Compare[Index].Up)))
+			{
+				Expire(Fx, 3.5f);
+			}
+			View(Ground - Forward * 500.f + FVector(0.f, 0.f, 220.f), Ground + FVector(0.f, 0.f, 100.f), 70.f);
+		});
+		static const float Solo[] = { 0.3f, 1.f, 2.f, 3.f };
+		for (int32 Moment = 0; Moment < UE_ARRAY_COUNT(Solo); ++Moment)
+		{
+			At(Start + Solo[Moment], [Shot, Index, Moment]() { Shot(FString::Printf(TEXT("ShinobiHailShot_3_%s_Solo%d"), Compare[Index].Name, Moment)); });
+		}
+		At(Start + 4.f, [this, View, Pack, Floor, Shower, Expire, Index]()
+		{
+			const FVector Forward = GetPawn() ? GetPawn()->GetActorForwardVector() : FVector::ForwardVector;
+			const FVector Right = GetPawn() ? GetPawn()->GetActorRightVector() : FVector::RightVector;
+			const FVector Ground = Floor(900.f, 700.f);
+			Shower(Ground - Right * 300.f);
+			View(Ground - Forward * 800.f + FVector(0.f, 0.f, 250.f), Ground + FVector(0.f, 0.f, 150.f), 70.f);
+		});
+		At(Start + 5.f, [Pack, Floor, Expire, Index, this]()
+		{
+			const FVector Right = GetPawn() ? GetPawn()->GetActorRightVector() : FVector::RightVector;
+			if (UNiagaraComponent* Fx = Pack(Compare[Index].Name, Floor(900.f, 700.f) + Right * 300.f + FVector(0.f, 0.f, Compare[Index].Up)))
+			{
+				Expire(Fx, 4.5f);
+			}
+		});
+		for (int32 Moment = 0; Moment < 2; ++Moment)
+		{
+			At(Start + 5.4f + Moment * 1.4f, [Shot, Index, Moment]() { Shot(FString::Printf(TEXT("ShinobiHailShot_3_%s_Side%d"), Compare[Index].Name, Moment)); });
+		}
+	}
+
+	// Snow weather as the game runs it (the host's pick on the game state, round this machine's camera): Light, then Blizzard.
+	for (int32 Index = 0; Index < 2; ++Index)
+	{
+		const float Start = 60.f + Index * 11.f;
+		At(Start, [this, View, Floor, Index]()
+		{
+			const FVector Forward = GetPawn() ? GetPawn()->GetActorForwardVector() : FVector::ForwardVector;
+			const FVector Eye = Floor(200.f, 0.f) + FVector(0.f, 0.f, 170.f);
+			View(Eye, Eye + Forward * 1000.f - FVector(0.f, 0.f, 100.f), 75.f);
+			if (AShinobiGameState* Session = GetWorld()->GetGameState<AShinobiGameState>())
+			{
+				Session->SetSnow(Index ? EShinobiSnow::Blizzard : EShinobiSnow::Light);
+			}
+		});
+		At(Start + 1.f, [Shot, Index]() { Shot(FString::Printf(TEXT("ShinobiHailShot_4_Snow%s_0"), Index ? TEXT("Blizzard") : TEXT("Light"))); });
+		At(Start + 6.f, [Shot, Index]() { Shot(FString::Printf(TEXT("ShinobiHailShot_4_Snow%s_1"), Index ? TEXT("Blizzard") : TEXT("Light"))); });
+	}
+	At(82.f, [this]()
+	{
+		if (AShinobiGameState* Session = GetWorld()->GetGameState<AShinobiGameState>())
+		{
+			Session->SetSnow(EShinobiSnow::Off);
+		}
+	});
+	// Frozen: a hero 4 m ahead caught by the shower's first shard: ice spikes on the body in a column of snowflakes, then the thaw.
+	At(82.5f, [this, View, Floor]()
+	{
+		const FVector Forward = GetPawn() ? GetPawn()->GetActorForwardVector() : FVector::ForwardVector;
+		const FVector Right = GetPawn() ? GetPawn()->GetActorRightVector() : FVector::RightVector;
+		const FVector Ground = Floor(400.f, 500.f);
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+		AShinobiPlayerCharacter* Victim = GetWorld()->SpawnActor<AShinobiPlayerCharacter>(Ground + FVector(0.f, 0.f, 100.f), (-Forward).Rotation(), Params);
+		if (!Victim || !Victim->GetAbilitySystemComponent())
+		{
+			return;
+		}
+		Victim->SetLifeSpan(8.f);
+		// Frozen once it has landed and its body has streamed in; filmed whole, feet to head, from 4.5 m.
+		FTimerHandle Handle;
+		GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(Victim, [Victim, View, Forward, Right]()
+		{
+			Victim->GetAbilitySystemComponent()->ApplyGameplayEffectToSelf(GetDefault<UGE_Frozen>(), 1.f, Victim->GetAbilitySystemComponent()->MakeEffectContext());
+			const FVector Body = Victim->GetActorLocation() + FVector(0.f, 0.f, 20.f); // the capsule centre is at the hips
+			View(Body - Forward * 420.f + Right * 150.f + FVector(0.f, 0.f, 40.f), Body, 45.f);
+		}), 1.5f, false);
+	});
+	static const float Thaw[] = { 0.3f, 0.9f, 1.6f, 2.15f, 2.5f };
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Thaw); ++Index)
+	{
+		At(84.f + Thaw[Index], [Shot, Index]() { Shot(FString::Printf(TEXT("ShinobiHailShot_5_Frozen%d"), Index)); });
+	}
+	At(88.f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
 
 void AShinobiPlayerController::RunMarkShot()

@@ -88,17 +88,47 @@ void AShinobiMeteor::BeginPlay()
 	{
 		return; // nothing to draw; the tick still runs the fall and the landing
 	}
+	if (Kind == EShinobiMeteor::Ice)
+	{
+		// A faceted ice shard (Scripts/setup_ice_hail.py), point first and turning about its length so its facets glint,
+		// a soft frost streak behind it and two small chips of hail following it. No glow, no light: it is ice, not fire.
+		const float Size = VisualScale * FMath::FRandRange(0.85f, 1.15f); // the shard mesh is 1 m long, 22 cm across
+		auto Shard = [](UStaticMeshComponent* Part)
+		{
+			const int32 Variant = FMath::RandRange(0, 2);
+			Part->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, *FString::Printf(TEXT("/Game/Shinobi/VFX/SM_IceShard_%d.SM_IceShard_%d"), Variant, Variant)));
+		};
+		Shard(Core);
+		Core->SetRelativeScale3D(FVector(Size));
+		Shell->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Shinobi/VFX/SM_IceTrail.SM_IceTrail"))); // 1 m long, 1 cm radius
+		Shell->SetRelativeLocation(FVector(-30.f * Size, 0.f, 0.f));
+		Shell->SetRelativeScale3D(FVector(4.f, 6.f, 6.f) * Size);
+		for (int32 Index = 0; Index < 2; ++Index)
+		{
+			UStaticMeshComponent* Chip = NewObject<UStaticMeshComponent>(this);
+			Shard(Chip);
+			Chip->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Chip->SetCastShadow(false);
+			Chip->SetupAttachment(RootComponent);
+			Chip->SetRelativeLocation(FVector(FMath::FRandRange(-260.f, -130.f), Index ? 30.f : -30.f, FMath::FRandRange(-25.f, 25.f)) * Size);
+			Chip->SetRelativeRotation(FRotator(FMath::FRandRange(-15.f, 15.f), FMath::FRandRange(-15.f, 15.f), FMath::FRandRange(0.f, 360.f)));
+			Chip->SetRelativeScale3D(FVector(FMath::FRandRange(0.2f, 0.3f) * Size));
+			Chip->RegisterComponent();
+		}
+		Spin = FMath::FRandRange(360.f, 720.f) * (FMath::RandBool() ? 1.f : -1.f);
+		Light->DestroyComponent(); // ice gives off no light
+		return;
+	}
 	// ponytail: glowing shells, no trail; a Flame/Ember card trail would read better (sprite-vfx-guide section 3d)
-	const bool bFire = Kind == EShinobiMeteor::Fire;
-	const FLinearColor Colour = bFire ? ShinobiVfx::Colors::Fire : ShinobiVfx::Colors::Ice;
-	const FVector Size = bFire ? FVector(2.6f) : FVector(0.45f, 0.45f, 1.5f); // the engine sphere is 100 units across
+	const FLinearColor Colour = ShinobiVfx::Colors::Fire;
+	const FVector Size(2.6f); // the engine sphere is 100 units across
 	Core->SetRelativeScale3D(Size * VisualScale);
-	Core->SetMaterial(0, ShinobiVfx::MakeGlow(this, Colour, bFire ? 6.f : 4.f, 1.f));
+	Core->SetMaterial(0, ShinobiVfx::MakeGlow(this, Colour, 6.f, 1.f));
 	Shell->SetRelativeScale3D(Size * VisualScale * 1.35f);
-	Shell->SetMaterial(0, ShinobiVfx::MakeFlame(this, Colour, bFire ? 4.f : 2.f));
+	Shell->SetMaterial(0, ShinobiVfx::MakeFlame(this, Colour, 4.f));
 	Light->SetLightColor(Colour);
-	Light->SetIntensity(bFire ? 60000.f : 15000.f);
-	Light->SetAttenuationRadius((bFire ? 900.f : 400.f) * VisualScale);
+	Light->SetIntensity(60000.f);
+	Light->SetAttenuationRadius(900.f * VisualScale);
 }
 
 void AShinobiMeteor::Tick(float DeltaSeconds)
@@ -112,9 +142,11 @@ void AShinobiMeteor::Tick(float DeltaSeconds)
 	if (bQueued != bPartsHidden)
 	{
 		bPartsHidden = bQueued;
-		Core->SetVisibility(!bQueued);
-		Shell->SetVisibility(!bQueued);
-		Light->SetVisibility(!bQueued);
+		RootComponent->SetVisibility(!bQueued, true);
+	}
+	if (Spin != 0.f)
+	{
+		Core->SetRelativeRotation(FRotator(0.f, 0.f, Age * Spin)); // rolling about its length, point first
 	}
 	const float Alpha = FMath::Clamp(Falling / FallSeconds, 0.f, 1.f);
 	SetActorLocation(FMath::Lerp(StartPoint, ImpactPoint, FMath::Pow(Alpha, 1.6f))); // speeding up as it falls
@@ -137,9 +169,18 @@ void AShinobiMeteor::Land()
 		UAbilitySystemComponent* Source = Thrower->GetAbilitySystemComponent();
 		for (AShinobiCharacterBase* Victim : ShinobiCombat::FindHostilesInRadius(Thrower, ImpactPoint, Impact.Radius))
 		{
-			if (ShinobiCombat::ApplyDamage(Source, Victim, Impact.Damage) && Impact.Status)
+			if (!ShinobiCombat::ApplyDamage(Source, Victim, Impact.Damage))
+			{
+				continue;
+			}
+			if (Impact.Status)
 			{
 				ShinobiCombat::ApplyStatus(Source, Victim, Impact.Status, Impact.StatusDamagePerTick);
+			}
+			if (Impact.FirstHitStatus && Impact.FirstHitVictims && !Impact.FirstHitVictims->Contains(Victim))
+			{
+				Impact.FirstHitVictims->Add(Victim);
+				ShinobiCombat::ApplyStatus(Source, Victim, Impact.FirstHitStatus);
 			}
 		}
 		if (Impact.FirePatchScale > 0.f)

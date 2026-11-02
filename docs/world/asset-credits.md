@@ -94,6 +94,15 @@ remaining trademarks: the TX4 taxi and double-decker bus shapes, London Eye and 
   shaped by `Scripts/world/prep_wall.py` and imported by `Scripts/setup_walls.py`. The Earth Wall's rock is Poly Haven's
   rock_face (CC0, world library) projected triplanar over Rodin's normal map and crevice shading; the Water Wall's
   `M_WaterCurtain` is original.
+- **Ice Meteor hail** (2026-11-02): the shard meshes, trail mesh and `M_IceShard` / `M_IceTrail` are original
+  (`Scripts/prep_ice_hail.py`, `Scripts/setup_ice_hail.py`). The landing's ice-shatter and frost-crack sprites (`T_IceShatter`)
+  and the shards' frosted surface (`T_IceSurface`) are recomposed from textures of **Celebrations All In One Bundle — VFX &
+  Material for Christmas Halloween Holidays** (Fab Standard License, added by the user through Fab; the pack itself sits
+  untracked in `Content/Celebrations_All_In_One`). Sources in `SourceArt/Fab/IceHail`.
+  The snow weather (`/Game/Shinobi/VFX/Weather/NS_SnowLight`, `NS_SnowBlizzard`) and the Ice Meteor freeze
+  (`/Game/Shinobi/VFX/Freeze/NS_FreezeIce`, `NS_FreezeAura`) are edited copies of that pack's NS_Snowing_GPU,
+  NS_Snowing_Storm_GPU, NS_Freez_Ice and NS_Snow_Aura (widened spawn areas, skeletal-mesh sampling, bigger spikes); their
+  materials and textures stay in the pack folder, so the pack must be present to cook.
 
 ## Summons
 

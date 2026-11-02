@@ -10,6 +10,9 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "NiagaraComponent.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
 #include "UObject/ConstructorHelpers.h"
 #include "ShinobiCoop.h"
 #include "Shinobi/ShinobiAttributeSet.h"
@@ -22,6 +25,7 @@
 #include "Shinobi/ShinobiTags.h"
 #include "Shinobi/Abilities/ShinobiGameplayAbility.h"
 #include "Shinobi/VFX/ShinobiBodyFlameComponent.h"
+#include "Shinobi/VFX/ShinobiBurst.h"
 #include "Shinobi/VFX/ShinobiCastFxComponent.h"
 #include "Shinobi/VFX/ShinobiChakraAuraComponent.h"
 #include "Shinobi/VFX/ShinobiFeedbackComponent.h"
@@ -73,6 +77,7 @@ void AShinobiCharacterBase::BeginPlay()
 	AbilitySystem->InitAbilityActorInfo(this, this);
 	AbilitySystem->RegisterGameplayTagEvent(ShinobiTags::State_Dead).AddUObject(this, &AShinobiCharacterBase::OnDeadTagChanged);
 	AbilitySystem->RegisterGameplayTagEvent(ShinobiTags::State_Phased).AddUObject(this, &AShinobiCharacterBase::OnPhasedTagChanged);
+	AbilitySystem->RegisterGameplayTagEvent(ShinobiTags::State_Frozen).AddUObject(this, &AShinobiCharacterBase::OnFrozenTagChanged);
 	// A downed or dead rider is thrown from the dragon.
 	for (const FGameplayTag Out : { ShinobiTags::State_Downed.GetTag(), ShinobiTags::State_Dead.GetTag() })
 	{
@@ -88,6 +93,61 @@ void AShinobiCharacterBase::BeginPlay()
 	{
 		Attributes->OnOutOfHealth.AddUObject(this, &AShinobiCharacterBase::HandleOutOfHealth);
 		GrantStartupAbilitiesAndEffects();
+	}
+}
+
+bool AShinobiCharacterBase::CanJumpInternal_Implementation() const
+{
+	return !AbilitySystem->HasMatchingGameplayTag(ShinobiTags::State_Frozen) && Super::CanJumpInternal_Implementation();
+}
+
+void AShinobiCharacterBase::OnFrozenTagChanged(const FGameplayTag Tag, int32 Count)
+{
+	for (UNiagaraComponent* Ice : FrozenIce)
+	{
+		if (Ice)
+		{
+			Ice->DestroyComponent();
+		}
+	}
+	FrozenIce.Reset();
+	if (FrozenAura)
+	{
+		FrozenAura->DestroyComponent();
+		FrozenAura = nullptr;
+	}
+	if (Count <= 0)
+	{
+		// Thawing: the ice shatters off (the server spawns the replicated burst; on a client this does nothing).
+		AShinobiBurst::Spawn(GetWorld(), EShinobiBurst::FrostImpact, GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight()), 1.f);
+		return;
+	}
+	if (IsNetMode(NM_DedicatedServer))
+	{
+		return;
+	}
+	// The spikes grow on the triangles of the mesh they are attached to (their mesh-location modules sample the attach parent):
+	// one crust per visible body part, so they also sprout from clothes, not only from the skin under them.
+	if (UNiagaraSystem* Ice = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/Shinobi/VFX/Freeze/NS_FreezeIce.NS_FreezeIce")))
+	{
+		TArray<USkeletalMeshComponent*> Parts;
+		GetComponents(Parts);
+		for (USkeletalMeshComponent* Part : Parts)
+		{
+			if (Part->GetSkeletalMeshAsset() && Part->IsVisible() && !Part->bHiddenInGame)
+			{
+				FrozenIce.Add(UNiagaraFunctionLibrary::SpawnSystemAttached(Ice, Part, NAME_None, FVector::ZeroVector, FRotator::ZeroRotator, EAttachLocation::KeepRelativeOffset, false));
+			}
+		}
+	}
+	if (UNiagaraSystem* Aura = LoadObject<UNiagaraSystem>(nullptr, TEXT("/Game/Shinobi/VFX/Freeze/NS_FreezeAura.NS_FreezeAura")))
+	{
+		const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+		FrozenAura = UNiagaraFunctionLibrary::SpawnSystemAttached(Aura, GetRootComponent(), NAME_None, Feet, FRotator::ZeroRotator, EAttachLocation::KeepWorldPosition, false);
+		if (FrozenAura)
+		{
+			FrozenAura->SetVariablePosition(TEXT("Actor Location"), Feet); // the flakes whirl round this point
+		}
 	}
 }
 

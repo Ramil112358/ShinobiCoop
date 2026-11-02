@@ -329,6 +329,10 @@ float UShinobiMovementComponent::GetMaxSpeed() const
 	{
 		return 0.f; // guarding roots the player (the guard pose is full-body); they still turn to face their input
 	}
+	if (Character && Character->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Frozen))
+	{
+		return 0.f; // rooted in ice
+	}
 	if (MovementMode == MOVE_Flying && Character && Character->GetAbilitySystemComponent()->HasMatchingGameplayTag(ShinobiTags::State_Mounted))
 	{
 		// Shift (UGA_Sprint, stamina and all) runs on the ground and flies faster, as it sprints on foot.

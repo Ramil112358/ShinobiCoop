@@ -23,7 +23,7 @@ public:
 	float AreaRadius = 500.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
-	int32 ShardCount = 14;
+	int32 ShardCount = 60; // a dense hail (about 15 a second), each shard light, so the shower hurts about as much as 14 heavy ones did
 
 	/** The shards' landings are spread over this long. */
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
@@ -33,7 +33,7 @@ public:
 	float ShardFall = 0.9f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
-	float ShardDamage = 12.f;
+	float ShardDamage = 3.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Jutsu")
 	float ShardRadius = 140.f;

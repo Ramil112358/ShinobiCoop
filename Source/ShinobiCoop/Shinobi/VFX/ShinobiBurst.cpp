@@ -142,7 +142,7 @@ void AShinobiBurst::BeginPlay()
 	case EShinobiBurst::Crumble:      Color = FLinearColor(0.35f, 0.22f, 0.1f); Duration = 0.5f; MaxScale = 3.f; Intensity = 1.f;  LightIntensity = 0.f;     Core = 0.5f; break;
 	case EShinobiBurst::Splash:       Color = ShinobiVfx::Colors::Chakra;    Duration = 0.5f; MaxScale = 3.f;  Intensity = 2.f;   LightIntensity = 0.f;     Core = 0.4f; break;
 	case EShinobiBurst::MeteorImpact: Color = ShinobiVfx::Colors::Fire;      Duration = 0.8f; MaxScale = 8.f;  Intensity = 3.f;   LightIntensity = 60000.f; Core = 0.2f; break;
-	case EShinobiBurst::FrostImpact:  Color = ShinobiVfx::Colors::Ice;       Duration = 0.5f; MaxScale = 2.f;  Intensity = 3.f;   LightIntensity = 12000.f; Core = 0.4f; break;
+	case EShinobiBurst::FrostImpact:  Color = ShinobiVfx::Colors::Ice;       Duration = 0.7f; MaxScale = 2.f;  Intensity = 3.f;   LightIntensity = 5000.f;  Core = 0.4f; break;
 	case EShinobiBurst::SusanooRise:  Color = FLinearColor(0.1f, 0.45f, 1.f); Duration = 0.9f; MaxScale = 6.f; Intensity = 2.5f; LightIntensity = 40000.f; Core = 0.3f; break;
 	case EShinobiBurst::SummonPoof:   Color = ShinobiVfx::Colors::Smoke;     Duration = 0.7f; MaxScale = 4.f;  Intensity = 0.8f;  LightIntensity = 0.f;     Core = 0.6f; break;
 	case EShinobiBurst::SkyBolt:      Color = ShinobiVfx::Colors::Lightning; Duration = 0.3f; MaxScale = 1.5f; Intensity = 4.f;   LightIntensity = 40000.f; break;
@@ -193,6 +193,12 @@ void AShinobiBurst::BeginPlay()
 	{
 		ShinobiVfx::SpawnScorch(GetWorld(), GetActorLocation(), 240.f * Scale, DirtTint, 10.f, ShinobiVfx::ChidoriDent, Surface); // as wide as the lightning ring (260 x Scale) it leaves
 		ShinobiVfx::SpawnDebris(GetWorld(), GetActorLocation(), 6, 320.f, 0.12f, 4.f, Surface);
+	}
+	else if (Kind == EShinobiBurst::FrostImpact)
+	{
+		const int32 Variant = FMath::RandRange(0, 2);
+		UStaticMesh* Chip = LoadObject<UStaticMesh>(nullptr, *FString::Printf(TEXT("/Game/Shinobi/VFX/SM_IceShard_%d.SM_IceShard_%d"), Variant, Variant));
+		ShinobiVfx::SpawnDebris(GetWorld(), GetActorLocation(), 3, 450.f * FMath::Sqrt(Scale), 0.22f * Scale, 2.5f, Surface, Chip, LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Shinobi/VFX/M_IceShard.M_IceShard")));
 	}
 	else if (Kind == EShinobiBurst::Spiral)
 	{
@@ -435,14 +441,22 @@ bool AShinobiBurst::BuildCards()
 		}
 		break;
 	case EShinobiBurst::FrostImpact:
-		// An ice shard landing: a pale flash, a small ring and a puff of frost.
-		Duration = 0.6f;
-		AddCard(Plane, ESprite::Burst, FLinearColor(0.7f, 0.9f, 1.f), 1.6f, FVector(0.f, 0.f, 20.f), FVector2D(300.f, 300.f) * S);
-		AddCard(Plane, ESprite::Ring, FLinearColor(0.6f, 0.85f, 1.f), 1.6f, FVector::ZeroVector, FVector2D(420.f, 420.f) * S, 0.f, true);
-		for (int32 Index = 0; Index < 3; ++Index)
+		// An ice shard landing: a brief cold glint and a burst of glitter (photo sprays from the Fab Celebrations pack) over a
+		// web of frost cracks, and a wisp of ice mist; the sharp read is the real ice chips bouncing away (SpawnDebris below).
+		Duration = 0.7f;
+		AddCard(Plane, ESprite::Burst, FLinearColor(0.7f, 0.9f, 1.f), 0.8f, FVector(0.f, 0.f, 25.f), FVector2D(150.f, 150.f) * S);
+		Cards.Last().Life = 0.15f;
+		AddCard(Plane, ESprite::IceShatter, White, 2.4f, FVector(0.f, 0.f, 50.f) * S, FVector2D(280.f, 280.f) * S);
+		Cards.Last().Spin = Random.FRandRange(-40.f, 40.f); // centred on the hit, facing the camera
+		Cards.Last().Life = 0.35f;
+		for (int32 Index = 0; Index < 2; ++Index)
 		{
-			AddCard(Plane, ESprite::Smoke, FLinearColor(0.75f, 0.9f, 1.f), 1.f, Around(Random.FRandRange(20.f, 80.f) * S, Random.FRandRange(0.f, 2.f * PI)), FVector2D(160.f, 200.f) * S, 60.f * S);
+			AddCard(Plane, ESprite::IceShatter, White, 2.f, Around(Random.FRandRange(40.f, 80.f) * S, Random.FRandRange(0.f, 2.f * PI)), FVector2D(180.f, 180.f) * S, 90.f * S);
+			Cards.Last().Life = 0.4f;
 		}
+		AddCard(Plane, ESprite::FrostCrack, FLinearColor(0.6f, 0.85f, 1.f), 1.2f, FVector::ZeroVector, FVector2D(380.f, 380.f) * S, 0.f, true);
+		Cards.Last().Spin = 0.f; // lies still
+		AddCard(Plane, ESprite::Smoke, FLinearColor(0.85f, 0.93f, 1.f), 0.5f, FVector::ZeroVector, FVector2D(150.f, 150.f) * S, 50.f * S);
 		break;
 	case EShinobiBurst::SusanooRise:
 		// Susanoo rising: a blue chakra spiral on the ground, a wide ring and a column of light.

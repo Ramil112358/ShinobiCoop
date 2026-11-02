@@ -3,6 +3,7 @@
 #include "Engine/World.h"
 #include "GameFramework/GameUserSettings.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Shinobi/ShinobiGameState.h"
 #include "Shinobi/ShinobiLook.h"
 #include "Shinobi/Hero/ShinobiCharacterSave.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
@@ -19,6 +20,21 @@ namespace
 	const TCHAR* CharacterKey = TEXT("Character");
 	const TCHAR* OutfitKey = TEXT("Outfit");
 	const TCHAR* FaceKey = TEXT("Face");
+	const TCHAR* SnowKey = TEXT("Snow");
+	const TCHAR* SnowNames[] = { TEXT("Off"), TEXT("Light"), TEXT("Blizzard") };
+
+	/** The game world this machine is playing in, if any (the settings panel is also open in the main menu). */
+	UWorld* PlayingWorld()
+	{
+		for (const FWorldContext& Context : GEngine->GetWorldContexts())
+		{
+			if (Context.World() && Context.World()->IsGameWorld())
+			{
+				return Context.World();
+			}
+		}
+		return nullptr;
+	}
 
 	UGameUserSettings* Settings()
 	{
@@ -65,6 +81,13 @@ void ShinobiSettings::SetSavedFace(const FString& Name)
 {
 	GConfig->SetString(ConfigSection, FaceKey, *Name, GGameUserSettingsIni);
 	GConfig->Flush(false, GGameUserSettingsIni);
+}
+
+EShinobiSnow ShinobiSettings::GetSavedSnow()
+{
+	int32 Value = 0;
+	GConfig->GetInt(ConfigSection, SnowKey, Value, GGameUserSettingsIni);
+	return EShinobiSnow(FMath::Clamp(Value, 0, int32(UE_ARRAY_COUNT(SnowNames)) - 1));
 }
 
 float ShinobiSettings::GetRenderScale()
@@ -116,6 +139,12 @@ FString ShinobiSettings::Label(ERow Row)
 		return FString::Printf(TEXT("VSync: %s"), S->IsVSyncEnabled() ? TEXT("On") : TEXT("Off"));
 	case ERow::Outline:
 		return FString::Printf(TEXT("Character outline: %s"), ShinobiLook::IsOutlineEnabled() ? TEXT("On") : TEXT("Off"));
+	case ERow::Snow:
+	{
+		// A client sees its own pick, kept for when it hosts; the session shows the host's.
+		const UWorld* World = PlayingWorld();
+		return FString::Printf(TEXT("Snow weather: %s%s"), SnowNames[uint8(GetSavedSnow())], World && World->GetNetMode() == NM_Client ? TEXT(" (the host decides)") : TEXT(""));
+	}
 	default:
 		return FString();
 	}
@@ -232,6 +261,17 @@ void ShinobiSettings::Cycle(ERow Row, UWorld* World)
 	case ERow::Outline:
 		ShinobiLook::SetOutlineEnabled(World, !ShinobiLook::IsOutlineEnabled());
 		return;
+	case ERow::Snow:
+	{
+		const EShinobiSnow Next = EShinobiSnow((uint8(GetSavedSnow()) + 1) % UE_ARRAY_COUNT(SnowNames));
+		GConfig->SetInt(ConfigSection, SnowKey, int32(Next), GGameUserSettingsIni);
+		GConfig->Flush(false, GGameUserSettingsIni);
+		if (AShinobiGameState* Session = World ? World->GetGameState<AShinobiGameState>() : nullptr)
+		{
+			Session->SetSnow(Next); // the host changes it for everyone; on a client this does nothing
+		}
+		return;
+	}
 	default:
 		return;
 	}

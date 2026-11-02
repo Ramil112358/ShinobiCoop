@@ -144,6 +144,8 @@ namespace ShinobiVfx
 				{Add, TEXT("/Game/Shinobi/VFX/T_ChidoriOrb.T_ChidoriOrb"), 0, 8},   // ChidoriOrb
 				{Add, TEXT("/Game/Shinobi/VFX/T_RasenganOrb.T_RasenganOrb"), 0, 8}, // RasenganOrb
 				{TEXT("/Game/Shinobi/VFX/M_SpriteDust.M_SpriteDust"), TEXT("/Game/Shinobi/VFX/T_PushDust.T_PushDust"), 0, 8}, // Dust
+				{Add, TEXT("/Game/Shinobi/VFX/T_IceShatter.T_IceShatter"), 0, 6}, // IceShatter (Scripts/setup_ice_hail.py)
+				{Add, TEXT("/Game/Shinobi/VFX/T_IceShatter.T_IceShatter"), 6, 2}, // FrostCrack
 			};
 			return Table[static_cast<int32>(Kind)];
 		}
@@ -258,11 +260,11 @@ namespace ShinobiVfx
 		Scorch->SetLifeSpan(Linger);
 	}
 
-	void SpawnDebris(UWorld* World, const FVector& Location, int32 Count, float Speed, float Size, float Linger, const FVector& Normal)
+	void SpawnDebris(UWorld* World, const FVector& Location, int32 Count, float Speed, float Size, float Linger, const FVector& Normal, UStaticMesh* Mesh, UMaterialInterface* Material)
 	{
 		// ponytail: uneven engine cubes in stone grey stand in until the Tripo debris chunks are imported
-		UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
-		UMaterialInterface* Basic = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+		UMaterialInterface* Basic = Material ? nullptr : LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+		Mesh = Mesh ? Mesh : LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
 		if (!World || World->GetNetMode() == NM_DedicatedServer || !Mesh)
 		{
 			return;
@@ -287,6 +289,7 @@ namespace ShinobiVfx
 		if (Rock)
 		{
 			Rock->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.12f, 0.1f, 0.085f));
+			Material = Rock;
 		}
 		for (int32 Index = 0; Index < Count; ++Index)
 		{
@@ -294,7 +297,7 @@ namespace ShinobiVfx
 			const FVector Out = Frame.RotateVector(FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f));
 			UStaticMeshComponent* Chunk = NewObject<UStaticMeshComponent>(Pile);
 			Chunk->SetStaticMesh(Mesh);
-			Chunk->SetMaterial(0, Rock);
+			Chunk->SetMaterial(0, Material);
 			Chunk->SetupAttachment(Root);
 			Chunk->SetWorldTransform(FTransform(FRotator(FMath::FRandRange(0.f, 360.f), FMath::FRandRange(0.f, 360.f), 0.f), Ground + Out * 25.f + Up * 15.f, FVector(FMath::FRandRange(0.6f, 1.4f), FMath::FRandRange(0.6f, 1.4f), FMath::FRandRange(0.4f, 1.f)) * Size));
 			// Physics only (no traces hit it), and it passes through characters rather than tripping them.

@@ -38,6 +38,7 @@ namespace ShinobiTags
 	UE_DEFINE_GAMEPLAY_TAG(State_Mounted, "State.Mounted");
 	UE_DEFINE_GAMEPLAY_TAG(State_SummonAttacking, "State.SummonAttacking");
 	UE_DEFINE_GAMEPLAY_TAG(State_Chilled, "State.Chilled");
+	UE_DEFINE_GAMEPLAY_TAG(State_Frozen, "State.Frozen");
 	UE_DEFINE_GAMEPLAY_TAG(State_TeleportMarked, "State.TeleportMarked");
 	UE_DEFINE_GAMEPLAY_TAG(State_PvpHold, "State.PvpHold");
 	UE_DEFINE_GAMEPLAY_TAG(State_AttackBoost, "State.AttackBoost"); // these three names are also looked up by the HUD's boost list

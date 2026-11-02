@@ -13,7 +13,7 @@ UENUM()
 enum class EShinobiMeteor : uint8
 {
 	Fire, // Fire Meteor: one big flaming rock
-	Ice,  // Ice Meteor Shower: a small ice shard
+	Ice,  // Ice Meteor Shower: a small ice shard with a frost trail
 };
 
 /** What a meteor does where it lands. Server-side only; the clients only need to see it fall. */
@@ -26,6 +26,10 @@ struct FShinobiMeteorImpact
 	float StatusDamagePerTick = 0.f;
 	/** Greater than 0: leaves an AShinobiFirePatch of this scale. */
 	float FirePatchScale = 0.f;
+	/** Applied, besides Status, to an enemy the first time any meteor sharing FirstHitVictims hits them (an Ice Meteor
+	 * Shower's freeze: each target is frozen once per shower). */
+	TSubclassOf<UGameplayEffect> FirstHitStatus;
+	TSharedPtr<TSet<TWeakObjectPtr<AShinobiCharacterBase>>> FirstHitVictims;
 };
 
 /**
@@ -88,5 +92,6 @@ private:
 	FShinobiMeteorImpact Impact;
 	TWeakObjectPtr<AShinobiCharacterBase> Caster;
 	bool bPartsHidden = false;
+	float Spin = 0.f; // Ice: degrees a second the shard turns about its length
 	float Age = 0.f;
 };

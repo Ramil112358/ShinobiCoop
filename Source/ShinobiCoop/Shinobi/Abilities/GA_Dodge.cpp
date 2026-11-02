@@ -16,6 +16,7 @@ UGA_Dodge::UGA_Dodge()
 	ActivationOwnedTags.AddTag(ShinobiTags::State_Dodging);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Dodging);
 	ActivationBlockedTags.AddTag(ShinobiTags::State_Mounted); // Control dives on a dragon
+	ActivationBlockedTags.AddTag(ShinobiTags::State_Frozen); // rooted in ice
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Sprint);
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_ChakraCharge);
 	CancelAbilitiesWithTag.AddTag(ShinobiTags::Ability_Melee);

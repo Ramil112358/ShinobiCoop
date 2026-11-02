@@ -100,6 +100,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual bool CanJumpInternal_Implementation() const override;
 	virtual void PossessedBy(AController* NewController) override;
 	virtual void OnRep_Controller() override;
 	/** The outline stencil for a viewer (see RefreshOutline). */
@@ -173,6 +174,15 @@ private:
 	/** Every machine: Kamui makes the capsule ignore pawns (walk through enemies); on the server, ending it nudges the
 	 * character out of anything it overlaps. */
 	void OnPhasedTagChanged(const FGameplayTag Tag, int32 Count);
+
+	/** Every machine: State.Frozen crusts the body in ice spikes inside a column of whirling snowflakes (the Fab Celebrations
+	 * pack's NS_Freez_Ice and NS_Snow_Aura, copied to /Game/Shinobi/VFX/Freeze); thawing shatters it. */
+	void OnFrozenTagChanged(const FGameplayTag Tag, int32 Count);
+	UPROPERTY()
+	TArray<TObjectPtr<class UNiagaraComponent>> FrozenIce; // one per visible body part (body, outfit pieces)
+	UPROPERTY()
+	TObjectPtr<class UNiagaraComponent> FrozenAura;
+
 	ECollisionResponse PrePhasePawnResponse = ECR_Block;
 	bool bStartupGranted = false;
 };

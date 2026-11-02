@@ -160,6 +160,8 @@ private:
 	void RunFireShotTest();
 	void RunFireCompareShot();
 	void RunMarkShot();
+	/** -ShinobiHailShot: Ice Meteor shards up close (a slow one), then a volley falling and landing, from the side. */
+	void RunHailShot();
 	/** -ShinobiSusanooShot: the Perfect Susanoo from four sides, from the gameplay camera and through a melee slash (Scripts/shot_chakra.ps1 -Susanoo). */
 	void RunSusanooShotTest();
 	/** -ShinobiDragonShot: Tairn mounted and hovering, from the side, the front, behind, above, the gameplay camera and breathing fire (Scripts/shot_chakra.ps1 -Dragon). */

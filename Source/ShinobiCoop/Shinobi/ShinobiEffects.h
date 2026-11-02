@@ -292,6 +292,17 @@ public:
 	UGE_Chill();
 };
 
+/** Frozen (an Ice Meteor Shower's first hit on someone): 2 s of State.Frozen, rooted in ice: no walking, jumping or
+ * dodging; guarding and casting still work. The shower freezes each target only once (later shards only chill). */
+UCLASS()
+class SHINOBICOOP_API UGE_Frozen : public UShinobiEffect
+{
+	GENERATED_BODY()
+public:
+	static constexpr float Seconds = 2.f;
+	UGE_Frozen();
+};
+
 /** Teleport's jump window: 6 s of State.TeleportMarked, while the thrown kunai stand. */
 UCLASS()
 class SHINOBICOOP_API UGE_TeleportMarked : public UShinobiEffect

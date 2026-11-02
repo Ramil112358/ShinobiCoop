@@ -281,6 +281,13 @@ UGE_Chill::UGE_Chill()
 	UseSingleRefreshingStack();
 }
 
+UGE_Frozen::UGE_Frozen()
+{
+	SetDuration(Seconds);
+	GrantTag(ShinobiTags::State_Frozen);
+	UseSingleRefreshingStack();
+}
+
 UGE_TeleportMarked::UGE_TeleportMarked()
 {
 	SetDuration(Seconds);
