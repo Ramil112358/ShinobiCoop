@@ -8,7 +8,7 @@
 class UGameplayEffect;
 class UShinobiHUDWidget;
 class UShinobiPauseMenuWidget;
-class UShinobiSkillsWidget;
+enum class EShinobiPauseTab : uint8;
 struct FGameplayTag;
 struct FInputActionValue;
 
@@ -82,8 +82,14 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerPickAppearance(const FShinobiAppearance& Look);
 
-	/** Local: open or close the pause menu (Esc / Start). */
+	/** Local: open the pause menu on its GAME tab (Esc / Start), or close it. With a jutsu's target preview up, Esc
+	 * cancels that instead. */
 	void TogglePauseMenu();
+
+	/** Local: open the pause menu on Tab (or switch an open one to it). Gameplay input waits while it's open. */
+	void OpenPauseMenu(EShinobiPauseTab Tab);
+	void ClosePauseMenu();
+	bool IsPauseMenuOpen() const { return PauseMenu != nullptr; }
 
 	/** Local: open or close the big map (M / View). */
 	void ToggleMap();
@@ -91,7 +97,7 @@ public:
 	/** Local: the last button pressed was a gamepad's (the HUD shows A/B/X/Y labels and the pad page). */
 	bool IsUsingGamepad() const { return bUsingGamepad; }
 
-	/** Local: open or close the Skills screen (K, or the pause menu's Jutsu entry). */
+	/** Local: open the pause menu on its JUTSU tab (K), or close it when it's already there. */
 	void ToggleSkillsScreen();
 
 	bool IsBigMapOpen() const;
@@ -211,7 +217,4 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UShinobiPauseMenuWidget> PauseMenu;
-
-	UPROPERTY()
-	TObjectPtr<UShinobiSkillsWidget> SkillsWidget;
 };

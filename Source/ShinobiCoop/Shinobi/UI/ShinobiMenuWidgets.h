@@ -5,6 +5,7 @@
 #include "Components/Button.h"
 #include "Components/Slider.h"
 #include "Shinobi/Pvp/ShinobiPvpMatch.h"
+#include "Shinobi/UI/ShinobiSettings.h"
 #include "ShinobiMenuWidgets.generated.h"
 
 class UShinobiSessionSubsystem;
@@ -82,8 +83,6 @@ protected:
 	UShinobiIndexButton* AddButton(UVerticalBox* Box, const FString& Label, int32 Index, FShinobiIndexClicked Handler);
 	UTextBlock* AddText(UVerticalBox* Box, const FString& Text, int32 Size, const FLinearColor& Color, bool bHeading = false);
 	void SetEntryLabel(int32 Index, const FString& Label);
-	/** Opens the settings panel over this menu (hidden until the panel's Back). */
-	void OpenSettings();
 
 	UPROPERTY()
 	TObjectPtr<UVerticalBox> Column;
@@ -97,36 +96,55 @@ protected:
 	FDelegateHandle ChangedHandle;
 };
 
-/** Resume, Jutsu (the Skills screen), Invite Friend (Steam overlay), Settings, Leave. The game keeps running (it's online). */
-UCLASS()
-class SHINOBICOOP_API UShinobiPauseMenuWidget : public UShinobiMenuWidget
-{
-	GENERATED_BODY()
-
-protected:
-	virtual FString GetTitle() const override { return TEXT("PAUSED"); }
-	virtual TArray<FString> GetEntries() const override { return { TEXT("Resume"), TEXT("Jutsu"), TEXT("Invite Friend"), TEXT("Settings"), TEXT("Leave") }; }
-	virtual void OnEntry(int32 Index) override;
-	virtual void Refresh() override;
-};
-
-/** Graphics settings (ShinobiSettings rows): each click cycles a row, applies and saves; Shortcuts opens the key bindings; Back returns to the opener. */
+/**
+ * The settings panel (ShinobiSettings rows), a tab page of the main menu (SETTINGS) and the pause menu (SETTINGS): rows
+ * under CHARACTER / GRAPHICS / DISPLAY / EFFECTS headings, each a selector "Name  < Value >". Clicking a row (or its >)
+ * steps it on, its < steps it back; Left / Right (keys, D-pad, stick) step the focused row. Every change applies and saves
+ * at once. The line under the rows explains the hovered or focused row.
+ */
 UCLASS()
 class SHINOBICOOP_API UShinobiSettingsWidget : public UShinobiMenuWidget
 {
 	GENERATED_BODY()
 
 public:
-	/** The menu hidden underneath, shown again on Back. */
-	TWeakObjectPtr<UUserWidget> Opener;
-	/** The main menu's SETTINGS tab: no Character / Outfit rows (SHINOBI has them) and no Back. Set before it's built. */
+	/** The main menu's SETTINGS tab: no Character / Face / Outfit rows (SHINOBI has them). Set before it's built. */
 	bool bMainMenu = false;
 
+	/** Steps the Index-th row shown by Delta values (wrapping), applies, saves and updates every value shown. */
+	void StepRow(int32 Index, int32 Delta);
+	/** The Index-th row's value as shown. */
+	FText GetShownValue(int32 Index) const;
+	/** The help line under the rows. */
+	FText GetDescriptionText() const;
+
 protected:
-	virtual FString GetTitle() const override { return TEXT("SETTINGS"); }
+	virtual TSharedRef<SWidget> RebuildWidget() override;
+	virtual void NativeTick(const FGeometry& Geometry, float DeltaTime) override;
+	virtual FNavigationReply NativeOnNavigation(const FGeometry& Geometry, const FNavigationEvent& Event, const FNavigationReply& DefaultReply) override;
+	virtual FReply NativeOnPreviewMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event) override;
 	/** In the main menu's SETTINGS tab the panel sits right of the stage's character. */
 	virtual FVector2D GetPanelAnchor() const override { return bMainMenu ? FVector2D(0.72f, 0.5f) : FVector2D(0.5f, 0.5f); }
-	virtual TArray<FString> GetEntries() const override;
+	virtual FString GetTitle() const override { return FString(); }
+	virtual TArray<FString> GetEntries() const override { return {}; }
 	virtual void OnEntry(int32 Index) override;
 	virtual void Refresh() override;
+
+private:
+	/** The row whose button has keyboard / gamepad focus, else INDEX_NONE. */
+	int32 GetFocusedRow() const;
+	void RefreshValues();
+
+	TArray<ShinobiSettings::ERow> Rows;
+	UPROPERTY()
+	TArray<TObjectPtr<UTextBlock>> ValueTexts;
+	/** Each row's < (a press over it steps back). */
+	UPROPERTY()
+	TArray<TObjectPtr<UWidget>> BackArrows;
+	UPROPERTY()
+	TObjectPtr<UTextBlock> DescriptionText;
+	/** The row the help line explains (INDEX_NONE: the general note). */
+	int32 DescribedRow = -2;
+	/** Set by a press over a row's <, used by that row's click. */
+	int32 PendingStep = 0;
 };

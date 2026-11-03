@@ -1,19 +1,19 @@
 #include "Shinobi/UI/ShinobiMenuWidgets.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
+#include "Components/ButtonSlot.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/SizeBox.h"
 #include "Components/Spacer.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/GameInstance.h"
-#include "Kismet/KismetSystemLibrary.h"
-#include "Shinobi/ShinobiPlayerController.h"
 #include "Shinobi/Online/ShinobiSessionSubsystem.h"
 #include "Shinobi/UI/ShinobiMenuStyle.h"
-#include "Shinobi/UI/ShinobiSettings.h"
-#include "Shinobi/UI/ShinobiShortcutsWidget.h"
 
 namespace
 {
@@ -159,96 +159,195 @@ void UShinobiMenuWidget::SetEntryLabel(int32 Index, const FString& Label)
 	}
 }
 
-void UShinobiMenuWidget::OpenSettings()
+namespace
 {
-	UShinobiSettingsWidget* Panel = CreateWidget<UShinobiSettingsWidget>(GetOwningPlayer(), UShinobiSettingsWidget::StaticClass());
-	Panel->Opener = this;
-	SetVisibility(ESlateVisibility::Collapsed);
-	Panel->AddToViewport(50);
-}
+	constexpr float SettingsPanelWidth = 640.f;
+	constexpr float SettingsValueWidth = 190.f;
+	const TCHAR* const SettingsGeneralNote = TEXT("Changes apply and save immediately. Lower graphics quality or render scale for more FPS.");
 
-void UShinobiPauseMenuWidget::OnEntry(int32 Index)
-{
-	switch (Index)
+	/** A row's < or >: an arrow glyph in a padded, transparent hit area. */
+	UBorder* SettingsMakeArrow(UWidgetTree& Tree, const TCHAR* Glyph)
 	{
-	case 0:
-		if (AShinobiPlayerController* PC = Cast<AShinobiPlayerController>(GetOwningPlayer()))
-		{
-			PC->TogglePauseMenu();
-		}
-		break;
-	case 1:
-		if (AShinobiPlayerController* PC = Cast<AShinobiPlayerController>(GetOwningPlayer()))
-		{
-			PC->ToggleSkillsScreen(); // closes this menu first; the gamepad's way to the Skills screen
-		}
-		break;
-	case 2:
-		if (UShinobiSessionSubsystem* Sessions = GetSessions())
-		{
-			Sessions->ShowInviteUI();
-		}
-		break;
-	case 3:
-		OpenSettings();
-		break;
-	default:
-		if (UShinobiSessionSubsystem* Sessions = GetSessions())
-		{
-			Sessions->LeaveGame();
-		}
-		break;
+		UBorder* Hit = Tree.ConstructWidget<UBorder>(UBorder::StaticClass());
+		Hit->SetBrush(ShinobiMenuStyle::ColorBrush(FLinearColor::Transparent));
+		Hit->SetPadding(FMargin(10.f, 0.f));
+		Hit->SetHorizontalAlignment(HAlign_Center);
+		Hit->SetVerticalAlignment(VAlign_Center);
+		Hit->SetContent(ShinobiMenuStyle::Text(Tree, FText::FromString(Glyph), 20, ShinobiMenuStyle::Accent));
+		return Hit;
 	}
 }
 
-void UShinobiPauseMenuWidget::Refresh()
+TSharedRef<SWidget> UShinobiSettingsWidget::RebuildWidget()
 {
-	Super::Refresh();
-	const UShinobiSessionSubsystem* Sessions = GetSessions();
-	EntryButtons[2]->SetIsEnabled(Sessions && !Sessions->IsLanMode()); // the Steam overlay does the inviting
-}
+	if (WidgetTree && !WidgetTree->RootWidget)
+	{
+		UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Root"));
+		WidgetTree->RootWidget = Root;
+		UBorder* Panel = ShinobiMenuStyle::PanelBox(*WidgetTree, FMargin(32.f, 22.f, 32.f, 20.f));
+		UCanvasPanelSlot* PanelSlot = Root->AddChildToCanvas(Panel);
+		PanelSlot->SetAnchors(FAnchors(GetPanelAnchor().X, GetPanelAnchor().Y));
+		PanelSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+		PanelSlot->SetAutoSize(true);
+		USizeBox* Width = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		Width->SetWidthOverride(SettingsPanelWidth);
+		Panel->SetContent(Width);
+		Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Column"));
+		Width->AddChild(Column);
 
-TArray<FString> UShinobiSettingsWidget::GetEntries() const
-{
-	TArray<FString> Entries;
-	for (const ShinobiSettings::ERow Row : ShinobiSettings::RowsFor(bMainMenu))
-	{
-		Entries.Add(ShinobiSettings::Label(Row));
+		Rows = ShinobiSettings::RowsFor(bMainMenu);
+		FString LastSection;
+		for (int32 Index = 0; Index < Rows.Num(); ++Index)
+		{
+			const ShinobiSettings::ERow Row = Rows[Index];
+			if (const FString Section = ShinobiSettings::RowSection(Row); Section != LastSection)
+			{
+				LastSection = Section;
+				UTextBlock* Heading = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Section), 13, ShinobiMenuStyle::Accent, true);
+				Column->AddChildToVerticalBox(Heading)->SetPadding(FMargin(4.f, Index == 0 ? 0.f : 16.f, 0.f, 4.f));
+			}
+			UShinobiIndexButton* Button = WidgetTree->ConstructWidget<UShinobiIndexButton>(UShinobiIndexButton::StaticClass());
+			Button->Index = Index;
+			Button->OnIndexClicked = FShinobiIndexClicked::CreateUObject(this, &UShinobiSettingsWidget::OnEntry);
+			Button->Arm();
+			UHorizontalBox* Line = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+			Button->AddChild(Line);
+			UHorizontalBoxSlot* NameSlot = Line->AddChildToHorizontalBox(ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(ShinobiSettings::RowName(Row)), 16, FLinearColor::White));
+			NameSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			NameSlot->SetVerticalAlignment(VAlign_Center);
+			UBorder* Back = SettingsMakeArrow(*WidgetTree, TEXT("‹"));
+			Line->AddChildToHorizontalBox(Back)->SetVerticalAlignment(VAlign_Fill);
+			USizeBox* ValueBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+			ValueBox->SetWidthOverride(SettingsValueWidth);
+			UTextBlock* Value = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 16, FLinearColor::White);
+			FSlateFontInfo Font = Value->GetFont();
+			Font.TypefaceFontName = TEXT("Bold");
+			Value->SetFont(Font);
+			Value->SetJustification(ETextJustify::Center);
+			ValueBox->AddChild(Value);
+			Line->AddChildToHorizontalBox(ValueBox)->SetVerticalAlignment(VAlign_Center);
+			Line->AddChildToHorizontalBox(SettingsMakeArrow(*WidgetTree, TEXT("›")))->SetVerticalAlignment(VAlign_Fill);
+			ShinobiMenuStyle::StyleButton(*Button, false, FMargin(20.f, 7.f, 10.f, 7.f));
+			Cast<UButtonSlot>(Line->Slot)->SetHorizontalAlignment(HAlign_Fill);
+			Column->AddChildToVerticalBox(Button)->SetPadding(FMargin(0.f, 3.f));
+			EntryButtons.Add(Button);
+			ValueTexts.Add(Value);
+			BackArrows.Add(Back);
+		}
+
+		// The help line: what the hovered or focused row does.
+		UBorder* Rule = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+		Rule->SetBrush(ShinobiMenuStyle::ColorBrush(FLinearColor(1.f, 1.f, 1.f, 0.1f)));
+		Rule->SetPadding(FMargin(0.f, 0.5f));
+		Column->AddChildToVerticalBox(Rule)->SetPadding(FMargin(0.f, 16.f, 0.f, 10.f));
+		USizeBox* DescriptionBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		DescriptionBox->SetMinDesiredHeight(40.f);
+		DescriptionText = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(SettingsGeneralNote), 14, ShinobiMenuStyle::TextDim);
+		DescriptionText->SetAutoWrapText(true);
+		DescriptionBox->AddChild(DescriptionText);
+		Column->AddChildToVerticalBox(DescriptionBox)->SetPadding(FMargin(4.f, 0.f));
+		RefreshValues();
 	}
-	Entries.Add(TEXT("Shortcuts"));
-	if (!bMainMenu)
-	{
-		Entries.Add(TEXT("Back"));
-	}
-	return Entries;
+	return UUserWidget::RebuildWidget(); // not UShinobiMenuWidget's: this panel has its own layout
 }
 
 void UShinobiSettingsWidget::OnEntry(int32 Index)
 {
-	const TArray<ShinobiSettings::ERow> Rows = ShinobiSettings::RowsFor(bMainMenu);
+	const int32 Delta = PendingStep != 0 ? PendingStep : 1; // a click on the < steps back, anywhere else on
+	PendingStep = 0;
+	StepRow(Index, Delta);
+}
+
+void UShinobiSettingsWidget::StepRow(int32 Index, int32 Delta)
+{
 	if (Rows.IsValidIndex(Index))
 	{
-		ShinobiSettings::Cycle(Rows[Index], GetWorld());
-		SetEntryLabel(Index, ShinobiSettings::Label(Rows[Index]));
-		return;
+		ShinobiSettings::Step(Rows[Index], GetWorld(), Delta);
+		RefreshValues(); // (one row can change another: the character's faces, the quality preset's render scale)
 	}
-	if (Index == Rows.Num()) // Shortcuts
+}
+
+FText UShinobiSettingsWidget::GetShownValue(int32 Index) const
+{
+	return ValueTexts.IsValidIndex(Index) ? ValueTexts[Index]->GetText() : FText::GetEmpty();
+}
+
+FText UShinobiSettingsWidget::GetDescriptionText() const
+{
+	return DescriptionText ? DescriptionText->GetText() : FText::GetEmpty();
+}
+
+void UShinobiSettingsWidget::RefreshValues()
+{
+	for (int32 Index = 0; Index < ValueTexts.Num() && Index < Rows.Num(); ++Index)
 	{
-		UShinobiShortcutsWidget* Panel = CreateWidget<UShinobiShortcutsWidget>(GetOwningPlayer(), UShinobiShortcutsWidget::StaticClass());
-		Panel->Opener = this;
-		SetVisibility(ESlateVisibility::Collapsed);
-		Panel->AddToViewport(60);
-		return;
+		const FText Value = FText::FromString(ShinobiSettings::RowValue(Rows[Index]));
+		if (!ValueTexts[Index]->GetText().EqualTo(Value))
+		{
+			ValueTexts[Index]->SetText(Value);
+		}
 	}
-	if (UUserWidget* Menu = Opener.Get())
+}
+
+int32 UShinobiSettingsWidget::GetFocusedRow() const
+{
+	for (int32 Index = 0; Index < EntryButtons.Num(); ++Index)
 	{
-		Menu->SetVisibility(ESlateVisibility::Visible);
+		if (EntryButtons[Index]->HasAnyUserFocus())
+		{
+			return Index;
+		}
 	}
-	RemoveFromParent();
+	return INDEX_NONE;
+}
+
+void UShinobiSettingsWidget::NativeTick(const FGeometry& Geometry, float DeltaTime)
+{
+	Super::NativeTick(Geometry, DeltaTime); // focus highlight
+	// The mouse's row first, else the focused one.
+	int32 Row = INDEX_NONE;
+	for (int32 Index = 0; Index < EntryButtons.Num() && Row == INDEX_NONE; ++Index)
+	{
+		Row = EntryButtons[Index]->IsHovered() ? Index : INDEX_NONE;
+	}
+	Row = Row != INDEX_NONE ? Row : GetFocusedRow();
+	if (Row != DescribedRow && DescriptionText)
+	{
+		DescribedRow = Row;
+		DescriptionText->SetText(FText::FromString(Rows.IsValidIndex(Row) ? ShinobiSettings::RowDescription(Rows[Row]) : FString(SettingsGeneralNote)));
+	}
+}
+
+FNavigationReply UShinobiSettingsWidget::NativeOnNavigation(const FGeometry& Geometry, const FNavigationEvent& Event, const FNavigationReply& DefaultReply)
+{
+	// Left / Right change the focused row's value instead of moving focus (arrows, D-pad and stick alike).
+	const EUINavigation Direction = Event.GetNavigationType();
+	if (Direction == EUINavigation::Left || Direction == EUINavigation::Right)
+	{
+		if (const int32 Row = GetFocusedRow(); Row != INDEX_NONE)
+		{
+			StepRow(Row, Direction == EUINavigation::Left ? -1 : 1);
+			return FNavigationReply::Stop();
+		}
+	}
+	return Super::NativeOnNavigation(Geometry, Event, DefaultReply);
+}
+
+FReply UShinobiSettingsWidget::NativeOnPreviewMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event)
+{
+	PendingStep = 0;
+	if (Event.GetEffectingButton() == EKeys::LeftMouseButton)
+	{
+		for (const UWidget* Arrow : BackArrows)
+		{
+			PendingStep = Arrow && Arrow->GetCachedGeometry().IsUnderLocation(Event.GetScreenSpacePosition()) ? -1 : PendingStep;
+		}
+	}
+	return Super::NativeOnPreviewMouseButtonDown(Geometry, Event); // (the row's button still takes the click)
 }
 
 void UShinobiSettingsWidget::Refresh()
 {
-	// Not tied to the session state: rows stay usable while matchmaking.
-	MessageText->SetText(FText::FromString(TEXT("Changes apply and save immediately. Lower quality or render scale for more FPS.")));
+	// Not tied to the session state: rows stay usable while matchmaking. (A host's snow pick can change what's shown.)
+	RefreshValues();
 }

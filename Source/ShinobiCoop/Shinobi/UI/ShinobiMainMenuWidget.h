@@ -39,12 +39,13 @@ protected:
 	virtual FReply NativeOnMouseButtonDoubleClick(const FGeometry& Geometry, const FPointerEvent& Event) override;
 };
 
-enum class EShinobiMenuTab : uint8 { Play, Shinobi, Create, Jutsu, Settings, Num };
+enum class EShinobiMenuTab : uint8 { Play, Shinobi, Create, Jutsu, Settings, Controls, Num };
 
 /**
  * The main menu (docs/superpowers/specs/2026-10-20-main-menu-polish-design.md): a top tab bar over the live stage
  * (AShinobiMenuStage). PLAY hosts on a map card (mode toggle, HOST) or lists found games; SHINOBI picks the character and
- * outfit; JUTSU edits the loadout; SETTINGS is the settings panel. Q/E or the bumpers switch tabs, Esc or B goes to PLAY.
+ * outfit; JUTSU edits the loadout; SETTINGS is the settings panel; CONTROLS the key bindings. Q/E or the bumpers switch
+ * tabs, Esc or B goes to PLAY.
  */
 UCLASS()
 class SHINOBICOOP_API UShinobiMainMenuWidget : public UShinobiMenuWidget
@@ -139,6 +140,8 @@ private:
 	TObjectPtr<class UShinobiRosterPage> RosterPage;
 	UPROPERTY()
 	TObjectPtr<class UShinobiCreatorPage> CreatorPage;
+	UPROPERTY()
+	TObjectPtr<class UShinobiShortcutsWidget> ControlsPage;
 	UPROPERTY()
 	TObjectPtr<UImage> Backdrop;
 	/** Darkens the left of the screen behind the PLAY lists. */

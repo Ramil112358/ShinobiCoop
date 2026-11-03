@@ -114,6 +114,7 @@ void UShinobiMenuShotSubsystem::OnWorldBeginPlay(UWorld& World)
 	});
 	View(EShinobiMenuTab::Jutsu, TEXT("ShinobiMenuTour_7_Jutsu"), nullptr);
 	View(EShinobiMenuTab::Settings, TEXT("ShinobiMenuTour_8_Settings"), nullptr);
+	View(EShinobiMenuTab::Controls, TEXT("ShinobiMenuTour_9_Controls"), nullptr);
 	RunSteps(MoveTemp(Steps), 1.5f);
 }
 

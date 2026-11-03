@@ -30,11 +30,13 @@
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/UI/ShinobiCreatorPage.h"
 #include "Shinobi/UI/ShinobiRosterPage.h"
+#include "Shinobi/UI/ShinobiShortcutsWidget.h"
 #include "Shinobi/UI/ShinobiSkillsWidget.h"
 
 namespace
 {
-	const TCHAR* const MainMenuTabNames[] = { TEXT("PLAY"), TEXT("SHINOBI"), TEXT("CREATE"), TEXT("JUTSU"), TEXT("SETTINGS") };
+	const TCHAR* const MainMenuTabNames[] = { TEXT("PLAY"), TEXT("SHINOBI"), TEXT("CREATE"), TEXT("JUTSU"), TEXT("SETTINGS"), TEXT("CONTROLS") };
+	static_assert(UE_ARRAY_COUNT(MainMenuTabNames) == int32(EShinobiMenuTab::Num), "a name per tab");
 	constexpr float MainMenuFadeSeconds = 0.2f;
 	constexpr float MainMenuTopBar = 64.f;
 
@@ -162,6 +164,11 @@ TSharedRef<SWidget> UShinobiMainMenuWidget::RebuildWidget()
 		Pages->AddChild(Settings);
 		Settings->TakeWidget(); // builds its rows now, so it has a first one to focus
 		FocusTargets[int32(EShinobiMenuTab::Settings)] = Settings->GetFirstEntry();
+		ControlsPage = CreateWidget<UShinobiShortcutsWidget>(this, UShinobiShortcutsWidget::StaticClass());
+		ControlsPage->PanelAnchor = FVector2D(0.66f, 0.5f); // right of the stage's character, like SETTINGS
+		Pages->AddChild(ControlsPage);
+		ControlsPage->TakeWidget();
+		FocusTargets[int32(EShinobiMenuTab::Controls)] = ControlsPage->GetFocusTarget();
 
 		MessageText = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 15, FLinearColor(1.f, 0.75f, 0.3f));
 		MessageText->SetJustification(ETextJustify::Center);
@@ -395,6 +402,10 @@ void UShinobiMainMenuWidget::SelectTab(EShinobiMenuTab NewTab)
 {
 	const EShinobiMenuTab Left = Tab;
 	Tab = NewTab;
+	if (ControlsPage && NewTab != EShinobiMenuTab::Controls)
+	{
+		ControlsPage->StopListening(); // (a key press meant for another tab mustn't rebind anything)
+	}
 	if (Pages)
 	{
 		Pages->SetActiveWidgetIndex(int32(NewTab));
@@ -407,7 +418,7 @@ void UShinobiMainMenuWidget::SelectTab(EShinobiMenuTab NewTab)
 	}
 	if (AShinobiMenuStage* Stage = GetStage())
 	{
-		Stage->SetFocus(NewTab == EShinobiMenuTab::Shinobi || NewTab == EShinobiMenuTab::Settings ? EShinobiMenuStageFocus::Left
+		Stage->SetFocus(NewTab == EShinobiMenuTab::Shinobi || NewTab == EShinobiMenuTab::Settings || NewTab == EShinobiMenuTab::Controls ? EShinobiMenuStageFocus::Left
 			: NewTab == EShinobiMenuTab::Create ? EShinobiMenuStageFocus::Right : EShinobiMenuStageFocus::Center);
 	}
 	// The stage wears what the tab edits: the made character on CREATE, the roster pick on SHINOBI.

@@ -4,7 +4,7 @@
 #include "InputCoreTypes.h"
 
 /**
- * The keyboard and mouse keys a player can rebind (Settings > Shortcuts): the 8 jutsu slots, the Skills screen and the core
+ * The keyboard and mouse keys a player can rebind (the CONTROLS tab): the 8 jutsu slots, the Skills screen and the core
  * actions. Alt is the only modifier. Gamepad buttons, WASD, the camera and Esc stay fixed. Saved per machine in
  * GameUserSettings.ini; UShinobiInputConfig::ApplyKeyBindings puts them into the mapping context.
  */
@@ -31,7 +31,7 @@ namespace ShinobiKeyBindings
 	SHINOBICOOP_API ERebind Rebind(EBindable Which, const FBinding& New, EBindable* OutSwappedWith = nullptr);
 	SHINOBICOOP_API void ResetToDefaults();
 
-	/** "Slot 1", "Skills screen", "Chakra charge"... */
+	/** "Slot 1", "Jutsu loadout", "Chakra charge"... */
 	SHINOBICOOP_API FText Label(EBindable Which);
 	/** "Alt+1", "Caps Lock", "Mouse 4"; bShort for the HUD's key chips ("Caps", "M4", "MMB"). */
 	SHINOBICOOP_API FText KeyLabel(const FBinding& Binding, bool bShort = false);

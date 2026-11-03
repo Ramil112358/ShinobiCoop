@@ -13,9 +13,20 @@ namespace ShinobiSettings
 {
 	enum class ERow : uint8 { Character, Face, Outfit, Quality, RenderScale, WindowMode, FrameCap, VSync, Outline, Snow, Num };
 
-	/** "Graphics quality: High" etc. */
+	/** "Graphics quality: High" etc. (RowName: RowValue). */
 	SHINOBICOOP_API FString Label(ERow Row);
-	/** Advances Row to its next value, applies and saves. World is used by the outline toggle. */
+	/** "Graphics quality" etc. */
+	SHINOBICOOP_API FString RowName(ERow Row);
+	/** "High" etc.: the row's current value. */
+	SHINOBICOOP_API FString RowValue(ERow Row);
+	/** One or two sentences on what the row does, for the settings panel's help line. */
+	SHINOBICOOP_API FString RowDescription(ERow Row);
+	/** The heading the row is listed under: CHARACTER, GRAPHICS, DISPLAY or EFFECTS. */
+	SHINOBICOOP_API FString RowSection(ERow Row);
+	/** Moves Row Delta values on (negative: back), wrapping, then applies and saves. World is used by the outline toggle
+	 * and the in-game character switch. */
+	SHINOBICOOP_API void Step(ERow Row, UWorld* World, int32 Delta);
+	/** Step(Row, World, +1). */
 	SHINOBICOOP_API void Cycle(ERow Row, UWorld* World);
 
 	/** The roster character this machine's player plays (saved by the Character row; the hero by default). */

@@ -41,18 +41,25 @@ namespace
 		return GEngine->GetGameUserSettings();
 	}
 
-	/** Index of the value after Current in Values (the first one if Current isn't in the list). */
+	/** Index wrapped into [0, Num). */
+	int32 SettingsWrap(int32 Index, int32 Num)
+	{
+		return Num > 0 ? ((Index % Num) + Num) % Num : 0;
+	}
+
+	/** Index of the value Delta steps from Current in Values (the first one, or going back the last, if Current isn't in
+	 * the list). */
 	template <typename T, int32 N>
-	int32 NextIndex(const T (&Values)[N], T Current)
+	int32 StepIndex(const T (&Values)[N], T Current, int32 Delta)
 	{
 		for (int32 Index = 0; Index < N; ++Index)
 		{
 			if (FMath::IsNearlyEqual(double(Values[Index]), double(Current), 0.5))
 			{
-				return (Index + 1) % N;
+				return SettingsWrap(Index + Delta, N);
 			}
 		}
-		return 0;
+		return Delta >= 0 ? 0 : N - 1;
 	}
 }
 
@@ -102,51 +109,111 @@ void ShinobiSettings::SetRenderScale(float Percent)
 	Settings()->SetResolutionScaleValueEx(Percent);
 }
 
-FString ShinobiSettings::Label(ERow Row)
+FString ShinobiSettings::RowName(ERow Row)
+{
+	switch (Row)
+	{
+	case ERow::Character: return TEXT("Character");
+	case ERow::Face: return TEXT("Face");
+	case ERow::Outfit: return TEXT("Outfit");
+	case ERow::Quality: return TEXT("Graphics quality");
+	case ERow::RenderScale: return TEXT("Render scale");
+	case ERow::WindowMode: return TEXT("Window");
+	case ERow::FrameCap: return TEXT("Frame cap");
+	case ERow::VSync: return TEXT("VSync");
+	case ERow::Outline: return TEXT("Character outline");
+	case ERow::Snow: return TEXT("Snow weather");
+	default: return FString();
+	}
+}
+
+FString ShinobiSettings::RowValue(ERow Row)
 {
 	UGameUserSettings* S = Settings();
 	switch (Row)
 	{
 	case ERow::Character:
-		return FString::Printf(TEXT("Character: %s"), *GetSavedCharacter());
+		return GetSavedCharacter();
 	case ERow::Face:
 	{
 		const int32 Body = AShinobiPlayerCharacter::FindRosterIndex(GetSavedCharacter());
 		const FShinobiFaceEntry* Face = AShinobiPlayerCharacter::FindFace(Body, FMath::Max(0, AShinobiPlayerCharacter::FindFaceIndex(Body, GetSavedFace())));
-		return FString::Printf(TEXT("Face: %s"), Face ? Face->Name : TEXT("Default"));
+		return Face ? Face->Name : TEXT("Default");
 	}
 	case ERow::Outfit:
-		return FString::Printf(TEXT("Outfit: %s"), *GetSavedOutfit());
+		return GetSavedOutfit();
 	case ERow::Quality:
 	{
 		const int32 Level = S->GetOverallScalabilityLevel();
-		return FString::Printf(TEXT("Graphics quality: %s"), Level >= 0 && Level < UE_ARRAY_COUNT(QualityNames) ? QualityNames[Level] : TEXT("Custom"));
+		return Level >= 0 && Level < UE_ARRAY_COUNT(QualityNames) ? QualityNames[Level] : TEXT("Custom");
 	}
 	case ERow::RenderScale:
-		return FString::Printf(TEXT("Render scale: %d%%"), FMath::RoundToInt(GetRenderScale()));
+		return FString::Printf(TEXT("%d%%"), FMath::RoundToInt(GetRenderScale()));
 	case ERow::WindowMode:
 	{
 		const EWindowMode::Type Mode = S->GetFullscreenMode();
-		return FString::Printf(TEXT("Window: %s"), Mode == EWindowMode::Fullscreen ? TEXT("Fullscreen")
-			: Mode == EWindowMode::WindowedFullscreen ? TEXT("Borderless") : TEXT("Windowed"));
+		return Mode == EWindowMode::Fullscreen ? TEXT("Fullscreen") : Mode == EWindowMode::WindowedFullscreen ? TEXT("Borderless") : TEXT("Windowed");
 	}
 	case ERow::FrameCap:
 	{
 		const float Cap = S->GetFrameRateLimit();
-		return Cap <= 0.f ? FString(TEXT("Frame cap: Unlimited")) : FString::Printf(TEXT("Frame cap: %d"), FMath::RoundToInt(Cap));
+		return Cap <= 0.f ? FString(TEXT("Unlimited")) : FString::Printf(TEXT("%d FPS"), FMath::RoundToInt(Cap));
 	}
 	case ERow::VSync:
-		return FString::Printf(TEXT("VSync: %s"), S->IsVSyncEnabled() ? TEXT("On") : TEXT("Off"));
+		return S->IsVSyncEnabled() ? TEXT("On") : TEXT("Off");
 	case ERow::Outline:
-		return FString::Printf(TEXT("Character outline: %s"), ShinobiLook::IsOutlineEnabled() ? TEXT("On") : TEXT("Off"));
+		return ShinobiLook::IsOutlineEnabled() ? TEXT("On") : TEXT("Off");
 	case ERow::Snow:
 	{
 		// A client sees its own pick, kept for when it hosts; the session shows the host's.
 		const UWorld* World = PlayingWorld();
-		return FString::Printf(TEXT("Snow weather: %s%s"), SnowNames[uint8(GetSavedSnow())], World && World->GetNetMode() == NM_Client ? TEXT(" (the host decides)") : TEXT(""));
+		return FString::Printf(TEXT("%s%s"), SnowNames[uint8(GetSavedSnow())], World && World->GetNetMode() == NM_Client ? TEXT(" (host decides)") : TEXT(""));
 	}
 	default:
 		return FString();
+	}
+}
+
+FString ShinobiSettings::Label(ERow Row)
+{
+	return FString::Printf(TEXT("%s: %s"), *RowName(Row), *RowValue(Row));
+}
+
+FString ShinobiSettings::RowDescription(ERow Row)
+{
+	switch (Row)
+	{
+	case ERow::Character: return TEXT("Who you play. In a game you switch at once, and the pick is kept for the next one.");
+	case ERow::Face: return TEXT("The face your character wears, on characters that have more than one.");
+	case ERow::Outfit: return TEXT("What your character wears over their own clothes.");
+	case ERow::Quality: return TEXT("The overall graphics preset. Lower it for more FPS. Custom means a single setting was changed elsewhere.");
+	case ERow::RenderScale: return TEXT("How sharp the 3D scene is drawn, scaled to your screen. Lower values give more FPS but a softer picture.");
+	case ERow::WindowMode: return TEXT("Exclusive fullscreen, a borderless window the size of the screen, or a normal window.");
+	case ERow::FrameCap: return TEXT("The highest frame rate the game runs at. A cap saves power and keeps fans quiet.");
+	case ERow::VSync: return TEXT("Matches frames to your monitor's refresh rate so the picture doesn't tear. Adds a little input delay.");
+	case ERow::Outline: return TEXT("Draws a thin outline round characters so they stand out from the scenery.");
+	case ERow::Snow: return TEXT("Snowfall in games you host. In someone else's game the host's pick applies to everyone.");
+	default: return FString();
+	}
+}
+
+FString ShinobiSettings::RowSection(ERow Row)
+{
+	switch (Row)
+	{
+	case ERow::Character:
+	case ERow::Face:
+	case ERow::Outfit:
+		return TEXT("CHARACTER");
+	case ERow::Quality:
+	case ERow::RenderScale:
+		return TEXT("GRAPHICS");
+	case ERow::WindowMode:
+	case ERow::FrameCap:
+	case ERow::VSync:
+		return TEXT("DISPLAY");
+	default:
+		return TEXT("EFFECTS");
 	}
 }
 
@@ -191,27 +258,33 @@ TArray<ShinobiSettings::ERow> ShinobiSettings::RowsFor(bool bMainMenu)
 
 void ShinobiSettings::Cycle(ERow Row, UWorld* World)
 {
+	Step(Row, World, 1);
+}
+
+void ShinobiSettings::Step(ERow Row, UWorld* World, int32 Delta)
+{
 	UGameUserSettings* S = Settings();
 	switch (Row)
 	{
 	case ERow::Character:
 	{
-		const int32 Next = (AShinobiPlayerCharacter::FindRosterIndex(GetSavedCharacter()) + 1) % UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster);
-		const FString Name = AShinobiPlayerCharacter::Roster[Next].Name;
-		GConfig->SetString(ConfigSection, CharacterKey, *Name, GGameUserSettingsIni);
+		const int32 Next = SettingsWrap(AShinobiPlayerCharacter::FindRosterIndex(GetSavedCharacter()) + Delta, UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster));
+		const FString Picked = AShinobiPlayerCharacter::Roster[Next].Name;
+		GConfig->SetString(ConfigSection, CharacterKey, *Picked, GGameUserSettingsIni);
 		GConfig->Flush(false, GGameUserSettingsIni);
 		// In a game (not the main menu), switch now too.
 		if (AShinobiPlayerController* PC = World ? World->GetFirstPlayerController<AShinobiPlayerController>() : nullptr)
 		{
-			PC->ShinobiCharacter(Name);
+			PC->ShinobiCharacter(Picked);
 		}
 		return;
 	}
 	case ERow::Face:
 	{
 		const int32 Body = AShinobiPlayerCharacter::FindRosterIndex(GetSavedCharacter());
-		const int32 Next = (FMath::Max(0, AShinobiPlayerCharacter::FindFaceIndex(Body, GetSavedFace())) + 1) % AShinobiPlayerCharacter::NumFaces(Body);
-		const FShinobiFaceEntry* Face = AShinobiPlayerCharacter::FindFace(Body, Next);
+		const int32 Faces = AShinobiPlayerCharacter::NumFaces(Body);
+		const int32 Next = SettingsWrap(FMath::Max(0, AShinobiPlayerCharacter::FindFaceIndex(Body, GetSavedFace())) + Delta, Faces);
+		const FShinobiFaceEntry* Face = Faces > 1 ? AShinobiPlayerCharacter::FindFace(Body, Next) : nullptr;
 		if (!Face)
 		{
 			return; // one face only
@@ -225,35 +298,39 @@ void ShinobiSettings::Cycle(ERow Row, UWorld* World)
 	}
 	case ERow::Outfit:
 	{
-		const int32 Next = (AShinobiPlayerCharacter::FindOutfitIndex(GetSavedOutfit()) + 1) % UE_ARRAY_COUNT(AShinobiPlayerCharacter::Outfits);
-		const FString Name = AShinobiPlayerCharacter::Outfits[Next].Name;
-		GConfig->SetString(ConfigSection, OutfitKey, *Name, GGameUserSettingsIni);
+		const int32 Next = SettingsWrap(AShinobiPlayerCharacter::FindOutfitIndex(GetSavedOutfit()) + Delta, UE_ARRAY_COUNT(AShinobiPlayerCharacter::Outfits));
+		const FString Picked = AShinobiPlayerCharacter::Outfits[Next].Name;
+		GConfig->SetString(ConfigSection, OutfitKey, *Picked, GGameUserSettingsIni);
 		GConfig->Flush(false, GGameUserSettingsIni);
 		if (AShinobiPlayerController* PC = World ? World->GetFirstPlayerController<AShinobiPlayerController>() : nullptr)
 		{
-			PC->ShinobiOutfit(Name);
+			PC->ShinobiOutfit(Picked);
 		}
 		return;
 	}
 	case ERow::Quality:
-		S->SetOverallScalabilityLevel((FMath::Max(S->GetOverallScalabilityLevel(), -1) + 1) % UE_ARRAY_COUNT(QualityNames));
+	{
+		const int32 Level = S->GetOverallScalabilityLevel(); // -1: Custom
+		const int32 Count = UE_ARRAY_COUNT(QualityNames);
+		S->SetOverallScalabilityLevel(Level < 0 ? (Delta >= 0 ? 0 : Count - 1) : SettingsWrap(Level + Delta, Count));
 		break;
+	}
 	case ERow::RenderScale:
-		SetRenderScale(RenderScales[NextIndex(RenderScales, GetRenderScale())]);
+		SetRenderScale(RenderScales[StepIndex(RenderScales, GetRenderScale(), Delta)]);
 		break;
 	case ERow::WindowMode:
 	{
-		int32 Next = 0;
+		int32 Next = Delta >= 0 ? 0 : UE_ARRAY_COUNT(WindowModes) - 1;
 		for (int32 Index = 0; Index < UE_ARRAY_COUNT(WindowModes); ++Index)
 		{
-			Next = WindowModes[Index] == S->GetFullscreenMode() ? (Index + 1) % UE_ARRAY_COUNT(WindowModes) : Next;
+			Next = WindowModes[Index] == S->GetFullscreenMode() ? SettingsWrap(Index + Delta, UE_ARRAY_COUNT(WindowModes)) : Next;
 		}
 		S->SetFullscreenMode(WindowModes[Next]);
 		S->ApplyResolutionSettings(false);
 		break;
 	}
 	case ERow::FrameCap:
-		S->SetFrameRateLimit(FrameCaps[NextIndex(FrameCaps, S->GetFrameRateLimit())]);
+		S->SetFrameRateLimit(FrameCaps[StepIndex(FrameCaps, S->GetFrameRateLimit(), Delta)]);
 		break;
 	case ERow::VSync:
 		S->SetVSyncEnabled(!S->IsVSyncEnabled());
@@ -263,7 +340,7 @@ void ShinobiSettings::Cycle(ERow Row, UWorld* World)
 		return;
 	case ERow::Snow:
 	{
-		const EShinobiSnow Next = EShinobiSnow((uint8(GetSavedSnow()) + 1) % UE_ARRAY_COUNT(SnowNames));
+		const EShinobiSnow Next = EShinobiSnow(SettingsWrap(int32(GetSavedSnow()) + Delta, UE_ARRAY_COUNT(SnowNames)));
 		GConfig->SetInt(ConfigSection, SnowKey, int32(Next), GGameUserSettingsIni);
 		GConfig->Flush(false, GGameUserSettingsIni);
 		if (AShinobiGameState* Session = World ? World->GetGameState<AShinobiGameState>() : nullptr)

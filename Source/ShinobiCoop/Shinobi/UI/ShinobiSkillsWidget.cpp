@@ -237,7 +237,8 @@ TSharedRef<SWidget> UShinobiSkillsWidget::RebuildWidget()
 			Slot->SetAutoSize(true);
 			return Slot;
 		};
-		if (!bMenuMode) // in the main menu the stage shows through
+		const bool bPage = bMenuMode || bEmbedded; // a tab page: the menu around it has the backdrop and the title
+		if (!bPage) // (in the main menu the stage shows through)
 		{
 			UBorder* Backdrop = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Backdrop"));
 			Backdrop->SetBrushColor(SkillsBackdropColor);
@@ -248,7 +249,7 @@ TSharedRef<SWidget> UShinobiSkillsWidget::RebuildWidget()
 
 		// Left: every known jutsu, under its group's heading.
 		UBorder* PoolPanel = ShinobiMenuStyle::PanelBox(*WidgetTree, FMargin(20.f, 6.f, 20.f, 16.f));
-		Place(PoolPanel, FAnchors(0.f, 0.f), FVector2D::ZeroVector, FVector2D(40.f, bMenuMode ? 20.f : 40.f));
+		Place(PoolPanel, FAnchors(0.f, 0.f), FVector2D::ZeroVector, FVector2D(40.f, bPage ? 20.f : 40.f));
 		UVerticalBox* Pool = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Pool"));
 		PoolPanel->SetContent(Pool);
 		if (bMenuMode)
@@ -258,7 +259,10 @@ TSharedRef<SWidget> UShinobiSkillsWidget::RebuildWidget()
 		}
 		else
 		{
-			Pool->AddChildToVerticalBox(ShinobiMenuStyle::Text(*WidgetTree, INVTEXT("JUTSU"), 34, FLinearColor::White, true));
+			if (!bEmbedded)
+			{
+				Pool->AddChildToVerticalBox(ShinobiMenuStyle::Text(*WidgetTree, INVTEXT("JUTSU"), 34, FLinearColor::White, true));
+			}
 			const AShinobiPlayerCharacter* Player = GetPlayer();
 			Known = Player ? Player->GetKnownJutsu() : TArray<TSubclassOf<UShinobiJutsuAbility>>();
 		}
@@ -311,7 +315,7 @@ TSharedRef<SWidget> UShinobiSkillsWidget::RebuildWidget()
 
 		// Bottom: the 8 slots with their keys, the hint or lock banner under them.
 		UVerticalBox* Bottom = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-		Place(Bottom, FAnchors(0.5f, 1.f), FVector2D(0.5f, 1.f), FVector2D(0.f, bMenuMode ? -20.f : -110.f)); // in game: above the HUD bar
+		Place(Bottom, FAnchors(0.5f, 1.f), FVector2D(0.5f, 1.f), FVector2D(0.f, bPage ? -20.f : -110.f)); // alone in game: above the HUD bar
 		UBorder* Bar = ShinobiMenuStyle::PanelBox(*WidgetTree, FMargin(12.f, 10.f));
 		Bottom->AddChildToVerticalBox(Bar)->SetHorizontalAlignment(HAlign_Center);
 		UHorizontalBox* Slots = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
@@ -338,7 +342,7 @@ TSharedRef<SWidget> UShinobiSkillsWidget::RebuildWidget()
 void UShinobiSkillsWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	if (!bMenuMode) // the main menu focuses it when its tab opens
+	if (!bMenuMode && !bEmbedded) // a menu focuses it when its tab opens
 	{
 		GetFocusTarget()->SetKeyboardFocus();
 	}
@@ -383,12 +387,12 @@ void UShinobiSkillsWidget::SelectJutsu(TSubclassOf<UShinobiJutsuAbility> Jutsu)
 void UShinobiSkillsWidget::NativeTick(const FGeometry& Geometry, float DeltaTime)
 {
 	Super::NativeTick(Geometry, DeltaTime);
-	if (!bMenuMode && !GetPlayer())
+	if (!bMenuMode && !bEmbedded && !GetPlayer())
 	{
 		Close(); // died, or the pawn went away
 		return;
 	}
-	RefreshCells();
+	RefreshCells(); // (on the pause menu's tab with no pawn: an empty bar)
 }
 
 void UShinobiSkillsWidget::RefreshCells()
@@ -553,9 +557,9 @@ FReply UShinobiSkillsWidget::NativeOnKeyDown(const FGeometry& Geometry, const FK
 		PickedPool = PickedSlot = INDEX_NONE; // B first drops the pick
 		return FReply::Handled();
 	}
-	if (bMenuMode)
+	if (bMenuMode || bEmbedded)
 	{
-		return Super::NativeOnKeyDown(Geometry, Event); // the main menu's Esc / B / tabs
+		return Super::NativeOnKeyDown(Geometry, Event); // the menu's Esc / B / K / tabs
 	}
 	if (bCancel || Key == EKeys::Escape || Key == ShinobiKeyBindings::Get(ShinobiKeyBindings::EBindable::SkillsScreen).Key || Key == EKeys::Gamepad_Special_Right)
 	{

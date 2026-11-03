@@ -9,8 +9,9 @@ class UTextBlock;
 class UVerticalBox;
 
 /**
- * Settings > Shortcuts: the keyboard/mouse key of each jutsu slot and core action (ShinobiKeyBindings). Click a key, then
- * press the new one (Alt allowed); a key already in use swaps over. Reset to defaults; Back returns to Settings.
+ * The CONTROLS tab (main menu and pause menu): the keyboard/mouse key of each jutsu slot and core action
+ * (ShinobiKeyBindings). Click a key, then press the new one (Alt allowed); a key already in use swaps over. Reset to
+ * defaults puts every key back.
  */
 UCLASS()
 class SHINOBICOOP_API UShinobiShortcutsWidget : public UUserWidget
@@ -18,12 +19,18 @@ class SHINOBICOOP_API UShinobiShortcutsWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	/** The menu hidden underneath, shown again on Back. */
-	TWeakObjectPtr<UUserWidget> Opener;
+	/** Where the panel's centre sits on its page (0-1). Set before it's built. */
+	FVector2D PanelAnchor = FVector2D(0.5f, 0.5f);
+
+	/** Slot 1's key: focus goes there when the tab opens. */
+	UWidget* GetFocusTarget() const;
+	/** Drops a "Press a key..." (leaving the tab). */
+	void StopListening();
+	bool IsListening() const { return Listening != INDEX_NONE; }
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
-	virtual void NativeConstruct() override;
+	virtual void NativeTick(const FGeometry& Geometry, float DeltaTime) override;
 	virtual FReply NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event) override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event) override;
 

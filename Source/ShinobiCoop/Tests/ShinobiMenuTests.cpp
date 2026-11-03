@@ -17,6 +17,9 @@
 #include "Camera/CameraComponent.h"
 #include "Blueprint/WidgetTree.h"
 #include "Shinobi/UI/ShinobiMainMenuWidget.h"
+#include "Shinobi/UI/ShinobiPauseMenuWidget.h"
+#include "Shinobi/UI/ShinobiShortcutsWidget.h"
+#include "GameFramework/GameUserSettings.h"
 #include "Shinobi/UI/ShinobiRosterPage.h"
 #include "Shinobi/UI/ShinobiSkillsWidget.h"
 #include "Shinobi/Hero/ShinobiBodyComponent.h"
@@ -247,7 +250,7 @@ bool FShinobiMainMenuTabFocusTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	UShinobiMainMenuWidget* Menu = CreateWidget<UShinobiMainMenuWidget>(W.World, UShinobiMainMenuWidget::StaticClass());
 	Menu->TakeWidget();
-	for (const EShinobiMenuTab Tab : { EShinobiMenuTab::Play, EShinobiMenuTab::Shinobi, EShinobiMenuTab::Create, EShinobiMenuTab::Jutsu, EShinobiMenuTab::Settings })
+	for (const EShinobiMenuTab Tab : { EShinobiMenuTab::Play, EShinobiMenuTab::Shinobi, EShinobiMenuTab::Create, EShinobiMenuTab::Jutsu, EShinobiMenuTab::Settings, EShinobiMenuTab::Controls })
 	{
 		Menu->SelectTab(Tab);
 		TestTrue(TEXT("tab selected"), Menu->GetTab() == Tab);
@@ -255,6 +258,63 @@ bool FShinobiMainMenuTabFocusTest::RunTest(const FString& Parameters)
 		TestNotNull(TEXT("something to focus"), Target);
 		TestTrue(TEXT("focus target is on that tab's page"), MenuTestIsInside(Target, Menu->GetTabPage(Tab)));
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPauseMenuTabsTest, "ShinobiCoop.UI.PauseMenuTabs", ShinobiTestFlags)
+bool FShinobiPauseMenuTabsTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	UShinobiPauseMenuWidget* Menu = CreateWidget<UShinobiPauseMenuWidget>(W.World, UShinobiPauseMenuWidget::StaticClass());
+	Menu->InitialTab = EShinobiPauseTab::Jutsu;
+	Menu->TakeWidget();
+	TestTrue(TEXT("opens on the tab asked for (K: JUTSU)"), Menu->GetTab() == EShinobiPauseTab::Jutsu);
+	for (const EShinobiPauseTab Tab : { EShinobiPauseTab::Game, EShinobiPauseTab::Jutsu, EShinobiPauseTab::Settings, EShinobiPauseTab::Controls })
+	{
+		Menu->SelectTab(Tab);
+		TestTrue(TEXT("tab selected"), Menu->GetTab() == Tab);
+		UWidget* Page = Menu->GetTabPage(Tab);
+		TestNotNull(TEXT("a page per tab"), Page);
+		const UWidget* Target = Menu->GetFocusTarget(Tab);
+		TestNotNull(TEXT("something to focus"), Target);
+		TestTrue(TEXT("focus target is on that tab's page"), MenuTestIsInside(Target, Page));
+	}
+	UShinobiSettingsWidget* Settings = Cast<UShinobiSettingsWidget>(Menu->GetTabPage(EShinobiPauseTab::Settings));
+	TestNotNull(TEXT("SETTINGS is the settings panel"), Settings);
+	TestNotNull(TEXT("CONTROLS is the key bindings"), Cast<UShinobiShortcutsWidget>(Menu->GetTabPage(EShinobiPauseTab::Controls)));
+	TestNotNull(TEXT("JUTSU is the Skills screen"), Cast<UShinobiSkillsWidget>(Menu->GetTabPage(EShinobiPauseTab::Jutsu)));
+	TestFalse(TEXT("Leave isn't armed until pressed"), Menu->IsLeaveArmed());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSettingsPanelStepTest, "ShinobiCoop.UI.SettingsPanelStepsBothWays", ShinobiTestFlags)
+bool FShinobiSettingsPanelStepTest::RunTest(const FString& Parameters)
+{
+	UGameUserSettings* Settings = GEngine->GetGameUserSettings();
+	const bool bOldVSync = Settings->IsVSyncEnabled();
+	const float OldCap = Settings->GetFrameRateLimit();
+	FShinobiTestWorld W;
+	UShinobiSettingsWidget* Panel = CreateWidget<UShinobiSettingsWidget>(W.World, UShinobiSettingsWidget::StaticClass());
+	Panel->bMainMenu = true;
+	Panel->TakeWidget();
+	const TArray<ShinobiSettings::ERow> Rows = ShinobiSettings::RowsFor(true);
+	const int32 Cap = Rows.IndexOfByKey(ShinobiSettings::ERow::FrameCap);
+	TestTrue(TEXT("the frame cap row is shown"), Cap != INDEX_NONE);
+	TestNotNull(TEXT("a first row to focus"), Panel->GetFirstEntry());
+	Settings->SetFrameRateLimit(60.f);
+	Panel->StepRow(Cap, 1);
+	TestEqual(TEXT("on: 60 -> 120"), Settings->GetFrameRateLimit(), 120.f);
+	TestEqual(TEXT("the row shows the new value"), Panel->GetShownValue(Cap).ToString(), FString(TEXT("120 FPS")));
+	Panel->StepRow(Cap, -1);
+	Panel->StepRow(Cap, -1);
+	TestEqual(TEXT("back twice: 120 -> 30"), Settings->GetFrameRateLimit(), 30.f);
+	TestEqual(TEXT("the row follows"), Panel->GetShownValue(Cap).ToString(), FString(TEXT("30 FPS")));
+	TestFalse(TEXT("a help line"), Panel->GetDescriptionText().IsEmpty());
+
+	Settings->SetVSyncEnabled(bOldVSync);
+	Settings->SetFrameRateLimit(OldCap);
+	Settings->ApplyNonResolutionSettings();
+	Settings->SaveSettings();
 	return true;
 }
 

@@ -13,37 +13,25 @@
 #include "Shinobi/Abilities/ShinobiLoadout.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/UI/ShinobiKeyBindings.h"
+#include "Shinobi/UI/ShinobiMenuStyle.h"
 #include "Shinobi/UI/ShinobiMenuWidgets.h"
 
 using ShinobiKeyBindings::EBindable;
 
 namespace
 {
-	const FLinearColor ShortcutsPanelColor(0.f, 0.f, 0.f, 0.8f);
-	const FLinearColor ShortcutsHeadingColor(0.91f, 0.79f, 0.48f);
-	const FLinearColor ShortcutsRowColor(0.88f, 0.88f, 0.9f);
-	const FLinearColor ShortcutsGreyColor(0.5f, 0.5f, 0.55f);
-	const FLinearColor ShortcutsGoodColor(0.91f, 0.79f, 0.48f);
+	const FLinearColor ShortcutsGoodColor(1.f, 0.75f, 0.3f);
 	const FLinearColor ShortcutsBadColor(1.f, 0.35f, 0.3f);
+	const FMargin ShortcutsChipPadding(10.f, 5.f);
 
-	UTextBlock* ShortcutsMakeText(UWidgetTree& Tree, const FString& Text, int32 Size, const FLinearColor& Color)
-	{
-		UTextBlock* Block = Tree.ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-		FSlateFontInfo Font = Block->GetFont();
-		Font.Size = Size;
-		Block->SetFont(Font);
-		Block->SetText(FText::FromString(Text));
-		Block->SetColorAndOpacity(FSlateColor(Color));
-		return Block;
-	}
-
-	UShinobiIndexButton* ShortcutsMakeButton(UWidgetTree& Tree, const FString& Label, int32 Index, FShinobiIndexClicked Handler)
+	UShinobiIndexButton* ShortcutsMakeButton(UWidgetTree& Tree, const FString& Label, int32 Size, int32 Index, FShinobiIndexClicked Handler, const FMargin& Padding)
 	{
 		UShinobiIndexButton* Button = Tree.ConstructWidget<UShinobiIndexButton>(UShinobiIndexButton::StaticClass());
 		Button->Index = Index;
 		Button->OnIndexClicked = MoveTemp(Handler);
 		Button->Arm();
-		Button->AddChild(ShortcutsMakeText(Tree, Label, 13, FLinearColor::Black));
+		Button->AddChild(ShinobiMenuStyle::Text(Tree, FText::FromString(Label), Size, FLinearColor::White));
+		ShinobiMenuStyle::StyleButton(*Button, false, Padding);
 		return Button;
 	}
 
@@ -65,45 +53,47 @@ TSharedRef<SWidget> UShinobiShortcutsWidget::RebuildWidget()
 		SetIsFocusable(true); // takes the key presses while a row listens
 		UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Root"));
 		WidgetTree->RootWidget = Root;
-		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Panel"));
-		Panel->SetBrushColor(ShortcutsPanelColor);
-		Panel->SetPadding(FMargin(36.f, 24.f));
+		UBorder* Panel = ShinobiMenuStyle::PanelBox(*WidgetTree, FMargin(34.f, 24.f, 34.f, 22.f));
 		UCanvasPanelSlot* PanelSlot = Root->AddChildToCanvas(Panel);
-		PanelSlot->SetAnchors(FAnchors(0.5f, 0.5f));
+		PanelSlot->SetAnchors(FAnchors(PanelAnchor.X, PanelAnchor.Y));
 		PanelSlot->SetAlignment(FVector2D(0.5f, 0.5f));
 		PanelSlot->SetAutoSize(true);
 
 		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
 		Panel->SetContent(Column);
-		UTextBlock* Title = ShortcutsMakeText(*WidgetTree, TEXT("SHORTCUTS"), 30, FLinearColor::White);
-		Column->AddChildToVerticalBox(Title)->SetHorizontalAlignment(HAlign_Center);
-		UTextBlock* Hint = ShortcutsMakeText(*WidgetTree, TEXT("Click a key, then press the new one  ·  Alt + key allowed  ·  Esc cancels  ·  keyboard & mouse only"), 11, ShortcutsGreyColor);
-		Column->AddChildToVerticalBox(Hint)->SetHorizontalAlignment(HAlign_Center);
+		UTextBlock* Hint = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(TEXT("Select a key, then press the new one  ·  Alt + key works  ·  Esc cancels  ·  gamepad buttons are fixed")), 13, ShinobiMenuStyle::TextDim);
+		Column->AddChildToVerticalBox(Hint)->SetPadding(FMargin(4.f, 0.f, 4.f, 6.f));
 
 		UHorizontalBox* Columns = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-		Column->AddChildToVerticalBox(Columns)->SetPadding(FMargin(0.f, 14.f));
+		Column->AddChildToVerticalBox(Columns)->SetPadding(FMargin(0.f, 6.f));
 		Chips.SetNum(static_cast<int32>(EBindable::Num));
-		const auto MakeColumn = [this, Columns](const TCHAR* Heading, int32 First, int32 Last)
+		const auto MakeColumn = [this, Columns](const TCHAR* Heading, int32 First, int32 Last, float Gap)
 		{
 			UVerticalBox* Rows = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-			Columns->AddChildToHorizontalBox(Rows)->SetPadding(FMargin(14.f, 0.f));
-			Rows->AddChildToVerticalBox(ShortcutsMakeText(*WidgetTree, Heading, 12, ShortcutsHeadingColor))->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+			Columns->AddChildToHorizontalBox(Rows)->SetPadding(FMargin(Gap, 0.f, 0.f, 0.f));
+			Rows->AddChildToVerticalBox(ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Heading), 13, ShinobiMenuStyle::Accent, true))->SetPadding(FMargin(4.f, 8.f, 0.f, 6.f));
 			for (int32 Bindable = First; Bindable <= Last; ++Bindable)
 			{
 				AddRow(Rows, Bindable);
 			}
 		};
-		MakeColumn(TEXT("JUTSU SLOTS"), static_cast<int32>(EBindable::Slot1), static_cast<int32>(EBindable::SkillsScreen));
-		MakeColumn(TEXT("ACTIONS"), static_cast<int32>(EBindable::Melee), static_cast<int32>(EBindable::Map));
+		MakeColumn(TEXT("JUTSU SLOTS"), static_cast<int32>(EBindable::Slot1), static_cast<int32>(EBindable::SkillsScreen), 0.f);
+		MakeColumn(TEXT("ACTIONS"), static_cast<int32>(EBindable::Melee), static_cast<int32>(EBindable::Map), 40.f);
 
-		MessageText = ShortcutsMakeText(*WidgetTree, FString(), 12, ShortcutsGoodColor);
-		Column->AddChildToVerticalBox(MessageText)->SetHorizontalAlignment(HAlign_Center);
+		UBorder* Rule = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+		Rule->SetBrush(ShinobiMenuStyle::ColorBrush(FLinearColor(1.f, 1.f, 1.f, 0.1f)));
+		Rule->SetPadding(FMargin(0.f, 0.5f));
+		Column->AddChildToVerticalBox(Rule)->SetPadding(FMargin(0.f, 12.f, 0.f, 10.f));
 		UHorizontalBox* Footer = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-		UVerticalBoxSlot* FooterSlot = Column->AddChildToVerticalBox(Footer);
-		FooterSlot->SetHorizontalAlignment(HAlign_Center);
-		FooterSlot->SetPadding(FMargin(0.f, 12.f, 0.f, 0.f));
-		Footer->AddChildToHorizontalBox(ShortcutsMakeButton(*WidgetTree, TEXT("  Reset to defaults  "), 0, FShinobiIndexClicked::CreateUObject(this, &UShinobiShortcutsWidget::OnFooter)))->SetPadding(FMargin(6.f, 0.f));
-		Footer->AddChildToHorizontalBox(ShortcutsMakeButton(*WidgetTree, TEXT("  Back  "), 1, FShinobiIndexClicked::CreateUObject(this, &UShinobiShortcutsWidget::OnFooter)))->SetPadding(FMargin(6.f, 0.f));
+		Column->AddChildToVerticalBox(Footer);
+		MessageText = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 14, ShortcutsGoodColor);
+		MessageText->SetAutoWrapText(true);
+		UHorizontalBoxSlot* MessageSlot = Footer->AddChildToHorizontalBox(MessageText);
+		MessageSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		MessageSlot->SetVerticalAlignment(VAlign_Center);
+		MessageSlot->SetPadding(FMargin(4.f, 0.f, 16.f, 0.f));
+		Footer->AddChildToHorizontalBox(ShortcutsMakeButton(*WidgetTree, TEXT("RESET TO DEFAULTS"), 14, 0,
+			FShinobiIndexClicked::CreateUObject(this, &UShinobiShortcutsWidget::OnFooter), FMargin(16.f, 7.f)))->SetVerticalAlignment(VAlign_Center);
 		RefreshChips();
 	}
 	return Super::RebuildWidget();
@@ -114,35 +104,49 @@ void UShinobiShortcutsWidget::AddRow(UVerticalBox* Column, int32 Bindable)
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 	Column->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 2.f));
 	USizeBox* LabelBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-	LabelBox->SetWidthOverride(210.f);
+	LabelBox->SetWidthOverride(230.f);
 	UHorizontalBox* Label = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 	LabelBox->AddChild(Label);
-	Label->AddChildToHorizontalBox(ShortcutsMakeText(*WidgetTree, ShinobiKeyBindings::Label(static_cast<EBindable>(Bindable)).ToString(), 13, ShortcutsRowColor))->SetVerticalAlignment(VAlign_Center);
+	UHorizontalBoxSlot* NameSlot = Label->AddChildToHorizontalBox(ShinobiMenuStyle::Text(*WidgetTree, ShinobiKeyBindings::Label(static_cast<EBindable>(Bindable)), 15, FLinearColor::White));
+	NameSlot->SetVerticalAlignment(VAlign_Center);
+	NameSlot->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
 	if (Bindable <= static_cast<int32>(EBindable::Slot8))
 	{
 		const ShinobiLoadout::FSlots Slots = ShortcutsCurrentSlots(*this);
 		const UClass* Jutsu = Slots.IsValidIndex(Bindable) ? Slots[Bindable].Get() : nullptr;
 		const FString Name = Jutsu ? GetDefault<UShinobiJutsuAbility>(const_cast<UClass*>(Jutsu))->DisplayName.ToString() : TEXT("empty");
-		UHorizontalBoxSlot* NameSlot = Label->AddChildToHorizontalBox(ShortcutsMakeText(*WidgetTree, Name, 11, ShortcutsGreyColor)); // for reference: the key stays with the slot
-		NameSlot->SetVerticalAlignment(VAlign_Center);
-		NameSlot->SetPadding(FMargin(8.f, 0.f, 0.f, 0.f));
+		UHorizontalBoxSlot* JutsuSlot = Label->AddChildToHorizontalBox(ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Name), 12, ShinobiMenuStyle::TextDim)); // for reference: the key stays with the slot
+		JutsuSlot->SetVerticalAlignment(VAlign_Center);
+		JutsuSlot->SetPadding(FMargin(8.f, 0.f, 0.f, 0.f));
 	}
 	Row->AddChildToHorizontalBox(LabelBox)->SetVerticalAlignment(VAlign_Center);
 	USizeBox* ChipBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-	ChipBox->SetWidthOverride(120.f);
-	UShinobiIndexButton* Chip = ShortcutsMakeButton(*WidgetTree, FString(), Bindable, FShinobiIndexClicked::CreateUObject(this, &UShinobiShortcutsWidget::OnKeyChip));
+	ChipBox->SetWidthOverride(140.f);
+	UShinobiIndexButton* Chip = ShortcutsMakeButton(*WidgetTree, FString(), 14, Bindable, FShinobiIndexClicked::CreateUObject(this, &UShinobiShortcutsWidget::OnKeyChip), ShortcutsChipPadding);
 	ChipBox->AddChild(Chip);
 	Row->AddChildToHorizontalBox(ChipBox);
 	Chips[Bindable] = Chip;
 }
 
-void UShinobiShortcutsWidget::NativeConstruct()
+UWidget* UShinobiShortcutsWidget::GetFocusTarget() const
 {
-	Super::NativeConstruct();
-	if (Chips.Num() > 0 && Chips[0])
+	return Chips.Num() > 0 && Chips[0] ? static_cast<UWidget*>(Chips[0]) : const_cast<UShinobiShortcutsWidget*>(this);
+}
+
+void UShinobiShortcutsWidget::StopListening()
+{
+	if (Listening != INDEX_NONE)
 	{
-		Chips[0]->SetKeyboardFocus(); // gamepad / keyboard navigation starts on slot 1
+		Listening = INDEX_NONE;
+		SetMessage(FString(), ShortcutsGoodColor);
+		RefreshChips();
 	}
+}
+
+void UShinobiShortcutsWidget::NativeTick(const FGeometry& Geometry, float DeltaTime)
+{
+	Super::NativeTick(Geometry, DeltaTime);
+	ShinobiMenuStyle::TickFocus(*WidgetTree); // focus highlight
 }
 
 void UShinobiShortcutsWidget::RefreshChips()
@@ -152,6 +156,7 @@ void UShinobiShortcutsWidget::RefreshChips()
 		if (UTextBlock* Text = Chips[Bindable] ? Cast<UTextBlock>(Chips[Bindable]->GetChildAt(0)) : nullptr)
 		{
 			Text->SetText(Bindable == Listening ? INVTEXT("Press a key...") : ShinobiKeyBindings::KeyLabel(ShinobiKeyBindings::Get(static_cast<EBindable>(Bindable))));
+			ShinobiMenuStyle::StyleButton(*Chips[Bindable], Bindable == Listening, ShortcutsChipPadding); // the listening key is lit
 		}
 	}
 }
@@ -173,18 +178,9 @@ void UShinobiShortcutsWidget::OnKeyChip(int32 Bindable)
 void UShinobiShortcutsWidget::OnFooter(int32 Index)
 {
 	Listening = INDEX_NONE;
-	if (Index == 0)
-	{
-		ShinobiKeyBindings::ResetToDefaults();
-		RefreshChips();
-		SetMessage(TEXT("All shortcuts are back to their defaults."), ShortcutsGoodColor);
-		return;
-	}
-	if (UUserWidget* Menu = Opener.Get())
-	{
-		Menu->SetVisibility(ESlateVisibility::Visible);
-	}
-	RemoveFromParent();
+	ShinobiKeyBindings::ResetToDefaults();
+	RefreshChips();
+	SetMessage(TEXT("All shortcuts are back to their defaults."), ShortcutsGoodColor);
 }
 
 void UShinobiShortcutsWidget::Bind(const FKey& Key, bool bAlt)

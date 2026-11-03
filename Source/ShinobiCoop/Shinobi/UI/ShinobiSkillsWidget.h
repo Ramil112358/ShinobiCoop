@@ -52,9 +52,9 @@ private:
 };
 
 /**
- * The Skills screen (K, or the pause menu's Jutsu): every jutsu the player knows above, their 8 bar slots below. Click a
- * jutsu then a slot (or drag it there) to equip; drag slot to slot to reorder; right-click a slot (or drag it to the
- * pool) to empty it. Swaps only out of combat and never for a jutsu on cooldown: the server decides (RequestLoadout).
+ * The Skills screen (the pause menu's JUTSU tab, which K opens, and the main menu's): every jutsu the player knows above,
+ * their 8 bar slots below. Click a jutsu then a slot (or drag it there) to equip; drag slot to slot to reorder; right-click
+ * a slot (or drag it to the pool) to empty it. Swaps only out of combat and never for a jutsu on cooldown: the server decides (RequestLoadout).
  * The game keeps running; gameplay input is blocked while it is open.
  */
 UCLASS()
@@ -66,6 +66,9 @@ public:
 	/** The main menu's JUTSU tab: the pawn's known jutsu and the saved bar, edited and saved directly (no pawn, no combat).
 	 * Esc / B / K are left to the menu. Set before the widget is built. */
 	bool bMenuMode = false;
+	/** The pause menu's JUTSU tab: the pawn's bar as in game, but no backdrop or title of its own, and Esc / B / K are
+	 * left to the menu. Set before the widget is built. */
+	bool bEmbedded = false;
 
 	void OnCellClicked(const UShinobiSkillCell& Cell);
 	void OnCellRightClicked(const UShinobiSkillCell& Cell);

@@ -111,7 +111,7 @@ namespace ShinobiKeyBindings
 	FText Label(EBindable Which)
 	{
 		static const TCHAR* Labels[] = { TEXT("Slot 1"), TEXT("Slot 2"), TEXT("Slot 3"), TEXT("Slot 4"), TEXT("Slot 5"), TEXT("Slot 6"), TEXT("Slot 7"), TEXT("Slot 8"),
-			TEXT("Skills screen"), TEXT("Melee"), TEXT("Dodge"), TEXT("Sprint"), TEXT("Block"), TEXT("Chakra charge"), TEXT("Revive"), TEXT("Lock-on"),
+			TEXT("Jutsu loadout"), TEXT("Melee"), TEXT("Dodge"), TEXT("Sprint"), TEXT("Block"), TEXT("Chakra charge"), TEXT("Revive"), TEXT("Lock-on"),
 			TEXT("Jump"), TEXT("Dismount dragon"), TEXT("Map") };
 		static_assert(UE_ARRAY_COUNT(Labels) == static_cast<int32>(EBindable::Num), "one label per bindable");
 		return FText::FromString(Labels[static_cast<int32>(Which)]);
