@@ -744,6 +744,27 @@ bool UShinobiBodyComponent::WearCharacter(const FString& Name)
 		*FString::Printf(TEXT("%sRTG_MannyTo%s.RTG_MannyTo%s"), *Dir, *Name, *Name));
 }
 
+FBoxSphereBounds UShinobiBodyComponent::CalcBounds(const FTransform& LocalToWorld) const
+{
+	const FBoxSphereBounds Engine = Super::CalcBounds(LocalToWorld);
+	// A skinned mesh is sized by its physics asset's bodies. SK_Hero's held only a few torso capsules (made before its rig
+	// was cleaned to unit-scale bones, Scripts/setup_hero.py), so its bounds sat inside the chest: occlusion culling then
+	// found that box hidden behind the hero's own depth from the frame before, dropped the mesh, found it visible again
+	// with the mesh gone, and so on, every other frame; temporal AA blended that into a see-through ghost (jumping, the
+	// cast poses and some idle frames covered the box the most). Every bone, padded by the skin round it, keeps it whole.
+	const TArray<FTransform>& Pose = GetComponentSpaceTransforms();
+	if (Pose.Num() == 0 || !GetSkinnedAsset())
+	{
+		return Engine;
+	}
+	FBox Bones(ForceInit);
+	for (const FTransform& Bone : Pose)
+	{
+		Bones += Bone.GetLocation();
+	}
+	return Engine + FBoxSphereBounds(Bones.ExpandBy(SkinPaddingCm).TransformBy(LocalToWorld));
+}
+
 void UShinobiBodyComponent::HideDriver()
 {
 	if (USkeletalMeshComponent* Driver = Cast<USkeletalMeshComponent>(GetAttachParent()))

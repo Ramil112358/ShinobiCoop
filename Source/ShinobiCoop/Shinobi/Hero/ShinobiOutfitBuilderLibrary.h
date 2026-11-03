@@ -9,8 +9,8 @@ class USkeletalMesh;
 
 /**
  * Editor-only helpers for Scripts/setup_hero.py: Chaos cloth on the outfit copies fitted to each roster body
- * (Scripts/character/skin_outfit.py; docs/character/outfit-steps.md). Every function logs and returns false on failure
- * (and does nothing outside the editor). The caller saves the assets.
+ * (Scripts/character/skin_outfit.py; docs/character/outfit-steps.md), and the bodies' ragdolls. Every function logs and
+ * returns false on failure (and does nothing outside the editor). The caller saves the assets.
  */
 UCLASS()
 class SHINOBICOOP_API UShinobiOutfitBuilderLibrary : public UBlueprintFunctionLibrary
@@ -53,4 +53,17 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|Outfit")
 	static UPhysicsAsset* BuildClothCollision(USkeletalMesh* Body, const FString& AssetPath);
+
+	/** How many bodies (one per bone it simulates) Physics has; 0 for none. setup_hero.py rebuilds a ragdoll with too few. */
+	UFUNCTION(BlueprintCallable, Category = "Shinobi|Outfit")
+	static int32 NumPhysicsBodies(const UPhysicsAsset* Physics);
+
+	/**
+	 * Rebuilds Mesh's own physics asset (its death ragdoll, which also sizes the mesh's bounds) in place with the editor's
+	 * default settings, the ones SkeletalMeshEditorSubsystem.create_physics_asset gave the other bodies. For an asset made
+	 * before the rig was cleaned to unit-scale bones: every bone looked shorter than the minimum size then, so it got only
+	 * a few torso bodies. The caller saves the asset.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Shinobi|Outfit")
+	static bool RebuildRagdoll(USkeletalMesh* Mesh);
 };

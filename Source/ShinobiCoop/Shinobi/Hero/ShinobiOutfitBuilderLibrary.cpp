@@ -439,3 +439,38 @@ UPhysicsAsset* UShinobiOutfitBuilderLibrary::BuildClothCollision(USkeletalMesh* 
 	return nullptr;
 #endif
 }
+
+int32 UShinobiOutfitBuilderLibrary::NumPhysicsBodies(const UPhysicsAsset* Physics)
+{
+	return Physics ? Physics->SkeletalBodySetups.Num() : 0;
+}
+
+bool UShinobiOutfitBuilderLibrary::RebuildRagdoll(USkeletalMesh* Mesh)
+{
+#if WITH_EDITOR
+	UPhysicsAsset* Physics = Mesh ? Mesh->GetPhysicsAsset() : nullptr;
+	if (!Physics)
+	{
+		UE_LOG(LogShinobiCoop, Warning, TEXT("RebuildRagdoll: %s has no physics asset"), Mesh ? *Mesh->GetName() : TEXT("no mesh"));
+		return false;
+	}
+	const int32 Before = Physics->SkeletalBodySetups.Num();
+	Physics->Modify();
+	Physics->SkeletalBodySetups.Reset();
+	Physics->ConstraintSetup.Reset();
+	Physics->UpdateBodySetupIndexMap(); // (stale maps of the old bodies crash CreateFromSkeletalMesh)
+	Physics->UpdateBoundsBodiesArray();
+	FPhysAssetCreateParams Params; // the editor's defaults: capsules, constraints, bones of 20 cm and up
+	FText Error;
+	if (!FPhysicsAssetUtils::CreateFromSkeletalMesh(Physics, Mesh, Params, Error, /*bSetToMesh=*/false, /*bShowProgress=*/false))
+	{
+		UE_LOG(LogShinobiCoop, Warning, TEXT("RebuildRagdoll: %s: %s"), *Mesh->GetName(), *Error.ToString());
+		return false;
+	}
+	Physics->MarkPackageDirty();
+	UE_LOG(LogShinobiCoop, Log, TEXT("RebuildRagdoll: %s: %d bodies (was %d)"), *Physics->GetName(), Physics->SkeletalBodySetups.Num(), Before);
+	return true;
+#else
+	return false;
+#endif
+}

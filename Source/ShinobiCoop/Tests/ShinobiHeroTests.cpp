@@ -146,6 +146,49 @@ bool FShinobiPickSwapsBodyTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiBodyBoundsTest, "ShinobiCoop.Hero.BoundsCoverWholeBody", ShinobiTestFlags)
+bool FShinobiBodyBoundsTest::RunTest(const FString& Parameters)
+{
+	// Bounds that sit inside the body (SK_Hero's physics asset had only torso bodies) let occlusion culling hide the mesh
+	// behind its own depth every other frame, which reads as a see-through ghost: each body's bounds hold all of it.
+	FShinobiOwnBodies OwnBodies;
+	FShinobiTestWorld W;
+	AShinobiPlayerCharacter* P = W.Spawn<AShinobiPlayerCharacter>();
+	if (!TestNotNull(TEXT("HeroMesh in use"), P->GetHeroMesh()))
+	{
+		return false;
+	}
+	int32 Checked = 0;
+	for (int32 Index = UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster) - 1; Index >= 0; --Index)
+	{
+		const FShinobiRosterEntry& Entry = AShinobiPlayerCharacter::Roster[Index];
+		const USkeletalMesh* Mesh = LoadObject<USkeletalMesh>(nullptr, Entry.Mesh, nullptr, LOAD_NoWarn | LOAD_Quiet);
+		if (!Mesh || !LoadObject<UIKRetargeter>(nullptr, Entry.Retargeter, nullptr, LOAD_NoWarn | LOAD_Quiet))
+		{
+			continue;
+		}
+		P->SetCharacterIndex(uint8(Index));
+		W.Tick(0.1f);
+		USkeletalMeshComponent* Body = P->GetHeroMesh();
+		Body->UpdateBounds();
+		const FBox Box = Body->Bounds.GetBox();
+		const FString Name = Entry.Name;
+		int32 Outside = 0;
+		for (const FTransform& Bone : Body->GetComponentSpaceTransforms())
+		{
+			Outside += Box.IsInside(Body->GetComponentTransform().TransformPosition(Bone.GetLocation())) ? 0 : 1;
+		}
+		TestEqual(Name + TEXT(": bones outside the bounds"), Outside, 0);
+		// As tall as the mesh itself (its imported bounds), not a box round the chest.
+		const float MeshHeight = Mesh->GetBounds().GetBox().GetSize().Z * Body->GetComponentScale().Z;
+		TestTrue(FString::Printf(TEXT("%s: bounds %.0f cm tall, mesh %.0f cm"), *Name, Box.GetSize().Z, MeshHeight), Box.GetSize().Z >= 0.9f * MeshHeight);
+		++Checked;
+	}
+	AddInfo(FString::Printf(TEXT("Checked %d imported roster character(s)"), Checked));
+	TestTrue(TEXT("At least the hero was checked"), Checked > 0);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSealHandContactTest, "ShinobiCoop.Hero.SealHandsTouchOnEveryBody", ShinobiTestFlags)
 bool FShinobiSealHandContactTest::RunTest(const FString& Parameters)
 {
@@ -305,6 +348,7 @@ bool FShinobiOutfitWornTest::RunTest(const FString& Parameters)
 			const USkeletalMeshComponent* Worn = P->GetOutfitMesh();
 			TestTrue(Who + TEXT(" shows the outfit mesh"), Worn->GetSkeletalMeshAsset() == Cloth && Worn->IsVisible());
 			TestTrue(Who + TEXT(" follows the body's pose"), Worn->LeaderPoseComponent.Get() == P->GetHeroMesh());
+			TestTrue(Who + TEXT(" takes the body's bounds"), Worn->bUseBoundsFromLeaderPoseComponent);
 			// The collar sits at the head, the hem above the knees: the cloth hangs within the body's height, centred on it
 			// (asset bounds moved by the component's offset: the component's own bounds follow the body's).
 			const FBox Cloth2 = Cloth->GetBounds().GetBox().ShiftBy(Worn->GetRelativeLocation());

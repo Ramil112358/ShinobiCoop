@@ -108,8 +108,30 @@ def import_hero(fbx, dest=HERO_DIR, name="SK_Hero", materials=True, physics=True
             raise RuntimeError(f"{name} has no physics asset (needed for the death ragdoll)")
         unreal.EditorAssetLibrary.save_loaded_asset(mesh)
         unreal.EditorAssetLibrary.save_loaded_asset(mesh.get_editor_property("physics_asset"))
+    if physics:
+        ensure_ragdoll(mesh, name)
     log(f"imported {fbx} -> {mesh.get_path_name()}")
     return mesh
+
+
+# A full ragdoll from the editor's defaults has a body per spine bone, the head, and each arm, hand, leg and foot (15 on
+# the Mixamo bodies). One made before clean_rig (bones 100x small) kept only a few torso bodies: SK_Hero's did. Its limbs
+# then can't ragdoll, and the mesh's bounds (sized by those bodies) sat inside its chest, which flickered it see-through.
+MIN_RAGDOLL_BODIES = 10
+
+
+def ensure_ragdoll(mesh, name):
+    """Rebuilds the mesh's physics asset in place when it has too few bodies (an existing one is otherwise kept)."""
+    physics = mesh.get_editor_property("physics_asset")
+    bodies = unreal.ShinobiOutfitBuilderLibrary.num_physics_bodies(physics)
+    if bodies >= MIN_RAGDOLL_BODIES:
+        return
+    if not unreal.ShinobiOutfitBuilderLibrary.rebuild_ragdoll(mesh):
+        raise RuntimeError(f"{name}: could not rebuild its ragdoll ({bodies} bodies)")
+    rebuilt = unreal.ShinobiOutfitBuilderLibrary.num_physics_bodies(physics)
+    unreal.EditorAssetLibrary.save_loaded_asset(physics)
+    # (A body whose rig really has fewer long bones keeps what the defaults give it; it is rebuilt again next run.)
+    log(f"{name}: ragdoll rebuilt ({bodies} -> {rebuilt} bodies)")
 
 
 def load_or_create(name, create, dest=HERO_DIR):
