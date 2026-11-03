@@ -4,7 +4,7 @@
 
 **Design.** The pause menu now works like the main menu (and most console or PC games' in-game menus): one screen with a tab bar, so nothing opens on top of anything else.
 
-- **Tabs:** GAME · JUTSU · SETTINGS · CONTROLS. Q / E or LB / RB switch tabs.
+- **Tabs:** GAME · JUTSU · SETTINGS · CONTROLS. Click any tab to open it, or step through them with Q / E or LB / RB. The tab bar sits above everything else on the screen (canvas Z order), so nothing can block a click on it. In the main menu the stage's drag-to-turn area used to cover the tab bar and swallow those clicks; it now starts below the bar.
   - **GAME:** the map and mode, then RESUME, INVITE FRIEND and LEAVE GAME. Leave asks first: the first press turns it into "CONFIRM LEAVE?" for 4 s. A PLAYERS card lists who's in the game, with ping, and marks you.
   - **JUTSU:** the Skills screen (`UShinobiSkillsWidget`, `bEmbedded`). It uses the live pawn's bar, with no backdrop or title of its own.
   - **SETTINGS:** the settings panel (`UShinobiSettingsWidget`).

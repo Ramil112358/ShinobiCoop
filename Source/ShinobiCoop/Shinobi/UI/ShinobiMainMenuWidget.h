@@ -44,8 +44,8 @@ enum class EShinobiMenuTab : uint8 { Play, Shinobi, Create, Jutsu, Settings, Con
 /**
  * The main menu (docs/superpowers/specs/2026-10-20-main-menu-polish-design.md): a top tab bar over the live stage
  * (AShinobiMenuStage). PLAY hosts on a map card (mode toggle, HOST) or lists found games; SHINOBI picks the character and
- * outfit; JUTSU edits the loadout; SETTINGS is the settings panel; CONTROLS the key bindings. Q/E or the bumpers switch
- * tabs, Esc or B goes to PLAY.
+ * outfit; JUTSU edits the loadout; SETTINGS is the settings panel; CONTROLS the key bindings. Click a tab, or Q/E or the
+ * bumpers, to switch; Esc or B goes to PLAY.
  */
 UCLASS()
 class SHINOBICOOP_API UShinobiMainMenuWidget : public UShinobiMenuWidget
@@ -60,6 +60,8 @@ public:
 	EShinobiMenuTab GetTab() const { return Tab; }
 	/** The page widget shown for Tab. */
 	UWidget* GetTabPage(EShinobiMenuTab Tab) const;
+	/** The top bar's button for Which: a click on it opens that tab. */
+	UShinobiIndexButton* GetTabButton(EShinobiMenuTab Which) const;
 	/** What gets keyboard focus when Tab opens (null only while the menu isn't built). */
 	UWidget* GetFocusTarget(EShinobiMenuTab Tab) const;
 	/** Pages built by other widgets (SHINOBI, JUTSU) say what to focus. */

@@ -14,8 +14,8 @@ enum class EShinobiPauseTab : uint8 { Game, Jutsu, Settings, Controls, Num };
 /**
  * The in-game menu (Esc / Start; K opens it on JUTSU): one screen with a tab bar, like the main menu, so nothing opens
  * over anything else. GAME: Resume, Invite Friend, Leave (asks twice) and who's in the game; JUTSU: the Skills screen;
- * SETTINGS: the settings panel; CONTROLS: the key bindings. Q / E or the bumpers switch tabs; Esc or Start resumes from
- * any tab, B goes back to GAME first. The world keeps running (it's online) but gameplay input waits until it closes.
+ * SETTINGS: the settings panel; CONTROLS: the key bindings. Click a tab, or Q / E or the bumpers, to switch; Esc or
+ * Start resumes from any tab, B goes back to GAME first. The world keeps running (it's online) but gameplay input waits until it closes.
  */
 UCLASS()
 class SHINOBICOOP_API UShinobiPauseMenuWidget : public UShinobiMenuWidget
@@ -30,6 +30,8 @@ public:
 	EShinobiPauseTab GetTab() const { return Tab; }
 	/** The page widget shown for Which. */
 	UWidget* GetTabPage(EShinobiPauseTab Which) const;
+	/** The top bar's button for Which: a click on it opens that tab. */
+	UShinobiIndexButton* GetTabButton(EShinobiPauseTab Which) const;
 	/** What gets keyboard focus when Which opens (null only while the menu isn't built). */
 	UWidget* GetFocusTarget(EShinobiPauseTab Which) const;
 	/** Keyboard / gamepad focus to the current tab's first control. */

@@ -16,6 +16,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Blueprint/WidgetTree.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Shinobi/UI/ShinobiMainMenuWidget.h"
 #include "Shinobi/UI/ShinobiPauseMenuWidget.h"
 #include "Shinobi/UI/ShinobiShortcutsWidget.h"
@@ -284,6 +285,38 @@ bool FShinobiPauseMenuTabsTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("CONTROLS is the key bindings"), Cast<UShinobiShortcutsWidget>(Menu->GetTabPage(EShinobiPauseTab::Controls)));
 	TestNotNull(TEXT("JUTSU is the Skills screen"), Cast<UShinobiSkillsWidget>(Menu->GetTabPage(EShinobiPauseTab::Jutsu)));
 	TestFalse(TEXT("Leave isn't armed until pressed"), Menu->IsLeaveArmed());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMenuTabClickTest, "ShinobiCoop.UI.MenuTabsOpenOnClick", ShinobiTestFlags)
+bool FShinobiMenuTabClickTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	// Any tab, in any order: a click on its button opens it (not only Q / E stepping through them).
+	UShinobiPauseMenuWidget* Pause = CreateWidget<UShinobiPauseMenuWidget>(W.World, UShinobiPauseMenuWidget::StaticClass());
+	Pause->TakeWidget();
+	for (const EShinobiPauseTab Tab : { EShinobiPauseTab::Controls, EShinobiPauseTab::Game, EShinobiPauseTab::Settings, EShinobiPauseTab::Jutsu })
+	{
+		UShinobiIndexButton* Button = Pause->GetTabButton(Tab);
+		TestNotNull(TEXT("pause menu: a button per tab"), Button);
+		if (Button)
+		{
+			Button->OnClicked.Broadcast();
+			TestTrue(TEXT("pause menu: the clicked tab opens"), Pause->GetTab() == Tab);
+		}
+	}
+	UShinobiMainMenuWidget* Menu = CreateWidget<UShinobiMainMenuWidget>(W.World, UShinobiMainMenuWidget::StaticClass());
+	Menu->TakeWidget();
+	for (const EShinobiMenuTab Tab : { EShinobiMenuTab::Controls, EShinobiMenuTab::Shinobi, EShinobiMenuTab::Settings, EShinobiMenuTab::Play, EShinobiMenuTab::Jutsu })
+	{
+		UShinobiIndexButton* Button = Menu->GetTabButton(Tab);
+		TestNotNull(TEXT("main menu: a button per tab"), Button);
+		if (Button)
+		{
+			Button->OnClicked.Broadcast();
+			TestTrue(TEXT("main menu: the clicked tab opens"), Menu->GetTab() == Tab);
+		}
+	}
 	return true;
 }
 
@@ -665,6 +698,8 @@ bool FShinobiMainMenuPreviewCatcherTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("it takes clicks"), Catcher->GetVisibility() == ESlateVisibility::Visible);
 	TestTrue(TEXT("under the pages"), Root->GetChildIndex(Catcher) != INDEX_NONE && Root->GetChildIndex(Catcher) < Root->GetChildIndex(Menu->GetPagesWidget()));
 	TestTrue(TEXT("the root itself doesn't"), Root->GetVisibility() != ESlateVisibility::Visible);
+	const UCanvasPanelSlot* CatcherSlot = Cast<UCanvasPanelSlot>(Catcher->Slot);
+	TestTrue(TEXT("it leaves the tab bar clear (a click on a tab reaches the tab)"), CatcherSlot && CatcherSlot->GetOffsets().Top > 0.f);
 	return true;
 }
 

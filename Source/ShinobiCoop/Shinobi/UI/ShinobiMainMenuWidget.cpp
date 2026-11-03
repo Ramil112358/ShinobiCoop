@@ -39,6 +39,8 @@ namespace
 	static_assert(UE_ARRAY_COUNT(MainMenuTabNames) == int32(EShinobiMenuTab::Num), "a name per tab");
 	constexpr float MainMenuFadeSeconds = 0.2f;
 	constexpr float MainMenuTopBar = 64.f;
+	/** The top bar's canvas Z order: over everything but the studio fade. */
+	constexpr int32 MainMenuBarZ = 10;
 
 	const TCHAR* MainMenuModeName(EShinobiPvpFormat Format)
 	{
@@ -119,16 +121,18 @@ TSharedRef<SWidget> UShinobiMainMenuWidget::RebuildWidget()
 		UBorder* Bar = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
 		Bar->SetBrush(ShinobiMenuStyle::ColorBrush(FLinearColor(0.f, 0.f, 0.f, 0.55f)));
 		Bar->SetPadding(FMargin(28.f, 10.f));
-		MainMenuPlace(Root, Bar, FAnchors(0.f, 0.f, 1.f, 0.f), FMargin(0.f, 0.f, 0.f, MainMenuTopBar));
+		// Above the pages and the preview's drag area, so a click on a tab always reaches it (only the studio fade covers it).
+		MainMenuPlace(Root, Bar, FAnchors(0.f, 0.f, 1.f, 0.f), FMargin(0.f, 0.f, 0.f, MainMenuTopBar))->SetZOrder(MainMenuBarZ);
 		UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 		Bar->SetContent(Tabs);
 		for (int32 Index = 0; Index < int32(EShinobiMenuTab::Num); ++Index)
 		{
 			UShinobiIndexButton* Button = MakeButton(MainMenuTabNames[Index], 16, false, Index, FShinobiIndexClicked::CreateUObject(this, &UShinobiMainMenuWidget::OnTabButton));
+			Button->SetCursor(EMouseCursor::Hand); // a click opens the tab
 			Tabs->AddChildToHorizontalBox(Button)->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f));
 			TabButtons.Add(Button);
 		}
-		UTextBlock* Keys = ShinobiMenuStyle::Text(*WidgetTree, INVTEXT("Q / E"), 11, ShinobiMenuStyle::TextDim);
+		UTextBlock* Keys = ShinobiMenuStyle::Text(*WidgetTree, INVTEXT("or Q / E"), 11, ShinobiMenuStyle::TextDim);
 		UHorizontalBoxSlot* KeysSlot = Tabs->AddChildToHorizontalBox(Keys);
 		KeysSlot->SetVerticalAlignment(VAlign_Center);
 		KeysSlot->SetPadding(FMargin(6.f, 0.f));
@@ -137,10 +141,10 @@ TSharedRef<SWidget> UShinobiMainMenuWidget::RebuildWidget()
 		StatusText = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 13, ShinobiMenuStyle::TextDim);
 		Tabs->AddChildToHorizontalBox(StatusText)->SetVerticalAlignment(VAlign_Center);
 
-		// Under the pages: the open stage, where the mouse turns and zooms the preview.
+		// Under the pages and below the top bar: the open stage, where the mouse turns and zooms the preview.
 		PreviewCatcher = CreateWidget<UShinobiPreviewCatcher>(this, UShinobiPreviewCatcher::StaticClass());
 		PreviewCatcher->Menu = this;
-		MainMenuPlace(Root, PreviewCatcher, FAnchors(0.f, 0.f, 1.f, 1.f), FMargin(0.f));
+		MainMenuPlace(Root, PreviewCatcher, FAnchors(0.f, 0.f, 1.f, 1.f), FMargin(0.f, MainMenuTopBar, 0.f, 0.f));
 
 		Pages = WidgetTree->ConstructWidget<UWidgetSwitcher>(UWidgetSwitcher::StaticClass(), TEXT("Pages"));
 		MainMenuPlace(Root, Pages, FAnchors(0.f, 0.f, 1.f, 1.f), FMargin(0.f, MainMenuTopBar, 0.f, 40.f));
@@ -215,7 +219,7 @@ TSharedRef<SWidget> UShinobiMainMenuWidget::RebuildWidget()
 		Blackout = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
 		Blackout->SetBrush(ShinobiMenuStyle::ColorBrush(FLinearColor::Black));
 		Blackout->SetVisibility(ESlateVisibility::Collapsed);
-		MainMenuPlace(Root, Blackout, FAnchors(0.f, 0.f, 1.f, 1.f), FMargin(0.f));
+		MainMenuPlace(Root, Blackout, FAnchors(0.f, 0.f, 1.f, 1.f), FMargin(0.f))->SetZOrder(MainMenuBarZ + 1);
 	}
 	return UUserWidget::RebuildWidget(); // not UShinobiMenuWidget's: this menu has no centred column
 }
@@ -700,6 +704,11 @@ FReply UShinobiMainMenuWidget::NativeOnAnalogValueChanged(const FGeometry& Geome
 		UseGamepadHints(true);
 	}
 	return FReply::Handled();
+}
+
+UShinobiIndexButton* UShinobiMainMenuWidget::GetTabButton(EShinobiMenuTab Which) const
+{
+	return TabButtons.IsValidIndex(int32(Which)) ? TabButtons[int32(Which)].Get() : nullptr;
 }
 
 void UShinobiMainMenuWidget::OnTabButton(int32 Index)

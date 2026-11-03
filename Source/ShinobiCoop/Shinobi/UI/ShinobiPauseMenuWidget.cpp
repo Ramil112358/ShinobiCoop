@@ -29,6 +29,8 @@ namespace
 	static_assert(UE_ARRAY_COUNT(PauseTabNames) == int32(EShinobiPauseTab::Num), "a name per tab");
 	constexpr float PauseTopBar = 64.f;
 	constexpr float PauseFooter = 52.f;
+	/** The bars' canvas Z order: over the pages. */
+	constexpr int32 PauseBarZ = 10;
 	constexpr float PauseFadeSeconds = 0.15f;
 	constexpr double PauseLeaveArmSeconds = 4.0;
 	const FLinearColor PauseBackdropColor(0.01f, 0.01f, 0.03f, 0.7f);
@@ -99,12 +101,14 @@ TSharedRef<SWidget> UShinobiPauseMenuWidget::RebuildWidget()
 		UBorder* Bar = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
 		Bar->SetBrush(ShinobiMenuStyle::ColorBrush(PauseBarColor));
 		Bar->SetPadding(FMargin(28.f, 10.f));
-		PausePlace(Root, Bar, FAnchors(0.f, 0.f, 1.f, 0.f), FMargin(0.f, 0.f, 0.f, PauseTopBar));
+		// Over the pages, so a click on a tab always reaches it.
+		PausePlace(Root, Bar, FAnchors(0.f, 0.f, 1.f, 0.f), FMargin(0.f, 0.f, 0.f, PauseTopBar))->SetZOrder(PauseBarZ);
 		UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 		Bar->SetContent(Tabs);
 		for (int32 Index = 0; Index < int32(EShinobiPauseTab::Num); ++Index)
 		{
 			UShinobiIndexButton* Button = PauseMakeButton(*WidgetTree, PauseTabNames[Index], 16, false, Index, FShinobiIndexClicked::CreateUObject(this, &UShinobiPauseMenuWidget::OnTabButton));
+			Button->SetCursor(EMouseCursor::Hand); // a click opens the tab
 			Tabs->AddChildToHorizontalBox(Button)->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f));
 			TabButtons.Add(Button);
 		}
@@ -143,7 +147,7 @@ TSharedRef<SWidget> UShinobiPauseMenuWidget::RebuildWidget()
 		Footer->SetBrush(ShinobiMenuStyle::ColorBrush(PauseBarColor));
 		Footer->SetPadding(FMargin(28.f, 0.f));
 		Footer->SetVerticalAlignment(VAlign_Center);
-		PausePlace(Root, Footer, FAnchors(0.f, 1.f, 1.f, 1.f), FMargin(0.f, -PauseFooter, 0.f, PauseFooter));
+		PausePlace(Root, Footer, FAnchors(0.f, 1.f, 1.f, 1.f), FMargin(0.f, -PauseFooter, 0.f, PauseFooter))->SetZOrder(PauseBarZ);
 		UHorizontalBox* FooterLine = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 		Footer->SetContent(FooterLine);
 		MessageText = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 14, PauseMessageColor);
@@ -356,6 +360,11 @@ FReply UShinobiPauseMenuWidget::NativeOnMouseMove(const FGeometry& Geometry, con
 	return Super::NativeOnMouseMove(Geometry, Event);
 }
 
+UShinobiIndexButton* UShinobiPauseMenuWidget::GetTabButton(EShinobiPauseTab Which) const
+{
+	return TabButtons.IsValidIndex(int32(Which)) ? TabButtons[int32(Which)].Get() : nullptr;
+}
+
 void UShinobiPauseMenuWidget::OnTabButton(int32 Index)
 {
 	SelectTab(EShinobiPauseTab(Index));
@@ -506,7 +515,7 @@ void UShinobiPauseMenuWidget::UseGamepadHints(bool bGamepad)
 	struct FHint { TArray<const TCHAR*> Keys; const TCHAR* Label; };
 	const TArray<FHint> Shown = bGamepad
 		? TArray<FHint>{ { { TEXT("LB"), TEXT("RB") }, TEXT("Switch tab") }, { { TEXT("A") }, TEXT("Select") }, { { TEXT("B") }, TEXT("Back") }, { { TEXT("Start") }, TEXT("Resume") } }
-		: TArray<FHint>{ { { TEXT("Q"), TEXT("E") }, TEXT("Switch tab") }, { { TEXT("Esc") }, TEXT("Resume") } };
+		: TArray<FHint>{ { { TEXT("Q"), TEXT("E") }, TEXT("Switch tab (or click one)") }, { { TEXT("Esc") }, TEXT("Resume") } };
 	for (const FHint& Hint : Shown)
 	{
 		for (const TCHAR* Key : Hint.Keys)
