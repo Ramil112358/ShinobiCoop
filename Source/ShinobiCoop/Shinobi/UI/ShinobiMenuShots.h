@@ -9,9 +9,9 @@
  *   -ShinobiMenuTour (Lvl_MainMenu): every tab, an arena in 2v2 and the empty Find Games list -> ShinobiMenuTour_<n>.png
  *   -ShinobiMenuPortraits (Lvl_MainMenu, a 3:4 window): each roster character's head and shoulders, no UI
  *     -> ShinobiMenuPortrait_<Name>.png (the SHINOBI tab's cards)
- *   -ShinobiCreatorTour (Lvl_MainMenu): CREATE's tabs, light presets, zooms and turns -> ShinobiCreatorTour_<n>_<What>.png
- *   -ShinobiThumbnailShot (Lvl_MainMenu, a square window): each wardrobe piece alone on its sex's base in the CREATE
- *     studio, framed on the piece, no UI -> ShinobiThumbnail_<Slot>_<Row>.png (the CREATE tab's strips)
+ *   -ShinobiCreatorTour (Lvl_MainMenu): the creator's categories, light presets, zooms and turns -> ShinobiCreatorTour_<n>_<What>.png
+ *   -ShinobiThumbnailShot (Lvl_MainMenu, a square window): each wardrobe piece alone on its sex's base in the creator's
+ *     studio, framed on the piece, no UI -> ShinobiThumbnail_<Slot>_<Row>.png (the creator's strips)
  *   -ShinobiMapShot (any level): the level from a camera tagged ShinobiMenuShot, else above and behind the first
  *     PlayerStart, pawn and UI hidden -> ShinobiMapShot_<Id>.png (the PLAY tab's map cards)
  */

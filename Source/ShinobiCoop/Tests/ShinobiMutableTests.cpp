@@ -1638,7 +1638,7 @@ bool FShinobiMutableMakeUpOnFaceTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableUpdateSkinWithoutRebuildTest, "ShinobiCoop.Mutable.UpdateSkinWithoutRebuild", ShinobiTestFlags)
 bool FShinobiMutableUpdateSkinWithoutRebuildTest::RunTest(const FString& Parameters)
 {
-	// The CREATE tab's skin tone slider: the worn body, head and neck retint at once, no Mutable build.
+	// The creator's skin tone slider: the worn body, head and neck retint at once, no Mutable build.
 	const FLinearColor Dark = UShinobiBodyComponent::SkinToneMultiplier(0);
 	WearAtTone(*this, TEXT("Ramil"), 128, [this, Dark](TSharedRef<FMutableWearer> Wearer, FLinearColor HeadTint)
 	{
@@ -1705,7 +1705,7 @@ bool FShinobiMutableBuildAfterWorldGoneTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableRecolourWithoutRebuildTest, "ShinobiCoop.Mutable.RecolourWithoutRebuild", ShinobiTestFlags)
 bool FShinobiMutableRecolourWithoutRebuildTest::RunTest(const FString& Parameters)
 {
-	// The CREATE tab's swatches: a worn piece takes another colour, then its own again, at once (UpdateSkin), no build.
+	// The creator's swatches: a worn piece takes another colour, then its own again, at once (UpdateSkin), no build.
 	const int32 Red = PaletteIndex(TEXT("Red"));
 	const int32 Navy = PaletteIndex(TEXT("Navy"));
 	const UDataTable* Palette = LoadObject<UDataTable>(nullptr, ShinobiMutable::PalettePath);
@@ -1742,7 +1742,7 @@ bool FShinobiMutableRecolourWithoutRebuildTest::RunTest(const FString& Parameter
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMutableEveryRowHasThumbnailTest, "ShinobiCoop.Mutable.EveryRowHasThumbnail", ShinobiTestFlags)
 bool FShinobiMutableEveryRowHasThumbnailTest::RunTest(const FString& Parameters)
 {
-	// The CREATE tab's strips: every wardrobe piece (Scripts/menu_shots.ps1 -Thumbnails, setup_mutable.py thumbnails) and
+	// The creator's strips: every wardrobe piece (Scripts/menu_shots.ps1 -Thumbnails, setup_mutable.py thumbnails) and
 	// every tattoo design has a picture.
 	int32 Checked = 0;
 	for (const TCHAR* Slot : ShinobiMutable::SlotNames)

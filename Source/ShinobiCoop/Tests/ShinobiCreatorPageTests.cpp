@@ -19,7 +19,7 @@
 
 namespace
 {
-	/** A menu stage and a CREATE page on it, kept alive across latent waits. */
+	/** A menu stage and a creator page on it, kept alive across latent waits. */
 	struct FCreatorBench
 	{
 		FShinobiTestWorld World;

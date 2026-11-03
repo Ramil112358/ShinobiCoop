@@ -60,7 +60,7 @@ struct FShinobiWardrobeRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Wardrobe)
 	TSoftObjectPtr<UTexture2D> Thumbnail;
 
-	/** Whether the piece's material takes the Wear parameter (the CREATE tab shows a Wear slider for it). */
+	/** Whether the piece's material takes the Wear parameter (the creator shows a Wear slider for it). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Wardrobe)
 	bool bHasWear = false;
 

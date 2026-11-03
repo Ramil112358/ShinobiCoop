@@ -31,11 +31,12 @@ enum class EShinobiLookEdit : uint8
 };
 
 /**
- * The main menu's CREATE tab (docs/superpowers/specs/2026-10-29-mutable-customisation-design.md, "CREATE tab UI"): make a
- * character on the stage and save it to one of UShinobiCharacterSave's slots. CHARACTER starts from a roster preset or a
- * slot and picks sex and head; CLOTHES, BODY & SKIN and FACE edit the rest. Every row changes the look through EditLook.
- * SAVE & PLAY stores the slot and plays it from the next match (a roster pick on the SHINOBI tab switches back). The code
- * box shows the look's preset code; LOAD CODE wears a pasted one.
+ * The character creator (docs/superpowers/specs/2026-10-29-mutable-customisation-design.md, "CREATE tab UI"), opened from
+ * the main menu's SHINOBI tab: its "+" card makes a new character, EDIT on a made one's card changes it (Open). It makes a
+ * character on the stage and saves it to one of UShinobiCharacterSave's slots. CHARACTER starts from a roster preset and
+ * picks sex and head; CLOTHES, BODY & SKIN and FACE edit the rest. Every row changes the look through EditLook. SAVE & PLAY
+ * stores the slot, plays it from the next match and goes back to the SHINOBI strip (OnSaved); BACK goes back unsaved
+ * (OnBack). The code box shows the look's preset code; LOAD CODE wears a pasted one.
  */
 UCLASS()
 class SHINOBICOOP_API UShinobiCreatorPage : public UUserWidget
@@ -50,9 +51,19 @@ public:
 
 	/** Set by the main menu before the page is built; may stay null (tests). */
 	TWeakObjectPtr<AShinobiMenuStage> Stage;
+	/** BACK: leave without saving. */
+	FSimpleDelegate OnBack;
+	/** SAVE & PLAY saved the slot. */
+	FSimpleDelegate OnSaved;
 
+	/** Starts editing slot SlotIndex afresh (an empty one starts from the default look, on CHARACTER), re-reading the
+	 * save and the outfit; the stage wears it on the next ShowOnStage. */
+	void Open(int32 SlotIndex);
 	/** Edits slot SlotIndex (an empty one starts from the default look) and shows it on the stage. */
 	void EditSlot(int32 SlotIndex);
+	int32 GetEditedSlot() const { return EditedSlot; }
+	/** Whether the edited slot already holds a made character (EDIT) rather than a new one ("+"). */
+	bool IsEditingMade() const;
 	/** Starts from Catalog->Presets[PresetIndex] (named after its roster character). */
 	void ApplyPreset(int32 PresetIndex);
 	void ShowCategory(ECategory Category);
@@ -130,9 +141,10 @@ private:
 	UPROPERTY()
 	TObjectPtr<UShinobiCreatorCatalog> Catalog;
 	UPROPERTY()
-	TArray<TObjectPtr<UShinobiIndexButton>> SlotButtons;
-	UPROPERTY()
 	TArray<TObjectPtr<UShinobiIndexButton>> CategoryButtons;
+	/** NEW SHINOBI or EDIT SHINOBI, over the categories. */
+	UPROPERTY()
+	TObjectPtr<UTextBlock> HeaderText;
 	/** The rows, straight in the scroll box, which follows focus down past the fold. */
 	UPROPERTY()
 	TObjectPtr<UScrollBox> Rows;

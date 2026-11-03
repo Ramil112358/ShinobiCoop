@@ -54,7 +54,7 @@ public:
 	 * already worn: the creator's live edits. */
 	void UpdateBody(const FShinobiAppearance& Look);
 	/** The look's skin tone, tattoos, make-up, freckles and piece colours on the worn body at once, without a Mutable
-	 * build (the CREATE tab's skin rows and swatches; the worn mesh and head stay). */
+	 * build (the creator's skin rows and swatches; the worn mesh and head stay). */
 	void UpdateSkin(const FShinobiAppearance& Look);
 
 	/** The body slider names, in order (FShinobiAppearance::BodyShape). */

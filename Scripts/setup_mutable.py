@@ -325,7 +325,7 @@ TATTOOS, TATTOO_REGIONS_TABLE = f"{MUTABLE_ROOT}/DT_Tattoos", f"{MUTABLE_ROOT}/D
 
 
 def tattoos():
-    # A design's thumbnail is the design itself (a white mask, shown on the CREATE tab's dark buttons).
+    # A design's thumbnail is the design itself (a white mask, shown on the creator's dark buttons).
     designs = [{"Name": path.rsplit("/", 1)[1][len("T_Tattoo"):-len("_alpha")], "Texture": asset_path(path), "Thumbnail": asset_path(path)}
                for path in TATTOO_DESIGNS if EAL.does_asset_exist(path)]
     new_table(TATTOOS, unreal.ShinobiTattooDesign, designs)

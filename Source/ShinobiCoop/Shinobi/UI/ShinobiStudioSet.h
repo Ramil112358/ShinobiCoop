@@ -10,7 +10,7 @@ class UPostProcessComponent;
 class URectLightComponent;
 class UStaticMeshComponent;
 
-/** The CREATE tab's light presets: they retune the same three lights and the backdrop's tint. */
+/** The creator's light presets: they retune the same three lights and the backdrop's tint. */
 UENUM()
 enum class EShinobiStudioLight : uint8
 {
@@ -20,10 +20,10 @@ enum class EShinobiStudioLight : uint8
 };
 
 /**
- * The CREATE tab's photo studio (Lvl_MainMenu; Scripts/setup_menu.py places it high above the rooftop): a seamless sphere
+ * The creator's photo studio (Lvl_MainMenu; Scripts/setup_menu.py places it high above the rooftop): a seamless sphere
  * backdrop that also shuts out the rooftop's sun and sky, a dark floor with a faint orange ring, a key light front-left and
  * above, a fill from the right at 35 % and a cool rim from behind, and a post process with fixed exposure. The menu stage
- * moves here while CREATE is open (AShinobiMenuStage::SetStudio). Faces +X like the stage: the camera looks back along -X.
+ * moves here while the creator is open (AShinobiMenuStage::SetStudio). Faces +X like the stage: the camera looks back along -X.
  */
 UCLASS()
 class SHINOBICOOP_API AShinobiStudioSet : public AActor

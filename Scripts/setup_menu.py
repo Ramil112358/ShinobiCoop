@@ -5,7 +5,7 @@ PolyHaven props under /Game/Shinobi/London). Close the GUI editor, then:
     powershell -File Scripts/run_python.ps1 -Script Scripts/setup_menu.py
 
 The stage stands at the origin facing +X; its camera looks back along -X, so everything behind the character is at -X.
-CREATE's studio (AShinobiStudioSet, its materials built here under /Game/Shinobi/UI/Studio) floats high above the roof.
+The creator's studio (AShinobiStudioSet, its materials built here under /Game/Shinobi/UI/Studio) floats high above the roof.
 """
 import unreal
 
@@ -126,7 +126,7 @@ s.set_editor_property("override_vignette_intensity", True)
 s.set_editor_property("vignette_intensity", 0.6)
 pp.set_editor_property("settings", s)
 
-# CREATE's studio: AShinobiStudioSet builds itself; its three materials are made here (rebuilt in place, so the level keeps them).
+# The creator's studio: AShinobiStudioSet builds itself; its three materials are made here (rebuilt in place, so the level keeps them).
 MEL = unreal.MaterialEditingLibrary
 STUDIO = "/Game/Shinobi/UI/Studio"
 

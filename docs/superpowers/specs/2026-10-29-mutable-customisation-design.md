@@ -114,9 +114,9 @@ Rows hold the existing per-frame cloth copies (`SK_Akatsuki_Crowd*`, `SK_Hokage_
 
 ## CREATE tab UI and preview
 
-Left panel with category tabs, character on the stage to the right, built with `UShinobiCreatorPage`'s existing picker and slider rows.
+Left panel with category tabs, character on the stage to the right, built with `UShinobiCreatorPage`'s existing picker and slider rows. *(2026-11-03)* No longer a tab of its own: the SHINOBI tab's **+ CREATE** card opens it on a free save slot and a made character's EDIT opens it on that slot (the made characters are cards on the SHINOBI strip, so the creator has no slot row). BACK / Esc / B goes back to the strip unsaved; SAVE & PLAY saves and goes back.
 
-- **Character:** roster preset strip, 4 save slots, Sex, Head.
+- **Character:** roster preset strip, Sex, Head.
 - **Clothes:** one row per slot with a thumbnail strip, palette swatch and Wear slider where supported.
 - **Body & Skin:** Build Type and Blend, the existing body sliders, Skin Tone as a gradient bar, Aged, Make Up, Freckles, Tattoos list (add, design, region, offset, rotation, scale, delete).
 - **Face:** face picker, blend faces and face sliders for MetaHuman faces; colour options only for static heads.

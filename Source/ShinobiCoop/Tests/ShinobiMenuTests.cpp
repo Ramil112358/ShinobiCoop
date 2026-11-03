@@ -25,6 +25,10 @@
 #include "Shinobi/UI/ShinobiRosterPage.h"
 #include "Shinobi/UI/ShinobiSkillsWidget.h"
 #include "Shinobi/Hero/ShinobiBodyComponent.h"
+#include "Shinobi/Hero/ShinobiCharacterSave.h"
+#include "Shinobi/UI/ShinobiCreatorPage.h"
+#include "Components/TextBlock.h"
+#include "Kismet/GameplayStatics.h"
 #include "Engine/SkeletalMesh.h"
 #include "Shinobi/UI/ShinobiSettings.h"
 #include "Shinobi/ShinobiGameState.h"
@@ -252,7 +256,7 @@ bool FShinobiMainMenuTabFocusTest::RunTest(const FString& Parameters)
 	FShinobiTestWorld W;
 	UShinobiMainMenuWidget* Menu = CreateWidget<UShinobiMainMenuWidget>(W.World, UShinobiMainMenuWidget::StaticClass());
 	Menu->TakeWidget();
-	for (const EShinobiMenuTab Tab : { EShinobiMenuTab::Play, EShinobiMenuTab::Shinobi, EShinobiMenuTab::Create, EShinobiMenuTab::Jutsu, EShinobiMenuTab::Settings, EShinobiMenuTab::Controls })
+	for (const EShinobiMenuTab Tab : { EShinobiMenuTab::Play, EShinobiMenuTab::Shinobi, EShinobiMenuTab::Jutsu, EShinobiMenuTab::Settings, EShinobiMenuTab::Controls })
 	{
 		Menu->SelectTab(Tab);
 		TestTrue(TEXT("tab selected"), Menu->GetTab() == Tab);
@@ -260,6 +264,12 @@ bool FShinobiMainMenuTabFocusTest::RunTest(const FString& Parameters)
 		TestNotNull(TEXT("something to focus"), Target);
 		TestTrue(TEXT("focus target is on that tab's page"), MenuTestIsInside(Target, Menu->GetTabPage(Tab)));
 	}
+	// The creator opens inside SHINOBI: focus goes to it, and back to the strip after.
+	Menu->OpenCreator(0);
+	TestTrue(TEXT("the creator is on the SHINOBI tab"), Menu->GetTab() == EShinobiMenuTab::Shinobi && Menu->IsCreating());
+	TestTrue(TEXT("focus target is in the creator"), MenuTestIsInside(Menu->GetFocusTarget(EShinobiMenuTab::Shinobi), Menu->GetCreatorPage()));
+	Menu->CloseCreator();
+	TestTrue(TEXT("focus target is on the strip again"), !Menu->IsCreating() && MenuTestIsInside(Menu->GetFocusTarget(EShinobiMenuTab::Shinobi), Menu->GetRosterPage()));
 	return true;
 }
 
@@ -496,7 +506,7 @@ bool FShinobiMainMenuReturnKeepsPickTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a visible focus target in Find Games"), MenuTestShown(Menu->GetFocusTarget(EShinobiMenuTab::Play)));
 
 	// SHINOBI: focus returns to the card picked now, not the one picked when the menu opened.
-	UShinobiRosterPage* Roster = Cast<UShinobiRosterPage>(Menu->GetTabPage(EShinobiMenuTab::Shinobi));
+	UShinobiRosterPage* Roster = Menu->GetRosterPage();
 	if (TestNotNull(TEXT("roster page"), Roster))
 	{
 		Roster->Pick(2);
@@ -507,6 +517,121 @@ bool FShinobiMainMenuReturnKeepsPickTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+
+namespace
+{
+	/** The saved made characters as they were, put back when a test is done with them. */
+	struct FMenuTestSaveGuard
+	{
+		bool bExisted = UGameplayStatics::DoesSaveGameExist(UShinobiCharacterSave::SlotName, 0);
+		TArray<FShinobiCharacterSlot> Slots = UShinobiCharacterSave::Load()->Slots;
+		int32 Active = UShinobiCharacterSave::Load()->Active;
+		FString Character = ShinobiSettings::GetSavedCharacter();
+
+		~FMenuTestSaveGuard()
+		{
+			ShinobiSettings::SetSavedCharacter(Character);
+			if (!bExisted)
+			{
+				UGameplayStatics::DeleteGameInSlot(UShinobiCharacterSave::SlotName, 0);
+				return;
+			}
+			UShinobiCharacterSave* Save = UShinobiCharacterSave::Load();
+			Save->Slots = Slots;
+			Save->Active = Active;
+			Save->Save();
+		}
+	};
+
+	/** The button under Root whose text reads Label, or null. */
+	UShinobiIndexButton* MenuTestButton(UUserWidget& Root, const FString& Label)
+	{
+		UShinobiIndexButton* Found = nullptr;
+		Root.WidgetTree->ForEachWidget([&Found, &Label](UWidget* Widget)
+		{
+			UShinobiIndexButton* Button = Cast<UShinobiIndexButton>(Widget);
+			const UTextBlock* Text = Button ? Cast<UTextBlock>(Button->GetChildAt(0)) : nullptr;
+			Found = !Found && Text && Text->GetText().ToString() == Label ? Button : Found;
+		});
+		return Found;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMainMenuCreateCardTest, "ShinobiCoop.UI.MainMenuCreateCard", ShinobiTestFlags)
+bool FShinobiMainMenuCreateCardTest::RunTest(const FString& Parameters)
+{
+	const FMenuTestSaveGuard Guard;
+	{
+		UShinobiCharacterSave* Save = UShinobiCharacterSave::Load(); // one made character, the roster pick played
+		Save->Slots.SetNum(1);
+		Save->Slots[0].Name = TEXT("Test Made");
+		Save->Active = INDEX_NONE;
+		Save->Save();
+	}
+	FShinobiTestWorld W;
+	UShinobiMainMenuWidget* Menu = CreateWidget<UShinobiMainMenuWidget>(W.World, UShinobiMainMenuWidget::StaticClass());
+	Menu->TakeWidget();
+	for (int32 Index = 0; Index < int32(EShinobiMenuTab::Num); ++Index)
+	{
+		const UTextBlock* Label = Cast<UTextBlock>(Menu->GetTabButton(EShinobiMenuTab(Index))->GetChildAt(0));
+		TestTrue(TEXT("no CREATE tab (it's in SHINOBI)"), Label && Label->GetText().ToString() != TEXT("CREATE"));
+	}
+	Menu->SelectTab(EShinobiMenuTab::Shinobi);
+	UShinobiRosterPage* Roster = Menu->GetRosterPage();
+	if (!TestNotNull(TEXT("roster page"), Roster))
+	{
+		return false;
+	}
+	TestNotNull(TEXT("a card for the made character"), Roster->GetMadeCard(0));
+	const auto MadeButtonsShown = [Roster]() { return Roster->GetEditButton()->GetParent()->GetVisibility() != ESlateVisibility::Collapsed; };
+	TestFalse(TEXT("EDIT hidden on a roster pick"), MadeButtonsShown());
+
+	// "+" opens the creator on the next free slot; BACK returns to the strip.
+	UShinobiIndexButton* Plus = Roster->GetCreateCard();
+	if (TestNotNull(TEXT("a + card"), Plus))
+	{
+		Plus->OnClicked.Broadcast();
+		TestTrue(TEXT("+ opens the creator in SHINOBI"), Menu->IsCreating() && Menu->GetTab() == EShinobiMenuTab::Shinobi);
+		TestEqual(TEXT("on the free slot"), Menu->GetCreatorPage()->GetEditedSlot(), 1);
+		TestFalse(TEXT("a new character"), Menu->GetCreatorPage()->IsEditingMade());
+		UShinobiIndexButton* Back = MenuTestButton(*Menu->GetCreatorPage(), TEXT("< BACK"));
+		if (TestNotNull(TEXT("a BACK button"), Back))
+		{
+			Back->OnClicked.Broadcast();
+			TestFalse(TEXT("BACK returns to the strip"), Menu->IsCreating());
+		}
+	}
+
+	// A made card plays it; EDIT opens it; DELETE (twice) removes it and the roster pick plays again.
+	Roster->GetMadeCard(0)->OnClicked.Broadcast();
+	TestEqual(TEXT("the made character is played"), UShinobiCharacterSave::Load()->Active, 0);
+	TestTrue(TEXT("its card has focus next"), Roster->GetFocusTarget() == Roster->GetMadeCard(0));
+	TestTrue(TEXT("EDIT shown"), MadeButtonsShown());
+	Roster->GetEditButton()->OnClicked.Broadcast();
+	TestTrue(TEXT("EDIT opens the creator on it"), Menu->IsCreating() && Menu->GetCreatorPage()->GetEditedSlot() == 0 && Menu->GetCreatorPage()->IsEditingMade());
+	Menu->CloseCreator();
+	Roster->GetDeleteButton()->OnClicked.Broadcast();
+	TestEqual(TEXT("one press doesn't delete"), UShinobiCharacterSave::Load()->Slots.Num(), 1);
+	Roster->GetDeleteButton()->OnClicked.Broadcast();
+	TestEqual(TEXT("the second press deletes"), UShinobiCharacterSave::Load()->Slots.Num(), 0);
+	TestEqual(TEXT("the roster pick is played"), UShinobiCharacterSave::Load()->Active, int32(INDEX_NONE));
+	TestNull(TEXT("its card is gone"), Roster->GetMadeCard(0));
+
+	// Every slot used: no "+".
+	{
+		UShinobiCharacterSave* Save = UShinobiCharacterSave::Load();
+		Save->Slots.SetNum(UShinobiCharacterSave::MaxSlots);
+		for (FShinobiCharacterSlot& Slot : Save->Slots)
+		{
+			Slot.Name = TEXT("Full");
+		}
+		Save->Save();
+	}
+	Roster->Show();
+	TestEqual(TEXT("no free slot"), UShinobiRosterPage::FindFreeSlot(), int32(INDEX_NONE));
+	TestNull(TEXT("+ hidden when the slots are full"), Roster->GetCreateCard());
+	return true;
+}
 
 namespace
 {
@@ -663,19 +788,21 @@ bool FShinobiMenuStageMovesToStudioTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMenuStageLeavesStudioMidFadeTest, "ShinobiCoop.UI.MenuStageLeavesStudioMidFade", ShinobiTestFlags)
 bool FShinobiMenuStageLeavesStudioMidFadeTest::RunTest(const FString& Parameters)
 {
-	// CREATE fades to black, moves the stage into the studio and fades back; leaving halfway turns the fade around.
+	// The creator fades to black, moves the stage into the studio and fades back; leaving halfway turns the fade around.
 	FShinobiTestWorld W;
 	AShinobiMenuStage* Stage = W.Spawn<AShinobiMenuStage>();
 	W.Spawn<AShinobiStudioSet>(FVector(0.f, 0.f, 20000.f));
 	UShinobiMainMenuWidget* Menu = CreateWidget<UShinobiMainMenuWidget>(W.World, UShinobiMainMenuWidget::StaticClass());
 	Menu->TakeWidget();
-	Menu->SelectTab(EShinobiMenuTab::Create);
+	Menu->OpenCreator(0);
 	for (int32 Step = 0; Step < 20; ++Step) { Menu->TickStudioFade(0.05f); }
-	TestTrue(TEXT("CREATE is in the studio"), Stage->IsInStudio());
+	TestTrue(TEXT("the creator is in the studio"), Stage->IsInStudio());
 	TestEqual(TEXT("faded back in"), Menu->GetStudioFade(), 0.f, 0.001f);
-	Menu->SelectTab(EShinobiMenuTab::Shinobi);
+	Menu->CloseCreator();
 	Menu->TickStudioFade(0.1f); // halfway to black
-	Menu->SelectTab(EShinobiMenuTab::Create);
+	Menu->OpenCreator(0);
+	Menu->SelectTab(EShinobiMenuTab::Jutsu); // (another tab leaves the creator too)
+	TestFalse(TEXT("another tab closes the creator"), Menu->IsCreating());
 	Menu->SelectTab(EShinobiMenuTab::Shinobi);
 	for (int32 Step = 0; Step < 20; ++Step) { Menu->TickStudioFade(0.05f); }
 	TestFalse(TEXT("SHINOBI is on the roof"), Stage->IsInStudio());

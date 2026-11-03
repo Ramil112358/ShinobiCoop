@@ -12,6 +12,7 @@
 #include "UnrealClient.h"
 #include "Engine/SkeletalMesh.h"
 #include "Shinobi/Hero/ShinobiBodyComponent.h"
+#include "Shinobi/Hero/ShinobiCharacterSave.h"
 #include "Shinobi/Hero/ShinobiMutableLook.h"
 #include "Shinobi/Hero/ShinobiMutableNames.h"
 #include "Shinobi/Hero/ShinobiMutableTypes.h"
@@ -36,6 +37,13 @@ namespace
 	void MenuShotsTake(const FString& Name, bool bShowUI = true)
 	{
 		FScreenshotRequest::RequestScreenshot(Name, bShowUI, false);
+	}
+
+	/** The creator shots' slot: the made character in play, else the first (as the creator opened before it moved into SHINOBI). */
+	int32 MenuShotsCreatorSlot()
+	{
+		const UShinobiCharacterSave* Made = UShinobiCharacterSave::Load();
+		return Made->GetActiveLook() ? Made->Active : 0;
 	}
 
 	/** Seconds a level gets to stream in and settle before its picture. */
@@ -103,11 +111,12 @@ void UShinobiMenuShotSubsystem::OnWorldBeginPlay(UWorld& World)
 	View(EShinobiMenuTab::Play, TEXT("ShinobiMenuTour_2_Arena2v2"), [](UShinobiMainMenuWidget& M) { M.TourSelectHost(TEXT("Arena: Camden"), 1); });
 	View(EShinobiMenuTab::Play, TEXT("ShinobiMenuTour_3_Find"), [](UShinobiMainMenuWidget& M) { M.TourShowFind(); });
 	View(EShinobiMenuTab::Shinobi, TEXT("ShinobiMenuTour_4_Shinobi"), nullptr);
-	View(EShinobiMenuTab::Create, TEXT("ShinobiMenuTour_5_Create"), nullptr);
+	View(EShinobiMenuTab::Shinobi, TEXT("ShinobiMenuTour_5_Create"), [](UShinobiMainMenuWidget& M) { M.OpenCreator(MenuShotsCreatorSlot()); });
 	Steps.Add([] {}); // (the made character's grooms and face finish loading)
-	View(EShinobiMenuTab::Create, TEXT("ShinobiMenuTour_6_CreateFace"), [](UShinobiMainMenuWidget& M)
+	View(EShinobiMenuTab::Shinobi, TEXT("ShinobiMenuTour_6_CreateFace"), [](UShinobiMainMenuWidget& M)
 	{
-		if (UShinobiCreatorPage* Creator = Cast<UShinobiCreatorPage>(M.GetTabPage(EShinobiMenuTab::Create)))
+		M.OpenCreator(MenuShotsCreatorSlot());
+		if (UShinobiCreatorPage* Creator = M.GetCreatorPage())
 		{
 			Creator->ShowCategory(UShinobiCreatorPage::ECategory::Face);
 		}
@@ -155,7 +164,7 @@ void UShinobiMenuShotSubsystem::StartCreatorTour(UWorld& World)
 {
 	TWeakObjectPtr<UWorld> WeakWorld(&World);
 	const auto Menu = [WeakWorld]() { return WeakWorld.IsValid() ? MenuShotsFindMenu(*WeakWorld) : nullptr; };
-	const auto Creator = [Menu]() { UShinobiMainMenuWidget* M = Menu(); return M ? Cast<UShinobiCreatorPage>(M->GetTabPage(EShinobiMenuTab::Create)) : nullptr; };
+	const auto Creator = [Menu]() { UShinobiMainMenuWidget* M = Menu(); return M ? M->GetCreatorPage() : nullptr; };
 	const auto Stage = [Menu]() { UShinobiMainMenuWidget* M = Menu(); return M ? M->GetStage() : nullptr; };
 	TArray<TFunction<void()>> Steps;
 	int32 Shot = 0;
@@ -169,7 +178,7 @@ void UShinobiMenuShotSubsystem::StartCreatorTour(UWorld& World)
 	Steps.Add([] {}); // the level settles
 	View(TEXT("Character"), [Menu, Creator]()
 	{
-		if (UShinobiMainMenuWidget* M = Menu()) { M->SelectTab(EShinobiMenuTab::Create); }
+		if (UShinobiMainMenuWidget* M = Menu()) { M->OpenCreator(MenuShotsCreatorSlot()); }
 		if (UShinobiCreatorPage* C = Creator()) { C->ApplyPreset(0); C->ShowCategory(UShinobiCreatorPage::ECategory::Character); }
 	});
 	View(TEXT("Clothes"), [Creator]() { if (UShinobiCreatorPage* C = Creator()) { C->ShowCategory(UShinobiCreatorPage::ECategory::Clothes); } });

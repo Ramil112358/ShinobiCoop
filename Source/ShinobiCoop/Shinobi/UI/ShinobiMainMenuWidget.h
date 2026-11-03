@@ -14,7 +14,7 @@ class UWidgetSwitcher;
 class UShinobiMainMenuWidget;
 
 /**
- * The open stage behind the main menu's pages (SHINOBI, CREATE): a drag here turns the character, the wheel zooms, a
+ * The open stage behind the main menu's pages (SHINOBI and its creator): a drag here turns the character, the wheel zooms, a
  * double-click resets. Presses on a page's panels never reach it, so they don't move the preview.
  */
 UCLASS()
@@ -39,13 +39,14 @@ protected:
 	virtual FReply NativeOnMouseButtonDoubleClick(const FGeometry& Geometry, const FPointerEvent& Event) override;
 };
 
-enum class EShinobiMenuTab : uint8 { Play, Shinobi, Create, Jutsu, Settings, Controls, Num };
+enum class EShinobiMenuTab : uint8 { Play, Shinobi, Jutsu, Settings, Controls, Num };
 
 /**
  * The main menu (docs/superpowers/specs/2026-10-20-main-menu-polish-design.md): a top tab bar over the live stage
  * (AShinobiMenuStage). PLAY hosts on a map card (mode toggle, HOST) or lists found games; SHINOBI picks the character and
- * outfit; JUTSU edits the loadout; SETTINGS is the settings panel; CONTROLS the key bindings. Click a tab, or Q/E or the
- * bumpers, to switch; Esc or B goes to PLAY.
+ * outfit, and its "+" card (or EDIT on a made character) opens the character creator in the same tab (OpenCreator); JUTSU
+ * edits the loadout; SETTINGS is the settings panel; CONTROLS the key bindings. Click a tab, or Q/E or the bumpers, to
+ * switch; Esc or B leaves the creator for the SHINOBI strip, else goes to PLAY.
  */
 UCLASS()
 class SHINOBICOOP_API UShinobiMainMenuWidget : public UShinobiMenuWidget
@@ -58,7 +59,16 @@ public:
 	 * the roster pick. */
 	void ShowPlayed();
 	EShinobiMenuTab GetTab() const { return Tab; }
-	/** The page widget shown for Tab. */
+	/** SHINOBI shows the character creator on save slot SlotIndex (a free one makes a new character), in the studio. */
+	void OpenCreator(int32 SlotIndex);
+	/** Back from the creator to the SHINOBI strip (unsaved edits are dropped). */
+	void CloseCreator();
+	/** The creator is open (on the SHINOBI tab). */
+	bool IsCreating() const { return bCreating; }
+	/** SHINOBI's character strip, and the creator it opens. */
+	class UShinobiRosterPage* GetRosterPage() const;
+	class UShinobiCreatorPage* GetCreatorPage() const;
+	/** The page widget shown for Tab (SHINOBI's holds the roster strip and the creator). */
 	UWidget* GetTabPage(EShinobiMenuTab Tab) const;
 	/** The top bar's button for Which: a click on it opens that tab. */
 	UShinobiIndexButton* GetTabButton(EShinobiMenuTab Which) const;
@@ -80,10 +90,10 @@ public:
 	FText GetHintText() const;
 	/** The open stage behind the pages: the only place a drag turns, or the wheel zooms, the preview. */
 	UWidget* GetPreviewCatcher() const { return PreviewCatcher; }
-	/** The stage when this tab previews a character (SHINOBI, CREATE), else null. */
+	/** The stage when this tab previews a character (SHINOBI and its creator), else null. */
 	AShinobiMenuStage* GetPreviewStage() const;
 	UWidget* GetPagesWidget() const;
-	/** CREATE's cut to the studio (NativeTick drives it): fades to black, moves the stage in or out, fades back. */
+	/** The creator's cut to the studio (NativeTick drives it): fades to black, moves the stage in or out, fades back. */
 	void TickStudioFade(float DeltaSeconds);
 	/** The black over the screen, 0..1. */
 	float GetStudioFade() const { return StudioFade; }
@@ -93,7 +103,7 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& Geometry, float DeltaTime) override;
 	virtual FReply NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event) override;
-	// The preview (SHINOBI and CREATE): the right stick turns and zooms, R3 resets (the mouse: UShinobiPreviewCatcher). A
+	// The preview (SHINOBI and its creator): the right stick turns and zooms, R3 resets (the mouse: UShinobiPreviewCatcher). A
 	// mouse move anywhere puts the hints back to the mouse's.
 	virtual FReply NativeOnMouseMove(const FGeometry& Geometry, const FPointerEvent& Event) override;
 	virtual FReply NativeOnAnalogValueChanged(const FGeometry& Geometry, const FAnalogInputEvent& Event) override;
@@ -108,6 +118,8 @@ private:
 	/** Host row chips' colours for the current selection. */
 	void StyleChips();
 	void OnTabButton(int32 Index);
+	/** Opens NewTab, with the creator showing when bCreate (SHINOBI only). */
+	void ShowPage(EShinobiMenuTab NewTab, bool bCreate);
 	void OnHostRow(int32 Row);
 	void OnMode(int32 Index);
 	void OnJoinRow(int32 Index);
@@ -128,7 +140,9 @@ private:
 	/** Right stick (dead zone applied), turning and zooming the preview each tick. */
 	FVector2D PreviewStick = FVector2D::ZeroVector;
 	bool bGamepadHints = false;
-	/** The stage belongs in the studio (CREATE, with a studio set in the level). */
+	/** SHINOBI shows the creator rather than the character strip. */
+	bool bCreating = false;
+	/** The stage belongs in the studio (the creator, with a studio set in the level). */
 	bool bWantStudio = false;
 	float StudioFade = 0.f;
 
@@ -138,6 +152,9 @@ private:
 	TArray<TObjectPtr<UShinobiIndexButton>> TabButtons;
 	UPROPERTY()
 	TArray<TObjectPtr<UWidget>> FocusTargets;
+	/** SHINOBI's page: the roster strip, or the creator. */
+	UPROPERTY()
+	TObjectPtr<UWidgetSwitcher> ShinobiPages;
 	UPROPERTY()
 	TObjectPtr<class UShinobiRosterPage> RosterPage;
 	UPROPERTY()
@@ -182,7 +199,7 @@ private:
 	TObjectPtr<UBorder> Blackout;
 	UPROPERTY()
 	TObjectPtr<UShinobiPreviewCatcher> PreviewCatcher;
-	/** CREATE's light presets (STUDIO, DAY, DUSK), top right. */
+	/** The creator's light presets (STUDIO, DAY, DUSK), top right. */
 	UPROPERTY()
 	TObjectPtr<UHorizontalBox> LightPresets;
 	UPROPERTY()

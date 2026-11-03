@@ -55,12 +55,6 @@ namespace
 	constexpr float CreatorPanelWidth = 470.f;
 	constexpr float CreatorRowsHeight = 470.f;
 
-	FString CreatorSlotLabel(const UShinobiCharacterSave* Save, int32 SlotIndex)
-	{
-		return Save && Save->Slots.IsValidIndex(SlotIndex) && !Save->Slots[SlotIndex].Name.IsEmpty()
-			? FString::Printf(TEXT("%d %s"), SlotIndex + 1, *Save->Slots[SlotIndex].Name.Left(10)) : FString::Printf(TEXT("%d EMPTY"), SlotIndex + 1);
-	}
-
 	int8 CreatorShape(float Value) { return int8(FMath::Clamp(FMath::RoundToInt(Value * 127.f), -127, 127)); }
 
 	/** The wardrobe table's row name of Row in WardrobeSlot (the piece's display name), or None. */
@@ -233,7 +227,8 @@ TSharedRef<SWidget> UShinobiCreatorPage::RebuildWidget()
 		Panel->SetContent(Width);
 		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
 		Width->AddChild(Column);
-		Column->AddChildToVerticalBox(ShinobiMenuStyle::Text(*WidgetTree, INVTEXT("CREATE"), 12, ShinobiMenuStyle::Accent));
+		HeaderText = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 12, ShinobiMenuStyle::Accent);
+		Column->AddChildToVerticalBox(HeaderText);
 
 		UHorizontalBox* CategoryRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 		Column->AddChildToVerticalBox(CategoryRow)->SetPadding(FMargin(0.f, 8.f, 0.f, 8.f));
@@ -267,6 +262,7 @@ TSharedRef<SWidget> UShinobiCreatorPage::RebuildWidget()
 		CodeBox = AddBox(TEXT("PRESET CODE (copy to share, paste and LOAD to wear)"), INVTEXT("paste a code"));
 		UHorizontalBox* Buttons = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 		Column->AddChildToVerticalBox(Buttons)->SetPadding(FMargin(0.f, 12.f, 0.f, 0.f));
+		Buttons->AddChildToHorizontalBox(MakeButton(TEXT("< BACK"), 0, [this](int32) { OnBack.ExecuteIfBound(); }))->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 		Buttons->AddChildToHorizontalBox(MakeButton(TEXT("LOAD CODE"), 0, [this](int32) { LoadCode(); }))->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 		UShinobiIndexButton* Play = MakeButton(TEXT("SAVE & PLAY"), 0, [this](int32) { SaveAndPlay(); }, 16);
 		ShinobiMenuStyle::StyleButton(*Play, true, FMargin(14.f, 6.f));
@@ -278,7 +274,7 @@ TSharedRef<SWidget> UShinobiCreatorPage::RebuildWidget()
 			MessageText->SetText(INVTEXT("The creator catalog isn't built (Scripts/setup_creator.py)."));
 		}
 
-		// Under the character (CREATE puts it right of centre), while its next look builds.
+		// Under the character (the creator puts it right of centre), while its next look builds.
 		Spinner = WidgetTree->ConstructWidget<UCircularThrobber>(UCircularThrobber::StaticClass());
 		Spinner->SetVisibility(ESlateVisibility::Collapsed);
 		UCanvasPanelSlot* SpinnerSlot = Root->AddChildToCanvas(Spinner);
@@ -286,13 +282,38 @@ TSharedRef<SWidget> UShinobiCreatorPage::RebuildWidget()
 		SpinnerSlot->SetAlignment(FVector2D(0.5f, 0.5f));
 		SpinnerSlot->SetAutoSize(true);
 
-		for (int32 SlotIndex = 0; SlotIndex < UShinobiCharacterSave::MaxSlots; ++SlotIndex)
-		{
-			SlotButtons.Add(MakeButton(CreatorSlotLabel(Save, SlotIndex), SlotIndex, [this](int32 Picked) { EditSlot(Picked); }, 12));
-		}
 		EditSlot(Save->Active != INDEX_NONE ? Save->Active : 0);
 	}
 	return Super::RebuildWidget();
+}
+
+void UShinobiCreatorPage::Open(int32 SlotIndex)
+{
+	Save = UShinobiCharacterSave::Load(); // (the SHINOBI strip may have picked or deleted one since)
+	Cloak = uint8(FMath::Max(0, AShinobiPlayerCharacter::FindOutfitIndex(ShinobiSettings::GetSavedOutfit())));
+	EditedSlot = FMath::Clamp(SlotIndex, 0, UShinobiCharacterSave::MaxSlots - 1);
+	Look = IsEditingMade() ? Save->Slots[EditedSlot].Look : FShinobiAppearance();
+	if (NameBox)
+	{
+		NameBox->SetText(FText::FromString(IsEditingMade() ? Save->Slots[EditedSlot].Name : FString()));
+	}
+	if (MessageText && Catalog)
+	{
+		MessageText->SetText(FText::GetEmpty());
+	}
+	if (!IsEditingMade())
+	{
+		Category = ECategory::Character; // (a new character starts from a preset)
+	}
+	ClickedPlace = INDEX_NONE;
+	bRedressPending = bRowsPending = false;
+	DebounceLeft = 0.f;
+	Refresh(false);
+}
+
+bool UShinobiCreatorPage::IsEditingMade() const
+{
+	return Save && Save->Slots.IsValidIndex(EditedSlot) && !Save->Slots[EditedSlot].Name.IsEmpty();
 }
 
 void UShinobiCreatorPage::EditSlot(int32 SlotIndex)
@@ -351,6 +372,10 @@ void UShinobiCreatorPage::SaveAndPlay()
 	MessageText->SetText(bSaved ? FText::Format(INVTEXT("{0} saved: played from the next match."), FText::FromString(Save->Slots[EditedSlot].Name))
 		: INVTEXT("Could not save."));
 	Refresh(false);
+	if (bSaved)
+	{
+		OnSaved.ExecuteIfBound();
+	}
 }
 
 bool UShinobiCreatorPage::LoadCode()
@@ -596,6 +621,7 @@ void UShinobiCreatorPage::Refresh(bool bRedress)
 	{
 		ShinobiMenuStyle::StyleButton(*CategoryButtons[Index], Index == int32(Category), FMargin(10.f, 6.f));
 	}
+	HeaderText->SetText(IsEditingMade() ? INVTEXT("EDIT SHINOBI") : INVTEXT("NEW SHINOBI"));
 	CodeBox->SetText(FText::FromString(Look.ToCode()));
 
 	// Strips (horizontal scroll boxes) keep their scroll across a rebuild of the same category.
@@ -684,21 +710,6 @@ void UShinobiCreatorPage::BuildCharacterRows()
 		Face->AddChildToVerticalBox(Name);
 		Card->AddChild(Face);
 		Strip->AddChild(Card);
-	}
-
-	// Save slots.
-	AddNote(TEXT("SAVE SLOT"));
-	UHorizontalBox* SlotRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-	AddRow(SlotRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-	for (int32 SlotIndex = 0; SlotIndex < SlotButtons.Num(); ++SlotIndex)
-	{
-		UShinobiIndexButton* Button = SlotButtons[SlotIndex];
-		ShinobiMenuStyle::StyleButton(*Button, SlotIndex == EditedSlot, FMargin(10.f, 6.f));
-		if (UTextBlock* Label = Cast<UTextBlock>(Button->GetChildAt(0)))
-		{
-			Label->SetText(FText::FromString(CreatorSlotLabel(Save, SlotIndex) + (Save && Save->Active == SlotIndex ? TEXT(" *") : TEXT(""))));
-		}
-		SlotRow->AddChildToHorizontalBox(Button)->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
 	}
 
 	AddChoice(TEXT("Sex"), { TEXT("Male"), TEXT("Female") }, int32(Look.Sex), [this](int32 Picked)

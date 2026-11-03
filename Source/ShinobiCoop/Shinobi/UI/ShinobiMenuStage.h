@@ -41,7 +41,7 @@ public:
 	void AddYaw(float Degrees);
 	/** Zooms by Delta: 0 frames the whole character, 1 the face (the aim sliding from chest to face). Clamped. */
 	void AddZoom(float Delta);
-	/** A tab's framing (CREATE's FACE: 1, else 0); ResetView returns to it. */
+	/** A tab's framing (the creator's FACE: 1, else 0); ResetView returns to it. */
 	void SetAutoZoom(float Zoom);
 	/** Facing front at the last SetAutoZoom framing. */
 	void ResetView();
@@ -49,7 +49,7 @@ public:
 	 * stays. */
 	void SetStudio(bool bInStudio);
 	bool IsInStudio() const { return bInStudio; }
-	/** The level's studio set (CREATE), or null. */
+	/** The level's studio set (the creator), or null. */
 	AShinobiStudioSet* GetStudio() const;
 	float GetZoom() const { return Zoom; }
 	float GetYaw() const { return Yaw; }

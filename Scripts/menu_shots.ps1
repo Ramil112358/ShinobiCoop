@@ -2,7 +2,7 @@
 #   -Packaged: in the built game (Packaged\Windows, Scripts/package.ps1) instead of the editor.
 #   -Tour:      -ShinobiMenuTour on Lvl_MainMenu: every tab, an arena in 2v2, Find Games (Saved\Screenshots\...\ShinobiMenuTour_*.png).
 #   -Portraits: -ShinobiMenuPortraits in a 3:4 window: each roster character -> Saved\MenuArt\T_Portrait_<Name>.png
-#   -Creator:   -ShinobiCreatorTour on Lvl_MainMenu: CREATE's tabs, light presets, zooms and turns; -Res "-ResX=2560 -ResY=1080" for another window.
+#   -Creator:   -ShinobiCreatorTour on Lvl_MainMenu: the creator's categories, light presets, zooms and turns; -Res "-ResX=2560 -ResY=1080" for another window.
 #   -Thumbnails: -ShinobiThumbnailShot in a square window: each wardrobe piece -> Saved\MenuArt\Thumbnails\T_Thumb_<Slot>_<Row>.png
 #               (import with: SETUP_MUTABLE_ONLY=thumbnails,wardrobe Scripts/run_python.ps1 -Script Scripts/setup_mutable.py -Editor)
 #   -Maps:      -ShinobiMapShot on every Host Game map -> Saved\MenuArt\T_Map_<Id>.png; -Map <Id> shoots just that one.
