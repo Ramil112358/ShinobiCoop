@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GenericPlatform/GenericPlatformInputDeviceMapper.h"
 #include "Shinobi/UI/ShinobiMenuWidgets.h"
 #include "ShinobiMainMenuWidget.generated.h"
 
@@ -103,6 +104,7 @@ public:
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& Geometry, float DeltaTime) override;
 	virtual FReply NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event) override;
 	// The preview (SHINOBI and its creator): the right stick turns and zooms, R3 resets (the mouse: UShinobiPreviewCatcher). A
@@ -142,6 +144,9 @@ private:
 	/** Right stick (dead zone applied), turning and zooming the preview each tick. */
 	FVector2D PreviewStick = FVector2D::ZeroVector;
 	bool bGamepadHints = false;
+	/** Plugging a controller in shows its hints; unplugging it, the mouse's. */
+	void OnInputDeviceConnectionChange(EInputDeviceConnectionState NewState, FPlatformUserId PlatformUser, FInputDeviceId InputDevice);
+	FDelegateHandle DeviceConnectionHandle;
 	/** SHINOBI shows the creator rather than the character strip. */
 	bool bCreating = false;
 	/** The stage belongs in the studio (the creator, with a studio set in the level). */

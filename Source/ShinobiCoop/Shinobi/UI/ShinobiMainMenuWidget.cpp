@@ -403,6 +403,23 @@ void UShinobiMainMenuWidget::NativeConstruct()
 	SelectTab(EShinobiMenuTab::Play);
 	ShowPlayed();
 	UpdateBackdrop();
+	DeviceConnectionHandle = IPlatformInputDeviceMapper::Get().GetOnInputDeviceConnectionChange().AddUObject(this,
+		&UShinobiMainMenuWidget::OnInputDeviceConnectionChange);
+}
+
+void UShinobiMainMenuWidget::NativeDestruct()
+{
+	IPlatformInputDeviceMapper::Get().GetOnInputDeviceConnectionChange().Remove(DeviceConnectionHandle);
+	DeviceConnectionHandle.Reset();
+	Super::NativeDestruct();
+}
+
+void UShinobiMainMenuWidget::OnInputDeviceConnectionChange(EInputDeviceConnectionState NewState, FPlatformUserId PlatformUser, FInputDeviceId InputDevice)
+{
+	if (NewState == EInputDeviceConnectionState::Connected || NewState == EInputDeviceConnectionState::Disconnected)
+	{
+		UseGamepadHints(NewState == EInputDeviceConnectionState::Connected);
+	}
 }
 
 void UShinobiMainMenuWidget::ShowPlayed()
