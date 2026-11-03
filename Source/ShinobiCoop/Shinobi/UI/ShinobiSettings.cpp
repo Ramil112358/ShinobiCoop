@@ -41,6 +41,14 @@ namespace
 		return GEngine->GetGameUserSettings();
 	}
 
+	constexpr int32 SettingsRosterCount = UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster);
+
+	/** The made character played (its slot in UShinobiCharacterSave), or INDEX_NONE when it's the roster pick. */
+	int32 SettingsPlayedMade(const UShinobiCharacterSave& Made)
+	{
+		return Made.GetActiveLook() && !Made.Slots[Made.Active].Name.IsEmpty() ? Made.Active : INDEX_NONE;
+	}
+
 	/** Index wrapped into [0, Num). */
 	int32 SettingsWrap(int32 Index, int32 Num)
 	{
@@ -119,9 +127,17 @@ FString ShinobiSettings::RowValue(ERow Row)
 	switch (Row)
 	{
 	case ERow::Character:
-		return GetSavedCharacter();
+	{
+		const UShinobiCharacterSave* Made = UShinobiCharacterSave::Load();
+		const int32 Played = SettingsPlayedMade(*Made);
+		return Played != INDEX_NONE ? Made->Slots[Played].Name : GetSavedCharacter();
+	}
 	case ERow::Face:
 	{
+		if (SettingsPlayedMade(*UShinobiCharacterSave::Load()) != INDEX_NONE)
+		{
+			return TEXT("Default"); // (a made character's face is its own, set in the creator)
+		}
 		const int32 Body = AShinobiPlayerCharacter::FindRosterIndex(GetSavedCharacter());
 		const FShinobiFaceEntry* Face = AShinobiPlayerCharacter::FindFace(Body, FMath::Max(0, AShinobiPlayerCharacter::FindFaceIndex(Body, GetSavedFace())));
 		return Face ? Face->Name : TEXT("Default");
@@ -169,7 +185,7 @@ FString ShinobiSettings::RowDescription(ERow Row)
 {
 	switch (Row)
 	{
-	case ERow::Character: return TEXT("Who you play. In a game you switch at once, and the pick is kept for the next one.");
+	case ERow::Character: return TEXT("Who you play: the roster, then the characters you made. In a game you switch at once, and the pick is kept for the next one.");
 	case ERow::Face: return TEXT("The face your character wears, on characters that have more than one.");
 	case ERow::Outfit: return TEXT("What your character wears over their own clothes.");
 	case ERow::Quality: return TEXT("The overall graphics preset. Lower it for more FPS. Custom means a single setting was changed elsewhere.");
@@ -253,13 +269,25 @@ TArray<FString> ShinobiSettings::RowOptions(ERow Row)
 	switch (Row)
 	{
 	case ERow::Character:
+	{
 		for (const FShinobiRosterEntry& Entry : AShinobiPlayerCharacter::Roster)
 		{
 			Options.Add(Entry.Name);
 		}
+		const UShinobiCharacterSave* Made = UShinobiCharacterSave::Load(); // then the made ones (the SHINOBI tab's cards)
+		for (const int32 SlotIndex : Made->GetMadeSlots())
+		{
+			Options.Add(Made->Slots[SlotIndex].Name);
+		}
 		break;
+	}
 	case ERow::Face:
 	{
+		if (SettingsPlayedMade(*UShinobiCharacterSave::Load()) != INDEX_NONE)
+		{
+			Options.Add(TEXT("Default")); // (nothing to pick)
+			break;
+		}
 		const int32 Body = AShinobiPlayerCharacter::FindRosterIndex(GetSavedCharacter());
 		for (int32 Index = 0; Index < AShinobiPlayerCharacter::NumFaces(Body); ++Index)
 		{
@@ -328,8 +356,16 @@ int32 ShinobiSettings::RowIndex(ERow Row)
 	switch (Row)
 	{
 	case ERow::Character:
-		return AShinobiPlayerCharacter::FindRosterIndex(GetSavedCharacter());
+	{
+		const UShinobiCharacterSave* Made = UShinobiCharacterSave::Load();
+		const int32 Played = SettingsPlayedMade(*Made);
+		return Played != INDEX_NONE ? SettingsRosterCount + Made->GetMadeSlots().IndexOfByKey(Played) : AShinobiPlayerCharacter::FindRosterIndex(GetSavedCharacter());
+	}
 	case ERow::Face:
+		if (SettingsPlayedMade(*UShinobiCharacterSave::Load()) != INDEX_NONE)
+		{
+			return 0;
+		}
 		return FMath::Max(0, AShinobiPlayerCharacter::FindFaceIndex(AShinobiPlayerCharacter::FindRosterIndex(GetSavedCharacter()), GetSavedFace()));
 	case ERow::Outfit:
 		return AShinobiPlayerCharacter::FindOutfitIndex(GetSavedOutfit());
@@ -390,18 +426,39 @@ void ShinobiSettings::SetRowIndex(ERow Row, UWorld* World, int32 Index)
 	{
 	case ERow::Character:
 	{
-		const FString Picked = AShinobiPlayerCharacter::Roster[Index].Name;
-		GConfig->SetString(ConfigSection, CharacterKey, *Picked, GGameUserSettingsIni);
-		GConfig->Flush(false, GGameUserSettingsIni);
-		// In a game (not the main menu), switch now too.
-		if (AShinobiPlayerController* PC = World ? World->GetFirstPlayerController<AShinobiPlayerController>() : nullptr)
+		AShinobiPlayerController* PC = World ? World->GetFirstPlayerController<AShinobiPlayerController>() : nullptr;
+		if (Index < SettingsRosterCount)
 		{
-			PC->ShinobiCharacter(Picked);
+			const FString Picked = AShinobiPlayerCharacter::Roster[Index].Name;
+			SetSavedCharacter(Picked); // (no made character is played from now on)
+			if (PC)
+			{
+				PC->ShinobiCharacter(Picked); // in a game (not the main menu), switch now too
+			}
+			return;
+		}
+		// A made character: played from now on, like its card in the SHINOBI tab.
+		UShinobiCharacterSave* Made = UShinobiCharacterSave::Load();
+		const TArray<int32> MadeSlots = Made->GetMadeSlots();
+		const int32 SlotIndex = MadeSlots.IsValidIndex(Index - SettingsRosterCount) ? MadeSlots[Index - SettingsRosterCount] : INDEX_NONE;
+		if (SlotIndex == INDEX_NONE)
+		{
+			return;
+		}
+		Made->Active = SlotIndex;
+		Made->Save();
+		if (PC)
+		{
+			PC->ServerPickAppearance(Made->Slots[SlotIndex].Look);
 		}
 		return;
 	}
 	case ERow::Face:
 	{
+		if (SettingsPlayedMade(*UShinobiCharacterSave::Load()) != INDEX_NONE)
+		{
+			return; // (a made character's face is its own)
+		}
 		const FShinobiFaceEntry* Face = AShinobiPlayerCharacter::FindFace(AShinobiPlayerCharacter::FindRosterIndex(GetSavedCharacter()), Index);
 		if (!Face)
 		{

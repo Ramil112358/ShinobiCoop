@@ -6,7 +6,9 @@
 #include "ShinobiMenuStage.generated.h"
 
 class UCameraComponent;
+class USceneCaptureComponent2D;
 class USkeletalMeshComponent;
+class UTextureRenderTarget2D;
 class UShinobiBodyComponent;
 class AShinobiStudioSet;
 
@@ -35,6 +37,22 @@ public:
 	const FShinobiAppearance& GetShownLook() const { return ShownLook; }
 	/** Head and shoulders of the body worn, for a portrait (a 3:4 view); the character stands centred at once. */
 	void FramePortrait();
+	/**
+	 * Films a made character's portrait off screen (the menu's own view doesn't move): head and shoulders like the roster's
+	 * (FramePortrait's lens, the face at ShinobiMenuArt::MadePortraitFaceV), from the front, without the outfit, against
+	 * whatever stands behind (the studio in the creator, else the menu's backdrop). It waits until Look is worn (built, with
+	 * no live edit since) and the character has turned to face front, lets it settle, then hands Done the picture as a PNG,
+	 * or an empty one when it can't be had (the look isn't being built, the picture can't be read). Showing another
+	 * character, another request or CancelPortrait drops it without calling Done.
+	 */
+	void RequestPortrait(const FShinobiAppearance& Look, TFunction<void(TArray<uint8>&&)> Done);
+	void CancelPortrait();
+	bool IsPortraitPending() const { return bPortraitPending; }
+	/** The look RequestPortrait waits for (meaningful while IsPortraitPending). */
+	const FShinobiAppearance& GetPortraitLook() const { return PortraitLook; }
+	/** A made character's portrait size in pixels (3:4, like the roster cards). */
+	static constexpr int32 PortraitWidth = 384;
+	static constexpr int32 PortraitHeight = 512;
 	/** Eases the character sideways to Focus's spot. */
 	void SetFocus(EShinobiMenuStageFocus Focus);
 	/** Turns the character (not the camera) by Degrees, easing there. */
@@ -83,6 +101,18 @@ private:
 	TObjectPtr<USkeletalMeshComponent> Outfit;
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UCameraComponent> Camera;
+	/** RequestPortrait's camera. */
+	UPROPERTY(VisibleAnywhere)
+	TObjectPtr<USceneCaptureComponent2D> PortraitCapture;
+	UPROPERTY(Transient)
+	TObjectPtr<UTextureRenderTarget2D> PortraitTarget;
+
+	/** RequestPortrait: waits for the look, warms the capture up, then takes the picture. */
+	void TickPortrait(float DeltaSeconds);
+	/** Puts PortraitCapture in front of the worn face. */
+	void PlacePortraitCapture();
+	/** PortraitTarget's pixels as a PNG (empty if it can't be read). */
+	TArray<uint8> ReadPortrait() const;
 
 	/** Places the camera for Zoom (between the full view and the face close-up). */
 	void PlaceCamera();
@@ -98,6 +128,13 @@ private:
 	bool bPortrait = false;
 	bool bInStudio = false;
 	FShinobiAppearance ShownLook;
+	bool bPortraitPending = false;
+	FShinobiAppearance PortraitLook;
+	TFunction<void(TArray<uint8>&&)> PortraitDone;
+	/** Seconds the requested look has stood ready (none: it isn't). */
+	float PortraitReadyTime = 0.f;
+	/** Seconds the requested look has been neither worn nor being built (it won't be: give up). */
+	float PortraitStuckTime = 0.f;
 	/** Where the stage stood before it went into the studio. */
 	FTransform Home;
 };

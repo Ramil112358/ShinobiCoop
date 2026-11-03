@@ -5,6 +5,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/GameUserSettings.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Shinobi/Hero/ShinobiCharacterSave.h"
 #include "Shinobi/ShinobiLook.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/UI/ShinobiSettings.h"
@@ -23,6 +24,14 @@ bool FShinobiSettingsCycleTest::RunTest(const FString& Parameters)
 	GConfig->GetString(Section, TEXT("Outfit"), OldOutfit, GGameUserSettingsIni);
 	FShinobiTestWorld W;
 
+	// (the Character row selects a played made character over the roster pick: play the roster one meanwhile)
+	const int32 OldMade = UShinobiCharacterSave::Load()->Active;
+	if (OldMade != INDEX_NONE)
+	{
+		UShinobiCharacterSave* Made = UShinobiCharacterSave::Load();
+		Made->Active = INDEX_NONE;
+		Made->Save();
+	}
 	GConfig->SetString(Section, TEXT("Character"), TEXT("Hero"), GGameUserSettingsIni);
 	ShinobiSettings::Cycle(ShinobiSettings::ERow::Character, W.World);
 	const FString Second = AShinobiPlayerCharacter::Roster[1 % UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster)].Name;
@@ -74,6 +83,12 @@ bool FShinobiSettingsCycleTest::RunTest(const FString& Parameters)
 	GConfig->SetString(Section, TEXT("Character"), *OldCharacter, GGameUserSettingsIni);
 	GConfig->SetString(Section, TEXT("Outfit"), *OldOutfit, GGameUserSettingsIni);
 	GConfig->Flush(false, GGameUserSettingsIni);
+	if (OldMade != INDEX_NONE)
+	{
+		UShinobiCharacterSave* Made = UShinobiCharacterSave::Load();
+		Made->Active = OldMade;
+		Made->Save();
+	}
 	return true;
 }
 

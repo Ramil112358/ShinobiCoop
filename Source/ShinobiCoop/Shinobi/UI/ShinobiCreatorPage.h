@@ -35,8 +35,8 @@ enum class EShinobiLookEdit : uint8
  * the main menu's SHINOBI tab: its "+" card makes a new character, EDIT on a made one's card changes it (Open). It makes a
  * character on the stage and saves it to one of UShinobiCharacterSave's slots. CHARACTER starts from a roster preset and
  * picks sex and head; CLOTHES, BODY & SKIN and FACE edit the rest. Every row changes the look through EditLook. SAVE & PLAY
- * stores the slot, plays it from the next match and goes back to the SHINOBI strip (OnSaved); BACK goes back unsaved
- * (OnBack). The code box shows the look's preset code; LOAD CODE wears a pasted one.
+ * has the stage film the character's portrait, then stores the slot with it, plays it from the next match and goes back to
+ * the SHINOBI strip (OnSaved); BACK goes back unsaved (OnBack). The code box shows the look's preset code; LOAD CODE wears a pasted one.
  */
 UCLASS()
 class SHINOBICOOP_API UShinobiCreatorPage : public UUserWidget
@@ -68,8 +68,18 @@ public:
 	void ApplyPreset(int32 PresetIndex);
 	void ShowCategory(ECategory Category);
 	ECategory GetCategory() const { return Category; }
-	/** Saves the edited look to its slot and plays it. */
+	/** Saves the edited look to its slot and plays it. Its portrait comes first (the SHINOBI card and the in-game HUD show
+	 * it): the stage films the look while the page waits (IsSaving), then FinishSave saves the two and goes back to the
+	 * strip. Without a stage, or with the look and its portrait unchanged, it saves at once. */
 	void SaveAndPlay();
+	/** SAVE & PLAY is waiting for the portrait: the page and the menu's tabs take no input meanwhile. */
+	bool IsSaving() const { return bSaving; }
+	/** Ends SAVE & PLAY's wait: saves the slot with Portrait (empty: none was had; the strip films it later), plays it and
+	 * goes back to the strip (the stage hands its picture here). */
+	void FinishSave(TArray<uint8>&& Portrait);
+	/** The wait for a portrait gives up after SaveTimeoutSeconds, or once the stage drops the request (NativeTick; tests). */
+	void TickSave(float DeltaSeconds);
+	static constexpr float SaveTimeoutSeconds = 30.f;
 	/** Wears the code box's preset code; false (and a message) when it isn't one. */
 	bool LoadCode();
 	/** Changes the look; Edit says how the stage follows. A changed sex clears what the new sex doesn't have. */
@@ -180,4 +190,10 @@ private:
 	ECategory BuiltCategory = ECategory::Num;
 	/** A Debounced slider moved: the stage re-dresses when this runs out. */
 	float DebounceLeft = 0.f;
+	/** SAVE & PLAY waits for the portrait (SaveWaited seconds so far). */
+	bool bSaving = false;
+	float SaveWaited = 0.f;
+	/** The page's inputs, disabled while it saves. */
+	UPROPERTY()
+	TArray<TObjectPtr<UWidget>> SaveLocked;
 };

@@ -414,6 +414,10 @@ void UShinobiMainMenuWidget::OpenCreator(int32 SlotIndex)
 	{
 		return;
 	}
+	if (AShinobiMenuStage* Stage = GetStage())
+	{
+		Stage->CancelPortrait(); // (the creator's edits aren't the saved look; SAVE & PLAY's return asks again)
+	}
 	CreatorPage->Open(SlotIndex);
 	ShowPage(EShinobiMenuTab::Shinobi, true);
 }
@@ -435,6 +439,10 @@ UShinobiCreatorPage* UShinobiMainMenuWidget::GetCreatorPage() const
 
 void UShinobiMainMenuWidget::ShowPage(EShinobiMenuTab NewTab, bool bCreate)
 {
+	if (bCreating && CreatorPage && CreatorPage->IsSaving() && !(bCreate && NewTab == EShinobiMenuTab::Shinobi))
+	{
+		return; // SAVE & PLAY is taking the portrait: no other tab (nor PLAY) until it's saved
+	}
 	const bool bLeftCreator = bCreating;
 	Tab = NewTab;
 	bCreating = bCreate && NewTab == EShinobiMenuTab::Shinobi && CreatorPage != nullptr;

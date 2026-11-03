@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Shinobi/Hero/ShinobiCreatorCatalog.h"
 #include "ShinobiHUDWidget.generated.h"
 
 class UAbilitySystemComponent;
@@ -172,12 +173,18 @@ private:
 	UPROPERTY()
 	TObjectPtr<UTextBlock> NameText;
 
-	/** The unit frame's round picture; shows the played roster character's portrait (UpdatePortrait). */
+	/** The unit frame's round picture; shows the played character's portrait (UpdatePortrait). */
 	UPROPERTY()
 	TObjectPtr<UImage> PortraitImage;
 
-	/** Roster index PortraitImage shows (CustomCharacter or beyond: the generic portrait); 254 until first set. */
+	/** Roster index PortraitImage shows (CustomCharacter: a made character's, ShownPortraitLook; beyond: the generic
+	 * portrait); 254 until first set. */
 	uint8 ShownPortrait = 254;
+	/** The made look PortraitImage shows while ShownPortrait is CustomCharacter. */
+	FShinobiAppearance ShownPortraitLook;
+	/** That made character's name (UShinobiCharacterSave), shown over the bars like a roster character's; empty when this
+	 * machine has no character wearing it (a look code). */
+	FString ShownMadeName;
 
 	UPROPERTY()
 	TObjectPtr<UProgressBar> HealthBar;

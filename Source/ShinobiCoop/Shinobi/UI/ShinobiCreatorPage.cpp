@@ -232,6 +232,7 @@ TSharedRef<SWidget> UShinobiCreatorPage::RebuildWidget()
 
 		UHorizontalBox* CategoryRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 		Column->AddChildToVerticalBox(CategoryRow)->SetPadding(FMargin(0.f, 8.f, 0.f, 8.f));
+		SaveLocked.Add(CategoryRow);
 		for (int32 Index = 0; Index < int32(ECategory::Num); ++Index)
 		{
 			CategoryButtons.Add(MakeButton(CreatorCategoryNames[Index], Index, [this](int32 Picked) { ShowCategory(ECategory(Picked)); }, 13));
@@ -244,6 +245,7 @@ TSharedRef<SWidget> UShinobiCreatorPage::RebuildWidget()
 		Rows->SetScrollWhenFocusChanges(EScrollWhenFocusChanges::AnimatedScroll);
 		RowsBox->AddChild(Rows);
 		Column->AddChildToVerticalBox(RowsBox);
+		SaveLocked.Add(RowsBox);
 		// Name, code and the buttons.
 		const auto AddBox = [this, Column](const TCHAR* Label, const FText& Hint)
 		{
@@ -262,6 +264,9 @@ TSharedRef<SWidget> UShinobiCreatorPage::RebuildWidget()
 		CodeBox = AddBox(TEXT("PRESET CODE (copy to share, paste and LOAD to wear)"), INVTEXT("paste a code"));
 		UHorizontalBox* Buttons = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 		Column->AddChildToVerticalBox(Buttons)->SetPadding(FMargin(0.f, 12.f, 0.f, 0.f));
+		SaveLocked.Add(NameBox);
+		SaveLocked.Add(CodeBox);
+		SaveLocked.Add(Buttons);
 		Buttons->AddChildToHorizontalBox(MakeButton(TEXT("< BACK"), 0, [this](int32) { OnBack.ExecuteIfBound(); }))->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 		Buttons->AddChildToHorizontalBox(MakeButton(TEXT("LOAD CODE"), 0, [this](int32) { LoadCode(); }))->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 		UShinobiIndexButton* Play = MakeButton(TEXT("SAVE & PLAY"), 0, [this](int32) { SaveAndPlay(); }, 16);
@@ -359,14 +364,90 @@ void UShinobiCreatorPage::FrameCategory()
 
 void UShinobiCreatorPage::SaveAndPlay()
 {
-	if (!Save)
+	if (!Save || bSaving)
 	{
 		return;
 	}
+	Save = UShinobiCharacterSave::Load(); // (the menu stage may have saved a portrait since Open)
+	const bool bPictured = Save->Slots.IsValidIndex(EditedSlot) && Save->Slots[EditedSlot].Look == Look && !Save->Slots[EditedSlot].Portrait.IsEmpty();
+	AShinobiMenuStage* Shown = Stage.Get();
+	UShinobiBodyComponent* Body = Shown ? Shown->GetBody() : nullptr;
+	if (bPictured || !Body)
+	{
+		FinishSave(TArray<uint8>()); // (its portrait stands; or nothing to film it with)
+		return;
+	}
+	// The portrait first, so the character never reaches the strip or a match without one: the stage wears exactly what
+	// is saved (an edit still waiting re-dresses it now), turns it to face front and films it; the page waits meanwhile.
+	const bool bStale = IsRedressPending() || (!Body->IsMutableBuildPending() && !(Body->GetAppearance() == Look));
+	bRedressPending = bRowsPending = false;
+	DebounceLeft = 0.f;
+	if (bStale)
+	{
+		Redress();
+	}
+	Shown->ResetView();
+	bSaving = true;
+	SaveWaited = 0.f;
+	for (UWidget* Input : SaveLocked)
+	{
+		Input->SetIsEnabled(false);
+	}
+	if (MessageText)
+	{
+		MessageText->SetText(INVTEXT("Saving: taking the portrait..."));
+	}
+	Shown->RequestPortrait(Look, [WeakThis = TWeakObjectPtr<UShinobiCreatorPage>(this)](TArray<uint8>&& Png)
+	{
+		if (UShinobiCreatorPage* Page = WeakThis.Get(); Page && Page->bSaving)
+		{
+			Page->FinishSave(MoveTemp(Png));
+		}
+	});
+}
+
+void UShinobiCreatorPage::TickSave(float DeltaSeconds)
+{
+	if (!bSaving)
+	{
+		return;
+	}
+	SaveWaited += DeltaSeconds;
+	const AShinobiMenuStage* Shown = Stage.Get();
+	if (!Shown || !Shown->IsPortraitPending() || SaveWaited >= SaveTimeoutSeconds)
+	{
+		FinishSave(TArray<uint8>()); // no portrait after all: the SHINOBI strip films it later
+	}
+}
+
+void UShinobiCreatorPage::FinishSave(TArray<uint8>&& Portrait)
+{
+	if (bSaving)
+	{
+		bSaving = false;
+		for (UWidget* Input : SaveLocked)
+		{
+			Input->SetIsEnabled(true);
+		}
+		if (AShinobiMenuStage* Shown = Stage.Get())
+		{
+			Shown->CancelPortrait(); // (when it gave up waiting)
+		}
+	}
+	Save = UShinobiCharacterSave::Load(); // (re-read: the stage may have saved a portrait meanwhile)
 	Save->Slots.SetNum(FMath::Max(Save->Slots.Num(), EditedSlot + 1));
+	FShinobiCharacterSlot& Slot = Save->Slots[EditedSlot];
 	FString Name = NameBox ? NameBox->GetText().ToString().TrimStartAndEnd().Left(24) : FString();
-	Save->Slots[EditedSlot].Name = Name.IsEmpty() ? FString::Printf(TEXT("Shinobi %d"), EditedSlot + 1) : Name;
-	Save->Slots[EditedSlot].Look = Look;
+	Slot.Name = Name.IsEmpty() ? FString::Printf(TEXT("Shinobi %d"), EditedSlot + 1) : Name;
+	if (!Portrait.IsEmpty())
+	{
+		Slot.Portrait = MoveTemp(Portrait);
+	}
+	else if (!(Slot.Look == Look))
+	{
+		Slot.Portrait.Reset(); // a new look without its picture: the SHINOBI strip films it
+	}
+	Slot.Look = Look;
 	Save->Active = EditedSlot;
 	const bool bSaved = Save->Save();
 	MessageText->SetText(bSaved ? FText::Format(INVTEXT("{0} saved: played from the next match."), FText::FromString(Save->Slots[EditedSlot].Name))
@@ -995,7 +1076,8 @@ void UShinobiCreatorPage::NativeTick(const FGeometry& Geometry, float DeltaTime)
 {
 	Super::NativeTick(Geometry, DeltaTime);
 	TickEdits(DeltaTime);
+	TickSave(DeltaTime);
 	const UShinobiBodyComponent* Body = Stage.IsValid() ? Stage->GetBody() : nullptr;
-	Spinner->SetVisibility(Body && Body->IsMutableBuildPending() ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	Spinner->SetVisibility(bSaving || (Body && Body->IsMutableBuildPending()) ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	ShinobiMenuStyle::TickFocus(*WidgetTree);
 }

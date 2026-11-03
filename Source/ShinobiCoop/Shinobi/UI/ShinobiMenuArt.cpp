@@ -1,6 +1,8 @@
 #include "Shinobi/UI/ShinobiMenuArt.h"
 #include "Engine/Texture2D.h"
+#include "ImageUtils.h"
 #include "Misc/PackageName.h"
+#include "Shinobi/Hero/ShinobiCharacterSave.h"
 #include "Shinobi/Online/ShinobiSessionSubsystem.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 
@@ -37,4 +39,13 @@ UTexture2D* ShinobiMenuArt::LoadArt(const FString& Path)
 		return nullptr;
 	}
 	return LoadObject<UTexture2D>(nullptr, *Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
+}
+
+UTexture2D* ShinobiMenuArt::MadePortrait(const FShinobiCharacterSlot& Slot)
+{
+	if (Slot.Portrait.IsEmpty())
+	{
+		return nullptr;
+	}
+	return FImageUtils::ImportBufferAsTexture2D(TArrayView64<const uint8>(Slot.Portrait.GetData(), Slot.Portrait.Num()));
 }
