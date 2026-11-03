@@ -75,8 +75,6 @@ public:
 	UShinobiIndexButton* GetTabButton(EShinobiMenuTab Which) const;
 	/** What gets keyboard focus when Tab opens (null only while the menu isn't built). */
 	UWidget* GetFocusTarget(EShinobiMenuTab Tab) const;
-	/** Pages built by other widgets (SHINOBI, JUTSU) say what to focus. */
-	void SetFocusTarget(EShinobiMenuTab Tab, UWidget* Target);
 	/** The stage in this world, if the level has one. */
 	AShinobiMenuStage* GetStage() const;
 	/** Number of map rows on the Host list (one per GetMaps() entry). */

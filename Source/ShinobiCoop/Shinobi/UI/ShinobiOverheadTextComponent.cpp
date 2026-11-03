@@ -21,7 +21,16 @@ UShinobiOverheadTextComponent::UShinobiOverheadTextComponent()
 void UShinobiOverheadTextComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (IsNetMode(NM_DedicatedServer))
+	{
+		SetComponentTickEnabled(false); // nothing is drawn on a dedicated server: neither the text nor its turn matter
+		return;
+	}
 	Refresh();
+	if (Text.IsEmpty() || !IsVisible())
+	{
+		return; // nothing drawn (a villager between barks, the local player's own tag): skip the per-frame transform update
+	}
 
 	// TextRender geometry faces its local +X, so it's mirrored/culled from behind: turn it (yaw only) to the local
 	// camera. GetFirstPlayerController() would also return remote clients' PCs on a listen server, so use the game

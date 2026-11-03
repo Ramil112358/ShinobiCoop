@@ -149,17 +149,6 @@ UTextBlock* UShinobiMenuWidget::AddText(UVerticalBox* Box, const FString& Text, 
 	return Block;
 }
 
-void UShinobiMenuWidget::SetEntryLabel(int32 Index, const FString& Label)
-{
-	if (EntryButtons.IsValidIndex(Index))
-	{
-		if (UTextBlock* Text = Cast<UTextBlock>(EntryButtons[Index]->GetChildAt(0)))
-		{
-			Text->SetText(FText::FromString(Label));
-		}
-	}
-}
-
 namespace
 {
 	constexpr float SettingsPanelWidth = 640.f;

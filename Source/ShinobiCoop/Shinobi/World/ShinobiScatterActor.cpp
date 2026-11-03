@@ -33,11 +33,37 @@ void AShinobiScatterActor::AddInstances(UStaticMesh* Mesh, const TArray<FTransfo
 		Component->SetCullDistances(0, static_cast<int32>(CullDistance));
 		Component->bAffectDistanceFieldLighting = false;
 		Component->SetCastShadow(CullDistance <= 0.f || CullDistance > 10000.f); // ground cover (short cull) casts no shadow
+		ApplyWindDistance(Component);
 		Component->RegisterComponent();
 		AddInstanceComponent(Component);
 		Instances.Add(Component);
 	}
 	Component->AddInstances(WorldTransforms, false, true);
+}
+
+void AShinobiScatterActor::PostRegisterAllComponents()
+{
+	Super::PostRegisterAllComponents();
+	// Chunks built before WindDisableDistance existed (and any later change to it) pick it up on load.
+	for (UHierarchicalInstancedStaticMeshComponent* Component : Instances)
+	{
+		ApplyWindDistance(Component);
+	}
+}
+
+void AShinobiScatterActor::ApplyWindDistance(UHierarchicalInstancedStaticMeshComponent* Component) const
+{
+	if (!Component)
+	{
+		return;
+	}
+	const float Cull = static_cast<float>(Component->InstanceEndCullDistance);
+	const float Distance = Cull > 0.f && WindDisableDistance > 0.f ? FMath::Min(WindDisableDistance, Cull * 0.5f) : WindDisableDistance;
+	const int32 Wanted = FMath::RoundToInt(Distance);
+	if (Component->WorldPositionOffsetDisableDistance != Wanted)
+	{
+		Component->SetWorldPositionOffsetDisableDistance(Wanted);
+	}
 }
 
 int32 AShinobiScatterActor::GetInstanceCount() const

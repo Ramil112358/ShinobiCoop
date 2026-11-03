@@ -84,9 +84,6 @@ public:
 	 * body's pose; a MetaHuman's face and grooms come off. Null takes the head off. */
 	void WearStaticHead(USkeletalMesh* Head);
 
-	/** Sets a body morph (Scripts/setup_creator.py) on this body and on every mesh following its pose (outfit, head):
-	 * the copies carry the same morphs (Scripts/character/transfer_morphs.py), so they keep fitting. */
-	void SetBodyMorph(FName Morph, float Weight);
 
 	/** Scales Bone (local axes; one, or absent, is none) on top of the retargeted pose, and every mesh following this
 	 * body's pose with it, cloth included. A bone with children of its own (a spine or pelvis bone, not a twist or

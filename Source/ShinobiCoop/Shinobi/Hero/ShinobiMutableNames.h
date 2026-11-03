@@ -60,7 +60,6 @@ namespace ShinobiMutable
 
 	/** Material parameters the wearer sets on a piece's materials (not Mutable parameters: runtime meshes keep theirs). */
 	inline constexpr const TCHAR* ColourParameter = TEXT("Colour");
-	inline constexpr const TCHAR* WearParameter = TEXT("Wear");
 
 	/** The slot's wardrobe Data Table (rows: FShinobiWardrobeRow). */
 	inline FString WardrobeTablePath(const TCHAR* Slot) { return FString::Printf(TEXT("/Game/Shinobi/Mutable/DT_Wardrobe_%s.DT_Wardrobe_%s"), Slot, Slot); }

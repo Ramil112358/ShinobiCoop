@@ -83,7 +83,6 @@ protected:
 	UShinobiSessionSubsystem* GetSessions() const;
 	UShinobiIndexButton* AddButton(UVerticalBox* Box, const FString& Label, int32 Index, FShinobiIndexClicked Handler);
 	UTextBlock* AddText(UVerticalBox* Box, const FString& Text, int32 Size, const FLinearColor& Color, bool bHeading = false);
-	void SetEntryLabel(int32 Index, const FString& Label);
 
 	UPROPERTY()
 	TObjectPtr<UVerticalBox> Column;
