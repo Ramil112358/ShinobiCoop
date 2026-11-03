@@ -1,6 +1,8 @@
 #include "Tests/ShinobiTestWorld.h"
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
+#include "InputTriggers.h"
+#include "Shinobi/UI/ShinobiKeyBindings.h"
 #include "Shinobi/ShinobiInputConfig.h"
 #include "Shinobi/Abilities/ShinobiLoadout.h"
 
@@ -59,53 +61,59 @@ bool FShinobiInputMappingsTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("D drives right"), RunModifiers(*DMapping), FVector2D(1.f, 0.f));
 	}
 
-	const TArray<FEnhancedActionKeyMapping>& JutsuMappings = Config->JutsuContext->GetMappings();
-	const auto CountFor = [](const TArray<FEnhancedActionKeyMapping>& List, const UInputAction* Action)
+	// Every rebindable action: its keyboard/mouse binding and, when it has one, its controller binding, with RB / RT combos
+	// chorded on the matching hold action (whatever this machine has saved: Build() applies it).
+	const auto CountFor = [&Mappings](const UInputAction* Action)
 	{
 		int32 Count = 0;
-		for (const FEnhancedActionKeyMapping& Mapping : List)
+		for (const FEnhancedActionKeyMapping& Mapping : Mappings)
 		{
 			Count += Mapping.Action == Action ? 1 : 0;
 		}
 		return Count;
 	};
-	int32 JutsuActions = 0;
-	for (const TPair<EShinobiAbilityInputID, TObjectPtr<UInputAction>>& Pair : Config->AbilityActions)
+	const auto ChordOf = [](const FEnhancedActionKeyMapping& Mapping) -> const UInputAction*
 	{
-		// Jutsu slots: one keyboard key in IMC_Shinobi and one pad button in IMC_ShinobiJutsu (RB held).
-		// Everything else: keyboard + gamepad in IMC_Shinobi.
-		const bool bJutsu = ShinobiLoadout::SlotIndexOf(Pair.Key) != INDEX_NONE;
-		JutsuActions += bJutsu ? 1 : 0;
-		const int32 ID = static_cast<int32>(Pair.Key);
-		TestEqual(*FString::Printf(TEXT("Ability input %d: keys in IMC_Shinobi"), ID), CountFor(Mappings, Pair.Value), bJutsu ? 1 : 2);
-		TestEqual(*FString::Printf(TEXT("Ability input %d: keys in IMC_ShinobiJutsu"), ID), CountFor(JutsuMappings, Pair.Value), bJutsu ? 1 : 0);
-	}
-	TestEqual(TEXT("Eight jutsu slot actions"), JutsuActions, 8);
-	TestNotNull(TEXT("RB holds the jutsu modifier"), FindMapping(Mappings, Config->JutsuModifier, EKeys::Gamepad_RightShoulder));
-	const FKey SlotKeys[] = { EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::R, EKeys::T, EKeys::G, EKeys::CapsLock };
-	for (int32 Slot = 0; Slot < ShinobiLoadout::NumSlots; ++Slot)
+		for (const TObjectPtr<UInputTrigger>& Trigger : Mapping.Triggers)
+		{
+			if (const UInputTriggerChordAction* Chord = Cast<UInputTriggerChordAction>(Trigger))
+			{
+				return Chord->ChordAction;
+			}
+		}
+		return nullptr;
+	};
+	for (int32 Index = 0; Index < static_cast<int32>(ShinobiKeyBindings::EBindable::Num); ++Index)
 	{
-		TestNotNull(*FString::Printf(TEXT("Slot %d on %s"), Slot + 1, *SlotKeys[Slot].ToString()),
-			FindMapping(Mappings, Config->AbilityActions[ShinobiLoadout::SlotInputID(Slot)], SlotKeys[Slot]));
+		const ShinobiKeyBindings::EBindable Which = static_cast<ShinobiKeyBindings::EBindable>(Index);
+		const FString Name = ShinobiKeyBindings::Label(Which).ToString();
+		const UInputAction* Action = Config->ActionForBindable(static_cast<uint8>(Index));
+		if (!TestNotNull(*FString::Printf(TEXT("%s has an action"), *Name), Action))
+		{
+			continue;
+		}
+		const ShinobiKeyBindings::FPadBinding Pad = ShinobiKeyBindings::GetPad(Which);
+		TestEqual(*FString::Printf(TEXT("%s: one key, plus one button if it has one"), *Name), CountFor(Action), Pad.IsBound() ? 2 : 1);
+		TestNotNull(*FString::Printf(TEXT("%s on its key"), *Name), FindMapping(Mappings, Action, ShinobiKeyBindings::Get(Which).Key));
+		if (Pad.IsBound())
+		{
+			const FEnhancedActionKeyMapping* PadMapping = FindMapping(Mappings, Action, Pad.Button);
+			if (TestNotNull(*FString::Printf(TEXT("%s on its button"), *Name), PadMapping))
+			{
+				const UInputAction* Hold = !Pad.Hold.IsValid() ? nullptr : Pad.Hold == EKeys::Gamepad_RightTrigger ? Config->PadHoldRT.Get() : Config->PadHoldRB.Get();
+				TestTrue(*FString::Printf(TEXT("%s: chorded on its hold button, or on nothing"), *Name), ChordOf(*PadMapping) == Hold);
+			}
+		}
 	}
-	const FKey PadButtons[] = { EKeys::Gamepad_FaceButton_Bottom, EKeys::Gamepad_FaceButton_Right, EKeys::Gamepad_FaceButton_Left, EKeys::Gamepad_FaceButton_Top,
-		EKeys::Gamepad_DPad_Up, EKeys::Gamepad_DPad_Right, EKeys::Gamepad_DPad_Down, EKeys::Gamepad_DPad_Left };
-	for (int32 Slot = 0; Slot < ShinobiLoadout::NumSlots; ++Slot)
-	{
-		TestNotNull(*FString::Printf(TEXT("Slot %d on RB + %s"), Slot + 1, *PadButtons[Slot].ToString()),
-			FindMapping(JutsuMappings, Config->AbilityActions[ShinobiLoadout::SlotInputID(Slot)], PadButtons[Slot]));
-	}
-	TestNotNull(TEXT("K opens the Skills screen"), FindMapping(Mappings, Config->SkillsScreen, EKeys::K));
+	TestNotNull(TEXT("RB holds for combos"), FindMapping(Mappings, Config->PadHoldRB, EKeys::Gamepad_RightShoulder));
+	TestNotNull(TEXT("RT holds for combos"), FindMapping(Mappings, Config->PadHoldRT, EKeys::Gamepad_RightTrigger));
+	TestNotNull(TEXT("Esc pauses"), FindMapping(Mappings, Config->Pause, EKeys::Escape));
+	TestNotNull(TEXT("Menu pauses"), FindMapping(Mappings, Config->Pause, EKeys::Gamepad_Special_Right));
 	TestNotNull(TEXT("Left Alt is the modifier"), FindMapping(Mappings, Config->AltModifier, EKeys::LeftAlt));
 	TestNotNull(TEXT("Right Alt is the modifier"), FindMapping(Mappings, Config->AltModifier, EKeys::RightAlt));
-	TestNotNull(TEXT("E revives"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Revive], EKeys::E));
-	TestNotNull(TEXT("F guards"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Block], EKeys::F));
-	TestNotNull(TEXT("LT guards"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Block], EKeys::Gamepad_LeftTrigger));
-	TestNotNull(TEXT("Y (without RB) revives"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Revive], EKeys::Gamepad_FaceButton_Top));
 
 	TestNotNull(TEXT("Mouse wheel controls camera zoom"), FindMapping(Mappings, Config->CameraZoom, EKeys::MouseWheelAxis));
 	TestNotNull(TEXT("Right mouse holds camera free-look"), FindMapping(Mappings, Config->CameraFreeLook, EKeys::RightMouseButton));
-	TestNotNull(TEXT("D-pad down (without RB) dismounts"), FindMapping(Mappings, Config->AbilityActions[EShinobiAbilityInputID::Dismount], EKeys::Gamepad_DPad_Down));
 
 	const FEnhancedActionKeyMapping* LeftStick = FindMapping(Mappings, Config->Move, EKeys::Gamepad_Left2D);
 	if (TestNotNull(TEXT("Left stick mapping exists"), LeftStick))

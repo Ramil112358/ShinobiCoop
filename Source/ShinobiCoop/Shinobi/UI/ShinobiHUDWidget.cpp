@@ -387,7 +387,7 @@ void UShinobiHUDWidget::BuildJutsuSlots(UCanvasPanel* Root)
 
 		UTextBlock* CostText = AddLabel(Layers, 12, HAlign_Right, VAlign_Bottom, CostColor);
 
-		// The key under the slot (ShinobiKeyBindings: its key, or RB + its button on a gamepad), set each tick.
+		// The key under the slot (ShinobiKeyBindings: its key, or its controller button(s) on a gamepad), set each tick.
 		USizeBox* KeyBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 		KeyBox->SetMinDesiredWidth(22.f);
 		KeyBox->SetHeightOverride(18.f);
@@ -1146,7 +1146,7 @@ void UShinobiHUDWidget::UpdateJutsuSlots(const UAbilitySystemComponent& ASC, con
 	for (int32 Index = 0; Index < NumJutsuSlots; ++Index)
 	{
 		const UShinobiJutsuAbility* Jutsu = OnPage[Index];
-		const FText KeyLabel = bPad ? ShinobiKeyBindings::PadLabel(ShinobiKeyBindings::GetPad(Index), true)
+		const FText KeyLabel = bPad ? ShinobiKeyBindings::PadLabel(ShinobiKeyBindings::GetPad(static_cast<ShinobiKeyBindings::EBindable>(Index)), true)
 			: ShinobiKeyBindings::KeyLabel(ShinobiKeyBindings::Get(static_cast<ShinobiKeyBindings::EBindable>(Index)), true);
 		if (!SlotKeyTexts[Index]->GetText().EqualTo(KeyLabel))
 		{

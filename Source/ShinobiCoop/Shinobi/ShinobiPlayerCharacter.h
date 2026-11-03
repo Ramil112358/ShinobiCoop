@@ -313,8 +313,6 @@ private:
 	void JumpReleased();
 	void AbilityInputPressed(EShinobiAbilityInputID InputID);
 	void AbilityInputReleased(EShinobiAbilityInputID InputID);
-	/** RB held: adds IMC_ShinobiJutsu (A/B/X/Y cast jutsu); released: removes it. */
-	void SetJutsuModifier(bool bHeld);
 	TWeakObjectPtr<AShinobiCharacterBase> LockTarget;
 
 	/** Every machine: hold the downed pose. Server: the effect ran out with HP still 0, so bled out: dead. */

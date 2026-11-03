@@ -1012,8 +1012,6 @@ void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
 		{
 			Subsystem->AddMappingContext(InputConfig.Context, ShinobiInputPriority);
-			// A possession that ended while RB was held never got RB's release, so start without the jutsu context.
-			Subsystem->RemoveMappingContext(InputConfig.JutsuContext);
 		}
 	}
 
@@ -1032,8 +1030,6 @@ void AShinobiPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerI
 		Input->BindAction(Pair.Value, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::AbilityInputReleased, Pair.Key);
 	}
 	Input->BindAction(InputConfig.LockOn, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::ToggleLockOn);
-	Input->BindAction(InputConfig.JutsuModifier, ETriggerEvent::Started, this, &AShinobiPlayerCharacter::SetJutsuModifier, true);
-	Input->BindAction(InputConfig.JutsuModifier, ETriggerEvent::Completed, this, &AShinobiPlayerCharacter::SetJutsuModifier, false);
 
 	if (IsLocallyControlled())
 	{
@@ -1365,23 +1361,4 @@ bool AShinobiPlayerCharacter::RouteTargetPlacementInput(EShinobiAbilityInputID I
 	}
 	AbilitySystem->AbilityLocalInputPressed(PlacementInputID);
 	return true;
-}
-
-void AShinobiPlayerCharacter::SetJutsuModifier(bool bHeld)
-{
-	const APlayerController* PC = Cast<APlayerController>(GetController());
-	UEnhancedInputLocalPlayerSubsystem* Subsystem = PC ? ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()) : nullptr;
-	if (!Subsystem)
-	{
-		return;
-	}
-	const UInputMappingContext* JutsuContext = UShinobiInputConfig::Get().JutsuContext;
-	if (bHeld)
-	{
-		Subsystem->AddMappingContext(JutsuContext, ShinobiJutsuInputPriority);
-	}
-	else
-	{
-		Subsystem->RemoveMappingContext(JutsuContext);
-	}
 }

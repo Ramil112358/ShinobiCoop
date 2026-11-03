@@ -111,7 +111,6 @@ protected:
 	virtual void SetupInputComponent() override;
 	/** Notes whether the last button or stick came from a gamepad (IsUsingGamepad). */
 	virtual bool InputKey(const FInputKeyEventArgs& Params) override;
-	void OnMapZoom(const FInputActionValue& Value);
 	/** Server: the new pawn plays the character this player picked (so the pick survives respawns). */
 	virtual void OnPossess(APawn* InPawn) override;
 	/** Local: the pawn we control changed, so every character's outline (hostile = red) is redrawn. */

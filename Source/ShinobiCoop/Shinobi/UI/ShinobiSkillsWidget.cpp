@@ -440,7 +440,7 @@ void UShinobiSkillsWidget::RefreshCells()
 			const FShinobiJutsuSlotState State = Jutsu->GetDefaultObject<UShinobiJutsuAbility>()->GetSlotState(*Player->GetAbilitySystemComponent());
 			Overlay = State.CooldownRemaining > 0.f ? FText::FromString(FString::Printf(TEXT("%ds"), FMath::CeilToInt(State.CooldownRemaining))) : INVTEXT("IN USE");
 		}
-		const FText Key = bPad ? ShinobiKeyBindings::PadLabel(ShinobiKeyBindings::GetPad(Index), true)
+		const FText Key = bPad ? ShinobiKeyBindings::PadLabel(ShinobiKeyBindings::GetPad(static_cast<ShinobiKeyBindings::EBindable>(Index)), true)
 			: ShinobiKeyBindings::KeyLabel(ShinobiKeyBindings::Get(static_cast<ShinobiKeyBindings::EBindable>(Index)), true);
 		SlotCells[Index]->Show(Jutsu, Index == PickedSlot ? SkillsGoldColor : (bLocked ? SkillsLockedColor : SkillsIdleColor), Overlay, Key, bLocked ? 0.45f : 1.f);
 	}

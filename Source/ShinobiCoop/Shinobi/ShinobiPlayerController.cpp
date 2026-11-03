@@ -195,7 +195,8 @@ void AShinobiPlayerController::SetupInputComponent()
 		Input->BindAction(UShinobiInputConfig::Get().Pause, ETriggerEvent::Started, this, &AShinobiPlayerController::TogglePauseMenu);
 		Input->BindAction(UShinobiInputConfig::Get().MapToggle, ETriggerEvent::Started, this, &AShinobiPlayerController::ToggleMap);
 		Input->BindAction(UShinobiInputConfig::Get().SkillsScreen, ETriggerEvent::Started, this, &AShinobiPlayerController::ToggleSkillsScreen);
-		Input->BindAction(UShinobiInputConfig::Get().MapZoom, ETriggerEvent::Started, this, &AShinobiPlayerController::OnMapZoom);
+		Input->BindAction(UShinobiInputConfig::Get().MapZoomIn, ETriggerEvent::Started, this, &AShinobiPlayerController::ZoomMap, 1, true);
+		Input->BindAction(UShinobiInputConfig::Get().MapZoomOut, ETriggerEvent::Started, this, &AShinobiPlayerController::ZoomMap, -1, true);
 	}
 }
 
@@ -217,15 +218,6 @@ void AShinobiPlayerController::ZoomMap(int32 Steps, bool bWrap)
 	if (Hud)
 	{
 		Hud->ZoomMap(Steps, bWrap);
-	}
-}
-
-void AShinobiPlayerController::OnMapZoom(const FInputActionValue& Value)
-{
-	const float Axis = Value.Get<float>();
-	if (!FMath::IsNearlyZero(Axis))
-	{
-		ZoomMap(Axis > 0.f ? 1 : -1, true);
 	}
 }
 

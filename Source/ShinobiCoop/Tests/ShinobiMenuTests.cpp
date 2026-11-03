@@ -305,22 +305,28 @@ bool FShinobiPauseMenuTabsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiControlsPadChipsTest, "ShinobiCoop.UI.ControlsPadChips", ShinobiTestFlags)
-bool FShinobiControlsPadChipsTest::RunTest(const FString& Parameters)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiControlsDeviceTabsTest, "ShinobiCoop.UI.ControlsDeviceTabs", ShinobiTestFlags)
+bool FShinobiControlsDeviceTabsTest::RunTest(const FString& Parameters)
 {
+	using ShinobiKeyBindings::EBindable;
 	FShinobiTestWorld W;
 	UShinobiShortcutsWidget* Controls = CreateWidget<UShinobiShortcutsWidget>(W.World, UShinobiShortcutsWidget::StaticClass());
 	Controls->TakeWidget();
-	for (int32 Slot = 0; Slot < ShinobiKeyBindings::NumPadSlots; ++Slot)
+	TestFalse(TEXT("the main menu opens on the keyboard"), Controls->IsShowingPad());
+	for (int32 Index = 0; Index < static_cast<int32>(EBindable::Num); ++Index)
 	{
-		const UPanelWidget* Chip = Cast<UPanelWidget>(Controls->GetPadChip(Slot));
-		const UTextBlock* Text = Chip ? Cast<UTextBlock>(Chip->GetChildAt(0)) : nullptr;
-		if (TestNotNull(*FString::Printf(TEXT("slot %d has a controller chip"), Slot + 1), Text))
-		{
-			TestEqual(TEXT("showing RB + its button"), Text->GetText().ToString(), ShinobiKeyBindings::PadLabel(ShinobiKeyBindings::GetPad(Slot)).ToString());
-		}
+		const EBindable Which = static_cast<EBindable>(Index);
+		TestEqual(*FString::Printf(TEXT("%s: its key"), *ShinobiKeyBindings::Label(Which).ToString()),
+			Controls->GetChipText(Index).ToString(), ShinobiKeyBindings::KeyLabel(ShinobiKeyBindings::Get(Which)).ToString());
 	}
-	TestNull(TEXT("actions have no controller chip"), Controls->GetPadChip(ShinobiKeyBindings::NumPadSlots));
+	Controls->ShowDevice(true);
+	TestTrue(TEXT("CONTROLLER tab"), Controls->IsShowingPad());
+	for (int32 Index = 0; Index < static_cast<int32>(EBindable::Num); ++Index)
+	{
+		const EBindable Which = static_cast<EBindable>(Index);
+		TestEqual(*FString::Printf(TEXT("%s: its button(s)"), *ShinobiKeyBindings::Label(Which).ToString()),
+			Controls->GetChipText(Index).ToString(), ShinobiKeyBindings::PadLabel(ShinobiKeyBindings::GetPad(Which)).ToString());
+	}
 	return true;
 }
 

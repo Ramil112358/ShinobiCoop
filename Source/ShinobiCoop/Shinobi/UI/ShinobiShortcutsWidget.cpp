@@ -12,6 +12,7 @@
 #include "Shinobi/Abilities/ShinobiJutsuAbility.h"
 #include "Shinobi/Abilities/ShinobiLoadout.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/ShinobiPlayerController.h"
 #include "Shinobi/UI/ShinobiKeyBindings.h"
 #include "Shinobi/UI/ShinobiMenuStyle.h"
 #include "Shinobi/UI/ShinobiMenuWidgets.h"
@@ -24,17 +25,16 @@ namespace
 	const FLinearColor ShortcutsBadColor(1.f, 0.35f, 0.3f);
 	const FMargin ShortcutsChipPadding(10.f, 5.f);
 	constexpr float ShortcutsLabelWidth = 230.f;
-	constexpr float ShortcutsKeyWidth = 140.f;
-	constexpr float ShortcutsPadWidth = 130.f;
+	constexpr float ShortcutsChipWidth = 170.f;
 
-	UShinobiIndexButton* ShortcutsMakeButton(UWidgetTree& Tree, const FString& Label, int32 Size, int32 Index, FShinobiIndexClicked Handler, const FMargin& Padding)
+	UShinobiIndexButton* ShortcutsMakeButton(UWidgetTree& Tree, const FString& Label, int32 Size, int32 Index, FShinobiIndexClicked Handler, const FMargin& Padding, bool bPrimary = false)
 	{
 		UShinobiIndexButton* Button = Tree.ConstructWidget<UShinobiIndexButton>(UShinobiIndexButton::StaticClass());
 		Button->Index = Index;
 		Button->OnIndexClicked = MoveTemp(Handler);
 		Button->Arm();
 		Button->AddChild(ShinobiMenuStyle::Text(Tree, FText::FromString(Label), Size, FLinearColor::White));
-		ShinobiMenuStyle::StyleButton(*Button, false, Padding);
+		ShinobiMenuStyle::StyleButton(*Button, bPrimary, Padding);
 		return Button;
 	}
 
@@ -47,6 +47,11 @@ namespace
 		}
 		return ShinobiLoadout::LoadSaved(GetDefault<AShinobiPlayerCharacter>()->GetKnownJutsu());
 	}
+
+	UTextBlock* ShortcutsChipText(const UShinobiIndexButton* Chip)
+	{
+		return Chip ? Cast<UTextBlock>(Chip->GetChildAt(0)) : nullptr;
+	}
 }
 
 TSharedRef<SWidget> UShinobiShortcutsWidget::RebuildWidget()
@@ -56,7 +61,7 @@ TSharedRef<SWidget> UShinobiShortcutsWidget::RebuildWidget()
 		SetIsFocusable(true); // takes the key presses while a row listens
 		UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Root"));
 		WidgetTree->RootWidget = Root;
-		UBorder* Panel = ShinobiMenuStyle::PanelBox(*WidgetTree, FMargin(34.f, 24.f, 34.f, 22.f));
+		UBorder* Panel = ShinobiMenuStyle::PanelBox(*WidgetTree, FMargin(34.f, 22.f, 34.f, 22.f));
 		UCanvasPanelSlot* PanelSlot = Root->AddChildToCanvas(Panel);
 		PanelSlot->SetAnchors(FAnchors(PanelAnchor.X, PanelAnchor.Y));
 		PanelSlot->SetAlignment(FVector2D(0.5f, 0.5f));
@@ -64,43 +69,38 @@ TSharedRef<SWidget> UShinobiShortcutsWidget::RebuildWidget()
 
 		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
 		Panel->SetContent(Column);
-		UTextBlock* Hint = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(TEXT("Select a key or button, then press the new one  ·  Alt + key works  ·  Esc / Menu cancels  ·  controller jutsu cast with RB held")), 13, ShinobiMenuStyle::TextDim);
-		Column->AddChildToVerticalBox(Hint)->SetPadding(FMargin(4.f, 0.f, 4.f, 6.f));
+
+		// The device tabs.
+		UHorizontalBox* TabRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+		Column->AddChildToVerticalBox(TabRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
+		for (const TCHAR* Name : { TEXT("KEYBOARD & MOUSE"), TEXT("CONTROLLER") })
+		{
+			DeviceTabs.Add(ShortcutsMakeButton(*WidgetTree, Name, 14, DeviceTabs.Num(),
+				FShinobiIndexClicked::CreateUObject(this, &UShinobiShortcutsWidget::OnDeviceTab), FMargin(16.f, 6.f)));
+			TabRow->AddChildToHorizontalBox(DeviceTabs.Last())->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+		}
+		UHorizontalBoxSlot* TabKeys = TabRow->AddChildToHorizontalBox(ShinobiMenuStyle::Text(*WidgetTree, INVTEXT("LT / RT"), 11, ShinobiMenuStyle::TextDim));
+		TabKeys->SetVerticalAlignment(VAlign_Center);
+		TabKeys->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
+
+		HintText = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 13, ShinobiMenuStyle::TextDim);
+		Column->AddChildToVerticalBox(HintText)->SetPadding(FMargin(4.f, 0.f, 4.f, 6.f));
 
 		UHorizontalBox* Columns = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 		Column->AddChildToVerticalBox(Columns)->SetPadding(FMargin(0.f, 6.f));
 		Chips.SetNum(static_cast<int32>(EBindable::Num));
-		PadChips.SetNum(ShinobiKeyBindings::NumPadSlots);
 		const auto MakeColumn = [this, Columns](const TCHAR* Heading, int32 First, int32 Last, float Gap)
 		{
 			UVerticalBox* Rows = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
 			Columns->AddChildToHorizontalBox(Rows)->SetPadding(FMargin(Gap, 0.f, 0.f, 0.f));
-			// The heading, and over the jutsu slots' two chip columns what each one binds.
-			UHorizontalBox* HeadingRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-			Rows->AddChildToVerticalBox(HeadingRow)->SetPadding(FMargin(4.f, 8.f, 0.f, 6.f));
-			USizeBox* HeadingBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-			HeadingBox->SetWidthOverride(ShortcutsLabelWidth - 4.f);
-			HeadingBox->AddChild(ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Heading), 13, ShinobiMenuStyle::Accent, true));
-			HeadingRow->AddChildToHorizontalBox(HeadingBox)->SetVerticalAlignment(VAlign_Bottom);
-			if (First <= static_cast<int32>(EBindable::Slot8))
-			{
-				for (const TPair<const TCHAR*, float>& Sub : { TPair<const TCHAR*, float>(TEXT("KEYBOARD"), ShortcutsKeyWidth), TPair<const TCHAR*, float>(TEXT("CONTROLLER"), ShortcutsPadWidth) })
-				{
-					USizeBox* SubBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-					SubBox->SetWidthOverride(Sub.Value);
-					UTextBlock* SubText = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Sub.Key), 11, ShinobiMenuStyle::TextDim);
-					SubText->SetJustification(ETextJustify::Center);
-					SubBox->AddChild(SubText);
-					HeadingRow->AddChildToHorizontalBox(SubBox)->SetVerticalAlignment(VAlign_Bottom);
-				}
-			}
+			Rows->AddChildToVerticalBox(ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Heading), 13, ShinobiMenuStyle::Accent, true))->SetPadding(FMargin(4.f, 4.f, 0.f, 6.f));
 			for (int32 Bindable = First; Bindable <= Last; ++Bindable)
 			{
 				AddRow(Rows, Bindable);
 			}
 		};
 		MakeColumn(TEXT("JUTSU SLOTS"), static_cast<int32>(EBindable::Slot1), static_cast<int32>(EBindable::SkillsScreen), 0.f);
-		MakeColumn(TEXT("ACTIONS"), static_cast<int32>(EBindable::Melee), static_cast<int32>(EBindable::Map), 40.f);
+		MakeColumn(TEXT("ACTIONS"), static_cast<int32>(EBindable::Melee), static_cast<int32>(EBindable::MapZoomOut), 40.f);
 
 		UBorder* Rule = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
 		Rule->SetBrush(ShinobiMenuStyle::ColorBrush(FLinearColor(1.f, 1.f, 1.f, 0.1f)));
@@ -116,9 +116,19 @@ TSharedRef<SWidget> UShinobiShortcutsWidget::RebuildWidget()
 		MessageSlot->SetPadding(FMargin(4.f, 0.f, 16.f, 0.f));
 		Footer->AddChildToHorizontalBox(ShortcutsMakeButton(*WidgetTree, TEXT("RESET TO DEFAULTS"), 14, 0,
 			FShinobiIndexClicked::CreateUObject(this, &UShinobiShortcutsWidget::OnFooter), FMargin(16.f, 7.f)))->SetVerticalAlignment(VAlign_Center);
-		RefreshChips();
+		ShowDevice(false);
 	}
 	return Super::RebuildWidget();
+}
+
+void UShinobiShortcutsWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+	// Opens on the device in use (in game; the main menu starts on the keyboard).
+	if (const AShinobiPlayerController* PC = Cast<AShinobiPlayerController>(GetOwningPlayer()))
+	{
+		ShowDevice(PC->IsUsingGamepad());
+	}
 }
 
 void UShinobiShortcutsWidget::AddRow(UVerticalBox* Column, int32 Bindable)
@@ -143,30 +153,43 @@ void UShinobiShortcutsWidget::AddRow(UVerticalBox* Column, int32 Bindable)
 	}
 	Row->AddChildToHorizontalBox(LabelBox)->SetVerticalAlignment(VAlign_Center);
 	USizeBox* ChipBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-	ChipBox->SetWidthOverride(ShortcutsKeyWidth);
-	UShinobiIndexButton* Chip = ShortcutsMakeButton(*WidgetTree, FString(), 14, Bindable, FShinobiIndexClicked::CreateUObject(this, &UShinobiShortcutsWidget::OnKeyChip), ShortcutsChipPadding);
+	ChipBox->SetWidthOverride(ShortcutsChipWidth);
+	UShinobiIndexButton* Chip = ShortcutsMakeButton(*WidgetTree, FString(), 14, Bindable, FShinobiIndexClicked::CreateUObject(this, &UShinobiShortcutsWidget::OnChip), ShortcutsChipPadding);
 	ChipBox->AddChild(Chip);
 	Row->AddChildToHorizontalBox(ChipBox);
 	Chips[Bindable] = Chip;
-	if (PadChips.IsValidIndex(Bindable) && Bindable <= static_cast<int32>(EBindable::Slot8))
-	{
-		USizeBox* PadBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		PadBox->SetWidthOverride(ShortcutsPadWidth);
-		UShinobiIndexButton* PadChip = ShortcutsMakeButton(*WidgetTree, FString(), 14, Bindable, FShinobiIndexClicked::CreateUObject(this, &UShinobiShortcutsWidget::OnPadChip), ShortcutsChipPadding);
-		PadBox->AddChild(PadChip);
-		Row->AddChildToHorizontalBox(PadBox)->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
-		PadChips[Bindable] = PadChip;
-	}
-}
-
-UWidget* UShinobiShortcutsWidget::GetPadChip(int32 PadSlot) const
-{
-	return PadChips.IsValidIndex(PadSlot) ? PadChips[PadSlot].Get() : nullptr;
 }
 
 UWidget* UShinobiShortcutsWidget::GetFocusTarget() const
 {
 	return Chips.Num() > 0 && Chips[0] ? static_cast<UWidget*>(Chips[0]) : const_cast<UShinobiShortcutsWidget*>(this);
+}
+
+FText UShinobiShortcutsWidget::GetChipText(int32 Bindable) const
+{
+	const UTextBlock* Text = Chips.IsValidIndex(Bindable) ? ShortcutsChipText(Chips[Bindable]) : nullptr;
+	return Text ? Text->GetText() : FText::GetEmpty();
+}
+
+void UShinobiShortcutsWidget::ShowDevice(bool bPad)
+{
+	if (Listening != INDEX_NONE)
+	{
+		Cancel();
+	}
+	bShowingPad = bPad;
+	for (int32 Index = 0; Index < DeviceTabs.Num(); ++Index)
+	{
+		ShinobiMenuStyle::StyleButton(*DeviceTabs[Index], (Index == 1) == bPad, FMargin(16.f, 6.f)); // the shown one is filled
+	}
+	if (HintText)
+	{
+		HintText->SetText(bPad
+			? INVTEXT("Select an action, then press its button  ·  hold RB or RT first for a two-button combo  ·  Menu cancels  ·  Menu always pauses")
+			: INVTEXT("Select an action, then press its key  ·  Alt + key works  ·  Esc cancels  ·  Esc always pauses"));
+	}
+	SetMessage(FString(), ShortcutsGoodColor);
+	RefreshChips();
 }
 
 void UShinobiShortcutsWidget::StopListening()
@@ -180,7 +203,7 @@ void UShinobiShortcutsWidget::StopListening()
 void UShinobiShortcutsWidget::Cancel()
 {
 	Listening = INDEX_NONE;
-	bListeningPad = false;
+	PendingHold = FKey();
 	SetMessage(FString(), ShortcutsGoodColor);
 	RefreshChips();
 }
@@ -195,55 +218,66 @@ void UShinobiShortcutsWidget::RefreshChips()
 {
 	for (int32 Bindable = 0; Bindable < Chips.Num(); ++Bindable)
 	{
-		if (UTextBlock* Text = Chips[Bindable] ? Cast<UTextBlock>(Chips[Bindable]->GetChildAt(0)) : nullptr)
+		UTextBlock* Text = ShortcutsChipText(Chips[Bindable]);
+		if (!Text)
 		{
-			const bool bLit = Bindable == Listening && !bListeningPad;
-			Text->SetText(bLit ? INVTEXT("Press a key...") : ShinobiKeyBindings::KeyLabel(ShinobiKeyBindings::Get(static_cast<EBindable>(Bindable))));
-			ShinobiMenuStyle::StyleButton(*Chips[Bindable], bLit, ShortcutsChipPadding); // the listening key is lit
+			continue;
 		}
-	}
-	for (int32 PadSlot = 0; PadSlot < PadChips.Num(); ++PadSlot)
-	{
-		if (UTextBlock* Text = PadChips[PadSlot] ? Cast<UTextBlock>(PadChips[PadSlot]->GetChildAt(0)) : nullptr)
+		const EBindable Which = static_cast<EBindable>(Bindable);
+		const bool bLit = Bindable == Listening;
+		FText Label;
+		if (bLit)
 		{
-			const bool bLit = PadSlot == Listening && bListeningPad;
-			Text->SetText(bLit ? INVTEXT("Press a button...") : ShinobiKeyBindings::PadLabel(ShinobiKeyBindings::GetPad(PadSlot)));
-			ShinobiMenuStyle::StyleButton(*PadChips[PadSlot], bLit, ShortcutsChipPadding);
+			Label = !bShowingPad ? INVTEXT("Press a key...")
+				: PendingHold.IsValid() ? FText::FromString(ShinobiKeyBindings::PadButtonLabel(PendingHold).ToString() + TEXT(" + ...")) : INVTEXT("Press a button...");
 		}
+		else
+		{
+			Label = bShowingPad ? ShinobiKeyBindings::PadLabel(ShinobiKeyBindings::GetPad(Which)) : ShinobiKeyBindings::KeyLabel(ShinobiKeyBindings::Get(Which));
+		}
+		Text->SetText(Label);
+		ShinobiMenuStyle::StyleButton(*Chips[Bindable], bLit, ShortcutsChipPadding); // the listening one is lit
 	}
 }
 
 void UShinobiShortcutsWidget::SetMessage(const FString& Text, const FLinearColor& Color)
 {
+	if (!MessageText)
+	{
+		return; // (not built yet)
+	}
 	MessageText->SetText(FText::FromString(Text));
 	MessageText->SetColorAndOpacity(FSlateColor(Color));
 }
 
-void UShinobiShortcutsWidget::OnKeyChip(int32 Bindable)
+void UShinobiShortcutsWidget::OnChip(int32 Bindable)
 {
 	Listening = Bindable;
-	bListeningPad = false;
-	SetMessage(FString(), ShortcutsGoodColor);
+	PendingHold = FKey();
+	SetMessage(bShowingPad ? TEXT("Press a button, or hold RB / RT and press another. Menu cancels.") : FString(), ShortcutsGoodColor);
 	RefreshChips();
-	SetKeyboardFocus(); // off the button, so Space / Enter can be bound instead of clicking it again
+	SetKeyboardFocus(); // off the chip, so Space / Enter / A can be bound instead of clicking it again
 }
 
-void UShinobiShortcutsWidget::OnPadChip(int32 PadSlot)
+void UShinobiShortcutsWidget::OnDeviceTab(int32 Index)
 {
-	Listening = PadSlot;
-	bListeningPad = true;
-	SetMessage(TEXT("Press the button to cast with RB held (Menu cancels)."), ShortcutsGoodColor);
-	RefreshChips();
-	SetKeyboardFocus(); // off the button, so A can be bound instead of clicking it again
+	ShowDevice(Index == 1);
 }
 
 void UShinobiShortcutsWidget::OnFooter(int32 Index)
 {
 	Listening = INDEX_NONE;
-	bListeningPad = false;
-	ShinobiKeyBindings::ResetToDefaults();
+	PendingHold = FKey();
+	if (bShowingPad)
+	{
+		ShinobiKeyBindings::ResetPad();
+	}
+	else
+	{
+		ShinobiKeyBindings::ResetKeyboard();
+	}
 	RefreshChips();
-	SetMessage(TEXT("All keys and buttons are back to their defaults."), ShortcutsGoodColor);
+	SetMessage(bShowingPad ? TEXT("All controller buttons are back to their defaults.") : TEXT("All keyboard and mouse keys are back to their defaults."), ShortcutsGoodColor);
 }
 
 void UShinobiShortcutsWidget::Bind(const FKey& Key, bool bAlt)
@@ -261,8 +295,8 @@ void UShinobiShortcutsWidget::Bind(const FKey& Key, bool bAlt)
 	Listening = INDEX_NONE;
 	if (Result == ShinobiKeyBindings::ERebind::Swapped)
 	{
-		SetMessage(FString::Printf(TEXT("%s was on %s: %s moved to %s."), *ShinobiKeyBindings::KeyLabel(New).ToString(),
-			*ShinobiKeyBindings::Label(SwappedWith).ToString(), *ShinobiKeyBindings::Label(SwappedWith).ToString(),
+		const FString Other = ShinobiKeyBindings::Label(SwappedWith).ToString();
+		SetMessage(FString::Printf(TEXT("%s was on %s: %s moved to %s."), *ShinobiKeyBindings::KeyLabel(New).ToString(), *Other, *Other,
 			*ShinobiKeyBindings::KeyLabel(Old).ToString()), ShortcutsGoodColor);
 	}
 	else
@@ -276,57 +310,78 @@ void UShinobiShortcutsWidget::Bind(const FKey& Key, bool bAlt)
 	}
 }
 
-void UShinobiShortcutsWidget::BindPad(const FKey& Button)
+void UShinobiShortcutsWidget::BindPad(const FKey& Hold, const FKey& Button)
 {
-	const int32 PadSlot = Listening;
-	const FKey Old = ShinobiKeyBindings::GetPad(PadSlot);
-	int32 SwappedWith = INDEX_NONE;
-	const ShinobiKeyBindings::ERebind Result = ShinobiKeyBindings::RebindPad(PadSlot, Button, &SwappedWith);
+	const EBindable Which = static_cast<EBindable>(Listening);
+	const ShinobiKeyBindings::FPadBinding Old = ShinobiKeyBindings::GetPad(Which);
+	const ShinobiKeyBindings::FPadBinding New{ Hold, Button };
+	EBindable SwappedWith = EBindable::Num;
+	const ShinobiKeyBindings::ERebind Result = ShinobiKeyBindings::RebindPad(Which, New, &SwappedWith);
+	PendingHold = FKey();
 	if (Result == ShinobiKeyBindings::ERebind::Blocked)
 	{
-		SetMessage(FString::Printf(TEXT("%s can't cast jutsu: use A, B, X, Y, the D-pad, LB, LT, RT or L3."),
-			*ShinobiKeyBindings::PadLabel(Button, false, false).ToString()), ShortcutsBadColor);
+		SetMessage(FString::Printf(TEXT("%s can't be used. Try A, B, X, Y, the D-pad, LB, LT, L3, R3 or View."),
+			*ShinobiKeyBindings::PadButtonLabel(Button).ToString()), ShortcutsBadColor);
+		RefreshChips();
 		return; // still listening: try another button
 	}
 	Listening = INDEX_NONE;
-	bListeningPad = false;
 	if (Result == ShinobiKeyBindings::ERebind::Swapped)
 	{
-		const FString Other = ShinobiKeyBindings::Label(static_cast<EBindable>(SwappedWith)).ToString();
-		SetMessage(FString::Printf(TEXT("%s was on %s: %s moved to %s."), *ShinobiKeyBindings::PadLabel(Button).ToString(), *Other, *Other,
-			*ShinobiKeyBindings::PadLabel(Old).ToString()), ShortcutsGoodColor);
+		const FString Other = ShinobiKeyBindings::Label(SwappedWith).ToString();
+		SetMessage(Old.IsBound()
+			? FString::Printf(TEXT("%s was on %s: %s moved to %s."), *ShinobiKeyBindings::PadLabel(New).ToString(), *Other, *Other, *ShinobiKeyBindings::PadLabel(Old).ToString())
+			: FString::Printf(TEXT("%s was on %s, which now has no button."), *ShinobiKeyBindings::PadLabel(New).ToString(), *Other), ShortcutsGoodColor);
 	}
 	else
 	{
 		SetMessage(FString(), ShortcutsGoodColor);
 	}
 	RefreshChips();
-	if (PadChips.IsValidIndex(PadSlot) && PadChips[PadSlot])
+	if (Chips.IsValidIndex(static_cast<int32>(Which)) && Chips[static_cast<int32>(Which)])
 	{
-		PadChips[PadSlot]->SetKeyboardFocus();
+		Chips[static_cast<int32>(Which)]->SetKeyboardFocus();
 	}
 }
 
 FReply UShinobiShortcutsWidget::NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event)
 {
+	const FKey Key = Event.GetKey();
 	if (Listening == INDEX_NONE)
 	{
+		if (Key == EKeys::Gamepad_LeftTrigger || Key == EKeys::Gamepad_RightTrigger)
+		{
+			ShowDevice(Key == EKeys::Gamepad_RightTrigger); // LT / RT: the device tabs
+			return FReply::Handled();
+		}
 		return Super::NativeOnKeyDown(Geometry, Event);
 	}
-	const FKey Key = Event.GetKey();
-	if (Key == EKeys::Escape || Key == EKeys::Gamepad_Special_Right || Key == EKeys::Gamepad_Special_Left)
+	if (Event.IsRepeat())
 	{
-		Cancel();
 		return FReply::Handled();
 	}
-	if (bListeningPad)
+	if (Key == EKeys::Escape || Key == EKeys::Gamepad_Special_Right)
 	{
-		// RB is the jutsu button itself: holding it first, as when casting, just waits for the button that goes with it.
-		if (Key.IsGamepadKey() && Key != EKeys::Gamepad_RightShoulder)
+		Cancel(); // (Esc and Menu always pause, so they're never bound)
+		return FReply::Handled();
+	}
+	if (bShowingPad)
+	{
+		if (!Key.IsGamepadKey())
 		{
-			BindPad(Key);
+			return FReply::Handled(); // keys other than Esc wait for a button
 		}
-		return FReply::Handled(); // (keys other than Esc wait for a button)
+		if (ShinobiKeyBindings::IsPadHold(Key))
+		{
+			if (!PendingHold.IsValid())
+			{
+				PendingHold = Key; // the first of a combo: wait for the second
+				RefreshChips();
+			}
+			return FReply::Handled();
+		}
+		BindPad(PendingHold, Key);
+		return FReply::Handled();
 	}
 	if (Key == EKeys::Gamepad_FaceButton_Right)
 	{
@@ -335,10 +390,24 @@ FReply UShinobiShortcutsWidget::NativeOnKeyDown(const FGeometry& Geometry, const
 	}
 	if (Key.IsGamepadKey() || Key == EKeys::LeftAlt || Key == EKeys::RightAlt)
 	{
-		return FReply::Handled(); // Alt alone waits for the key it goes with; the pad's buttons are on the CONTROLLER chips
+		return FReply::Handled(); // Alt alone waits for the key it goes with; buttons are on the CONTROLLER tab
 	}
 	Bind(Key, Event.IsAltDown());
 	return FReply::Handled();
+}
+
+FReply UShinobiShortcutsWidget::NativeOnKeyUp(const FGeometry& Geometry, const FKeyEvent& Event)
+{
+	if (Listening != INDEX_NONE && bShowingPad && PendingHold.IsValid() && Event.GetKey() == PendingHold)
+	{
+		// Let go with nothing pressed alongside: RB / RT never act alone.
+		SetMessage(FString::Printf(TEXT("%s only works held with another button: hold it, then press the other."),
+			*ShinobiKeyBindings::PadButtonLabel(PendingHold).ToString()), ShortcutsBadColor);
+		PendingHold = FKey();
+		RefreshChips();
+		return FReply::Handled();
+	}
+	return Super::NativeOnKeyUp(Geometry, Event);
 }
 
 FReply UShinobiShortcutsWidget::NativeOnMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event)
@@ -347,7 +416,7 @@ FReply UShinobiShortcutsWidget::NativeOnMouseButtonDown(const FGeometry& Geometr
 	{
 		return Super::NativeOnMouseButtonDown(Geometry, Event);
 	}
-	if (bListeningPad)
+	if (bShowingPad)
 	{
 		Cancel(); // a click while a button is awaited backs out
 		return FReply::Handled();

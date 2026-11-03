@@ -11,9 +11,6 @@ class UInputMappingContext;
 /** Priority IMC_Shinobi is added at. */
 constexpr int32 ShinobiInputPriority = 1;
 
-/** IMC_ShinobiJutsu goes above IMC_Shinobi so, while RB is held, the jutsu slots' buttons win over jump/dodge/melee. */
-constexpr int32 ShinobiJutsuInputPriority = ShinobiInputPriority + 1;
-
 /** All input actions and the mapping context, constructed in code so no input assets are needed. */
 UCLASS()
 class SHINOBICOOP_API UShinobiInputConfig : public UObject
@@ -30,9 +27,9 @@ public:
 	 * Build() per possession would let a stale, unbound context win priority ties after a re-possess. */
 	static const UShinobiInputConfig& Get();
 
-	/** Puts ShinobiKeyBindings' keyboard/mouse keys on the rebindable actions in Context (their gamepad keys stay), Alt
-	 * bindings chorded on AltModifier, and each jutsu slot's pad button in JutsuContext, then has every local player rebuild
-	 * its mappings. Build() and every rebind call it. */
+	/** Maps every rebindable action (ShinobiKeyBindings) in Context afresh: its keyboard/mouse key (Alt + key chorded on
+	 * AltModifier) and its controller button (RB / RT + button chorded on PadHoldRB / PadHoldRT), then has every local
+	 * player rebuild its mappings. Build() and every rebind call it. */
 	void ApplyKeyBindings() const;
 
 	/** The action a ShinobiKeyBindings::EBindable drives (cast from uint8 so this header needn't include it). */
@@ -54,11 +51,7 @@ public:
 	UPROPERTY()
 	TObjectPtr<UInputAction> Jump;
 
-	/** Gamepad RB: while held, the player adds JutsuContext. */
-	UPROPERTY()
-	TObjectPtr<UInputAction> JutsuModifier;
-
-	/** Tab / R3: lock the camera onto the enemy nearest the crosshair (again to release). */
+	/** Tab / R3 by default: lock the camera onto the enemy nearest the crosshair (again to release). */
 	UPROPERTY()
 	TObjectPtr<UInputAction> LockOn;
 
@@ -70,23 +63,29 @@ public:
 	UPROPERTY()
 	TObjectPtr<UInputAction> CameraZoom;
 
-	/** M (View button): open or close the big map. */
+	/** M / View by default: open or close the big map. */
 	UPROPERTY()
 	TObjectPtr<UInputAction> MapToggle;
 
-	/** = / - (numpad + / -, D-pad up): zoom the open map, +1 in, -1 out. */
+	/** = / D-pad up and - / nothing by default: zoom the open map (else the minimap) in or out a level. */
 	UPROPERTY()
-	TObjectPtr<UInputAction> MapZoom;
+	TObjectPtr<UInputAction> MapZoomIn;
 
-	/** Each jutsu slot's pad button (ShinobiKeyBindings::GetPad) on that slot's action. Only active while RB is held. */
 	UPROPERTY()
-	TObjectPtr<UInputMappingContext> JutsuContext;
+	TObjectPtr<UInputAction> MapZoomOut;
 
 	/** Left/Right Alt: the chord for Alt + key bindings. */
 	UPROPERTY()
 	TObjectPtr<UInputAction> AltModifier;
 
-	/** K: the Skills screen (bound by AShinobiPlayerController). */
+	/** RB / RT held: the chords for two-button controller bindings (they do nothing alone). */
+	UPROPERTY()
+	TObjectPtr<UInputAction> PadHoldRB;
+
+	UPROPERTY()
+	TObjectPtr<UInputAction> PadHoldRT;
+
+	/** K / D-pad left by default: the Skills screen (bound by AShinobiPlayerController). */
 	UPROPERTY()
 	TObjectPtr<UInputAction> SkillsScreen;
 

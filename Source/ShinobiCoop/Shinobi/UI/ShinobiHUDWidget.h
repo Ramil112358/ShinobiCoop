@@ -62,7 +62,7 @@ private:
 	void BuildJutsuSlots(UCanvasPanel* Root);
 	UTextBlock* MakeText(int32 FontSize, const FLinearColor& Tint, bool bBold = false);
 	UTextBlock* AddLabel(UOverlay* Layers, int32 FontSize, EHorizontalAlignment HorizontalAlign, EVerticalAlignment VerticalAlign, const FLinearColor& Tint);
-	/** The slots show the player's loadout (empty ones as a bare frame), and their keys (RB + a button on a gamepad). */
+	/** The slots show the player's loadout (empty ones as a bare frame), and their keys (or controller buttons). */
 	void UpdateJutsuSlots(const UAbilitySystemComponent& ASC, const class AShinobiPlayerCharacter* Player);
 
 	/** While riding a dragon: a ring at the point where its fire will end (straight ahead of the dragon, or the first thing in the way). */
