@@ -515,8 +515,8 @@ void UShinobiPauseMenuWidget::UseGamepadHints(bool bGamepad)
 	Hints->ClearChildren();
 	struct FHint { TArray<const TCHAR*> Keys; const TCHAR* Label; };
 	const TArray<FHint> Shown = bGamepad
-		? TArray<FHint>{ { { TEXT("LB"), TEXT("RB") }, TEXT("Switch tab") }, { { TEXT("A") }, TEXT("Select") }, { { TEXT("B") }, TEXT("Back") }, { { TEXT("Start") }, TEXT("Resume") } }
-		: TArray<FHint>{ { { TEXT("Q"), TEXT("E") }, TEXT("Switch tab (or click one)") }, { { TEXT("Esc") }, TEXT("Resume") } };
+		? TArray<FHint>{ { { TEXT("LB"), TEXT("RB") }, TEXT("Switch between tabs") }, { { TEXT("A") }, TEXT("Select") }, { { TEXT("B") }, TEXT("Back") }, { { TEXT("Start") }, TEXT("Resume") } }
+		: TArray<FHint>{ { { TEXT("Q"), TEXT("E") }, TEXT("Switch between tabs") }, { { TEXT("Esc") }, TEXT("Resume") } };
 	for (const FHint& Hint : Shown)
 	{
 		for (const TCHAR* Key : Hint.Keys)

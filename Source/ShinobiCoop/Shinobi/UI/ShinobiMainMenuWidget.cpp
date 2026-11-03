@@ -132,10 +132,6 @@ TSharedRef<SWidget> UShinobiMainMenuWidget::RebuildWidget()
 			Tabs->AddChildToHorizontalBox(Button)->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f));
 			TabButtons.Add(Button);
 		}
-		UTextBlock* Keys = ShinobiMenuStyle::Text(*WidgetTree, INVTEXT("or Q / E"), 11, ShinobiMenuStyle::TextDim);
-		UHorizontalBoxSlot* KeysSlot = Tabs->AddChildToHorizontalBox(Keys);
-		KeysSlot->SetVerticalAlignment(VAlign_Center);
-		KeysSlot->SetPadding(FMargin(6.f, 0.f));
 		UHorizontalBoxSlot* Gap = Tabs->AddChildToHorizontalBox(WidgetTree->ConstructWidget<USpacer>(USpacer::StaticClass()));
 		Gap->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		StatusText = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 13, ShinobiMenuStyle::TextDim);
