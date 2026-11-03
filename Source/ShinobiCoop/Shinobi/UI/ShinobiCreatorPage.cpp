@@ -436,18 +436,18 @@ void UShinobiCreatorPage::FinishSave(TArray<uint8>&& Portrait)
 	}
 	Save = UShinobiCharacterSave::Load(); // (re-read: the stage may have saved a portrait meanwhile)
 	Save->Slots.SetNum(FMath::Max(Save->Slots.Num(), EditedSlot + 1));
-	FShinobiCharacterSlot& Slot = Save->Slots[EditedSlot];
+	FShinobiCharacterSlot& Saved = Save->Slots[EditedSlot]; // (not "Slot": UWidget::Slot)
 	FString Name = NameBox ? NameBox->GetText().ToString().TrimStartAndEnd().Left(24) : FString();
-	Slot.Name = Name.IsEmpty() ? FString::Printf(TEXT("Shinobi %d"), EditedSlot + 1) : Name;
+	Saved.Name = Name.IsEmpty() ? FString::Printf(TEXT("Shinobi %d"), EditedSlot + 1) : Name;
 	if (!Portrait.IsEmpty())
 	{
-		Slot.Portrait = MoveTemp(Portrait);
+		Saved.Portrait = MoveTemp(Portrait);
 	}
-	else if (!(Slot.Look == Look))
+	else if (!(Saved.Look == Look))
 	{
-		Slot.Portrait.Reset(); // a new look without its picture: the SHINOBI strip films it
+		Saved.Portrait.Reset(); // a new look without its picture: the SHINOBI strip films it
 	}
-	Slot.Look = Look;
+	Saved.Look = Look;
 	Save->Active = EditedSlot;
 	const bool bSaved = Save->Save();
 	MessageText->SetText(bSaved ? FText::Format(INVTEXT("{0} saved: played from the next match."), FText::FromString(Save->Slots[EditedSlot].Name))

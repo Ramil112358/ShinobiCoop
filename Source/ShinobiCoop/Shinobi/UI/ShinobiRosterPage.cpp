@@ -280,8 +280,8 @@ void UShinobiRosterPage::RebuildMadeCards()
 	TArray<FString> Names;
 	for (const int32 SlotIndex : Slots)
 	{
-		const FShinobiCharacterSlot& Slot = Made->Slots[SlotIndex];
-		Names.Add(FString::Printf(TEXT("%s|%08x"), *Slot.Name, FCrc::MemCrc32(Slot.Portrait.GetData(), Slot.Portrait.Num()))); // (a new portrait rebuilds too)
+		const FShinobiCharacterSlot& Character = Made->Slots[SlotIndex]; // (not "Slot": UWidget::Slot)
+		Names.Add(FString::Printf(TEXT("%s|%08x"), *Character.Name, FCrc::MemCrc32(Character.Portrait.GetData(), Character.Portrait.Num()))); // (a new portrait rebuilds too)
 	}
 	Names.Add(FindFreeSlot() != INDEX_NONE ? TEXT("+") : TEXT("")); // ("+" comes and goes too)
 	if (CreateCard && Names == BuiltMadeNames)
@@ -463,11 +463,11 @@ void UShinobiRosterPage::RequestMadePortrait(AShinobiMenuStage& Shown, const FSh
 		// Every made character wearing that look gets it (the slots may have changed while it was filmed).
 		UShinobiCharacterSave* Made = UShinobiCharacterSave::Load();
 		bool bChanged = false;
-		for (FShinobiCharacterSlot& Slot : Made->Slots)
+		for (FShinobiCharacterSlot& Character : Made->Slots)
 		{
-			if (!Slot.Name.IsEmpty() && Slot.Look == Look && Slot.Portrait.IsEmpty())
+			if (!Character.Name.IsEmpty() && Character.Look == Look && Character.Portrait.IsEmpty())
 			{
-				Slot.Portrait = Png;
+				Character.Portrait = Png;
 				bChanged = true;
 			}
 		}

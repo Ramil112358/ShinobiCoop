@@ -598,10 +598,10 @@ void UShinobiHUDWidget::UpdatePortrait(const AShinobiPlayerCharacter* Player)
 		ShownPortraitLook = Player->GetAppearance();
 		// The saved character wearing it; else the one played (the look came back from the server a little different).
 		const UShinobiCharacterSave* Made = UShinobiCharacterSave::Load();
-		const FShinobiCharacterSlot* Slot = Made->FindSlot(ShownPortraitLook);
-		Slot = Slot ? Slot : Made->GetActiveLook() ? &Made->Slots[Made->Active] : nullptr;
-		ShownMadeName = Slot ? Slot->Name : FString();
-		Art = Slot ? ShinobiMenuArt::MadePortrait(*Slot) : nullptr;
+		const FShinobiCharacterSlot* Played = Made->FindSlot(ShownPortraitLook); // (not "Slot": UWidget::Slot)
+		Played = Played ? Played : Made->GetActiveLook() ? &Made->Slots[Made->Active] : nullptr;
+		ShownMadeName = Played ? Played->Name : FString();
+		Art = Played ? ShinobiMenuArt::MadePortrait(*Played) : nullptr;
 		HeadV = ShinobiMenuArt::MadePortraitFaceV;
 	}
 	else if (Index < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster))
