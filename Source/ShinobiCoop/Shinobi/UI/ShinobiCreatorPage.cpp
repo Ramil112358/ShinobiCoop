@@ -363,9 +363,14 @@ void UShinobiCreatorPage::SaveAndPlay()
 	{
 		return;
 	}
+	Save = UShinobiCharacterSave::Load(); // (the menu stage may have saved a portrait since Open)
 	Save->Slots.SetNum(FMath::Max(Save->Slots.Num(), EditedSlot + 1));
 	FString Name = NameBox ? NameBox->GetText().ToString().TrimStartAndEnd().Left(24) : FString();
 	Save->Slots[EditedSlot].Name = Name.IsEmpty() ? FString::Printf(TEXT("Shinobi %d"), EditedSlot + 1) : Name;
+	if (!(Save->Slots[EditedSlot].Look == Look))
+	{
+		Save->Slots[EditedSlot].Portrait.Reset(); // a new look: the SHINOBI strip films it again
+	}
 	Save->Slots[EditedSlot].Look = Look;
 	Save->Active = EditedSlot;
 	const bool bSaved = Save->Save();

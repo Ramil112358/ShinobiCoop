@@ -249,16 +249,7 @@ int32 UShinobiRosterPage::FindFreeSlot()
 
 TArray<int32> UShinobiRosterPage::MadeSlots()
 {
-	const UShinobiCharacterSave* Made = UShinobiCharacterSave::Load();
-	TArray<int32> Found;
-	for (int32 SlotIndex = 0; SlotIndex < Made->Slots.Num(); ++SlotIndex)
-	{
-		if (!Made->Slots[SlotIndex].Name.IsEmpty())
-		{
-			Found.Add(SlotIndex);
-		}
-	}
-	return Found;
+	return UShinobiCharacterSave::Load()->GetMadeSlots();
 }
 
 UShinobiIndexButton* UShinobiRosterPage::GetCreateCard() const
@@ -289,7 +280,8 @@ void UShinobiRosterPage::RebuildMadeCards()
 	TArray<FString> Names;
 	for (const int32 SlotIndex : Slots)
 	{
-		Names.Add(Made->Slots[SlotIndex].Name);
+		const FShinobiCharacterSlot& Slot = Made->Slots[SlotIndex];
+		Names.Add(FString::Printf(TEXT("%s|%08x"), *Slot.Name, FCrc::MemCrc32(Slot.Portrait.GetData(), Slot.Portrait.Num()))); // (a new portrait rebuilds too)
 	}
 	Names.Add(FindFreeSlot() != INDEX_NONE ? TEXT("+") : TEXT("")); // ("+" comes and goes too)
 	if (CreateCard && Names == BuiltMadeNames)
@@ -310,7 +302,7 @@ void UShinobiRosterPage::RebuildMadeCards()
 	{
 		const FString& Name = Made->Slots[SlotIndex].Name;
 		UTextBlock* Label = nullptr;
-		UShinobiIndexButton* Card = MakeCard(nullptr, Name.Left(1), 64, Name.Left(12), SlotIndex,
+		UShinobiIndexButton* Card = MakeCard(ShinobiMenuArt::MadePortrait(Made->Slots[SlotIndex]), Name.Left(1), 64, Name.Left(12), SlotIndex,
 			FShinobiIndexClicked::CreateUObject(this, &UShinobiRosterPage::PickMade), Label);
 		MadeStrip->AddChildToHorizontalBox(Card)->SetPadding(FMargin(6.f, 0.f));
 		MadeCards.Add(Card);
@@ -379,7 +371,7 @@ UWidget* UShinobiRosterPage::GetFocusTarget() const
 	return Cards.IsValidIndex(Picked) ? Cards[Picked].Get() : nullptr;
 }
 
-void UShinobiRosterPage::Show()
+void UShinobiRosterPage::Show(bool bWear)
 {
 	RebuildMadeCards();
 	const UShinobiCharacterSave* Made = UShinobiCharacterSave::Load();
@@ -443,17 +435,46 @@ void UShinobiRosterPage::Show()
 			Label->SetText(INVTEXT("DELETE"));
 		}
 	}
-	if (AShinobiMenuStage* Shown = Stage.Get())
+	if (AShinobiMenuStage* Shown = bWear ? Stage.Get() : nullptr)
 	{
 		if (bMade)
 		{
 			Shown->ShowAppearance(Made->Slots[Active].Look, Outfit);
+			if (Made->Slots[Active].Portrait.IsEmpty())
+			{
+				RequestMadePortrait(*Shown, Made->Slots[Active].Look);
+			}
 		}
 		else
 		{
 			Shown->Show(Picked, Outfit, Face);
 		}
 	}
+}
+
+void UShinobiRosterPage::RequestMadePortrait(AShinobiMenuStage& Shown, const FShinobiAppearance& Look)
+{
+	Shown.RequestPortrait(Look, [WeakThis = TWeakObjectPtr<UShinobiRosterPage>(this), Look](TArray<uint8>&& Png)
+	{
+		// Every made character wearing that look gets it (the slots may have changed while it was filmed).
+		UShinobiCharacterSave* Made = UShinobiCharacterSave::Load();
+		bool bChanged = false;
+		for (FShinobiCharacterSlot& Slot : Made->Slots)
+		{
+			if (!Slot.Name.IsEmpty() && Slot.Look == Look && Slot.Portrait.IsEmpty())
+			{
+				Slot.Portrait = Png;
+				bChanged = true;
+			}
+		}
+		if (bChanged && Made->Save())
+		{
+			if (UShinobiRosterPage* Page = WeakThis.Get())
+			{
+				Page->Show(false); // its card shows the picture (the stage keeps what it wears)
+			}
+		}
+	});
 }
 
 void UShinobiRosterPage::NativeTick(const FGeometry& Geometry, float DeltaTime)

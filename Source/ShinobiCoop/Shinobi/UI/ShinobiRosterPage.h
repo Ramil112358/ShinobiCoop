@@ -6,16 +6,17 @@
 #include "ShinobiRosterPage.generated.h"
 
 class AShinobiMenuStage;
+struct FShinobiAppearance;
 class UShinobiIndexButton;
 class UTextBlock;
 class UTexture2D;
 
 /**
  * The main menu's SHINOBI tab: along the bottom a portrait card per roster character, then a card per character made in
- * the creator (UShinobiCharacterSave's slots) and a "+" card that makes a new one (hidden once every slot is used). On the
- * right: the pick's name, a face stepper (roster characters with several), an outfit dropdown, and for a made character
- * EDIT (back into the creator) and DELETE (press twice). Every change is saved (ShinobiSettings, UShinobiCharacterSave)
- * and worn by the stage at once.
+ * the creator (UShinobiCharacterSave's slots; its portrait once the stage has filmed it, AShinobiMenuStage::RequestPortrait)
+ * and a "+" card that makes a new one (hidden once every slot is used). On the right: the pick's name, a face stepper
+ * (roster characters with several), an outfit dropdown, and for a made character EDIT (back into the creator) and DELETE
+ * (press twice). Every change is saved (ShinobiSettings, UShinobiCharacterSave) and worn by the stage at once.
  */
 UCLASS()
 class SHINOBICOOP_API UShinobiRosterPage : public UUserWidget
@@ -55,8 +56,8 @@ public:
 	void StepFace(int32 Direction);
 	/** The picked character's card (a made one's when it is played). */
 	UWidget* GetFocusTarget() const;
-	/** Card looks, name and outfit line from the saved picks; the stage wears them. */
-	void Show();
+	/** Card looks, name and outfit line from the saved picks; the stage wears them (unless !bWear: only the page). */
+	void Show(bool bWear = true);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -66,8 +67,10 @@ protected:
 private:
 	/** A card for the strip: Picture (or a dark card with Initial on it) over Label. */
 	UShinobiIndexButton* MakeCard(UTexture2D* Picture, const FString& Initial, int32 InitialSize, const FString& Label, int32 Index, FShinobiIndexClicked Handler, UTextBlock*& OutLabel);
-	/** Rebuilds the made cards and "+" when the saved characters changed. */
+	/** Rebuilds the made cards and "+" when the saved characters (or their portraits) changed. */
 	void RebuildMadeCards();
+	/** Has the stage film the made character wearing Look, and keeps the picture as its portrait (its card shows it). */
+	void RequestMadePortrait(AShinobiMenuStage& Shown, const FShinobiAppearance& Look);
 
 	UPROPERTY()
 	TArray<TObjectPtr<UShinobiIndexButton>> Cards;

@@ -414,6 +414,10 @@ void UShinobiMainMenuWidget::OpenCreator(int32 SlotIndex)
 	{
 		return;
 	}
+	if (AShinobiMenuStage* Stage = GetStage())
+	{
+		Stage->CancelPortrait(); // (the creator's edits aren't the saved look; SAVE & PLAY's return asks again)
+	}
 	CreatorPage->Open(SlotIndex);
 	ShowPage(EShinobiMenuTab::Shinobi, true);
 }

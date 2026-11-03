@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 
 struct FShinobiMap;
+struct FShinobiCharacterSlot;
 class UTexture2D;
 
 /**
@@ -18,4 +19,9 @@ namespace ShinobiMenuArt
 	SHINOBICOOP_API FString PortraitPath(int32 RosterIndex);
 	/** Quiet load: null (and no warning) when the picture isn't there. */
 	SHINOBICOOP_API UTexture2D* LoadArt(const FString& Path);
+	/** A made character's portrait (FShinobiCharacterSlot::Portrait) as a transient texture; null when it has none yet. */
+	SHINOBICOOP_API UTexture2D* MadePortrait(const FShinobiCharacterSlot& Slot);
+	/** Where the face sits in a 3:4 portrait, from the top (the menu stage films made characters' this way; the HUD's round
+	 * picture is centred on it). */
+	constexpr float MadePortraitFaceV = 0.39f;
 }

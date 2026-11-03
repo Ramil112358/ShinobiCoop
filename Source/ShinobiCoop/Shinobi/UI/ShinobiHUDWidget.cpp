@@ -2,6 +2,7 @@
 #include "Shinobi/ShinobiPlayerController.h"
 #include "Shinobi/UI/ShinobiKeyBindings.h"
 #include "Shinobi/UI/ShinobiMenuArt.h"
+#include "Shinobi/Hero/ShinobiCharacterSave.h"
 #include "AbilitySystemComponent.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
@@ -580,19 +581,28 @@ UTextBlock* UShinobiHUDWidget::AddLabel(UOverlay* Layers, int32 FontSize, EHoriz
 
 void UShinobiHUDWidget::UpdatePortrait(const AShinobiPlayerCharacter* Player)
 {
-	const uint8 Index = Player && Player->GetCharacterIndex() < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster) ? Player->GetCharacterIndex() : 253;
-	if (!PortraitImage || Index == ShownPortrait)
+	const uint8 Played = Player ? Player->GetCharacterIndex() : 253;
+	const bool bMade = Played == AShinobiPlayerCharacter::CustomCharacter;
+	const uint8 Index = Played < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster) || bMade ? Played : 253;
+	if (!PortraitImage || (Index == ShownPortrait && (!bMade || Player->GetAppearance() == ShownPortraitLook)))
 	{
 		return;
 	}
 	ShownPortrait = Index;
-	// The menu card art (3:4, head and shoulders) cropped to its top square; creator-made characters keep the generic picture.
-	UTexture2D* Art = Index < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster) ? ShinobiMenuArt::LoadArt(ShinobiMenuArt::PortraitPath(Index)) : nullptr;
-	FSlateBrush Brush = RoundedBrush(FLinearColor::White, -1.f, PortraitRimColor, 2.f, Art);
-	if (Art)
+	// The menu card art (3:4, head and shoulders) cropped to its top square: a roster character's imported portrait, or the
+	// one the main menu filmed of this machine's made character (its SHINOBI card); else the generic picture.
+	UTexture2D* Art = nullptr;
+	float HeadV = 0.39f; // where the head sits in the 3:4 card (measured per portrait; the MetaHuman bodies frame lower)
+	if (bMade)
 	{
-		// Centred on the head: where it sits in the 3:4 card (measured per portrait; the MetaHuman bodies frame lower).
-		float HeadV = 0.39f;
+		ShownPortraitLook = Player->GetAppearance();
+		const FShinobiCharacterSlot* Slot = UShinobiCharacterSave::Load()->FindSlot(ShownPortraitLook);
+		Art = Slot ? ShinobiMenuArt::MadePortrait(*Slot) : nullptr;
+		HeadV = ShinobiMenuArt::MadePortraitFaceV;
+	}
+	else if (Index < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster))
+	{
+		Art = ShinobiMenuArt::LoadArt(ShinobiMenuArt::PortraitPath(Index));
 		const FString Who = AShinobiPlayerCharacter::Roster[Index].Name;
 		if (Who == TEXT("BikaMH"))
 		{
@@ -602,6 +612,11 @@ void UShinobiHUDWidget::UpdatePortrait(const AShinobiPlayerCharacter* Player)
 		{
 			HeadV = 0.44f;
 		}
+	}
+	FSlateBrush Brush = RoundedBrush(FLinearColor::White, -1.f, PortraitRimColor, 2.f, Art);
+	if (Art)
+	{
+		// Centred on the head.
 		const float Span = FMath::Min(1.f, (float)Art->GetSizeX() / FMath::Max(Art->GetSizeY(), 1));
 		const float Top = FMath::Clamp(HeadV - Span * 0.5f, 0.f, 1.f - Span);
 		Brush.SetUVRegion(FBox2f(FVector2f(0.f, Top), FVector2f(1.f, Top + Span)));

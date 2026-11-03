@@ -1,17 +1,32 @@
 #include "Shinobi/UI/ShinobiMenuStage.h"
 #include "Animation/AnimSequence.h"
 #include "Camera/CameraComponent.h"
+#include "Components/SceneCaptureComponent2D.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "EngineUtils.h"
+#include "ImageCore.h"
+#include "ImageUtils.h"
+#include "TextureResource.h"
 #include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/UI/ShinobiMenuArt.h"
 #include "Shinobi/UI/ShinobiStudioSet.h"
 
 namespace
 {
 	const TCHAR* const MenuStageManny = TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple");
 	const TCHAR* const MenuStageIdle = TEXT("/Game/Characters/Mannequins/Anims/Unarmed/MM_Idle.MM_Idle");
+
+	/** FramePortrait's lens: 3 m from the face, 24 degrees across a 16:9 frame (the camera keeps that height of view
+	 * whatever the window's shape). */
+	constexpr float MenuStagePortraitDistance = 300.f;
+	constexpr float MenuStagePortraitFOV = 24.f;
+	/** Seconds a requested look stands ready before its picture is taken; the last MenuStagePortraitWarmup of them are
+	 * filmed every frame so exposure, temporal AA, streamed textures and grooms settle in the capture too. */
+	constexpr float MenuStagePortraitSettle = 1.5f;
+	constexpr float MenuStagePortraitWarmup = 0.5f;
 }
 
 AShinobiMenuStage::AShinobiMenuStage()
@@ -42,6 +57,14 @@ AShinobiMenuStage::AShinobiMenuStage()
 	Camera->bOverrideAspectRatioAxisConstraint = true; // (a wider window shows more at the sides, the same height)
 	Camera->AspectRatioAxisConstraint = AspectRatio_MaintainYFOV;
 	PlaceCamera();
+
+	// Made characters' portraits (RequestPortrait): off screen, only when asked.
+	PortraitCapture = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("PortraitCapture"));
+	PortraitCapture->SetupAttachment(Root);
+	PortraitCapture->bCaptureEveryFrame = false;
+	PortraitCapture->bCaptureOnMovement = false;
+	PortraitCapture->bAlwaysPersistRenderingState = true; // (exposure and temporal AA carry over the warm-up frames)
+	PortraitCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR; // tone-mapped, as the screen shows it
 }
 
 void AShinobiMenuStage::BeginPlay()
@@ -66,6 +89,10 @@ void AShinobiMenuStage::StartDriver()
 void AShinobiMenuStage::ShowAppearance(const FShinobiAppearance& Look, int32 OutfitIndex)
 {
 	StartDriver();
+	if (bPortraitPending && !(PortraitLook == Look))
+	{
+		CancelPortrait(); // (someone else stands here now)
+	}
 	ShownLook = Look;
 	// The made body lands later (Mutable builds it): dress the outfit on its skeleton then.
 	Body->OnBodyBuilt.RemoveAll(this);
@@ -86,6 +113,7 @@ void AShinobiMenuStage::ShowAppearance(const FShinobiAppearance& Look, int32 Out
 void AShinobiMenuStage::Show(int32 RosterIndex, int32 OutfitIndex, int32 Face)
 {
 	StartDriver();
+	CancelPortrait(); // (a roster body: no made character to film)
 	Body->OnBodyBuilt.RemoveAll(this);
 	ShownBody = INDEX_NONE;
 	for (const int32 Index : { RosterIndex, 0 }) // the pick, else the hero
@@ -145,6 +173,100 @@ void AShinobiMenuStage::FramePortrait()
 	Camera->SetFieldOfView(24.f);
 	Camera->SetRelativeLocation(FVector(300.f, 0.f, HeadHeight() - 2.f));
 	Camera->SetRelativeRotation(FRotator(0.f, 180.f, 0.f));
+}
+
+void AShinobiMenuStage::RequestPortrait(const FShinobiAppearance& Look, TFunction<void(TArray<uint8>&&)> Done)
+{
+	if (!(bPortraitPending && PortraitLook == Look))
+	{
+		PortraitReadyTime = 0.f; // (the same look asked again keeps waiting where it got to)
+	}
+	bPortraitPending = true;
+	PortraitLook = Look;
+	PortraitDone = MoveTemp(Done);
+}
+
+void AShinobiMenuStage::CancelPortrait()
+{
+	bPortraitPending = false;
+	PortraitDone = nullptr;
+	PortraitReadyTime = 0.f;
+}
+
+void AShinobiMenuStage::PlacePortraitCapture()
+{
+	const FVector Up = GetActorUpVector();
+	const FVector Forward = Driver->GetRightVector(); // the character faces the driver's +Y (the actor's +X, unturned)
+	// The face: a little above the head bone, which sits at the skull's base (as -ShinobiPortraitShot aims).
+	static const FName HeadBone(TEXT("head"));
+	const FVector Head = Body->GetBoneIndex(HeadBone) != INDEX_NONE ? Body->GetBoneLocation(HeadBone)
+		: GetActorTransform().TransformPosition(FVector(0.f, Driver->GetRelativeLocation().Y, HeadHeight()));
+	const FVector Face = Head + Up * 8.f;
+	// FramePortrait's height of view in a 3:4 picture, the face MadePortraitFaceV down from its top.
+	const float HalfHeight = FMath::Atan(FMath::Tan(FMath::DegreesToRadians(MenuStagePortraitFOV * 0.5f)) / FMath::Max(Camera->AspectRatio, 0.1f));
+	const float HalfWidth = FMath::Atan(FMath::Tan(HalfHeight) * float(PortraitWidth) / float(PortraitHeight));
+	const float FrameHeight = 2.f * MenuStagePortraitDistance * FMath::Tan(HalfHeight);
+	const FVector Eye = Face + Forward * MenuStagePortraitDistance - Up * (0.5f - ShinobiMenuArt::MadePortraitFaceV) * FrameHeight;
+	PortraitCapture->SetWorldLocationAndRotation(Eye, (-Forward).Rotation());
+	PortraitCapture->FOVAngle = FMath::RadiansToDegrees(2.f * HalfWidth);
+}
+
+TArray<uint8> AShinobiMenuStage::ReadPortrait() const
+{
+	FTextureRenderTargetResource* Resource = PortraitTarget ? PortraitTarget->GameThread_GetRenderTargetResource() : nullptr;
+	TArray<FColor> Pixels;
+	if (!Resource || !Resource->ReadPixels(Pixels) || Pixels.Num() != PortraitWidth * PortraitHeight)
+	{
+		return {};
+	}
+	for (FColor& Pixel : Pixels)
+	{
+		Pixel.A = 255; // (the capture's alpha isn't opacity)
+	}
+	TArray64<uint8> Png;
+	if (!FImageUtils::CompressImage(Png, TEXT("png"), FImageView(Pixels.GetData(), PortraitWidth, PortraitHeight)))
+	{
+		return {};
+	}
+	return TArray<uint8>(Png.GetData(), int32(Png.Num()));
+}
+
+void AShinobiMenuStage::TickPortrait(float DeltaSeconds)
+{
+	if (!bPortraitPending)
+	{
+		return;
+	}
+	// Ready: the look is on (built, no live edit since), in the menu's light (the roster's portraits are), not the studio's.
+	const bool bReady = !bInStudio && !Body->IsMutableBuildPending() && Body->GetAppearance() == PortraitLook && Body->GetSkeletalMeshAsset();
+	PortraitReadyTime = bReady ? PortraitReadyTime + DeltaSeconds : 0.f;
+	if (PortraitReadyTime < MenuStagePortraitSettle - MenuStagePortraitWarmup)
+	{
+		return;
+	}
+	if (!PortraitTarget)
+	{
+		PortraitTarget = NewObject<UTextureRenderTarget2D>(this, TEXT("PortraitTarget"));
+		PortraitTarget->RenderTargetFormat = RTF_RGBA8;
+		PortraitTarget->ClearColor = FLinearColor::Black;
+		PortraitTarget->InitAutoFormat(PortraitWidth, PortraitHeight);
+		PortraitTarget->UpdateResourceImmediate(true);
+		PortraitCapture->TextureTarget = PortraitTarget;
+	}
+	PlacePortraitCapture();
+	PortraitCapture->HideComponent(Outfit); // (the roster's portraits wear no outfit either)
+	PortraitCapture->CaptureScene();
+	if (PortraitReadyTime < MenuStagePortraitSettle)
+	{
+		return; // warming up
+	}
+	TArray<uint8> Png = ReadPortrait();
+	TFunction<void(TArray<uint8>&&)> Done = MoveTemp(PortraitDone);
+	CancelPortrait();
+	if (Done && !Png.IsEmpty())
+	{
+		Done(MoveTemp(Png));
+	}
 }
 
 AShinobiStudioSet* AShinobiMenuStage::GetStudio() const
@@ -228,4 +350,5 @@ void AShinobiMenuStage::Tick(float DeltaSeconds)
 		Driver->SetRelativeRotation(FRotator(0.f, -90.f + Yaw, 0.f));
 		PlaceCamera();
 	}
+	TickPortrait(DeltaSeconds);
 }

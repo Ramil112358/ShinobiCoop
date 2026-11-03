@@ -29,6 +29,11 @@
 #include "Shinobi/UI/ShinobiCreatorPage.h"
 #include "Components/TextBlock.h"
 #include "Kismet/GameplayStatics.h"
+#include "Components/Image.h"
+#include "Components/PanelWidget.h"
+#include "Engine/Texture2D.h"
+#include "ImageCore.h"
+#include "ImageUtils.h"
 #include "Engine/SkeletalMesh.h"
 #include "Shinobi/UI/ShinobiSettings.h"
 #include "Shinobi/ShinobiGameState.h"
@@ -630,6 +635,155 @@ bool FShinobiMainMenuCreateCardTest::RunTest(const FString& Parameters)
 	Roster->Show();
 	TestEqual(TEXT("no free slot"), UShinobiRosterPage::FindFreeSlot(), int32(INDEX_NONE));
 	TestNull(TEXT("+ hidden when the slots are full"), Roster->GetCreateCard());
+	return true;
+}
+
+namespace
+{
+	/** A tiny PNG (3 x 4, one colour) standing in for a filmed portrait. */
+	TArray<uint8> MenuTestPortraitPng()
+	{
+		TArray<FColor> Pixels;
+		Pixels.Init(FColor(200, 40, 30, 255), 3 * 4);
+		TArray64<uint8> Png;
+		FImageUtils::CompressImage(Png, TEXT("png"), FImageView(Pixels.GetData(), 3, 4));
+		return TArray<uint8>(Png.GetData(), int32(Png.Num()));
+	}
+
+	/** The picture on a SHINOBI strip card (MakeCard: card > column > size box > overlay > image), or null. */
+	UObject* MenuTestCardPicture(const UShinobiIndexButton* Card)
+	{
+		const UPanelWidget* Column = Card ? Cast<UPanelWidget>(Card->GetChildAt(0)) : nullptr;
+		const UPanelWidget* Box = Column ? Cast<UPanelWidget>(Column->GetChildAt(0)) : nullptr;
+		const UPanelWidget* Layers = Box ? Cast<UPanelWidget>(Box->GetChildAt(0)) : nullptr;
+		const UImage* Picture = Layers ? Cast<UImage>(Layers->GetChildAt(0)) : nullptr;
+		return Picture ? Picture->GetBrush().GetResourceObject() : nullptr;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMadePortraitTest, "ShinobiCoop.UI.MadeCharacterPortrait", ShinobiTestFlags)
+bool FShinobiMadePortraitTest::RunTest(const FString& Parameters)
+{
+	// A made character's portrait (filmed by the menu stage) is kept with it, shown on its card, and survives SAVE & PLAY
+	// unless the look changed.
+	const FMenuTestSaveGuard Guard;
+	const TArray<uint8> Png = MenuTestPortraitPng();
+	if (!TestTrue(TEXT("a test PNG"), Png.Num() > 0))
+	{
+		return false;
+	}
+	{
+		UShinobiCharacterSave* Save = UShinobiCharacterSave::Load(); // one with a portrait, one without
+		Save->Slots.Reset();
+		Save->Slots.SetNum(2);
+		Save->Slots[0].Name = TEXT("Pictured");
+		Save->Slots[0].Portrait = Png;
+		Save->Slots[1].Name = TEXT("Unpictured");
+		Save->Slots[1].Look.Sex = EShinobiSex::Female;
+		Save->Active = INDEX_NONE;
+		Save->Save();
+	}
+	const UShinobiCharacterSave* Saved = UShinobiCharacterSave::Load();
+	TestTrue(TEXT("the portrait is saved with the character"), Saved->Slots[0].Portrait == Png);
+	UTexture2D* Texture = ShinobiMenuArt::MadePortrait(Saved->Slots[0]);
+	if (TestNotNull(TEXT("the portrait loads as a texture"), Texture))
+	{
+		TestEqual(TEXT("its width"), Texture->GetSizeX(), 3);
+		TestEqual(TEXT("its height"), Texture->GetSizeY(), 4);
+	}
+	TestNull(TEXT("no portrait yet: no texture"), ShinobiMenuArt::MadePortrait(Saved->Slots[1]));
+	TestTrue(TEXT("FindSlot: the character wearing a look"), Saved->FindSlot(Saved->Slots[1].Look) == &Saved->Slots[1]);
+
+	FShinobiTestWorld W;
+	UShinobiMainMenuWidget* Menu = CreateWidget<UShinobiMainMenuWidget>(W.World, UShinobiMainMenuWidget::StaticClass());
+	Menu->TakeWidget();
+	Menu->SelectTab(EShinobiMenuTab::Shinobi);
+	UShinobiRosterPage* Roster = Menu->GetRosterPage();
+	if (!TestNotNull(TEXT("roster page"), Roster))
+	{
+		return false;
+	}
+	TestTrue(TEXT("the pictured card shows its portrait"), Cast<UTexture2D>(MenuTestCardPicture(Roster->GetMadeCard(0))) != nullptr);
+	TestNull(TEXT("the other a dark card (its initial)"), Cast<UTexture2D>(MenuTestCardPicture(Roster->GetMadeCard(1))));
+	{
+		UShinobiCharacterSave* Save = UShinobiCharacterSave::Load(); // (as the stage hands one back)
+		Save->Slots[1].Portrait = Png;
+		Save->Save();
+	}
+	Roster->Show();
+	TestTrue(TEXT("a portrait filmed later shows on its card"), Cast<UTexture2D>(MenuTestCardPicture(Roster->GetMadeCard(1))) != nullptr);
+
+	// SAVE & PLAY with the look unchanged keeps the portrait; a changed look drops it (to be filmed again).
+	Menu->OpenCreator(0);
+	Menu->GetCreatorPage()->SaveAndPlay();
+	TestTrue(TEXT("unchanged look: the portrait stays"), UShinobiCharacterSave::Load()->Slots[0].Portrait == Png);
+	{
+		UShinobiCharacterSave* Save = UShinobiCharacterSave::Load(); // (the slot's look as it was before an edit)
+		Save->Slots[0].Look.Sex = EShinobiSex::Female;
+		Save->Save();
+	}
+	Menu->GetCreatorPage()->SaveAndPlay(); // (the creator still holds the male look)
+	TestTrue(TEXT("changed look: the portrait goes"), UShinobiCharacterSave::Load()->Slots[0].Portrait.IsEmpty());
+	TestTrue(TEXT("the other character's portrait isn't touched"), UShinobiCharacterSave::Load()->Slots[1].Portrait == Png);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiStagePortraitRequestTest, "ShinobiCoop.UI.MenuStagePortraitRequest", ShinobiTestFlags)
+bool FShinobiStagePortraitRequestTest::RunTest(const FString& Parameters)
+{
+	// A portrait request waits for its look; a roster body, another request's look or CancelPortrait drops it.
+	FShinobiTestWorld W;
+	AShinobiMenuStage* Stage = W.Spawn<AShinobiMenuStage>();
+	FShinobiAppearance Look;
+	Stage->RequestPortrait(Look, [](TArray<uint8>&&) {});
+	TestTrue(TEXT("pending"), Stage->IsPortraitPending());
+	TestTrue(TEXT("for that look"), Stage->GetPortraitLook() == Look);
+	Stage->Show(0, 0);
+	TestFalse(TEXT("a roster body drops it"), Stage->IsPortraitPending());
+	Stage->RequestPortrait(Look, [](TArray<uint8>&&) {});
+	Stage->CancelPortrait();
+	TestFalse(TEXT("CancelPortrait drops it"), Stage->IsPortraitPending());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSettingsMadeCharacterTest, "ShinobiCoop.UI.SettingsCharacterListsMadeOnes", ShinobiTestFlags)
+bool FShinobiSettingsMadeCharacterTest::RunTest(const FString& Parameters)
+{
+	// The pause menu's Character row: the roster, then the made characters; the played one is selected.
+	const FMenuTestSaveGuard Guard;
+	using ShinobiSettings::ERow;
+	constexpr int32 RosterCount = UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster);
+	{
+		UShinobiCharacterSave* Save = UShinobiCharacterSave::Load(); // two made characters with an empty slot between
+		Save->Slots.Reset();
+		Save->Slots.SetNum(3);
+		Save->Slots[0].Name = TEXT("Made One");
+		Save->Slots[2].Name = TEXT("Made Two");
+		Save->Active = INDEX_NONE;
+		Save->Save();
+	}
+	ShinobiSettings::SetSavedCharacter(AShinobiPlayerCharacter::Roster[0].Name);
+	const TArray<FString> Options = ShinobiSettings::RowOptions(ERow::Character);
+	if (!TestEqual(TEXT("the roster, then the made characters"), Options.Num(), RosterCount + 2))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the first made one"), Options[RosterCount], FString(TEXT("Made One")));
+	TestEqual(TEXT("the second made one"), Options[RosterCount + 1], FString(TEXT("Made Two")));
+	TestEqual(TEXT("a roster pick: it's selected"), ShinobiSettings::RowIndex(ERow::Character), 0);
+
+	ShinobiSettings::SetRowIndex(ERow::Character, nullptr, RosterCount + 1);
+	TestEqual(TEXT("picking a made one plays it"), UShinobiCharacterSave::Load()->Active, 2);
+	TestEqual(TEXT("it's selected, not the last roster pick"), ShinobiSettings::RowIndex(ERow::Character), RosterCount + 1);
+	TestEqual(TEXT("its name is shown"), ShinobiSettings::RowValue(ERow::Character), FString(TEXT("Made Two")));
+	TestEqual(TEXT("no faces to pick for it"), ShinobiSettings::RowOptions(ERow::Face).Num(), 1);
+	ShinobiSettings::Step(ERow::Face, nullptr, 1);
+	TestEqual(TEXT("the Face row leaves it played"), UShinobiCharacterSave::Load()->Active, 2);
+
+	ShinobiSettings::SetRowIndex(ERow::Character, nullptr, 1 % RosterCount);
+	TestEqual(TEXT("a roster pick stops playing the made one"), UShinobiCharacterSave::Load()->Active, int32(INDEX_NONE));
+	TestEqual(TEXT("the roster pick is saved"), ShinobiSettings::GetSavedCharacter(), FString(AShinobiPlayerCharacter::Roster[1 % RosterCount].Name));
+	TestEqual(TEXT("and selected"), ShinobiSettings::RowIndex(ERow::Character), 1 % RosterCount);
 	return true;
 }
 
