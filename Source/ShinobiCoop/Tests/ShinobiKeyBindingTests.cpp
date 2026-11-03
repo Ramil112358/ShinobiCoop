@@ -149,4 +149,47 @@ bool FShinobiKeyBindingLiveTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiPadBindingTest, "ShinobiCoop.KeyBindings.PadSlots", ShinobiTestFlags)
+bool FShinobiPadBindingTest::RunTest(const FString& Parameters)
+{
+	FSavedBindings Saved;
+	const UInputMappingContext* Jutsu = UShinobiInputConfig::Get().JutsuContext;
+	const auto OnPad = [Jutsu](int32 SlotIndex, const FKey& Button)
+	{
+		for (const FEnhancedActionKeyMapping& Mapping : Jutsu->GetMappings())
+		{
+			if (Mapping.Action == SlotAction(SlotIndex) && Mapping.Key == Button)
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+	TestTrue(TEXT("Slot 1 on A"), ShinobiKeyBindings::GetPad(0) == EKeys::Gamepad_FaceButton_Bottom);
+	TestTrue(TEXT("Slot 8 on D-pad left"), ShinobiKeyBindings::GetPad(7) == EKeys::Gamepad_DPad_Left);
+	TestEqual(TEXT("HUD label"), ShinobiKeyBindings::PadLabel(EKeys::Gamepad_FaceButton_Bottom, true).ToString(), FString(TEXT("RB+A")));
+	TestEqual(TEXT("Menu label"), ShinobiKeyBindings::PadLabel(EKeys::Gamepad_DPad_Up).ToString(), FString(TEXT("RB + D-pad Up")));
+
+	int32 SwappedWith = INDEX_NONE;
+	TestTrue(TEXT("Y is slot 4's: a swap"), ShinobiKeyBindings::RebindPad(0, EKeys::Gamepad_FaceButton_Top, &SwappedWith) == ERebind::Swapped);
+	TestEqual(TEXT("with slot 4"), SwappedWith, 3);
+	TestTrue(TEXT("Slot 1 on Y"), ShinobiKeyBindings::GetPad(0) == EKeys::Gamepad_FaceButton_Top);
+	TestTrue(TEXT("Slot 4 gets A"), ShinobiKeyBindings::GetPad(3) == EKeys::Gamepad_FaceButton_Bottom);
+	TestTrue(TEXT("RB + Y casts slot 1"), OnPad(0, EKeys::Gamepad_FaceButton_Top));
+	TestFalse(TEXT("and RB + A no longer does"), OnPad(0, EKeys::Gamepad_FaceButton_Bottom));
+	TestTrue(TEXT("LT is a free button"), ShinobiKeyBindings::RebindPad(4, EKeys::Gamepad_LeftTrigger) == ERebind::Done);
+	TestTrue(TEXT("RB + LT casts slot 5"), OnPad(4, EKeys::Gamepad_LeftTrigger));
+
+	for (const FKey& Button : { EKeys::Gamepad_RightShoulder, EKeys::Gamepad_RightThumbstick, EKeys::Gamepad_Special_Right, EKeys::Gamepad_LeftX, EKeys::Q })
+	{
+		TestTrue(*FString::Printf(TEXT("%s refused"), *Button.ToString()), ShinobiKeyBindings::RebindPad(1, Button) == ERebind::Blocked);
+	}
+	TestTrue(TEXT("Slot 2 keeps B"), ShinobiKeyBindings::GetPad(1) == EKeys::Gamepad_FaceButton_Right);
+
+	ShinobiKeyBindings::ResetToDefaults();
+	TestTrue(TEXT("Reset puts slot 1 back on A"), ShinobiKeyBindings::GetPad(0) == EKeys::Gamepad_FaceButton_Bottom && OnPad(0, EKeys::Gamepad_FaceButton_Bottom));
+	TestTrue(TEXT("and slot 5 on D-pad up"), ShinobiKeyBindings::GetPad(4) == EKeys::Gamepad_DPad_Up);
+	return true;
+}
+
 #endif

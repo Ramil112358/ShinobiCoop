@@ -94,7 +94,7 @@ public:
 	/** Local: open or close the big map (M / View). */
 	void ToggleMap();
 
-	/** Local: the last button pressed was a gamepad's (the HUD shows A/B/X/Y labels and the pad page). */
+	/** Local: the gamepad was used last (the HUD and menus show each jutsu slot's RB + button instead of its key). */
 	bool IsUsingGamepad() const { return bUsingGamepad; }
 
 	/** Local: open the pause menu on its JUTSU tab (K), or close it when it's already there. */
@@ -109,7 +109,7 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
-	/** Notes whether the last button came from a gamepad (IsUsingGamepad). */
+	/** Notes whether the last button or stick came from a gamepad (IsUsingGamepad). */
 	virtual bool InputKey(const FInputKeyEventArgs& Params) override;
 	void OnMapZoom(const FInputActionValue& Value);
 	/** Server: the new pawn plays the character this player picked (so the pick survives respawns). */

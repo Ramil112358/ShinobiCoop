@@ -231,7 +231,9 @@ void AShinobiPlayerController::OnMapZoom(const FInputActionValue& Value)
 
 bool AShinobiPlayerController::InputKey(const FInputKeyEventArgs& Params)
 {
-	if (Params.Event == IE_Pressed)
+	// A press picks the device; so does a real push of a stick (or a real mouse move), past the drift of an idle one.
+	const bool bMoved = Params.Key.IsAnalog() && FMath::Abs(Params.AmountDepressed) > (Params.Key.IsGamepadKey() ? 0.5f : 2.f);
+	if (Params.Event == IE_Pressed || bMoved)
 	{
 		bUsingGamepad = Params.Key.IsGamepadKey();
 	}

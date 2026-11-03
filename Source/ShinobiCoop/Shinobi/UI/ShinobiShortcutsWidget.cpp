@@ -23,6 +23,9 @@ namespace
 	const FLinearColor ShortcutsGoodColor(1.f, 0.75f, 0.3f);
 	const FLinearColor ShortcutsBadColor(1.f, 0.35f, 0.3f);
 	const FMargin ShortcutsChipPadding(10.f, 5.f);
+	constexpr float ShortcutsLabelWidth = 230.f;
+	constexpr float ShortcutsKeyWidth = 140.f;
+	constexpr float ShortcutsPadWidth = 130.f;
 
 	UShinobiIndexButton* ShortcutsMakeButton(UWidgetTree& Tree, const FString& Label, int32 Size, int32 Index, FShinobiIndexClicked Handler, const FMargin& Padding)
 	{
@@ -61,17 +64,36 @@ TSharedRef<SWidget> UShinobiShortcutsWidget::RebuildWidget()
 
 		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
 		Panel->SetContent(Column);
-		UTextBlock* Hint = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(TEXT("Select a key, then press the new one  ·  Alt + key works  ·  Esc cancels  ·  gamepad buttons are fixed")), 13, ShinobiMenuStyle::TextDim);
+		UTextBlock* Hint = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(TEXT("Select a key or button, then press the new one  ·  Alt + key works  ·  Esc / Menu cancels  ·  controller jutsu cast with RB held")), 13, ShinobiMenuStyle::TextDim);
 		Column->AddChildToVerticalBox(Hint)->SetPadding(FMargin(4.f, 0.f, 4.f, 6.f));
 
 		UHorizontalBox* Columns = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 		Column->AddChildToVerticalBox(Columns)->SetPadding(FMargin(0.f, 6.f));
 		Chips.SetNum(static_cast<int32>(EBindable::Num));
+		PadChips.SetNum(ShinobiKeyBindings::NumPadSlots);
 		const auto MakeColumn = [this, Columns](const TCHAR* Heading, int32 First, int32 Last, float Gap)
 		{
 			UVerticalBox* Rows = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
 			Columns->AddChildToHorizontalBox(Rows)->SetPadding(FMargin(Gap, 0.f, 0.f, 0.f));
-			Rows->AddChildToVerticalBox(ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Heading), 13, ShinobiMenuStyle::Accent, true))->SetPadding(FMargin(4.f, 8.f, 0.f, 6.f));
+			// The heading, and over the jutsu slots' two chip columns what each one binds.
+			UHorizontalBox* HeadingRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+			Rows->AddChildToVerticalBox(HeadingRow)->SetPadding(FMargin(4.f, 8.f, 0.f, 6.f));
+			USizeBox* HeadingBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+			HeadingBox->SetWidthOverride(ShortcutsLabelWidth - 4.f);
+			HeadingBox->AddChild(ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Heading), 13, ShinobiMenuStyle::Accent, true));
+			HeadingRow->AddChildToHorizontalBox(HeadingBox)->SetVerticalAlignment(VAlign_Bottom);
+			if (First <= static_cast<int32>(EBindable::Slot8))
+			{
+				for (const TPair<const TCHAR*, float>& Sub : { TPair<const TCHAR*, float>(TEXT("KEYBOARD"), ShortcutsKeyWidth), TPair<const TCHAR*, float>(TEXT("CONTROLLER"), ShortcutsPadWidth) })
+				{
+					USizeBox* SubBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+					SubBox->SetWidthOverride(Sub.Value);
+					UTextBlock* SubText = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Sub.Key), 11, ShinobiMenuStyle::TextDim);
+					SubText->SetJustification(ETextJustify::Center);
+					SubBox->AddChild(SubText);
+					HeadingRow->AddChildToHorizontalBox(SubBox)->SetVerticalAlignment(VAlign_Bottom);
+				}
+			}
 			for (int32 Bindable = First; Bindable <= Last; ++Bindable)
 			{
 				AddRow(Rows, Bindable);
@@ -104,7 +126,7 @@ void UShinobiShortcutsWidget::AddRow(UVerticalBox* Column, int32 Bindable)
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 	Column->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 2.f));
 	USizeBox* LabelBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-	LabelBox->SetWidthOverride(230.f);
+	LabelBox->SetWidthOverride(ShortcutsLabelWidth);
 	UHorizontalBox* Label = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 	LabelBox->AddChild(Label);
 	UHorizontalBoxSlot* NameSlot = Label->AddChildToHorizontalBox(ShinobiMenuStyle::Text(*WidgetTree, ShinobiKeyBindings::Label(static_cast<EBindable>(Bindable)), 15, FLinearColor::White));
@@ -121,11 +143,25 @@ void UShinobiShortcutsWidget::AddRow(UVerticalBox* Column, int32 Bindable)
 	}
 	Row->AddChildToHorizontalBox(LabelBox)->SetVerticalAlignment(VAlign_Center);
 	USizeBox* ChipBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-	ChipBox->SetWidthOverride(140.f);
+	ChipBox->SetWidthOverride(ShortcutsKeyWidth);
 	UShinobiIndexButton* Chip = ShortcutsMakeButton(*WidgetTree, FString(), 14, Bindable, FShinobiIndexClicked::CreateUObject(this, &UShinobiShortcutsWidget::OnKeyChip), ShortcutsChipPadding);
 	ChipBox->AddChild(Chip);
 	Row->AddChildToHorizontalBox(ChipBox);
 	Chips[Bindable] = Chip;
+	if (PadChips.IsValidIndex(Bindable) && Bindable <= static_cast<int32>(EBindable::Slot8))
+	{
+		USizeBox* PadBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		PadBox->SetWidthOverride(ShortcutsPadWidth);
+		UShinobiIndexButton* PadChip = ShortcutsMakeButton(*WidgetTree, FString(), 14, Bindable, FShinobiIndexClicked::CreateUObject(this, &UShinobiShortcutsWidget::OnPadChip), ShortcutsChipPadding);
+		PadBox->AddChild(PadChip);
+		Row->AddChildToHorizontalBox(PadBox)->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
+		PadChips[Bindable] = PadChip;
+	}
+}
+
+UWidget* UShinobiShortcutsWidget::GetPadChip(int32 PadSlot) const
+{
+	return PadChips.IsValidIndex(PadSlot) ? PadChips[PadSlot].Get() : nullptr;
 }
 
 UWidget* UShinobiShortcutsWidget::GetFocusTarget() const
@@ -137,10 +173,16 @@ void UShinobiShortcutsWidget::StopListening()
 {
 	if (Listening != INDEX_NONE)
 	{
-		Listening = INDEX_NONE;
-		SetMessage(FString(), ShortcutsGoodColor);
-		RefreshChips();
+		Cancel();
 	}
+}
+
+void UShinobiShortcutsWidget::Cancel()
+{
+	Listening = INDEX_NONE;
+	bListeningPad = false;
+	SetMessage(FString(), ShortcutsGoodColor);
+	RefreshChips();
 }
 
 void UShinobiShortcutsWidget::NativeTick(const FGeometry& Geometry, float DeltaTime)
@@ -155,8 +197,18 @@ void UShinobiShortcutsWidget::RefreshChips()
 	{
 		if (UTextBlock* Text = Chips[Bindable] ? Cast<UTextBlock>(Chips[Bindable]->GetChildAt(0)) : nullptr)
 		{
-			Text->SetText(Bindable == Listening ? INVTEXT("Press a key...") : ShinobiKeyBindings::KeyLabel(ShinobiKeyBindings::Get(static_cast<EBindable>(Bindable))));
-			ShinobiMenuStyle::StyleButton(*Chips[Bindable], Bindable == Listening, ShortcutsChipPadding); // the listening key is lit
+			const bool bLit = Bindable == Listening && !bListeningPad;
+			Text->SetText(bLit ? INVTEXT("Press a key...") : ShinobiKeyBindings::KeyLabel(ShinobiKeyBindings::Get(static_cast<EBindable>(Bindable))));
+			ShinobiMenuStyle::StyleButton(*Chips[Bindable], bLit, ShortcutsChipPadding); // the listening key is lit
+		}
+	}
+	for (int32 PadSlot = 0; PadSlot < PadChips.Num(); ++PadSlot)
+	{
+		if (UTextBlock* Text = PadChips[PadSlot] ? Cast<UTextBlock>(PadChips[PadSlot]->GetChildAt(0)) : nullptr)
+		{
+			const bool bLit = PadSlot == Listening && bListeningPad;
+			Text->SetText(bLit ? INVTEXT("Press a button...") : ShinobiKeyBindings::PadLabel(ShinobiKeyBindings::GetPad(PadSlot)));
+			ShinobiMenuStyle::StyleButton(*PadChips[PadSlot], bLit, ShortcutsChipPadding);
 		}
 	}
 }
@@ -170,17 +222,28 @@ void UShinobiShortcutsWidget::SetMessage(const FString& Text, const FLinearColor
 void UShinobiShortcutsWidget::OnKeyChip(int32 Bindable)
 {
 	Listening = Bindable;
+	bListeningPad = false;
 	SetMessage(FString(), ShortcutsGoodColor);
 	RefreshChips();
 	SetKeyboardFocus(); // off the button, so Space / Enter can be bound instead of clicking it again
 }
 
+void UShinobiShortcutsWidget::OnPadChip(int32 PadSlot)
+{
+	Listening = PadSlot;
+	bListeningPad = true;
+	SetMessage(TEXT("Press the button to cast with RB held (Menu cancels)."), ShortcutsGoodColor);
+	RefreshChips();
+	SetKeyboardFocus(); // off the button, so A can be bound instead of clicking it again
+}
+
 void UShinobiShortcutsWidget::OnFooter(int32 Index)
 {
 	Listening = INDEX_NONE;
+	bListeningPad = false;
 	ShinobiKeyBindings::ResetToDefaults();
 	RefreshChips();
-	SetMessage(TEXT("All shortcuts are back to their defaults."), ShortcutsGoodColor);
+	SetMessage(TEXT("All keys and buttons are back to their defaults."), ShortcutsGoodColor);
 }
 
 void UShinobiShortcutsWidget::Bind(const FKey& Key, bool bAlt)
@@ -213,6 +276,37 @@ void UShinobiShortcutsWidget::Bind(const FKey& Key, bool bAlt)
 	}
 }
 
+void UShinobiShortcutsWidget::BindPad(const FKey& Button)
+{
+	const int32 PadSlot = Listening;
+	const FKey Old = ShinobiKeyBindings::GetPad(PadSlot);
+	int32 SwappedWith = INDEX_NONE;
+	const ShinobiKeyBindings::ERebind Result = ShinobiKeyBindings::RebindPad(PadSlot, Button, &SwappedWith);
+	if (Result == ShinobiKeyBindings::ERebind::Blocked)
+	{
+		SetMessage(FString::Printf(TEXT("%s can't cast jutsu: use A, B, X, Y, the D-pad, LB, LT, RT or L3."),
+			*ShinobiKeyBindings::PadLabel(Button, false, false).ToString()), ShortcutsBadColor);
+		return; // still listening: try another button
+	}
+	Listening = INDEX_NONE;
+	bListeningPad = false;
+	if (Result == ShinobiKeyBindings::ERebind::Swapped)
+	{
+		const FString Other = ShinobiKeyBindings::Label(static_cast<EBindable>(SwappedWith)).ToString();
+		SetMessage(FString::Printf(TEXT("%s was on %s: %s moved to %s."), *ShinobiKeyBindings::PadLabel(Button).ToString(), *Other, *Other,
+			*ShinobiKeyBindings::PadLabel(Old).ToString()), ShortcutsGoodColor);
+	}
+	else
+	{
+		SetMessage(FString(), ShortcutsGoodColor);
+	}
+	RefreshChips();
+	if (PadChips.IsValidIndex(PadSlot) && PadChips[PadSlot])
+	{
+		PadChips[PadSlot]->SetKeyboardFocus();
+	}
+}
+
 FReply UShinobiShortcutsWidget::NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event)
 {
 	if (Listening == INDEX_NONE)
@@ -220,16 +314,28 @@ FReply UShinobiShortcutsWidget::NativeOnKeyDown(const FGeometry& Geometry, const
 		return Super::NativeOnKeyDown(Geometry, Event);
 	}
 	const FKey Key = Event.GetKey();
-	if (Key == EKeys::Escape)
+	if (Key == EKeys::Escape || Key == EKeys::Gamepad_Special_Right || Key == EKeys::Gamepad_Special_Left)
 	{
-		Listening = INDEX_NONE;
-		SetMessage(FString(), ShortcutsGoodColor);
-		RefreshChips();
+		Cancel();
+		return FReply::Handled();
+	}
+	if (bListeningPad)
+	{
+		// RB is the jutsu button itself: holding it first, as when casting, just waits for the button that goes with it.
+		if (Key.IsGamepadKey() && Key != EKeys::Gamepad_RightShoulder)
+		{
+			BindPad(Key);
+		}
+		return FReply::Handled(); // (keys other than Esc wait for a button)
+	}
+	if (Key == EKeys::Gamepad_FaceButton_Right)
+	{
+		Cancel(); // a pad on a keyboard row: B backs out
 		return FReply::Handled();
 	}
 	if (Key.IsGamepadKey() || Key == EKeys::LeftAlt || Key == EKeys::RightAlt)
 	{
-		return FReply::Handled(); // Alt alone waits for the key it goes with; pads stay fixed
+		return FReply::Handled(); // Alt alone waits for the key it goes with; the pad's buttons are on the CONTROLLER chips
 	}
 	Bind(Key, Event.IsAltDown());
 	return FReply::Handled();
@@ -240,6 +346,11 @@ FReply UShinobiShortcutsWidget::NativeOnMouseButtonDown(const FGeometry& Geometr
 	if (Listening == INDEX_NONE)
 	{
 		return Super::NativeOnMouseButtonDown(Geometry, Event);
+	}
+	if (bListeningPad)
+	{
+		Cancel(); // a click while a button is awaited backs out
+		return FReply::Handled();
 	}
 	Bind(Event.GetEffectingButton(), Event.IsAltDown());
 	return FReply::Handled();

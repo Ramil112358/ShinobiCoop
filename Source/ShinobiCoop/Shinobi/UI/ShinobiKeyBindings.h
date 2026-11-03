@@ -4,9 +4,10 @@
 #include "InputCoreTypes.h"
 
 /**
- * The keyboard and mouse keys a player can rebind (the CONTROLS tab): the 8 jutsu slots, the Skills screen and the core
- * actions. Alt is the only modifier. Gamepad buttons, WASD, the camera and Esc stay fixed. Saved per machine in
- * GameUserSettings.ini; UShinobiInputConfig::ApplyKeyBindings puts them into the mapping context.
+ * The keys a player can rebind (the CONTROLS tab): the keyboard/mouse key of the 8 jutsu slots, the Skills screen and the
+ * core actions (Alt is the only modifier), and the gamepad button of each jutsu slot (pressed while RB is held). The other
+ * gamepad buttons, WASD, the camera and Esc stay fixed. Saved per machine in GameUserSettings.ini;
+ * UShinobiInputConfig::ApplyKeyBindings puts them into the mapping contexts.
  */
 namespace ShinobiKeyBindings
 {
@@ -35,4 +36,17 @@ namespace ShinobiKeyBindings
 	SHINOBICOOP_API FText Label(EBindable Which);
 	/** "Alt+1", "Caps Lock", "Mouse 4"; bShort for the HUD's key chips ("Caps", "M4", "MMB"). */
 	SHINOBICOOP_API FText KeyLabel(const FBinding& Binding, bool bShort = false);
+
+	/** The gamepad: each jutsu slot casts on RB + its button. */
+	constexpr int32 NumPadSlots = 8;
+	/** Slots 1-4 on A / B / X / Y, slots 5-8 on D-pad up / right / down / left. */
+	SHINOBICOOP_API FKey PadDefault(int32 Slot);
+	/** The saved button, or the default when none is saved or the saved one is no longer allowed. */
+	SHINOBICOOP_API FKey GetPad(int32 Slot);
+	/** Allowed with RB: the face buttons, the D-pad, LB, LT, RT and L3. Not RB itself, R3 (lock-on), Start / View or the sticks. */
+	SHINOBICOOP_API bool IsPadAllowed(const FKey& Button);
+	/** Slot gets Button. If another slot had it, that slot takes Slot's old one (OutSwappedWith says which). Saves and applies. */
+	SHINOBICOOP_API ERebind RebindPad(int32 Slot, const FKey& Button, int32* OutSwappedWith = nullptr);
+	/** "A", "D-pad Up", "LT"; with bChord, RB first: "RB + A" (bShort: "RB+A", or an arrow for the D-pad), how the HUD and menus show a slot. */
+	SHINOBICOOP_API FText PadLabel(const FKey& Button, bool bShort = false, bool bChord = true);
 }

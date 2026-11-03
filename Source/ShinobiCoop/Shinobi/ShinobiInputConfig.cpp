@@ -91,8 +91,8 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 	AddAbility(EShinobiAbilityInputID::Dodge, TEXT("IA_Dodge"), EKeys::LeftControl, EKeys::Gamepad_FaceButton_Right);
 	AddAbility(EShinobiAbilityInputID::Sprint, TEXT("IA_Sprint"), EKeys::LeftShift, EKeys::Gamepad_LeftThumbstick);
 	AddAbility(EShinobiAbilityInputID::ChakraCharge, TEXT("IA_ChakraCharge"), EKeys::C, EKeys::Gamepad_LeftShoulder);
-	AddAbility(EShinobiAbilityInputID::Dismount, TEXT("IA_Dismount"), EKeys::X, EKeys::Gamepad_DPad_Down); // off the dragon, on any page
-	AddAbility(EShinobiAbilityInputID::Revive, TEXT("IA_Revive"), EKeys::E, EKeys::Gamepad_FaceButton_Top); // RB + Y is jutsu 4 (JutsuContext wins)
+	AddAbility(EShinobiAbilityInputID::Dismount, TEXT("IA_Dismount"), EKeys::X, EKeys::Gamepad_DPad_Down); // off the dragon (RB + D-pad down is jutsu 7 by default)
+	AddAbility(EShinobiAbilityInputID::Revive, TEXT("IA_Revive"), EKeys::E, EKeys::Gamepad_FaceButton_Top); // RB + Y is jutsu 4 by default (JutsuContext wins)
 	AddAbility(EShinobiAbilityInputID::Block, TEXT("IA_Block"), EKeys::F, EKeys::Gamepad_LeftTrigger); // hold
 
 	Config->LockOn = MakeAction(Config, TEXT("IA_LockOn"), EInputActionValueType::Boolean);
@@ -103,25 +103,15 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 	Ctx->MapKey(Config->Pause, EKeys::Escape);
 	Ctx->MapKey(Config->Pause, EKeys::Gamepad_Special_Right);
 
-	// Jutsu slots 1-8: one keyboard key each here. The pad reaches the current pad page's four through PadJutsuActions,
-	// face buttons in JutsuContext, which the player adds while RB is held.
+	// Jutsu slots 1-8: a keyboard key each here, and a pad button each in JutsuContext, which the player adds while RB is
+	// held (ApplyKeyBindings maps both from ShinobiKeyBindings).
 	Config->JutsuModifier = MakeAction(Config, TEXT("IA_JutsuModifier"), EInputActionValueType::Boolean);
 	Ctx->MapKey(Config->JutsuModifier, EKeys::Gamepad_RightShoulder);
-	UInputMappingContext* JutsuCtx = NewObject<UInputMappingContext>(Config, TEXT("IMC_ShinobiJutsu"));
-	Config->JutsuContext = JutsuCtx;
-	const FKey SlotKeys[ShinobiLoadout::NumSlots] = { EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::R, EKeys::T, EKeys::G, EKeys::CapsLock };
+	Config->JutsuContext = NewObject<UInputMappingContext>(Config, TEXT("IMC_ShinobiJutsu"));
 	for (int32 Slot = 0; Slot < ShinobiLoadout::NumSlots; ++Slot)
 	{
-		UInputAction* Action = MakeAction(Config, *FString::Printf(TEXT("IA_Jutsu%d"), Slot + 1), EInputActionValueType::Boolean);
-		Ctx->MapKey(Action, SlotKeys[Slot]);
-		Config->AbilityActions.Add(ShinobiLoadout::SlotInputID(Slot), Action);
-	}
-	const FKey FaceKeys[] = { EKeys::Gamepad_FaceButton_Bottom, EKeys::Gamepad_FaceButton_Right, EKeys::Gamepad_FaceButton_Left, EKeys::Gamepad_FaceButton_Top };
-	for (int32 Face = 0; Face < UE_ARRAY_COUNT(FaceKeys); ++Face)
-	{
-		UInputAction* Action = MakeAction(Config, *FString::Printf(TEXT("IA_PadJutsu%d"), Face + 1), EInputActionValueType::Boolean);
-		JutsuCtx->MapKey(Action, FaceKeys[Face]);
-		Config->PadJutsuActions.Add(Action);
+		Config->AbilityActions.Add(ShinobiLoadout::SlotInputID(Slot),
+			MakeAction(Config, *FString::Printf(TEXT("IA_Jutsu%d"), Slot + 1), EInputActionValueType::Boolean));
 	}
 
 	// Alt + key bindings chord on this (ShinobiKeyBindings).
@@ -131,12 +121,6 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 
 	Config->SkillsScreen = MakeAction(Config, TEXT("IA_SkillsScreen"), EInputActionValueType::Boolean);
 	Ctx->MapKey(Config->SkillsScreen, EKeys::K);
-
-	// Pad jutsu pages (slots 1-4 / 5-8): the D-pad while RB is held. The keyboard has a key per slot.
-	Config->JutsuPageNext = MakeAction(Config, TEXT("IA_JutsuPageNext"), EInputActionValueType::Boolean);
-	JutsuCtx->MapKey(Config->JutsuPageNext, EKeys::Gamepad_DPad_Right);
-	Config->JutsuPagePrev = MakeAction(Config, TEXT("IA_JutsuPagePrev"), EInputActionValueType::Boolean);
-	JutsuCtx->MapKey(Config->JutsuPagePrev, EKeys::Gamepad_DPad_Left);
 
 	// Mouse wheel axis: positive values zoom in, negative values zoom out.
 	Config->CameraZoom = MakeAction(Config, TEXT("IA_CameraZoom"), EInputActionValueType::Axis1D);
@@ -218,6 +202,29 @@ void UShinobiInputConfig::ApplyKeyBindings() const
 			Chord->ChordAction = AltModifier;
 			Mapping.Triggers.Add(Chord);
 		}
+	}
+	// The pad: RB + the slot's button (JutsuContext is only applied while RB is held, and wins over the same buttons'
+	// plain meanings in Context).
+	for (int32 Slot = 0; JutsuContext && Slot < ShinobiLoadout::NumSlots && Slot < ShinobiKeyBindings::NumPadSlots; ++Slot)
+	{
+		UInputAction* Action = ActionForBindable(static_cast<uint8>(Slot));
+		if (!Action)
+		{
+			continue;
+		}
+		TArray<FKey> OldButtons;
+		for (const FEnhancedActionKeyMapping& Mapping : JutsuContext->GetMappings())
+		{
+			if (Mapping.Action == Action)
+			{
+				OldButtons.Add(Mapping.Key);
+			}
+		}
+		for (const FKey& Button : OldButtons)
+		{
+			JutsuContext->UnmapKey(Action, Button);
+		}
+		JutsuContext->MapKey(Action, ShinobiKeyBindings::GetPad(Slot));
 	}
 	if (!GEngine)
 	{

@@ -11,7 +11,7 @@ class UInputMappingContext;
 /** Priority IMC_Shinobi is added at. */
 constexpr int32 ShinobiInputPriority = 1;
 
-/** IMC_ShinobiJutsu goes above IMC_Shinobi so, while RB is held, its face buttons win over jump/dodge/melee. */
+/** IMC_ShinobiJutsu goes above IMC_Shinobi so, while RB is held, the jutsu slots' buttons win over jump/dodge/melee. */
 constexpr int32 ShinobiJutsuInputPriority = ShinobiInputPriority + 1;
 
 /** All input actions and the mapping context, constructed in code so no input assets are needed. */
@@ -31,7 +31,8 @@ public:
 	static const UShinobiInputConfig& Get();
 
 	/** Puts ShinobiKeyBindings' keyboard/mouse keys on the rebindable actions in Context (their gamepad keys stay), Alt
-	 * bindings chorded on AltModifier, and has every local player rebuild its mappings. Build() and every rebind call it. */
+	 * bindings chorded on AltModifier, and each jutsu slot's pad button in JutsuContext, then has every local player rebuild
+	 * its mappings. Build() and every rebind call it. */
 	void ApplyKeyBindings() const;
 
 	/** The action a ShinobiKeyBindings::EBindable drives (cast from uint8 so this header needn't include it). */
@@ -65,13 +66,6 @@ public:
 	UPROPERTY()
 	TObjectPtr<UInputAction> Pause;
 
-	/** RB + D-pad right / left: the pad's jutsu page (slots 1-4 or 5-8). */
-	UPROPERTY()
-	TObjectPtr<UInputAction> JutsuPageNext;
-
-	UPROPERTY()
-	TObjectPtr<UInputAction> JutsuPagePrev;
-
 	/** Mouse wheel: adjust the player's camera distance (zooms the big map instead while it is open). */
 	UPROPERTY()
 	TObjectPtr<UInputAction> CameraZoom;
@@ -84,13 +78,9 @@ public:
 	UPROPERTY()
 	TObjectPtr<UInputAction> MapZoom;
 
-	/** Gamepad A/B/X/Y -> PadJutsuActions. Only active while RB is held. */
+	/** Each jutsu slot's pad button (ShinobiKeyBindings::GetPad) on that slot's action. Only active while RB is held. */
 	UPROPERTY()
 	TObjectPtr<UInputMappingContext> JutsuContext;
-
-	/** RB + A/B/X/Y: the current pad page's four slots (AShinobiPlayerCharacter::PadJutsuPressed). */
-	UPROPERTY()
-	TArray<TObjectPtr<UInputAction>> PadJutsuActions;
 
 	/** Left/Right Alt: the chord for Alt + key bindings. */
 	UPROPERTY()

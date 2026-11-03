@@ -21,6 +21,7 @@
 #include "Shinobi/UI/ShinobiDropdown.h"
 #include "Shinobi/UI/ShinobiPauseMenuWidget.h"
 #include "Shinobi/UI/ShinobiShortcutsWidget.h"
+#include "Shinobi/UI/ShinobiKeyBindings.h"
 #include "GameFramework/GameUserSettings.h"
 #include "Shinobi/UI/ShinobiRosterPage.h"
 #include "Shinobi/UI/ShinobiSkillsWidget.h"
@@ -301,6 +302,25 @@ bool FShinobiPauseMenuTabsTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("CONTROLS is the key bindings"), Cast<UShinobiShortcutsWidget>(Menu->GetTabPage(EShinobiPauseTab::Controls)));
 	TestNotNull(TEXT("JUTSU is the Skills screen"), Cast<UShinobiSkillsWidget>(Menu->GetTabPage(EShinobiPauseTab::Jutsu)));
 	TestFalse(TEXT("Leave isn't armed until pressed"), Menu->IsLeaveArmed());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiControlsPadChipsTest, "ShinobiCoop.UI.ControlsPadChips", ShinobiTestFlags)
+bool FShinobiControlsPadChipsTest::RunTest(const FString& Parameters)
+{
+	FShinobiTestWorld W;
+	UShinobiShortcutsWidget* Controls = CreateWidget<UShinobiShortcutsWidget>(W.World, UShinobiShortcutsWidget::StaticClass());
+	Controls->TakeWidget();
+	for (int32 Slot = 0; Slot < ShinobiKeyBindings::NumPadSlots; ++Slot)
+	{
+		const UPanelWidget* Chip = Cast<UPanelWidget>(Controls->GetPadChip(Slot));
+		const UTextBlock* Text = Chip ? Cast<UTextBlock>(Chip->GetChildAt(0)) : nullptr;
+		if (TestNotNull(*FString::Printf(TEXT("slot %d has a controller chip"), Slot + 1), Text))
+		{
+			TestEqual(TEXT("showing RB + its button"), Text->GetText().ToString(), ShinobiKeyBindings::PadLabel(ShinobiKeyBindings::GetPad(Slot)).ToString());
+		}
+	}
+	TestNull(TEXT("actions have no controller chip"), Controls->GetPadChip(ShinobiKeyBindings::NumPadSlots));
 	return true;
 }
 

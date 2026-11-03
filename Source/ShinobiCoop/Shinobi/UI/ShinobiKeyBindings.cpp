@@ -18,6 +18,11 @@ namespace ShinobiKeyBindings
 			return Names[static_cast<int32>(Which)];
 		}
 
+		FString PadConfigKey(int32 Slot)
+		{
+			return FString::Printf(TEXT("PadSlot%d"), Slot + 1);
+		}
+
 		void Store(EBindable Which, const FBinding& Binding)
 		{
 			const FString Value = (Binding.bAlt ? FString(AltPrefix) : FString()) + Binding.Key.GetFName().ToString();
@@ -105,6 +110,10 @@ namespace ShinobiKeyBindings
 		{
 			GConfig->RemoveKey(ConfigSection, ConfigKey(static_cast<EBindable>(Index)), GGameUserSettingsIni);
 		}
+		for (int32 Slot = 0; Slot < NumPadSlots; ++Slot)
+		{
+			GConfig->RemoveKey(ConfigSection, *PadConfigKey(Slot), GGameUserSettingsIni);
+		}
 		SaveAndApply();
 	}
 
@@ -140,5 +149,98 @@ namespace ShinobiKeyBindings
 			}
 		}
 		return FText::FromString(Binding.bAlt ? AltPrefix + Text : Text);
+	}
+
+	FKey PadDefault(int32 Slot)
+	{
+		static const FKey Buttons[] = { EKeys::Gamepad_FaceButton_Bottom, EKeys::Gamepad_FaceButton_Right, EKeys::Gamepad_FaceButton_Left,
+			EKeys::Gamepad_FaceButton_Top, EKeys::Gamepad_DPad_Up, EKeys::Gamepad_DPad_Right, EKeys::Gamepad_DPad_Down, EKeys::Gamepad_DPad_Left };
+		static_assert(UE_ARRAY_COUNT(Buttons) == NumPadSlots, "one default per slot");
+		return Buttons[FMath::Clamp(Slot, 0, NumPadSlots - 1)];
+	}
+
+	FKey GetPad(int32 Slot)
+	{
+		FString Value;
+		if (!GConfig->GetString(ConfigSection, *PadConfigKey(Slot), Value, GGameUserSettingsIni) || Value.IsEmpty())
+		{
+			return PadDefault(Slot);
+		}
+		const FKey Button(FName(*Value));
+		return IsPadAllowed(Button) ? Button : PadDefault(Slot);
+	}
+
+	bool IsPadAllowed(const FKey& Button)
+	{
+		static const FKey Allowed[] = { EKeys::Gamepad_FaceButton_Bottom, EKeys::Gamepad_FaceButton_Right, EKeys::Gamepad_FaceButton_Left,
+			EKeys::Gamepad_FaceButton_Top, EKeys::Gamepad_DPad_Up, EKeys::Gamepad_DPad_Right, EKeys::Gamepad_DPad_Down, EKeys::Gamepad_DPad_Left,
+			EKeys::Gamepad_LeftShoulder, EKeys::Gamepad_LeftTrigger, EKeys::Gamepad_RightTrigger, EKeys::Gamepad_LeftThumbstick };
+		for (const FKey& Each : Allowed)
+		{
+			if (Button == Each)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	ERebind RebindPad(int32 Slot, const FKey& Button, int32* OutSwappedWith)
+	{
+		if (Slot < 0 || Slot >= NumPadSlots || !IsPadAllowed(Button))
+		{
+			return ERebind::Blocked;
+		}
+		const FKey Old = GetPad(Slot);
+		ERebind Result = ERebind::Done;
+		for (int32 Other = 0; Other < NumPadSlots; ++Other)
+		{
+			if (Other != Slot && GetPad(Other) == Button)
+			{
+				GConfig->SetString(ConfigSection, *PadConfigKey(Other), *Old.GetFName().ToString(), GGameUserSettingsIni); // every slot keeps a button
+				Result = ERebind::Swapped;
+				if (OutSwappedWith)
+				{
+					*OutSwappedWith = Other;
+				}
+				break;
+			}
+		}
+		GConfig->SetString(ConfigSection, *PadConfigKey(Slot), *Button.GetFName().ToString(), GGameUserSettingsIni);
+		SaveAndApply();
+		return Result;
+	}
+
+	FText PadLabel(const FKey& Button, bool bShort, bool bChord)
+	{
+		struct FPadName { FKey Key; const TCHAR* Long; const TCHAR* Short; };
+		static const FPadName Names[] = {
+			{ EKeys::Gamepad_FaceButton_Bottom, TEXT("A"), TEXT("A") },
+			{ EKeys::Gamepad_FaceButton_Right, TEXT("B"), TEXT("B") },
+			{ EKeys::Gamepad_FaceButton_Left, TEXT("X"), TEXT("X") },
+			{ EKeys::Gamepad_FaceButton_Top, TEXT("Y"), TEXT("Y") },
+			{ EKeys::Gamepad_DPad_Up, TEXT("D-pad Up"), TEXT("\u2191") },
+			{ EKeys::Gamepad_DPad_Right, TEXT("D-pad Right"), TEXT("\u2192") },
+			{ EKeys::Gamepad_DPad_Down, TEXT("D-pad Down"), TEXT("\u2193") },
+			{ EKeys::Gamepad_DPad_Left, TEXT("D-pad Left"), TEXT("\u2190") },
+			{ EKeys::Gamepad_LeftShoulder, TEXT("LB"), TEXT("LB") },
+			{ EKeys::Gamepad_RightShoulder, TEXT("RB"), TEXT("RB") },
+			{ EKeys::Gamepad_LeftTrigger, TEXT("LT"), TEXT("LT") },
+			{ EKeys::Gamepad_RightTrigger, TEXT("RT"), TEXT("RT") },
+			{ EKeys::Gamepad_LeftThumbstick, TEXT("L3"), TEXT("L3") },
+			{ EKeys::Gamepad_RightThumbstick, TEXT("R3"), TEXT("R3") },
+			{ EKeys::Gamepad_Special_Left, TEXT("View"), TEXT("View") },
+			{ EKeys::Gamepad_Special_Right, TEXT("Menu"), TEXT("Menu") },
+		};
+		FString Text = Button.GetDisplayName(false).ToString();
+		for (const FPadName& Each : Names)
+		{
+			if (Each.Key == Button)
+			{
+				Text = bShort ? Each.Short : Each.Long;
+				break;
+			}
+		}
+		return FText::FromString(!bChord ? Text : FString(bShort ? TEXT("RB+") : TEXT("RB + ")) + Text);
 	}
 }

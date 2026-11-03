@@ -430,7 +430,6 @@ void UShinobiSkillsWidget::RefreshCells()
 	}
 	const AShinobiPlayerController* PC = Cast<AShinobiPlayerController>(GetOwningPlayer());
 	const bool bPad = PC && PC->IsUsingGamepad();
-	static const TCHAR* FaceLabels[] = { TEXT("A"), TEXT("B"), TEXT("X"), TEXT("Y") };
 	for (int32 Index = 0; Index < SlotCells.Num(); ++Index)
 	{
 		const TSubclassOf<UShinobiJutsuAbility> Jutsu = Loadout.IsValidIndex(Index) ? Loadout[Index] : nullptr;
@@ -441,7 +440,7 @@ void UShinobiSkillsWidget::RefreshCells()
 			const FShinobiJutsuSlotState State = Jutsu->GetDefaultObject<UShinobiJutsuAbility>()->GetSlotState(*Player->GetAbilitySystemComponent());
 			Overlay = State.CooldownRemaining > 0.f ? FText::FromString(FString::Printf(TEXT("%ds"), FMath::CeilToInt(State.CooldownRemaining))) : INVTEXT("IN USE");
 		}
-		const FText Key = bPad ? FText::FromString(FString::Printf(TEXT("%s%s"), Index < 4 ? TEXT("") : TEXT("2-"), FaceLabels[Index % 4]))
+		const FText Key = bPad ? ShinobiKeyBindings::PadLabel(ShinobiKeyBindings::GetPad(Index), true)
 			: ShinobiKeyBindings::KeyLabel(ShinobiKeyBindings::Get(static_cast<ShinobiKeyBindings::EBindable>(Index)), true);
 		SlotCells[Index]->Show(Jutsu, Index == PickedSlot ? SkillsGoldColor : (bLocked ? SkillsLockedColor : SkillsIdleColor), Overlay, Key, bLocked ? 0.45f : 1.f);
 	}
