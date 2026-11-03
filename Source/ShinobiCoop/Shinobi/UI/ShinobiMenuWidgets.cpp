@@ -155,7 +155,7 @@ namespace
 	constexpr float SettingsValueWidth = 190.f;
 	/** A stepper arrow's hit area: the glyph and its padding. */
 	constexpr float SettingsArrowWidth = 32.f;
-	const TCHAR* const SettingsGeneralNote = TEXT("Changes apply and save immediately. Lower graphics quality or render scale for more FPS.");
+	const TCHAR* const SettingsGeneralNote = TEXT("Changes apply and save immediately. Lower graphics quality or upscaling quality for more FPS.");
 
 	/** A row's < or >: an arrow glyph in a padded, transparent hit area. */
 	UBorder* SettingsMakeArrow(UWidgetTree& Tree, const TCHAR* Glyph)

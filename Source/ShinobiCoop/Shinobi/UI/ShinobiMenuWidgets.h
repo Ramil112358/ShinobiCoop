@@ -98,7 +98,7 @@ protected:
 
 /**
  * The settings panel (ShinobiSettings rows), a tab page of the main menu (SETTINGS) and the pause menu (SETTINGS): rows
- * under CHARACTER / GRAPHICS / DISPLAY / EFFECTS headings. A row with many values (quality, render scale, frame cap,
+ * under CHARACTER / GRAPHICS / DISPLAY / EFFECTS headings. A row with many values (quality, upscaling quality, frame cap,
  * character...) is a dropdown: a click (A / Enter) opens the list of them to pick from. An On / Off row is a stepper
  * "< Value >": a click flips it. Left / Right (keys, D-pad, stick) step the focused row either way. Every change applies
  * and saves at once. The line under the rows explains the hovered or focused row.

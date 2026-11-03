@@ -2,7 +2,9 @@
 /Intermediate/
 /Saved/
 /DerivedDataCache/
-Plugins/**/Binaries/
+# (plugin builds are local, but vendor runtime DLLs such as DLSS's nvngx_*.dll and Streamline's sl.*.dll ship in ThirdParty)
+Plugins/**/Binaries/*
+!Plugins/**/Binaries/ThirdParty/
 Plugins/**/Intermediate/
 /Content/Developers/
 .vs/

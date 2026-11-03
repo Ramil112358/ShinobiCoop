@@ -8,11 +8,22 @@
 #include "Shinobi/Hero/ShinobiCharacterSave.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
 #include "Shinobi/ShinobiPlayerController.h"
+#include "Shinobi/UI/ShinobiGraphics.h"
 
 namespace
 {
 	const TCHAR* QualityNames[] = { TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic"), TEXT("Cinematic") };
-	const float RenderScales[] = { 50.f, 67.f, 75.f, 100.f };
+	// Upscaling quality: the scene's resolution (screen percentage) before TSR / DLSS scales it up to the screen. The same
+	// ratios as the vendor upscalers' modes; Native is 100 % (anti-aliasing only: TSR, or DLAA with DLSS).
+	const float RenderScales[] = { 33.f, 50.f, 58.f, 67.f, 100.f };
+	const TCHAR* RenderScaleNames[] = { TEXT("Ultra Performance"), TEXT("Performance"), TEXT("Balanced"), TEXT("Quality"), TEXT("Native") };
+	static_assert(UE_ARRAY_COUNT(RenderScales) == UE_ARRAY_COUNT(RenderScaleNames));
+	const TCHAR* UpscalerNames[] = { TEXT("TSR"), TEXT("DLSS") }; // (ShinobiGraphics::EUpscaler's order)
+
+	const TCHAR* OnOff(bool bOn)
+	{
+		return bOn ? TEXT("On") : TEXT("Off");
+	}
 	const float FrameCaps[] = { 30.f, 60.f, 120.f, 144.f, 0.f }; // 0 = unlimited
 	const EWindowMode::Type WindowModes[] = { EWindowMode::Fullscreen, EWindowMode::WindowedFullscreen, EWindowMode::Windowed };
 
@@ -111,10 +122,16 @@ FString ShinobiSettings::RowName(ERow Row)
 	case ERow::Face: return TEXT("Face");
 	case ERow::Outfit: return TEXT("Outfit");
 	case ERow::Quality: return TEXT("Graphics quality");
-	case ERow::RenderScale: return TEXT("Render scale");
+	case ERow::Upscaler: return TEXT("Upscaler");
+	case ERow::RenderScale: return TEXT("Upscaling quality");
+	case ERow::DynamicResolution: return TEXT("Dynamic resolution");
+	case ERow::RayTracing: return TEXT("Ray tracing");
+	case ERow::RayReconstruction: return TEXT("Ray Reconstruction");
 	case ERow::WindowMode: return TEXT("Window");
 	case ERow::FrameCap: return TEXT("Frame cap");
 	case ERow::VSync: return TEXT("VSync");
+	case ERow::FrameGeneration: return TEXT("Frame generation");
+	case ERow::LowLatency: return TEXT("NVIDIA Reflex");
 	case ERow::Outline: return TEXT("Character outline");
 	case ERow::Snow: return TEXT("Snow weather");
 	default: return FString();
@@ -149,8 +166,23 @@ FString ShinobiSettings::RowValue(ERow Row)
 		const int32 Level = S->GetOverallScalabilityLevel();
 		return Level >= 0 && Level < UE_ARRAY_COUNT(QualityNames) ? QualityNames[Level] : TEXT("Custom");
 	}
+	case ERow::Upscaler:
+		return UpscalerNames[uint8(ShinobiGraphics::GetUpscaler())];
 	case ERow::RenderScale:
-		return FString::Printf(TEXT("%d%%"), FMath::RoundToInt(GetRenderScale()));
+	{
+		const int32 Index = RowIndex(Row);
+		return Index != INDEX_NONE ? FString(RenderScaleNames[Index]) : FString::Printf(TEXT("%d%%"), FMath::RoundToInt(GetRenderScale()));
+	}
+	case ERow::DynamicResolution:
+		return OnOff(S->IsDynamicResolutionEnabled());
+	case ERow::RayTracing:
+		return OnOff(ShinobiGraphics::IsRayTracing());
+	case ERow::RayReconstruction:
+		return OnOff(ShinobiGraphics::IsRayReconstruction());
+	case ERow::FrameGeneration:
+		return ShinobiGraphics::FrameGenOptions()[ShinobiGraphics::GetFrameGen()];
+	case ERow::LowLatency:
+		return ShinobiGraphics::IsFrameGenOn() ? TEXT("On (frame generation)") : OnOff(ShinobiGraphics::IsLowLatency());
 	case ERow::WindowMode:
 	{
 		const EWindowMode::Type Mode = S->GetFullscreenMode();
@@ -162,7 +194,7 @@ FString ShinobiSettings::RowValue(ERow Row)
 		return Cap <= 0.f ? FString(TEXT("Unlimited")) : FString::Printf(TEXT("%d FPS"), FMath::RoundToInt(Cap));
 	}
 	case ERow::VSync:
-		return S->IsVSyncEnabled() ? TEXT("On") : TEXT("Off");
+		return ShinobiGraphics::IsFrameGenOn() ? TEXT("Off (frame generation)") : OnOff(S->IsVSyncEnabled());
 	case ERow::Outline:
 		return ShinobiLook::IsOutlineEnabled() ? TEXT("On") : TEXT("Off");
 	case ERow::Snow:
@@ -189,10 +221,16 @@ FString ShinobiSettings::RowDescription(ERow Row)
 	case ERow::Face: return TEXT("The face your character wears, on characters that have more than one.");
 	case ERow::Outfit: return TEXT("What your character wears over their own clothes.");
 	case ERow::Quality: return TEXT("The overall graphics preset. Lower it for more FPS. Custom means a single setting was changed elsewhere.");
-	case ERow::RenderScale: return TEXT("How sharp the 3D scene is drawn, scaled to your screen. Lower values give more FPS but a softer picture.");
+	case ERow::Upscaler: return TEXT("What scales the scene up to your screen and smooths its edges. TSR is Unreal's own. DLSS uses your RTX card's AI cores, usually sharper.");
+	case ERow::RenderScale: return TEXT("How much of the screen's resolution the scene is drawn at before it's scaled up. Lower gives more FPS but a softer picture. Native draws every pixel.");
+	case ERow::DynamicResolution: return TEXT("Lowers the resolution for a moment when a big jutsu would drop the frame rate below your frame cap (60 FPS without one).");
+	case ERow::RayTracing: return TEXT("Lights and reflects the world with your GPU's ray-tracing cores: truer reflections on water and glass. Costs FPS.");
+	case ERow::RayReconstruction: return TEXT("DLSS cleans up the ray-traced light and reflections with AI. Turning it on also turns on DLSS and ray tracing.");
 	case ERow::WindowMode: return TEXT("Exclusive fullscreen, a borderless window the size of the screen, or a normal window.");
 	case ERow::FrameCap: return TEXT("The highest frame rate the game runs at. A cap saves power and keeps fans quiet.");
-	case ERow::VSync: return TEXT("Matches frames to your monitor's refresh rate so the picture doesn't tear. Adds a little input delay.");
+	case ERow::VSync: return TEXT("Matches frames to your monitor's refresh rate so the picture doesn't tear. Adds a little input delay. Off while frame generation is on.");
+	case ERow::FrameGeneration: return TEXT("Your RTX card adds AI frames between the real ones: smoother motion, but slightly more input delay. Best from 60 FPS up. Turns VSync off and NVIDIA Reflex on.");
+	case ERow::LowLatency: return TEXT("Cuts the delay between your input and the screen. Always on with frame generation.");
 	case ERow::Outline: return TEXT("Draws a thin outline round characters so they stand out from the scenery.");
 	case ERow::Snow: return TEXT("Snowfall in games you host. In someone else's game the host's pick applies to everyone.");
 	default: return FString();
@@ -208,11 +246,17 @@ FString ShinobiSettings::RowSection(ERow Row)
 	case ERow::Outfit:
 		return TEXT("CHARACTER");
 	case ERow::Quality:
+	case ERow::Upscaler:
 	case ERow::RenderScale:
+	case ERow::DynamicResolution:
+	case ERow::RayTracing:
+	case ERow::RayReconstruction:
 		return TEXT("GRAPHICS");
 	case ERow::WindowMode:
 	case ERow::FrameCap:
 	case ERow::VSync:
+	case ERow::FrameGeneration:
+	case ERow::LowLatency:
 		return TEXT("DISPLAY");
 	default:
 		return TEXT("EFFECTS");
@@ -245,11 +289,29 @@ void ShinobiSettings::SetSavedOutfit(const FString& Name)
 	}
 }
 
+bool ShinobiSettings::IsRowAvailable(ERow Row)
+{
+	const ShinobiGraphics::FCaps& Caps = ShinobiGraphics::Caps();
+	switch (Row)
+	{
+	case ERow::Upscaler: return Caps.bDLSS; // (TSR alone: nothing to pick)
+	case ERow::RayTracing: return Caps.bRayTracing;
+	case ERow::RayReconstruction: return Caps.bRayReconstruction && Caps.bRayTracing;
+	case ERow::FrameGeneration: return Caps.HasFrameGen();
+	case ERow::LowLatency: return Caps.bReflex;
+	default: return Row < ERow::Num;
+	}
+}
+
 TArray<ShinobiSettings::ERow> ShinobiSettings::RowsFor(bool bMainMenu)
 {
 	TArray<ERow> Rows;
 	for (uint8 Row = 0; Row < uint8(ERow::Num); ++Row)
 	{
+		if (!IsRowAvailable(ERow(Row)))
+		{
+			continue;
+		}
 		if (!bMainMenu || (ERow(Row) != ERow::Character && ERow(Row) != ERow::Face && ERow(Row) != ERow::Outfit))
 		{
 			Rows.Add(ERow(Row));
@@ -308,11 +370,21 @@ TArray<FString> ShinobiSettings::RowOptions(ERow Row)
 			Options.Add(Name);
 		}
 		break;
-	case ERow::RenderScale:
-		for (const float Scale : RenderScales)
+	case ERow::Upscaler:
+		Options.Add(UpscalerNames[0]);
+		if (ShinobiGraphics::Caps().bDLSS)
 		{
-			Options.Add(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(Scale)));
+			Options.Add(UpscalerNames[1]);
 		}
+		break;
+	case ERow::RenderScale:
+		for (const TCHAR* Name : RenderScaleNames)
+		{
+			Options.Add(Name);
+		}
+		break;
+	case ERow::FrameGeneration:
+		Options = ShinobiGraphics::FrameGenOptions();
 		break;
 	case ERow::WindowMode:
 		Options = { TEXT("Fullscreen"), TEXT("Borderless"), TEXT("Windowed") }; // (WindowModes' order)
@@ -323,7 +395,11 @@ TArray<FString> ShinobiSettings::RowOptions(ERow Row)
 			Options.Add(Cap <= 0.f ? FString(TEXT("Unlimited")) : FString::Printf(TEXT("%d FPS"), FMath::RoundToInt(Cap)));
 		}
 		break;
+	case ERow::DynamicResolution:
+	case ERow::RayTracing:
+	case ERow::RayReconstruction:
 	case ERow::VSync:
+	case ERow::LowLatency:
 	case ERow::Outline:
 		Options = { TEXT("Off"), TEXT("On") };
 		break;
@@ -374,8 +450,20 @@ int32 ShinobiSettings::RowIndex(ERow Row)
 		const int32 Level = S->GetOverallScalabilityLevel();
 		return Level >= 0 && Level < UE_ARRAY_COUNT(QualityNames) ? Level : INDEX_NONE; // Custom: none of them
 	}
+	case ERow::Upscaler:
+		return int32(ShinobiGraphics::GetUpscaler());
 	case ERow::RenderScale:
 		return Find(RenderScales, GetRenderScale());
+	case ERow::DynamicResolution:
+		return S->IsDynamicResolutionEnabled() ? 1 : 0;
+	case ERow::RayTracing:
+		return ShinobiGraphics::IsRayTracing() ? 1 : 0;
+	case ERow::RayReconstruction:
+		return ShinobiGraphics::IsRayReconstruction() ? 1 : 0;
+	case ERow::FrameGeneration:
+		return ShinobiGraphics::GetFrameGen();
+	case ERow::LowLatency:
+		return ShinobiGraphics::IsLowLatency() ? 1 : 0;
 	case ERow::WindowMode:
 		for (int32 Index = 0; Index < UE_ARRAY_COUNT(WindowModes); ++Index)
 		{
@@ -388,7 +476,7 @@ int32 ShinobiSettings::RowIndex(ERow Row)
 	case ERow::FrameCap:
 		return Find(FrameCaps, S->GetFrameRateLimit());
 	case ERow::VSync:
-		return S->IsVSyncEnabled() ? 1 : 0;
+		return S->IsVSyncEnabled() && !ShinobiGraphics::IsFrameGenOn() ? 1 : 0;
 	case ERow::Outline:
 		return ShinobiLook::IsOutlineEnabled() ? 1 : 0;
 	case ERow::Snow:
@@ -485,9 +573,27 @@ void ShinobiSettings::SetRowIndex(ERow Row, UWorld* World, int32 Index)
 	case ERow::Quality:
 		S->SetOverallScalabilityLevel(Index);
 		break;
+	case ERow::Upscaler:
+		ShinobiGraphics::SetUpscaler(ShinobiGraphics::EUpscaler(Index));
+		return;
 	case ERow::RenderScale:
-		SetRenderScale(RenderScales[Index]);
+		SetRenderScale(RenderScales[Index]); // (then DLAA at Native, and the dynamic resolution range: ShinobiGraphics::ApplySaved)
 		break;
+	case ERow::DynamicResolution:
+		S->SetDynamicResolutionEnabled(Index == 1);
+		break;
+	case ERow::RayTracing:
+		ShinobiGraphics::SetRayTracing(Index == 1);
+		return;
+	case ERow::RayReconstruction:
+		ShinobiGraphics::SetRayReconstruction(Index == 1);
+		return;
+	case ERow::FrameGeneration:
+		ShinobiGraphics::SetFrameGen(Index); // (VSync off, Reflex on)
+		return;
+	case ERow::LowLatency:
+		ShinobiGraphics::SetLowLatency(Index == 1);
+		return;
 	case ERow::WindowMode:
 		S->SetFullscreenMode(WindowModes[Index]);
 		S->ApplyResolutionSettings(false);
@@ -496,6 +602,10 @@ void ShinobiSettings::SetRowIndex(ERow Row, UWorld* World, int32 Index)
 		S->SetFrameRateLimit(FrameCaps[Index]);
 		break;
 	case ERow::VSync:
+		if (Index == 1 && ShinobiGraphics::IsFrameGenOn())
+		{
+			return; // frame generation paces its own frames: VSync stays off while it's on
+		}
 		S->SetVSyncEnabled(Index == 1);
 		break;
 	case ERow::Outline:
@@ -520,4 +630,5 @@ void ShinobiSettings::SetRowIndex(ERow Row, UWorld* World, int32 Index)
 	}
 	S->ApplyNonResolutionSettings();
 	S->SaveSettings();
+	ShinobiGraphics::ApplySaved(); // (the dynamic resolution budget follows the frame cap, DLAA the upscaling quality)
 }

@@ -11,7 +11,16 @@ enum class EShinobiSnow : uint8;
  */
 namespace ShinobiSettings
 {
-	enum class ERow : uint8 { Character, Face, Outfit, Quality, RenderScale, WindowMode, FrameCap, VSync, Outline, Snow, Num };
+	/** RenderScale is shown as "Upscaling quality" (Ultra Performance ... Native). Upscaler, RayTracing, RayReconstruction,
+	 * FrameGeneration and LowLatency are only listed on machines that support them (IsRowAvailable; ShinobiGraphics). */
+	enum class ERow : uint8
+	{
+		Character, Face, Outfit,
+		Quality, Upscaler, RenderScale, DynamicResolution, RayTracing, RayReconstruction,
+		WindowMode, FrameCap, VSync, FrameGeneration, LowLatency,
+		Outline, Snow,
+		Num
+	};
 
 	/** "Graphics quality: High" etc. (RowName: RowValue). */
 	SHINOBICOOP_API FString Label(ERow Row);
@@ -49,7 +58,10 @@ namespace ShinobiSettings
 	SHINOBICOOP_API void SetSavedCharacter(const FString& Name);
 	SHINOBICOOP_API void SetSavedOutfit(const FString& Name);
 
-	/** The rows the settings panel shows: the main menu leaves out Character, Face and Outfit (its SHINOBI tab has them). */
+	/** Whether this machine can use Row at all (DLSS, frame generation, Reflex and ray-tracing rows need the GPU and plugin). */
+	SHINOBICOOP_API bool IsRowAvailable(ERow Row);
+	/** The rows the settings panel shows: the available ones, and the main menu leaves out Character, Face and Outfit (its
+	 * SHINOBI tab has them). */
 	SHINOBICOOP_API TArray<ERow> RowsFor(bool bMainMenu);
 
 	/** Snow weather this machine picks when it hosts (Off by default). In a session the host's pick applies to everyone. */

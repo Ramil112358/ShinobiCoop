@@ -216,6 +216,43 @@ Implementation notes for `ShinobiSettings`:
 - When a saved choice is no longer supported (new GPU, plugin missing), fall back to TSR.
 - Extend `Tests/ShinobiSettingsTests.cpp`: unsupported vendors aren't listed, the fallback works, and FG forces low-latency on.
 
+## 9. Implemented: steps 1–3 and the ray-tracing setting
+
+Code: `Source/ShinobiCoop/Shinobi/UI/ShinobiGraphics.*` (new) and `ShinobiSettings.*`. Tests: `ShinobiCoop.UI.SettingsUpscalerFrameGenRayTracing`
+plus updated settings and menu tests. It was written without a compiler or editor, so build it and run `Scripts/run_tests.ps1` first.
+
+| Row (section) | Values | What it drives | Shown when |
+| --- | --- | --- | --- |
+| *Upscaler* (GRAPHICS) | TSR / DLSS (DLSS by default where it runs) | `r.NGX.DLSS.Enable`, `r.NGX.DLAA.Enable` at Native | DLSS plugin loaded and `UDLSSLibrary::IsDLSSSupported` |
+| *Upscaling quality* (was *Render scale*) | Ultra Performance 33 % · Performance 50 % · Balanced 58 % · Quality 67 % · Native 100 % | engine screen percentage (`SetResolutionScaleValueEx`), which TSR and DLSS both follow | always |
+| *Dynamic resolution* | Off / On | `UGameUserSettings::SetDynamicResolutionEnabled`; budget `r.DynamicRes.FrameTimeBudget` = frame cap (60 FPS uncapped), range 50 %–upscaling quality | always |
+| *Ray tracing* | Off / On (Off by default: today's look) | `r.Lumen.HardwareRayTracing` | `IsRayTracingEnabled()` (RT GPU, DX12/Vulkan SM6) |
+| *Ray Reconstruction* | Off / On (On also picks DLSS + ray tracing) | `r.NGX.DLSS.DenoiserMode` | DLSS plugin reports `IsDLSSRRSupported` and ray tracing is available |
+| *Frame generation* (DISPLAY) | Off / 2x / 3x / 4x … / Dynamic (whatever `GetSupportedDLSSGModes` lists for the GPU) | `UStreamlineLibraryDLSSG::SetDLSSGMode`, else `r.Streamline.DLSSG.Enable` | Streamline DLSSG plugin and `IsDLSSGSupported` (RTX 40+) |
+| *NVIDIA Reflex* | Off / On (On by default; forced on with frame generation) | `t.Streamline.Reflex.Enable` | Streamline Reflex plugin and `IsReflexSupported` |
+
+Frame generation turns *VSync* off and keeps it off while it's on (the row reads "Off (frame generation)").
+`UShinobiGraphicsSubsystem` applies the saved picks at startup, after the PostEngineInit plugins have loaded.
+The rows only exist on machines that support them. With no plugin, the game behaves as before, plus the new upscaling presets and dynamic resolution.
+
+### Installing NVIDIA's plugins (each Windows build machine)
+
+1. Download the **DLSS 4.5 Unreal Engine plugin for UE 5.8** from https://developer.nvidia.com/rtx/dlss/get-started (accept the SDK licence).
+2. Copy its plugin folders into `ShinobiCoop/Plugins/` (create it). `ShinobiCoop.uproject` already lists `DLSS`, `StreamlineCore`, `StreamlineDLSSG`
+   and `StreamlineReflex` as **Optional**, Win64-only, not for Server targets. If the package names its folders differently (older packages had a single `Streamline`),
+   change those four entries to match the `.uplugin` names.
+3. Build and run. The log line `LogShinobiGraphics: Graphics: DLSS 1, Ray Reconstruction 1, Reflex 1, hardware ray tracing 1, frame generation [Off, On2X, ...]`
+   shows what was found.
+4. `.gitignore` now keeps `Plugins/**/Binaries/ThirdParty/` (the `nvngx_*` / `sl.*` DLLs) and still ignores built plugin binaries. Commit the plugin
+   only if the repository is private and the licence allows it. Otherwise each machine installs it.
+
+### Still to check by hand (needs a GPU)
+
+- `stat unit` / `stat gpu` with each upscaler and quality on Hidden Leaf Valley, London and an arena during Fire Meteor / Susanoo.
+- `stat DLSSG` (presented frames > 1 means frame generation is running). Check the HUD isn't smeared by frame generation.
+- The image-quality items in section 5 (VFX motion vectors, foliage velocity, the outline's post-process location). These aren't done yet.
+- Ray tracing on: London's glass and the water, and buildings whose Nanite fallback is coarse (the BVH uses the fallback).
+
 ## Sources
 
 - [UE 5.8 release notes](https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-5-8-release-notes),
