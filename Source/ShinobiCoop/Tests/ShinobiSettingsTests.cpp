@@ -132,4 +132,49 @@ bool FShinobiSettingsStepBackTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSettingsOptionsTest, "ShinobiCoop.UI.SettingsOptionsPickDirectly", ShinobiTestFlags)
+bool FShinobiSettingsOptionsTest::RunTest(const FString& Parameters)
+{
+	// Rows with many values are picked from a list (a dropdown), any value in one go; On / Off rows stay steppers.
+	UGameUserSettings* Settings = GEngine->GetGameUserSettings();
+	const int32 OldQuality = Settings->GetOverallScalabilityLevel();
+	const float OldCap = Settings->GetFrameRateLimit();
+	FShinobiTestWorld W;
+	using ShinobiSettings::ERow;
+
+	TestTrue(TEXT("quality: a dropdown"), ShinobiSettings::UsesDropdown(ERow::Quality));
+	TestTrue(TEXT("render scale: a dropdown"), ShinobiSettings::UsesDropdown(ERow::RenderScale));
+	TestTrue(TEXT("frame cap: a dropdown"), ShinobiSettings::UsesDropdown(ERow::FrameCap));
+	TestTrue(TEXT("character: a dropdown"), ShinobiSettings::UsesDropdown(ERow::Character));
+	TestFalse(TEXT("VSync: a stepper"), ShinobiSettings::UsesDropdown(ERow::VSync));
+	TestFalse(TEXT("outline: a stepper"), ShinobiSettings::UsesDropdown(ERow::Outline));
+
+	const TArray<FString> Quality = ShinobiSettings::RowOptions(ERow::Quality);
+	TestEqual(TEXT("five presets"), Quality.Num(), 5);
+	Settings->SetOverallScalabilityLevel(0);
+	ShinobiSettings::SetRowIndex(ERow::Quality, W.World, 3);
+	TestEqual(TEXT("Low straight to Epic"), Settings->GetOverallScalabilityLevel(), 3);
+	TestEqual(TEXT("the shown value is the picked option"), ShinobiSettings::RowValue(ERow::Quality), Quality[3]);
+	TestEqual(TEXT("its index"), ShinobiSettings::RowIndex(ERow::Quality), 3);
+
+	const TArray<FString> Caps = ShinobiSettings::RowOptions(ERow::FrameCap);
+	ShinobiSettings::SetRowIndex(ERow::FrameCap, W.World, Caps.Num() - 1);
+	TestEqual(TEXT("the last frame cap: unlimited"), Settings->GetFrameRateLimit(), 0.f);
+	TestEqual(TEXT("listed as Unlimited"), Caps.Last(), FString(TEXT("Unlimited")));
+	ShinobiSettings::SetRowIndex(ERow::FrameCap, W.World, Caps.Num()); // out of range
+	TestEqual(TEXT("an option off the list changes nothing"), Settings->GetFrameRateLimit(), 0.f);
+
+	for (uint8 Row = 0; Row < uint8(ERow::Num); ++Row)
+	{
+		const int32 Index = ShinobiSettings::RowIndex(ERow(Row));
+		TestTrue(FString::Printf(TEXT("row %d: its index is on its list (or none)"), Row), Index == INDEX_NONE || ShinobiSettings::RowOptions(ERow(Row)).IsValidIndex(Index));
+	}
+
+	Settings->SetOverallScalabilityLevel(OldQuality);
+	Settings->SetFrameRateLimit(OldCap);
+	Settings->ApplyNonResolutionSettings();
+	Settings->SaveSettings();
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

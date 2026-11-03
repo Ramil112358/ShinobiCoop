@@ -13,6 +13,7 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Shinobi/ShinobiPlayerCharacter.h"
+#include "Shinobi/UI/ShinobiDropdown.h"
 #include "Shinobi/UI/ShinobiMenuArt.h"
 #include "Shinobi/UI/ShinobiMenuStage.h"
 #include "Shinobi/UI/ShinobiMenuStyle.h"
@@ -135,7 +136,12 @@ TSharedRef<SWidget> UShinobiRosterPage::RebuildWidget()
 			return TArray<TObjectPtr<UWidget>>{Heading, Row};
 		};
 		FaceRow = Stepper(INVTEXT("FACE"), &UShinobiRosterPage::StepFace, FaceText);
-		Stepper(INVTEXT("OUTFIT"), &UShinobiRosterPage::StepOutfit, OutfitText);
+		// The outfits: a list to pick from (it grows with every outfit imported).
+		Column->AddChildToVerticalBox(ShinobiMenuStyle::Text(*WidgetTree, INVTEXT("OUTFIT"), 12, ShinobiMenuStyle::TextDim))->SetPadding(FMargin(0.f, 14.f, 0.f, 4.f));
+		OutfitField = WidgetTree->ConstructWidget<UShinobiDropdown>(UShinobiDropdown::StaticClass());
+		OutfitField->OnPicked = FShinobiIndexClicked::CreateUObject(this, &UShinobiRosterPage::PickOutfit);
+		OutfitField->Build(*WidgetTree, 18, 300.f);
+		Column->AddChildToVerticalBox(OutfitField);
 		Column->AddChildToVerticalBox(ShinobiMenuStyle::Text(*WidgetTree, INVTEXT("LT / RT  change outfit"), 11, ShinobiMenuStyle::TextDim))->SetPadding(FMargin(0.f, 10.f, 0.f, 0.f));
 		Show();
 	}
@@ -150,8 +156,12 @@ void UShinobiRosterPage::Pick(int32 RosterIndex)
 
 void UShinobiRosterPage::StepOutfit(int32 Direction)
 {
-	const int32 Next = ((RosterSavedOutfit() + Direction) % RosterOutfitCount + RosterOutfitCount) % RosterOutfitCount;
-	ShinobiSettings::SetSavedOutfit(AShinobiPlayerCharacter::Outfits[Next].Name);
+	PickOutfit(((RosterSavedOutfit() + Direction) % RosterOutfitCount + RosterOutfitCount) % RosterOutfitCount);
+}
+
+void UShinobiRosterPage::PickOutfit(int32 OutfitIndex)
+{
+	ShinobiSettings::SetSavedOutfit(AShinobiPlayerCharacter::Outfits[FMath::Clamp(OutfitIndex, 0, RosterOutfitCount - 1)].Name);
 	Show();
 }
 
@@ -202,14 +212,14 @@ void UShinobiRosterPage::Show()
 		}
 		FaceText->SetText(FText::FromString(Line));
 	}
-	if (OutfitText)
+	if (OutfitField)
 	{
-		FString Line = AShinobiPlayerCharacter::Outfits[Outfit].Name;
-		if (!AShinobiPlayerCharacter::IsOutfitBuilt(Outfit, Picked))
+		TArray<FString> Names;
+		for (int32 Index = 0; Index < RosterOutfitCount; ++Index)
 		{
-			Line += TEXT(" (not built)");
+			Names.Add(FString(AShinobiPlayerCharacter::Outfits[Index].Name) + (AShinobiPlayerCharacter::IsOutfitBuilt(Index, Picked) ? TEXT("") : TEXT(" (not built)")));
 		}
-		OutfitText->SetText(FText::FromString(Line));
+		OutfitField->SetOptions(Names, Outfit); // (what's built depends on the character)
 	}
 	if (AShinobiMenuStage* Shown = Stage.Get())
 	{

@@ -18,6 +18,7 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Shinobi/UI/ShinobiMainMenuWidget.h"
+#include "Shinobi/UI/ShinobiDropdown.h"
 #include "Shinobi/UI/ShinobiPauseMenuWidget.h"
 #include "Shinobi/UI/ShinobiShortcutsWidget.h"
 #include "GameFramework/GameUserSettings.h"
@@ -343,6 +344,12 @@ bool FShinobiSettingsPanelStepTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("back twice: 120 -> 30"), Settings->GetFrameRateLimit(), 30.f);
 	TestEqual(TEXT("the row follows"), Panel->GetShownValue(Cap).ToString(), FString(TEXT("30 FPS")));
 	TestFalse(TEXT("a help line"), Panel->GetDescriptionText().IsEmpty());
+	const int32 Quality = Rows.IndexOfByKey(ShinobiSettings::ERow::Quality);
+	const int32 OldQuality = Settings->GetOverallScalabilityLevel();
+	Panel->PickRow(Quality, 4); // as picked from the row's dropdown
+	TestEqual(TEXT("quality picked from its list"), Settings->GetOverallScalabilityLevel(), 4);
+	TestEqual(TEXT("the row shows it"), Panel->GetShownValue(Quality).ToString(), ShinobiSettings::RowOptions(ShinobiSettings::ERow::Quality)[4]);
+	Settings->SetOverallScalabilityLevel(OldQuality);
 
 	Settings->SetVSyncEnabled(bOldVSync);
 	Settings->SetFrameRateLimit(OldCap);
@@ -380,6 +387,14 @@ bool FShinobiMenuRosterPickTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("wraps to the last outfit"), ShinobiSettings::GetSavedOutfit(),
 		FString(AShinobiPlayerCharacter::Outfits[UE_ARRAY_COUNT(AShinobiPlayerCharacter::Outfits) - 1].Name));
 	TestNotNull(TEXT("a card to focus"), Page->GetFocusTarget());
+	UShinobiDropdown* Outfits = Page->GetOutfitField();
+	if (TestNotNull(TEXT("outfits: a dropdown"), Outfits))
+	{
+		TestEqual(TEXT("every outfit listed"), Outfits->GetOptions().Num(), int32(UE_ARRAY_COUNT(AShinobiPlayerCharacter::Outfits)));
+		Outfits->Choose(1);
+		TestEqual(TEXT("picked from the list"), ShinobiSettings::GetSavedOutfit(), FString(AShinobiPlayerCharacter::Outfits[1].Name));
+		TestEqual(TEXT("the field shows the pick"), Outfits->GetSelected(), 1);
+	}
 
 	ShinobiSettings::SetSavedCharacter(OldCharacter);
 	ShinobiSettings::SetSavedOutfit(OldOutfit);

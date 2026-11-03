@@ -18,6 +18,7 @@
 #include "Misc/PackageName.h"
 #include "Shinobi/Online/ShinobiSessionSubsystem.h"
 #include "Shinobi/ShinobiPlayerController.h"
+#include "Shinobi/UI/ShinobiDropdown.h"
 #include "Shinobi/UI/ShinobiKeyBindings.h"
 #include "Shinobi/UI/ShinobiMenuStyle.h"
 #include "Shinobi/UI/ShinobiShortcutsWidget.h"
@@ -297,7 +298,7 @@ void UShinobiPauseMenuWidget::NativeTick(const FGeometry& Geometry, float DeltaT
 	}
 	// Input is the menu's alone while it's open: if focus went astray (a click on nothing, the Steam overlay), take it
 	// back, or Esc would have nowhere to go.
-	if (!HasAnyUserFocus() && !HasFocusedDescendants())
+	if (!HasAnyUserFocus() && !HasFocusedDescendants() && !UShinobiDropdownList::GetOpen()) // (an open dropdown has it)
 	{
 		FocusTab();
 	}

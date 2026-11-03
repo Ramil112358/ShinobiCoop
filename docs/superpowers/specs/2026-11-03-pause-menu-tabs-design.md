@@ -12,6 +12,18 @@
 - **Keys:** Esc or Start resumes from any tab. B goes back to GAME first, then resumes. K opens the menu on JUTSU and closes it from there. A key being bound on CONTROLS, or B dropping a JUTSU pick, is used by the page and never reaches the menu.
 - **Screen:** a full-screen dim, a top bar with the tabs and a "LIVE · the game keeps running" reminder, and a footer with session messages and key hints. The hints switch between keyboard and gamepad with the last device used. The HUD is hidden (render opacity 0, still ticking) while the menu is open.
 - **Input:** UI only while the menu is open, as the Skills screen already was. Gameplay keys wait, so pressing 1 in the menu no longer casts. The world keeps running. Clicks on the backdrop stay in the menu, and focus that strays is taken back, so Esc always works.
-- **Settings panel (main menu and pause menu):** rows sit under CHARACTER / GRAPHICS / DISPLAY / EFFECTS headings. Each row reads "Name ‹ Value ›". A click (or a click on ›) steps the value on, and a click on ‹ steps it back. Left / Right (arrows, D-pad, stick) step the focused row. A help line under the rows explains the hovered or focused row (`ShinobiSettings::RowDescription`). `ShinobiSettings::Step(Row, World, Delta)` steps both ways and wraps; `Cycle` is `Step(+1)`.
+- **Settings panel (main menu and pause menu):** rows sit under CHARACTER / GRAPHICS / DISPLAY / EFFECTS headings. A row with more than two values is a dropdown: Character, Face (when there are more than two), Outfit, Graphics quality, Render scale, Window, Frame cap and Snow weather. It reads "Name [Value ▾]", and a click (A / Enter) opens the list of values so any of them is one pick away. An On / Off row (VSync, Character outline) stays a stepper "Name ‹ Value ›": a click flips it. Left / Right (arrows, D-pad, stick) step the focused row either way, dropdown or not. A help line under the rows explains the hovered or focused row (`ShinobiSettings::RowDescription`). `ShinobiSettings::RowOptions` / `RowIndex` / `SetRowIndex` back the lists; `Step(Row, World, Delta)` steps both ways and wraps; `Cycle` is `Step(+1)`.
 - **Main menu:** it gains a CONTROLS tab for the key bindings. Its SETTINGS tab loses the Shortcuts entry.
 - **Shortcuts restyle:** the menu style (panel, sheared buttons, accent headings). The key being listened for is lit. Leaving the tab cancels the listen.
+
+## Dropdowns
+
+Choices with more than two options use a dropdown instead of a stepper, so players don't click through them one by one. Two-option choices (On / Off, Male / Female) keep their arrows.
+
+- **Where:** the settings panel rows above; the SHINOBI tab's outfit; every CREATE row built with `AddChoice` that has more than two options (head, build, make-up, freckles, tattoo region, face, blend, hair, beard, mustache, cloak).
+- **`UShinobiDropdown`:** the field, a menu-style button with the value and a chevron. A click opens the list; picking runs `OnPicked`. `Choose(Index)` does the same without the list (tests).
+- **`UShinobiDropdownList`:** the open list, a layer added to the viewport over every menu (Z 1000). It sits under the field, or above it near the bottom of the screen, and is as wide as the field. It scrolls past about 11 options.
+  - The current option is ticked and focused.
+  - Up / Down move, a letter key jumps to the next option starting with it, and click / A / Enter picks.
+  - Esc / B / Backspace or a click outside closes it unchanged. Focus goes back to the field either way.
+  - While it's open, the pause menu doesn't take focus back, and closing the pause menu closes the list.

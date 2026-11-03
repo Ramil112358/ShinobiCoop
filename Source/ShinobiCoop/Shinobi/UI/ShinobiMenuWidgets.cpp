@@ -13,6 +13,7 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/GameInstance.h"
 #include "Shinobi/Online/ShinobiSessionSubsystem.h"
+#include "Shinobi/UI/ShinobiDropdown.h"
 #include "Shinobi/UI/ShinobiMenuStyle.h"
 
 namespace
@@ -163,6 +164,8 @@ namespace
 {
 	constexpr float SettingsPanelWidth = 640.f;
 	constexpr float SettingsValueWidth = 190.f;
+	/** A stepper arrow's hit area: the glyph and its padding. */
+	constexpr float SettingsArrowWidth = 32.f;
 	const TCHAR* const SettingsGeneralNote = TEXT("Changes apply and save immediately. Lower graphics quality or render scale for more FPS.");
 
 	/** A row's < or >: an arrow glyph in a padded, transparent hit area. */
@@ -215,24 +218,48 @@ TSharedRef<SWidget> UShinobiSettingsWidget::RebuildWidget()
 			UHorizontalBoxSlot* NameSlot = Line->AddChildToHorizontalBox(ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(ShinobiSettings::RowName(Row)), 16, FLinearColor::White));
 			NameSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 			NameSlot->SetVerticalAlignment(VAlign_Center);
-			UBorder* Back = SettingsMakeArrow(*WidgetTree, TEXT("‹"));
-			Line->AddChildToHorizontalBox(Back)->SetVerticalAlignment(VAlign_Fill);
-			USizeBox* ValueBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-			ValueBox->SetWidthOverride(SettingsValueWidth);
 			UTextBlock* Value = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 16, FLinearColor::White);
 			FSlateFontInfo Font = Value->GetFont();
 			Font.TypefaceFontName = TEXT("Bold");
 			Value->SetFont(Font);
-			Value->SetJustification(ETextJustify::Center);
-			ValueBox->AddChild(Value);
-			Line->AddChildToHorizontalBox(ValueBox)->SetVerticalAlignment(VAlign_Center);
-			Line->AddChildToHorizontalBox(SettingsMakeArrow(*WidgetTree, TEXT("›")))->SetVerticalAlignment(VAlign_Fill);
+			UBorder* Back = nullptr;
+			UBorder* Field = nullptr;
+			if (ShinobiSettings::UsesDropdown(Row))
+			{
+				// Many values: a field that opens the list of them ("Value  v"), as wide as a stepper.
+				USizeBox* FieldBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+				FieldBox->SetWidthOverride(SettingsValueWidth + 2.f * SettingsArrowWidth);
+				Field = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+				Field->SetBrush(ShinobiMenuStyle::FieldBrush(false));
+				Field->SetPadding(FMargin(12.f, 3.f, 10.f, 3.f));
+				FieldBox->AddChild(Field);
+				UHorizontalBox* FieldLine = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+				Field->SetContent(FieldLine);
+				UHorizontalBoxSlot* ValueSlot = FieldLine->AddChildToHorizontalBox(Value);
+				ValueSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+				ValueSlot->SetVerticalAlignment(VAlign_Center);
+				FieldLine->AddChildToHorizontalBox(ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(TEXT("\u25BE")), 16, ShinobiMenuStyle::Accent))->SetVerticalAlignment(VAlign_Center);
+				Line->AddChildToHorizontalBox(FieldBox)->SetVerticalAlignment(VAlign_Center);
+			}
+			else
+			{
+				// Two values (On / Off): "< Value >", a click or Left / Right flips it.
+				Back = SettingsMakeArrow(*WidgetTree, TEXT("\u2039"));
+				Line->AddChildToHorizontalBox(Back)->SetVerticalAlignment(VAlign_Fill);
+				USizeBox* ValueBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+				ValueBox->SetWidthOverride(SettingsValueWidth);
+				Value->SetJustification(ETextJustify::Center);
+				ValueBox->AddChild(Value);
+				Line->AddChildToHorizontalBox(ValueBox)->SetVerticalAlignment(VAlign_Center);
+				Line->AddChildToHorizontalBox(SettingsMakeArrow(*WidgetTree, TEXT("\u203A")))->SetVerticalAlignment(VAlign_Fill);
+			}
 			ShinobiMenuStyle::StyleButton(*Button, false, FMargin(20.f, 7.f, 10.f, 7.f));
 			Cast<UButtonSlot>(Line->Slot)->SetHorizontalAlignment(HAlign_Fill);
 			Column->AddChildToVerticalBox(Button)->SetPadding(FMargin(0.f, 3.f));
 			EntryButtons.Add(Button);
 			ValueTexts.Add(Value);
 			BackArrows.Add(Back);
+			Fields.Add(Field);
 		}
 
 		// The help line: what the hovered or focused row does.
@@ -253,9 +280,42 @@ TSharedRef<SWidget> UShinobiSettingsWidget::RebuildWidget()
 
 void UShinobiSettingsWidget::OnEntry(int32 Index)
 {
+	if (Rows.IsValidIndex(Index) && ShinobiSettings::UsesDropdown(Rows[Index]))
+	{
+		PendingStep = 0;
+		OpenRowList(Index);
+		return;
+	}
 	const int32 Delta = PendingStep != 0 ? PendingStep : 1; // a click on the < steps back, anywhere else on
 	PendingStep = 0;
 	StepRow(Index, Delta);
+}
+
+void UShinobiSettingsWidget::OpenRowList(int32 Index)
+{
+	if (!Rows.IsValidIndex(Index) || !EntryButtons.IsValidIndex(Index))
+	{
+		return;
+	}
+	TWeakObjectPtr<UShinobiSettingsWidget> Self = this;
+	// Under the row's field; focus comes back to the row.
+	UShinobiDropdownList::Open(*EntryButtons[Index], ShinobiSettings::RowOptions(Rows[Index]), ShinobiSettings::RowIndex(Rows[Index]),
+		[Self, Index](int32 Picked)
+		{
+			if (UShinobiSettingsWidget* Panel = Self.Get())
+			{
+				Panel->PickRow(Index, Picked);
+			}
+		}, Fields.IsValidIndex(Index) ? Fields[Index].Get() : nullptr);
+}
+
+void UShinobiSettingsWidget::PickRow(int32 Index, int32 Option)
+{
+	if (Rows.IsValidIndex(Index))
+	{
+		ShinobiSettings::SetRowIndex(Rows[Index], GetWorld(), Option);
+		RefreshValues();
+	}
 }
 
 void UShinobiSettingsWidget::StepRow(int32 Index, int32 Delta)
@@ -313,6 +373,13 @@ void UShinobiSettingsWidget::NativeTick(const FGeometry& Geometry, float DeltaTi
 	Row = Row != INDEX_NONE ? Row : GetFocusedRow();
 	if (Row != DescribedRow && DescriptionText)
 	{
+		for (int32 Index = 0; Index < Fields.Num(); ++Index)
+		{
+			if (Fields[Index] && (Index == Row || Index == DescribedRow))
+			{
+				Fields[Index]->SetBrush(ShinobiMenuStyle::FieldBrush(Index == Row)); // the field of the row under the mouse or focus
+			}
+		}
 		DescribedRow = Row;
 		DescriptionText->SetText(FText::FromString(Rows.IsValidIndex(Row) ? ShinobiSettings::RowDescription(Rows[Row]) : FString(SettingsGeneralNote)));
 	}

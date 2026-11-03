@@ -9,6 +9,7 @@
 #include "ShinobiMenuWidgets.generated.h"
 
 class UShinobiSessionSubsystem;
+class UBorder;
 class UTextBlock;
 class UVerticalBox;
 
@@ -98,9 +99,10 @@ protected:
 
 /**
  * The settings panel (ShinobiSettings rows), a tab page of the main menu (SETTINGS) and the pause menu (SETTINGS): rows
- * under CHARACTER / GRAPHICS / DISPLAY / EFFECTS headings, each a selector "Name  < Value >". Clicking a row (or its >)
- * steps it on, its < steps it back; Left / Right (keys, D-pad, stick) step the focused row. Every change applies and saves
- * at once. The line under the rows explains the hovered or focused row.
+ * under CHARACTER / GRAPHICS / DISPLAY / EFFECTS headings. A row with many values (quality, render scale, frame cap,
+ * character...) is a dropdown: a click (A / Enter) opens the list of them to pick from. An On / Off row is a stepper
+ * "< Value >": a click flips it. Left / Right (keys, D-pad, stick) step the focused row either way. Every change applies
+ * and saves at once. The line under the rows explains the hovered or focused row.
  */
 UCLASS()
 class SHINOBICOOP_API UShinobiSettingsWidget : public UShinobiMenuWidget
@@ -113,6 +115,10 @@ public:
 
 	/** Steps the Index-th row shown by Delta values (wrapping), applies, saves and updates every value shown. */
 	void StepRow(int32 Index, int32 Delta);
+	/** Sets the Index-th row shown to its Option-th value (ShinobiSettings::RowOptions), as picked from its dropdown. */
+	void PickRow(int32 Index, int32 Option);
+	/** Opens the Index-th row's dropdown list (a click on a dropdown row does this). */
+	void OpenRowList(int32 Index);
 	/** The Index-th row's value as shown. */
 	FText GetShownValue(int32 Index) const;
 	/** The help line under the rows. */
@@ -138,9 +144,12 @@ private:
 	TArray<ShinobiSettings::ERow> Rows;
 	UPROPERTY()
 	TArray<TObjectPtr<UTextBlock>> ValueTexts;
-	/** Each row's < (a press over it steps back). */
+	/** Each stepper row's < (a press over it steps back); null on dropdown rows. */
 	UPROPERTY()
 	TArray<TObjectPtr<UWidget>> BackArrows;
+	/** Each dropdown row's field (the list opens under it); null on stepper rows. */
+	UPROPERTY()
+	TArray<TObjectPtr<UBorder>> Fields;
 	UPROPERTY()
 	TObjectPtr<UTextBlock> DescriptionText;
 	/** The row the help line explains (INDEX_NONE: the general note). */

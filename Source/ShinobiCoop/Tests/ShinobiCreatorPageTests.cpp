@@ -13,6 +13,7 @@
 #include "Shinobi/Hero/ShinobiMutableTypes.h"
 #include "Shinobi/UI/ShinobiCreatorPage.h"
 #include "Shinobi/UI/ShinobiMenuStage.h"
+#include "Shinobi/UI/ShinobiDropdown.h"
 #include "Shinobi/UI/ShinobiMenuWidgets.h"
 #include "Tests/AutomationCommon.h"
 
@@ -375,11 +376,16 @@ namespace
 		return false;
 	}
 
-	/** Clicks the ">" of the row captioned Caption, then lets the page rebuild its rows. */
+	/** Picks the next option of the row captioned Caption (its dropdown: a click, then the next entry of the list; a
+	 * two-option row: its ">"), then lets the page rebuild its rows. */
 	bool CreatorTestNext(UShinobiCreatorPage& Page, const FString& Caption)
 	{
 		UShinobiIndexButton* Next = CreatorTestLast<UShinobiIndexButton>(CreatorTestRow(Page, Caption));
-		const bool bClicked = Next && Next->OnIndexClicked.ExecuteIfBound(Next->Index);
+		bool bClicked = Next && Next->OnIndexClicked.ExecuteIfBound(Next->Index); // (headless, the dropdown's list can't open)
+		if (UShinobiDropdown* Field = Cast<UShinobiDropdown>(Next); Field && Field->GetOptions().Num() > 0)
+		{
+			Field->Choose((Field->GetSelected() + 1) % Field->GetOptions().Num());
+		}
 		Page.TickEdits(0.f);
 		return bClicked;
 	}
@@ -397,6 +403,27 @@ namespace
 		Bench.Page->ShowCategory(UShinobiCreatorPage::ECategory::BodySkin);
 		Bench.Page->TickEdits(0.f);
 	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCreatorDropdownRowsTest, "ShinobiCoop.UI.CreatorManyOptionsAreDropdowns", ShinobiTestFlags)
+bool FShinobiCreatorDropdownRowsTest::RunTest(const FString& Parameters)
+{
+	// Build has four options: one pick from a list. Sex has two: it stays "< value >".
+	FCreatorBench Bench;
+	CreatorTestBodySkin(Bench);
+	UShinobiDropdown* Build = Cast<UShinobiDropdown>(CreatorTestLast<UShinobiIndexButton>(CreatorTestRow(*Bench.Page, TEXT("Build"))));
+	if (TestNotNull(TEXT("Build is a dropdown"), Build))
+	{
+		TestEqual(TEXT("every build listed"), Build->GetOptions().Num(), 4);
+		Build->Choose(0);
+		Bench.Page->TickEdits(0.f);
+		TestTrue(TEXT("picking Slim straight from the list"), Bench.Page->GetLook().Build == EShinobiBuild::Under);
+	}
+	Bench.Page->ShowCategory(UShinobiCreatorPage::ECategory::Character);
+	Bench.Page->TickEdits(0.f);
+	UShinobiIndexButton* Sex = CreatorTestLast<UShinobiIndexButton>(CreatorTestRow(*Bench.Page, TEXT("Sex")));
+	TestTrue(TEXT("Sex keeps its arrows"), Sex && !Sex->IsA<UShinobiDropdown>());
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCreatorBuildPickersTest, "ShinobiCoop.UI.CreatorBuildPickers", ShinobiTestFlags)

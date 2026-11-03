@@ -85,6 +85,25 @@ void ShinobiMenuStyle::StyleButton(UButton& Button, bool bPrimary, const FMargin
 	}
 }
 
+void ShinobiMenuStyle::StyleListItem(UButton& Button, bool bLit)
+{
+	const FMargin Padding(12.f, 7.f);
+	const FSlateBrush Hot = MenuStyleBox(Accent.CopyWithNewOpacity(0.35f), FLinearColor(0.f, 0.f, 0.f, 0.f), 0.f);
+	FButtonStyle Style;
+	Style.SetNormal(bLit ? Hot : MenuStyleBox(FLinearColor(0.f, 0.f, 0.f, 0.f), FLinearColor(0.f, 0.f, 0.f, 0.f), 0.f));
+	Style.SetHovered(Hot);
+	Style.SetPressed(MenuStyleBox(Accent.CopyWithNewOpacity(0.55f), FLinearColor(0.f, 0.f, 0.f, 0.f), 0.f));
+	Style.SetDisabled(Style.Normal);
+	Style.SetNormalPadding(Padding);
+	Style.SetPressedPadding(Padding);
+	Button.SetStyle(Style);
+}
+
+FSlateBrush ShinobiMenuStyle::FieldBrush(bool bLit)
+{
+	return MenuStyleBox(FLinearColor(0.f, 0.f, 0.f, 0.45f), bLit ? Accent : FLinearColor(1.f, 1.f, 1.f, 0.16f), 1.f);
+}
+
 void ShinobiMenuStyle::TickFocus(UWidgetTree& Tree)
 {
 	Tree.ForEachWidget([](UWidget* Widget)

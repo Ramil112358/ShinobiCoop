@@ -42,6 +42,7 @@
 #include "Shinobi/Hero/ShinobiCreatorCatalog.h"
 #include "Shinobi/UI/ShinobiSettings.h"
 #include "Shinobi/UI/ShinobiHUDWidget.h"
+#include "Shinobi/UI/ShinobiDropdown.h"
 #include "Shinobi/UI/ShinobiPauseMenuWidget.h"
 #include "EnhancedInputComponent.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
@@ -298,6 +299,7 @@ void AShinobiPlayerController::ClosePauseMenu()
 	{
 		return;
 	}
+	UShinobiDropdownList::CloseOpen(); // (a settings list left open would outlive its menu)
 	PauseMenu->RemoveFromParent();
 	PauseMenu = nullptr;
 	if (Hud)

@@ -26,6 +26,14 @@ namespace ShinobiSettings
 	/** Moves Row Delta values on (negative: back), wrapping, then applies and saves. World is used by the outline toggle
 	 * and the in-game character switch. */
 	SHINOBICOOP_API void Step(ERow Row, UWorld* World, int32 Delta);
+	/** Every value Row can take, in order ("Low" ... "Cinematic", "Off" / "On"). */
+	SHINOBICOOP_API TArray<FString> RowOptions(ERow Row);
+	/** Index into RowOptions of Row's current value; INDEX_NONE when it's none of them (Custom quality). */
+	SHINOBICOOP_API int32 RowIndex(ERow Row);
+	/** Sets Row to RowOptions(Row)[Index] (out of range: nothing), then applies and saves. */
+	SHINOBICOOP_API void SetRowIndex(ERow Row, UWorld* World, int32 Index);
+	/** More than two options: the settings panel picks from a dropdown list; On / Off rows step. */
+	SHINOBICOOP_API bool UsesDropdown(ERow Row);
 	/** Step(Row, World, +1). */
 	SHINOBICOOP_API void Cycle(ERow Row, UWorld* World);
 

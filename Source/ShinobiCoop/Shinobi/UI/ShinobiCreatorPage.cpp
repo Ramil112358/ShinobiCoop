@@ -27,6 +27,7 @@
 #include "Shinobi/UI/ShinobiMenuArt.h"
 #include "Shinobi/UI/ShinobiMenuStage.h"
 #include "Shinobi/UI/ShinobiMenuStyle.h"
+#include "Shinobi/UI/ShinobiDropdown.h"
 #include "Shinobi/UI/ShinobiMenuWidgets.h"
 #include "Shinobi/UI/ShinobiSettings.h"
 
@@ -448,6 +449,25 @@ void UShinobiCreatorPage::AddChoice(const FString& Label, const TArray<FString>&
 	Caption->SetMinDesiredWidth(150.f);
 	Row->AddChildToHorizontalBox(Caption)->SetVerticalAlignment(VAlign_Center);
 	const int32 Shown = Names.IsValidIndex(Current) ? Current : 0;
+	if (Names.Num() > 2)
+	{
+		// Many options (heads, hair, make-up...): a dropdown, so any of them is one pick away.
+		UShinobiDropdown* Field = WidgetTree->ConstructWidget<UShinobiDropdown>(UShinobiDropdown::StaticClass());
+		const TWeakObjectPtr<UShinobiDropdown> WeakField = Field;
+		Field->OnIndexClicked = FShinobiIndexClicked::CreateWeakLambda(this, [this, WeakField](int32)
+		{
+			if (UShinobiDropdown* Opened = WeakField.Get())
+			{
+				ClickedPlace = RowControls().IndexOfByKey(Opened); // (a pick rebuilds the rows: focus comes back to this place)
+				Opened->OpenList();
+			}
+		});
+		Field->OnPicked = FShinobiIndexClicked::CreateWeakLambda(this, [this, Pick](int32 Picked) { Pick(Picked); bRowsPending = true; });
+		Field->SetOptions(Names, Shown);
+		Field->Build(*WidgetTree, 14, 236.f);
+		Row->AddChildToHorizontalBox(Field)->SetVerticalAlignment(VAlign_Center);
+		return;
+	}
 	for (const int32 Direction : {-1, +1})
 	{
 		const int32 Next = ((Shown + Direction) % Names.Num() + Names.Num()) % Names.Num();

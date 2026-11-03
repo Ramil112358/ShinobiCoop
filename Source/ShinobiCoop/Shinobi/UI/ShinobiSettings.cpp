@@ -47,20 +47,6 @@ namespace
 		return Num > 0 ? ((Index % Num) + Num) % Num : 0;
 	}
 
-	/** Index of the value Delta steps from Current in Values (the first one, or going back the last, if Current isn't in
-	 * the list). */
-	template <typename T, int32 N>
-	int32 StepIndex(const T (&Values)[N], T Current, int32 Delta)
-	{
-		for (int32 Index = 0; Index < N; ++Index)
-		{
-			if (FMath::IsNearlyEqual(double(Values[Index]), double(Current), 0.5))
-			{
-				return SettingsWrap(Index + Delta, N);
-			}
-		}
-		return Delta >= 0 ? 0 : N - 1;
-	}
 }
 
 FString ShinobiSettings::GetSavedCharacter()
@@ -261,15 +247,150 @@ void ShinobiSettings::Cycle(ERow Row, UWorld* World)
 	Step(Row, World, 1);
 }
 
+TArray<FString> ShinobiSettings::RowOptions(ERow Row)
+{
+	TArray<FString> Options;
+	switch (Row)
+	{
+	case ERow::Character:
+		for (const FShinobiRosterEntry& Entry : AShinobiPlayerCharacter::Roster)
+		{
+			Options.Add(Entry.Name);
+		}
+		break;
+	case ERow::Face:
+	{
+		const int32 Body = AShinobiPlayerCharacter::FindRosterIndex(GetSavedCharacter());
+		for (int32 Index = 0; Index < AShinobiPlayerCharacter::NumFaces(Body); ++Index)
+		{
+			const FShinobiFaceEntry* Face = AShinobiPlayerCharacter::FindFace(Body, Index);
+			Options.Add(Face ? Face->Name : TEXT("Default"));
+		}
+		break;
+	}
+	case ERow::Outfit:
+		for (const FShinobiOutfitEntry& Entry : AShinobiPlayerCharacter::Outfits)
+		{
+			Options.Add(Entry.Name);
+		}
+		break;
+	case ERow::Quality:
+		for (const TCHAR* Name : QualityNames)
+		{
+			Options.Add(Name);
+		}
+		break;
+	case ERow::RenderScale:
+		for (const float Scale : RenderScales)
+		{
+			Options.Add(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(Scale)));
+		}
+		break;
+	case ERow::WindowMode:
+		Options = { TEXT("Fullscreen"), TEXT("Borderless"), TEXT("Windowed") }; // (WindowModes' order)
+		break;
+	case ERow::FrameCap:
+		for (const float Cap : FrameCaps)
+		{
+			Options.Add(Cap <= 0.f ? FString(TEXT("Unlimited")) : FString::Printf(TEXT("%d FPS"), FMath::RoundToInt(Cap)));
+		}
+		break;
+	case ERow::VSync:
+	case ERow::Outline:
+		Options = { TEXT("Off"), TEXT("On") };
+		break;
+	case ERow::Snow:
+		for (const TCHAR* Name : SnowNames)
+		{
+			Options.Add(Name);
+		}
+		break;
+	default:
+		break;
+	}
+	return Options;
+}
+
+int32 ShinobiSettings::RowIndex(ERow Row)
+{
+	UGameUserSettings* S = Settings();
+	const auto Find = [](const auto& Values, auto Current)
+	{
+		for (int32 Index = 0; Index < int32(UE_ARRAY_COUNT(Values)); ++Index)
+		{
+			if (FMath::IsNearlyEqual(double(Values[Index]), double(Current), 0.5))
+			{
+				return Index;
+			}
+		}
+		return int32(INDEX_NONE);
+	};
+	switch (Row)
+	{
+	case ERow::Character:
+		return AShinobiPlayerCharacter::FindRosterIndex(GetSavedCharacter());
+	case ERow::Face:
+		return FMath::Max(0, AShinobiPlayerCharacter::FindFaceIndex(AShinobiPlayerCharacter::FindRosterIndex(GetSavedCharacter()), GetSavedFace()));
+	case ERow::Outfit:
+		return AShinobiPlayerCharacter::FindOutfitIndex(GetSavedOutfit());
+	case ERow::Quality:
+	{
+		const int32 Level = S->GetOverallScalabilityLevel();
+		return Level >= 0 && Level < UE_ARRAY_COUNT(QualityNames) ? Level : INDEX_NONE; // Custom: none of them
+	}
+	case ERow::RenderScale:
+		return Find(RenderScales, GetRenderScale());
+	case ERow::WindowMode:
+		for (int32 Index = 0; Index < UE_ARRAY_COUNT(WindowModes); ++Index)
+		{
+			if (WindowModes[Index] == S->GetFullscreenMode())
+			{
+				return Index;
+			}
+		}
+		return INDEX_NONE;
+	case ERow::FrameCap:
+		return Find(FrameCaps, S->GetFrameRateLimit());
+	case ERow::VSync:
+		return S->IsVSyncEnabled() ? 1 : 0;
+	case ERow::Outline:
+		return ShinobiLook::IsOutlineEnabled() ? 1 : 0;
+	case ERow::Snow:
+		return int32(GetSavedSnow());
+	default:
+		return INDEX_NONE;
+	}
+}
+
+bool ShinobiSettings::UsesDropdown(ERow Row)
+{
+	return RowOptions(Row).Num() > 2;
+}
+
 void ShinobiSettings::Step(ERow Row, UWorld* World, int32 Delta)
 {
+	const int32 Count = RowOptions(Row).Num();
+	if (Count < 2)
+	{
+		return; // nothing to change to (a character with one face)
+	}
+	const int32 Current = RowIndex(Row);
+	// A value off the list (Custom quality, a render scale set elsewhere) steps to the first one, or back to the last.
+	SetRowIndex(Row, World, Current == INDEX_NONE ? (Delta >= 0 ? 0 : Count - 1) : SettingsWrap(Current + Delta, Count));
+}
+
+void ShinobiSettings::SetRowIndex(ERow Row, UWorld* World, int32 Index)
+{
+	if (!RowOptions(Row).IsValidIndex(Index))
+	{
+		return;
+	}
 	UGameUserSettings* S = Settings();
 	switch (Row)
 	{
 	case ERow::Character:
 	{
-		const int32 Next = SettingsWrap(AShinobiPlayerCharacter::FindRosterIndex(GetSavedCharacter()) + Delta, UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster));
-		const FString Picked = AShinobiPlayerCharacter::Roster[Next].Name;
+		const FString Picked = AShinobiPlayerCharacter::Roster[Index].Name;
 		GConfig->SetString(ConfigSection, CharacterKey, *Picked, GGameUserSettingsIni);
 		GConfig->Flush(false, GGameUserSettingsIni);
 		// In a game (not the main menu), switch now too.
@@ -281,10 +402,7 @@ void ShinobiSettings::Step(ERow Row, UWorld* World, int32 Delta)
 	}
 	case ERow::Face:
 	{
-		const int32 Body = AShinobiPlayerCharacter::FindRosterIndex(GetSavedCharacter());
-		const int32 Faces = AShinobiPlayerCharacter::NumFaces(Body);
-		const int32 Next = SettingsWrap(FMath::Max(0, AShinobiPlayerCharacter::FindFaceIndex(Body, GetSavedFace())) + Delta, Faces);
-		const FShinobiFaceEntry* Face = Faces > 1 ? AShinobiPlayerCharacter::FindFace(Body, Next) : nullptr;
+		const FShinobiFaceEntry* Face = AShinobiPlayerCharacter::FindFace(AShinobiPlayerCharacter::FindRosterIndex(GetSavedCharacter()), Index);
 		if (!Face)
 		{
 			return; // one face only
@@ -298,8 +416,7 @@ void ShinobiSettings::Step(ERow Row, UWorld* World, int32 Delta)
 	}
 	case ERow::Outfit:
 	{
-		const int32 Next = SettingsWrap(AShinobiPlayerCharacter::FindOutfitIndex(GetSavedOutfit()) + Delta, UE_ARRAY_COUNT(AShinobiPlayerCharacter::Outfits));
-		const FString Picked = AShinobiPlayerCharacter::Outfits[Next].Name;
+		const FString Picked = AShinobiPlayerCharacter::Outfits[Index].Name;
 		GConfig->SetString(ConfigSection, OutfitKey, *Picked, GGameUserSettingsIni);
 		GConfig->Flush(false, GGameUserSettingsIni);
 		if (AShinobiPlayerController* PC = World ? World->GetFirstPlayerController<AShinobiPlayerController>() : nullptr)
@@ -309,38 +426,30 @@ void ShinobiSettings::Step(ERow Row, UWorld* World, int32 Delta)
 		return;
 	}
 	case ERow::Quality:
-	{
-		const int32 Level = S->GetOverallScalabilityLevel(); // -1: Custom
-		const int32 Count = UE_ARRAY_COUNT(QualityNames);
-		S->SetOverallScalabilityLevel(Level < 0 ? (Delta >= 0 ? 0 : Count - 1) : SettingsWrap(Level + Delta, Count));
+		S->SetOverallScalabilityLevel(Index);
 		break;
-	}
 	case ERow::RenderScale:
-		SetRenderScale(RenderScales[StepIndex(RenderScales, GetRenderScale(), Delta)]);
+		SetRenderScale(RenderScales[Index]);
 		break;
 	case ERow::WindowMode:
-	{
-		int32 Next = Delta >= 0 ? 0 : UE_ARRAY_COUNT(WindowModes) - 1;
-		for (int32 Index = 0; Index < UE_ARRAY_COUNT(WindowModes); ++Index)
-		{
-			Next = WindowModes[Index] == S->GetFullscreenMode() ? SettingsWrap(Index + Delta, UE_ARRAY_COUNT(WindowModes)) : Next;
-		}
-		S->SetFullscreenMode(WindowModes[Next]);
+		S->SetFullscreenMode(WindowModes[Index]);
 		S->ApplyResolutionSettings(false);
 		break;
-	}
 	case ERow::FrameCap:
-		S->SetFrameRateLimit(FrameCaps[StepIndex(FrameCaps, S->GetFrameRateLimit(), Delta)]);
+		S->SetFrameRateLimit(FrameCaps[Index]);
 		break;
 	case ERow::VSync:
-		S->SetVSyncEnabled(!S->IsVSyncEnabled());
+		S->SetVSyncEnabled(Index == 1);
 		break;
 	case ERow::Outline:
-		ShinobiLook::SetOutlineEnabled(World, !ShinobiLook::IsOutlineEnabled());
+		if ((Index == 1) != ShinobiLook::IsOutlineEnabled())
+		{
+			ShinobiLook::SetOutlineEnabled(World, Index == 1);
+		}
 		return;
 	case ERow::Snow:
 	{
-		const EShinobiSnow Next = EShinobiSnow(SettingsWrap(int32(GetSavedSnow()) + Delta, UE_ARRAY_COUNT(SnowNames)));
+		const EShinobiSnow Next = EShinobiSnow(Index);
 		GConfig->SetInt(ConfigSection, SnowKey, int32(Next), GGameUserSettingsIni);
 		GConfig->Flush(false, GGameUserSettingsIni);
 		if (AShinobiGameState* Session = World ? World->GetGameState<AShinobiGameState>() : nullptr)

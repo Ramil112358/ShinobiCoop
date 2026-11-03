@@ -9,8 +9,8 @@ class UShinobiIndexButton;
 class UTextBlock;
 
 /**
- * The main menu's SHINOBI tab: a portrait card per roster character along the bottom, the pick's name and an outfit
- * selector on the right. Every change is saved (ShinobiSettings) and worn by the stage at once.
+ * The main menu's SHINOBI tab: a portrait card per roster character along the bottom, the pick's name, a face stepper
+ * (characters with several) and an outfit dropdown on the right. Every change is saved (ShinobiSettings) and worn by the stage at once.
  */
 UCLASS()
 class SHINOBICOOP_API UShinobiRosterPage : public UUserWidget
@@ -23,8 +23,12 @@ public:
 
 	/** Plays Roster[RosterIndex] from now on. */
 	void Pick(int32 RosterIndex);
-	/** The next (+1) or previous (-1) outfit, wrapping. */
+	/** The next (+1) or previous (-1) outfit, wrapping (LT / RT). */
 	void StepOutfit(int32 Direction);
+	/** Wears Outfits[OutfitIndex] from now on (the OUTFIT dropdown). */
+	void PickOutfit(int32 OutfitIndex);
+	/** The OUTFIT dropdown. */
+	class UShinobiDropdown* GetOutfitField() const { return OutfitField; }
 	/** The picked character's next (+1) or previous (-1) face, wrapping (a character with one face keeps it). */
 	void StepFace(int32 Direction);
 	/** The picked character's card. */
@@ -45,7 +49,7 @@ private:
 	UPROPERTY()
 	TObjectPtr<UTextBlock> NameText;
 	UPROPERTY()
-	TObjectPtr<UTextBlock> OutfitText;
+	TObjectPtr<class UShinobiDropdown> OutfitField;
 	/** The FACE label and row: shown for a character with several faces. */
 	UPROPERTY()
 	TArray<TObjectPtr<UWidget>> FaceRow;

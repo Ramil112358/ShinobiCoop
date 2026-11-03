@@ -27,6 +27,10 @@ namespace ShinobiMenuStyle
 	SHINOBICOOP_API UButton* Button(UWidgetTree& Tree, const FText& Label, int32 Size, bool bPrimary = false);
 	/** Gives an existing button (and its text child, if any) the Button look. */
 	SHINOBICOOP_API void StyleButton(UButton& Button, bool bPrimary, const FMargin& Padding = FMargin(18.f, 8.f));
+	/** A flat (unsheared) row of a dropdown's option list; lit = focused (hover lights it too). */
+	SHINOBICOOP_API void StyleListItem(UButton& Button, bool bLit);
+	/** A dropdown field's frame: a darker inset box with a faint outline, lit like a button when hovered. */
+	SHINOBICOOP_API FSlateBrush FieldBrush(bool bLit);
 	/** Call every tick: lights the focused styled button in Tree (FButtonStyle has no focused state). */
 	SHINOBICOOP_API void TickFocus(UWidgetTree& Tree);
 	/** Translucent dark panel with a faint accent outline. */
