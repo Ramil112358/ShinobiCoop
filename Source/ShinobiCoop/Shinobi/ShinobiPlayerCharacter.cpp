@@ -341,6 +341,9 @@ bool AShinobiPlayerCharacter::DressOutfit(USkeletalMeshComponent& BodyMesh, USke
 	// The outfit's bones take the body's component-space pose, so a body whose skeleton sits elsewhere in its FBX than the
 	// outfit's would carry the outfit off by the difference: shift it back by the two hips' reference-pose offset.
 	Outfit.SetRelativeLocation(RefHipsLocation(Cloth) - RefHipsLocation(Body));
+	// Its bounds are the body's (a whole-body box, UShinobiBodyComponent::CalcBounds), not the body's physics asset's bodies
+	// on its own, which can miss the limbs and let occlusion culling flicker it into a ghost.
+	Outfit.bUseBoundsFromLeaderPoseComponent = true;
 	Outfit.SetLeaderPoseComponent(&BodyMesh);
 	Outfit.ForceClothNextUpdateTeleportAndReset();
 	return true;

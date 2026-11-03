@@ -72,6 +72,13 @@ public:
 	/** Hides the driver (the mesh this is attached to) and keeps it animating unseen. */
 	void HideDriver();
 
+	/** The engine's bounds (the physics asset's bodies in the current pose) grown to every bone plus SkinPaddingCm, so a
+	 * physics asset that misses the limbs or head can't leave the bounds inside the body (see the definition). */
+	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
+
+	/** How far the skin (and hair) reaches past the bones it hangs on, in the component's units: CalcBounds' margin. */
+	static constexpr float SkinPaddingCm = 20.f;
+
 	/** A MetaHuman's face, grooms and LODSync worn with this body (WearMetaHumanParts); empty otherwise. */
 	const TArray<TObjectPtr<UActorComponent>>& GetMetaHumanParts() const { return MetaHumanParts; }
 	/** Skin Tone's multiplier: ShinobiMutable::SkinToneDark at 0, white at 128, SkinToneLight at 255, linear between. */
