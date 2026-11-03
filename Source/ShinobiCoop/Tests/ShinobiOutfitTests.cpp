@@ -283,7 +283,7 @@ bool FShinobiOutfitCharacterMaterialTest::RunTest(const FString& Parameters)
 	{
 		return true;
 	}
-	TestTrue(TEXT("M_Character is marked for clothing (the outfits' cloth)"), Material->bUsedWithClothing);
+	TestTrue(TEXT("M_Character is marked for clothing (the outfits' cloth)"), Material->GetUsageByFlag(MATUSAGE_Clothing));
 	EMaterialSamplerType HideSampler = SAMPLERTYPE_MAX;
 	for (const UMaterialExpression* Expression : Material->GetExpressions())
 	{

@@ -379,7 +379,7 @@ void AShinobiPlayerCharacter::UpdateOutfitCloth()
 		{
 			for (const UClothingAssetBase* Cloth : OutfitMesh->GetSkeletalMeshAsset()->GetMeshClothingAssets())
 			{
-				if (UChaosClothingInteractor* Chaos = Cloth ? Cast<UChaosClothingInteractor>(Interactor->GetClothingInteractor(Cloth->GetName())) : nullptr)
+				if (UChaosClothingInteractor* Chaos = Cloth ? Cast<UChaosClothingInteractor>(Interactor->GetClothingInteractor(Cloth->GetFName())) : nullptr)
 				{
 					Chaos->SetGravity(1.f, bOverride, Down * FMath::Abs(GetCharacterMovement()->GetGravityZ()));
 				}
