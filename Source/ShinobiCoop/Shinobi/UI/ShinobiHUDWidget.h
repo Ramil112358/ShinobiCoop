@@ -182,6 +182,9 @@ private:
 	uint8 ShownPortrait = 254;
 	/** The made look PortraitImage shows while ShownPortrait is CustomCharacter. */
 	FShinobiAppearance ShownPortraitLook;
+	/** That made character's name (UShinobiCharacterSave), shown over the bars like a roster character's; empty when this
+	 * machine has no character wearing it (a look code). */
+	FString ShownMadeName;
 
 	UPROPERTY()
 	TObjectPtr<UProgressBar> HealthBar;

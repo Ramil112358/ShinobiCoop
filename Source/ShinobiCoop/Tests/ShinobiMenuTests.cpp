@@ -728,6 +728,59 @@ bool FShinobiMadePortraitTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCreatorSavePortraitTest, "ShinobiCoop.UI.CreatorSaveTakesPortraitFirst", ShinobiTestFlags)
+bool FShinobiCreatorSavePortraitTest::RunTest(const FString& Parameters)
+{
+	// SAVE & PLAY has the stage film the portrait before the character is saved and the strip comes back; the menu can't
+	// leave for PLAY meanwhile.
+	const FMenuTestSaveGuard Guard;
+	{
+		UShinobiCharacterSave* Save = UShinobiCharacterSave::Load(); // no made characters yet
+		Save->Slots.Reset();
+		Save->Active = INDEX_NONE;
+		Save->Save();
+	}
+	FShinobiTestWorld W;
+	AShinobiMenuStage* Stage = W.Spawn<AShinobiMenuStage>();
+	UShinobiMainMenuWidget* Menu = CreateWidget<UShinobiMainMenuWidget>(W.World, UShinobiMainMenuWidget::StaticClass());
+	Menu->TakeWidget();
+	Menu->SelectTab(EShinobiMenuTab::Shinobi);
+	Menu->OpenCreator(0);
+	UShinobiCreatorPage* Creator = Menu->GetCreatorPage();
+	Creator->SaveAndPlay();
+	if (!TestTrue(TEXT("it waits for the portrait"), Creator->IsSaving()))
+	{
+		return false;
+	}
+	TestTrue(TEXT("the stage films the look being saved"), Stage->IsPortraitPending() && Stage->GetPortraitLook() == Creator->GetLook());
+	TestTrue(TEXT("nothing is saved yet"), UShinobiCharacterSave::Load()->GetMadeSlots().IsEmpty());
+	Menu->SelectTab(EShinobiMenuTab::Play);
+	TestTrue(TEXT("no leaving for PLAY meanwhile"), Menu->IsCreating() && Menu->GetTab() == EShinobiMenuTab::Shinobi);
+	Menu->CloseCreator();
+	TestTrue(TEXT("nor back to the strip"), Menu->IsCreating());
+
+	const TArray<uint8> Png = MenuTestPortraitPng();
+	Creator->FinishSave(TArray<uint8>(Png)); // (as the stage hands it over)
+	const UShinobiCharacterSave* Saved = UShinobiCharacterSave::Load();
+	TestTrue(TEXT("saved with its portrait"), Saved->Slots.IsValidIndex(0) && Saved->Slots[0].Portrait == Png);
+	TestEqual(TEXT("and played"), Saved->Active, 0);
+	TestFalse(TEXT("no longer waiting"), Creator->IsSaving());
+	TestFalse(TEXT("then back to the strip"), Menu->IsCreating());
+	TestFalse(TEXT("the stage's request is done"), Stage->IsPortraitPending());
+	TestTrue(TEXT("its card shows the portrait at once"), Cast<UTexture2D>(MenuTestCardPicture(Menu->GetRosterPage()->GetMadeCard(0))) != nullptr);
+
+	// No picture to be had: it saves without one once the wait runs out (the strip films it later).
+	Menu->OpenCreator(1);
+	Creator->SaveAndPlay();
+	TestTrue(TEXT("a second character waits too"), Creator->IsSaving());
+	Creator->TickSave(UShinobiCreatorPage::SaveTimeoutSeconds);
+	TestFalse(TEXT("the wait runs out"), Creator->IsSaving());
+	Saved = UShinobiCharacterSave::Load();
+	TestTrue(TEXT("saved without a portrait"), Saved->Slots.IsValidIndex(1) && !Saved->Slots[1].Name.IsEmpty() && Saved->Slots[1].Portrait.IsEmpty());
+	TestFalse(TEXT("and back to the strip"), Menu->IsCreating());
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiStagePortraitRequestTest, "ShinobiCoop.UI.MenuStagePortraitRequest", ShinobiTestFlags)
 bool FShinobiStagePortraitRequestTest::RunTest(const FString& Parameters)
 {

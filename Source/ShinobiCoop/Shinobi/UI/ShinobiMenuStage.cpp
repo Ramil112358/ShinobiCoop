@@ -25,8 +25,11 @@ namespace
 	constexpr float MenuStagePortraitFOV = 24.f;
 	/** Seconds a requested look stands ready before its picture is taken; the last MenuStagePortraitWarmup of them are
 	 * filmed every frame so exposure, temporal AA, streamed textures and grooms settle in the capture too. */
-	constexpr float MenuStagePortraitSettle = 1.5f;
+	constexpr float MenuStagePortraitSettle = 1.f;
 	constexpr float MenuStagePortraitWarmup = 0.5f;
+	/** Seconds a requested look may be neither worn nor building before the request gives up (it was never asked for, or
+	 * the creator catalog isn't there). */
+	constexpr float MenuStagePortraitGiveUp = 2.f;
 }
 
 AShinobiMenuStage::AShinobiMenuStage()
@@ -179,7 +182,7 @@ void AShinobiMenuStage::RequestPortrait(const FShinobiAppearance& Look, TFunctio
 {
 	if (!(bPortraitPending && PortraitLook == Look))
 	{
-		PortraitReadyTime = 0.f; // (the same look asked again keeps waiting where it got to)
+		PortraitReadyTime = PortraitStuckTime = 0.f; // (the same look asked again keeps waiting where it got to)
 	}
 	bPortraitPending = true;
 	PortraitLook = Look;
@@ -190,7 +193,7 @@ void AShinobiMenuStage::CancelPortrait()
 {
 	bPortraitPending = false;
 	PortraitDone = nullptr;
-	PortraitReadyTime = 0.f;
+	PortraitReadyTime = PortraitStuckTime = 0.f;
 }
 
 void AShinobiMenuStage::PlacePortraitCapture()
@@ -237,9 +240,22 @@ void AShinobiMenuStage::TickPortrait(float DeltaSeconds)
 	{
 		return;
 	}
-	// Ready: the look is on (built, no live edit since), in the menu's light (the roster's portraits are), not the studio's.
-	const bool bReady = !bInStudio && !Body->IsMutableBuildPending() && Body->GetAppearance() == PortraitLook && Body->GetSkeletalMeshAsset();
+	// Ready: the look is on (built, no live edit since) and the character has turned to face front.
+	const bool bBuilding = Body->IsMutableBuildPending();
+	const bool bWorn = !bBuilding && Body->GetAppearance() == PortraitLook && Body->GetSkeletalMeshAsset();
+	const bool bReady = bWorn && FMath::Abs(Yaw - TargetYaw) < 1.f;
 	PortraitReadyTime = bReady ? PortraitReadyTime + DeltaSeconds : 0.f;
+	PortraitStuckTime = bWorn || bBuilding ? 0.f : PortraitStuckTime + DeltaSeconds;
+	if (PortraitStuckTime >= MenuStagePortraitGiveUp)
+	{
+		TFunction<void(TArray<uint8>&&)> Done = MoveTemp(PortraitDone);
+		CancelPortrait();
+		if (Done)
+		{
+			Done(TArray<uint8>()); // (no picture: the look isn't coming)
+		}
+		return;
+	}
 	if (PortraitReadyTime < MenuStagePortraitSettle - MenuStagePortraitWarmup)
 	{
 		return;
@@ -263,9 +279,9 @@ void AShinobiMenuStage::TickPortrait(float DeltaSeconds)
 	TArray<uint8> Png = ReadPortrait();
 	TFunction<void(TArray<uint8>&&)> Done = MoveTemp(PortraitDone);
 	CancelPortrait();
-	if (Done && !Png.IsEmpty())
+	if (Done)
 	{
-		Done(MoveTemp(Png));
+		Done(MoveTemp(Png)); // (empty when it couldn't be read)
 	}
 }
 

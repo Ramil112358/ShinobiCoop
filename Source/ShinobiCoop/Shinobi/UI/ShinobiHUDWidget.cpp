@@ -596,7 +596,11 @@ void UShinobiHUDWidget::UpdatePortrait(const AShinobiPlayerCharacter* Player)
 	if (bMade)
 	{
 		ShownPortraitLook = Player->GetAppearance();
-		const FShinobiCharacterSlot* Slot = UShinobiCharacterSave::Load()->FindSlot(ShownPortraitLook);
+		// The saved character wearing it; else the one played (the look came back from the server a little different).
+		const UShinobiCharacterSave* Made = UShinobiCharacterSave::Load();
+		const FShinobiCharacterSlot* Slot = Made->FindSlot(ShownPortraitLook);
+		Slot = Slot ? Slot : Made->GetActiveLook() ? &Made->Slots[Made->Active] : nullptr;
+		ShownMadeName = Slot ? Slot->Name : FString();
 		Art = Slot ? ShinobiMenuArt::MadePortrait(*Slot) : nullptr;
 		HeadV = ShinobiMenuArt::MadePortraitFaceV;
 	}
@@ -645,9 +649,12 @@ void UShinobiHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	UpdatePortrait(Player);
 	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	const APlayerState* Me = GetOwningPlayerState();
-	// The character's name; a creator-made one has none, so it shows the player's.
+	// The character's name: a roster one's, or the made one's (UpdatePortrait looked it up); a look with no saved
+	// character behind it (a look code) shows the player's.
 	const bool bRoster = Player && Player->GetCharacterIndex() < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster);
+	const bool bMade = Player && Player->GetCharacterIndex() == AShinobiPlayerCharacter::CustomCharacter && !ShownMadeName.IsEmpty();
 	NameText->SetText(bRoster ? FText::FromString(AShinobiPlayerCharacter::Roster[Player->GetCharacterIndex()].Name)
+		: bMade ? FText::FromString(ShownMadeName)
 		: Me ? FText::FromString(Me->GetPlayerName()) : FText::GetEmpty());
 
 	const float HealthRatio = Stats->GetHealth() / FMath::Max(Stats->GetMaxHealth(), 1.f);

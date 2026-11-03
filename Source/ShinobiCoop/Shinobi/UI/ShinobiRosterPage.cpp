@@ -456,6 +456,10 @@ void UShinobiRosterPage::RequestMadePortrait(AShinobiMenuStage& Shown, const FSh
 {
 	Shown.RequestPortrait(Look, [WeakThis = TWeakObjectPtr<UShinobiRosterPage>(this), Look](TArray<uint8>&& Png)
 	{
+		if (Png.IsEmpty())
+		{
+			return; // (none to be had: asked again next time it's shown)
+		}
 		// Every made character wearing that look gets it (the slots may have changed while it was filmed).
 		UShinobiCharacterSave* Made = UShinobiCharacterSave::Load();
 		bool bChanged = false;

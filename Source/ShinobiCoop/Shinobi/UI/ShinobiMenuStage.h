@@ -39,9 +39,11 @@ public:
 	void FramePortrait();
 	/**
 	 * Films a made character's portrait off screen (the menu's own view doesn't move): head and shoulders like the roster's
-	 * (FramePortrait's lens, the face at ShinobiMenuArt::MadePortraitFaceV), without the outfit, against the menu's backdrop.
-	 * It waits until Look is worn (built, with no live edit since) and the stage is out of the studio, lets it settle, then
-	 * hands Done the picture as a PNG. Showing another character, another request or CancelPortrait drops it.
+	 * (FramePortrait's lens, the face at ShinobiMenuArt::MadePortraitFaceV), from the front, without the outfit, against
+	 * whatever stands behind (the studio in the creator, else the menu's backdrop). It waits until Look is worn (built, with
+	 * no live edit since) and the character has turned to face front, lets it settle, then hands Done the picture as a PNG,
+	 * or an empty one when it can't be had (the look isn't being built, the picture can't be read). Showing another
+	 * character, another request or CancelPortrait drops it without calling Done.
 	 */
 	void RequestPortrait(const FShinobiAppearance& Look, TFunction<void(TArray<uint8>&&)> Done);
 	void CancelPortrait();
@@ -131,6 +133,8 @@ private:
 	TFunction<void(TArray<uint8>&&)> PortraitDone;
 	/** Seconds the requested look has stood ready (none: it isn't). */
 	float PortraitReadyTime = 0.f;
+	/** Seconds the requested look has been neither worn nor being built (it won't be: give up). */
+	float PortraitStuckTime = 0.f;
 	/** Where the stage stood before it went into the studio. */
 	FTransform Home;
 };
