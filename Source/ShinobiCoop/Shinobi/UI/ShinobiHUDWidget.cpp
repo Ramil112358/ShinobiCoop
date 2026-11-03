@@ -68,7 +68,6 @@ namespace
 	const FLinearColor NoChakraColor(1.f, 0.3f, 0.25f);
 	constexpr float SlotSize = 56.f; // 8 on the bar now (was 4 at 88)
 	constexpr float SlotBorder = 6.f; // the ornate frame art, scaled with the slot
-	constexpr float PadPageGap = 14.f; // after slot 4: the gamepad's two pages
 	constexpr float PortraitSize = 124.f;
 	constexpr float PipSize = 22.f;
 	constexpr float StatusSize = 30.f;
@@ -355,7 +354,7 @@ void UShinobiHUDWidget::BuildJutsuSlots(UCanvasPanel* Root)
 	for (int32 Index = 0; Index < NumJutsuSlots; ++Index)
 	{
 		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-		Row->AddChildToHorizontalBox(Column)->SetPadding(FMargin(Index == 4 ? 3.f + PadPageGap : 3.f, 0.f, 3.f, 0.f));
+		Row->AddChildToHorizontalBox(Column)->SetPadding(FMargin(3.f, 0.f, 3.f, 0.f));
 		USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 		Box->SetWidthOverride(SlotSize);
 		Box->SetHeightOverride(SlotSize);
@@ -388,7 +387,7 @@ void UShinobiHUDWidget::BuildJutsuSlots(UCanvasPanel* Root)
 
 		UTextBlock* CostText = AddLabel(Layers, 12, HAlign_Right, VAlign_Bottom, CostColor);
 
-		// The key under the slot (ShinobiKeyBindings, or A/B/X/Y on a gamepad), set each tick.
+		// The key under the slot (ShinobiKeyBindings: its key, or its controller button(s) on a gamepad), set each tick.
 		USizeBox* KeyBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 		KeyBox->SetMinDesiredWidth(22.f);
 		KeyBox->SetHeightOverride(18.f);
@@ -1143,15 +1142,11 @@ void UShinobiHUDWidget::UpdateJutsuSlots(const UAbilitySystemComponent& ASC, con
 	}
 	const AShinobiPlayerController* PC = Player ? Cast<AShinobiPlayerController>(Player->GetController()) : nullptr;
 	const bool bPad = PC && PC->IsUsingGamepad();
-	const int32 PadPage = Player ? Player->GetPadJutsuPage() : 1;
-	static const TCHAR* FaceLabels[] = { TEXT("A"), TEXT("B"), TEXT("X"), TEXT("Y") };
 	FText CastName;
 	for (int32 Index = 0; Index < NumJutsuSlots; ++Index)
 	{
 		const UShinobiJutsuAbility* Jutsu = OnPage[Index];
-		const bool bOnPadPage = Index / 4 == PadPage - 1;
-		SlotColumns[Index]->SetRenderOpacity(bPad && !bOnPadPage ? 0.5f : 1.f);
-		const FText KeyLabel = bPad ? (bOnPadPage ? FText::FromString(FaceLabels[Index % 4]) : FText::GetEmpty())
+		const FText KeyLabel = bPad ? ShinobiKeyBindings::PadLabel(ShinobiKeyBindings::GetPad(static_cast<ShinobiKeyBindings::EBindable>(Index)), true)
 			: ShinobiKeyBindings::KeyLabel(ShinobiKeyBindings::Get(static_cast<ShinobiKeyBindings::EBindable>(Index)), true);
 		if (!SlotKeyTexts[Index]->GetText().EqualTo(KeyLabel))
 		{

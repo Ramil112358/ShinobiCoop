@@ -13,6 +13,7 @@ public class ShinobiCoop : ModuleRules
 			"CoreUObject",
 			"Engine",
 			"InputCore",
+			"ApplicationCore", // IPlatformInputDeviceMapper: the menu hints follow a controller being plugged in
 			"EnhancedInput",
 			"AIModule",
 			"StateTreeModule",

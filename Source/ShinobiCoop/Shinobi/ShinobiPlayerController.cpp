@@ -195,7 +195,8 @@ void AShinobiPlayerController::SetupInputComponent()
 		Input->BindAction(UShinobiInputConfig::Get().Pause, ETriggerEvent::Started, this, &AShinobiPlayerController::TogglePauseMenu);
 		Input->BindAction(UShinobiInputConfig::Get().MapToggle, ETriggerEvent::Started, this, &AShinobiPlayerController::ToggleMap);
 		Input->BindAction(UShinobiInputConfig::Get().SkillsScreen, ETriggerEvent::Started, this, &AShinobiPlayerController::ToggleSkillsScreen);
-		Input->BindAction(UShinobiInputConfig::Get().MapZoom, ETriggerEvent::Started, this, &AShinobiPlayerController::OnMapZoom);
+		Input->BindAction(UShinobiInputConfig::Get().MapZoomIn, ETriggerEvent::Started, this, &AShinobiPlayerController::ZoomMap, 1, true);
+		Input->BindAction(UShinobiInputConfig::Get().MapZoomOut, ETriggerEvent::Started, this, &AShinobiPlayerController::ZoomMap, -1, true);
 	}
 }
 
@@ -220,18 +221,11 @@ void AShinobiPlayerController::ZoomMap(int32 Steps, bool bWrap)
 	}
 }
 
-void AShinobiPlayerController::OnMapZoom(const FInputActionValue& Value)
-{
-	const float Axis = Value.Get<float>();
-	if (!FMath::IsNearlyZero(Axis))
-	{
-		ZoomMap(Axis > 0.f ? 1 : -1, true);
-	}
-}
-
 bool AShinobiPlayerController::InputKey(const FInputKeyEventArgs& Params)
 {
-	if (Params.Event == IE_Pressed)
+	// A press picks the device; so does a real push of a stick (or a real mouse move), past the drift of an idle one.
+	const bool bMoved = Params.Key.IsAnalog() && FMath::Abs(Params.AmountDepressed) > (Params.Key.IsGamepadKey() ? 0.5f : 2.f);
+	if (Params.Event == IE_Pressed || bMoved)
 	{
 		bUsingGamepad = Params.Key.IsGamepadKey();
 	}

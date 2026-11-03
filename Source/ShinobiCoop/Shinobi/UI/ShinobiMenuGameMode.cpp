@@ -35,6 +35,13 @@ void AShinobiMenuPlayerController::BeginPlay()
 	SetInputMode(FInputModeUIOnly()); // the menu focuses its first button itself
 
 	UShinobiSessionSubsystem* Sessions = GetGameInstance()->GetSubsystem<UShinobiSessionSubsystem>();
+	if (!Sessions->IsLanMode())
+	{
+		// Steam runs the game as its test app 480 (Spacewar), whose own Steam Input layout swallows the pad: with the Steam
+		// client open, an Xbox controller does nothing until Steam Input is off for Spacewar.
+		UE_LOG(LogShinobiCoop, Display, TEXT("Running as Steam app 480 (Spacewar). If a controller does nothing: Steam > Library > "
+			"Spacewar > Properties > Controller > Disable Steam Input, then restart the game."));
+	}
 	if (FParse::Param(FCommandLine::Get(), TEXT("ShinobiAutoHost")))
 	{
 		// -ShinobiAutoHostArena=<WestEnd|Camden|Westminster|Tower> hosts that PvP arena, in -ShinobiAutoHostFormat=1v1|2v2 (1v1 if absent).

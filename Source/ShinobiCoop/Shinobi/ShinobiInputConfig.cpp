@@ -76,82 +76,47 @@ UShinobiInputConfig* UShinobiInputConfig::Build(UObject* Outer)
 	Config->CameraFreeLook = MakeAction(Config, TEXT("IA_CameraFreeLook"), EInputActionValueType::Boolean);
 	Ctx->MapKey(Config->CameraFreeLook, EKeys::RightMouseButton);
 
+	// Everything a player can rebind (ShinobiKeyBindings) starts unmapped: ApplyKeyBindings maps each action's keyboard/mouse
+	// key and controller button(s).
 	Config->Jump = MakeAction(Config, TEXT("IA_Jump"), EInputActionValueType::Boolean);
-	Ctx->MapKey(Config->Jump, EKeys::SpaceBar);
-	Ctx->MapKey(Config->Jump, EKeys::Gamepad_FaceButton_Bottom);
-
-	const auto AddAbility = [Config, Ctx](EShinobiAbilityInputID ID, FName Name, const FKey& Key, const FKey& PadKey)
+	const auto AddAbility = [Config](EShinobiAbilityInputID ID, FName Name)
 	{
-		UInputAction* Action = MakeAction(Config, Name, EInputActionValueType::Boolean);
-		Ctx->MapKey(Action, Key);
-		Ctx->MapKey(Action, PadKey);
-		Config->AbilityActions.Add(ID, Action);
+		Config->AbilityActions.Add(ID, MakeAction(Config, Name, EInputActionValueType::Boolean));
 	};
-	AddAbility(EShinobiAbilityInputID::Melee, TEXT("IA_Melee"), EKeys::LeftMouseButton, EKeys::Gamepad_FaceButton_Left);
-	AddAbility(EShinobiAbilityInputID::Dodge, TEXT("IA_Dodge"), EKeys::LeftControl, EKeys::Gamepad_FaceButton_Right);
-	AddAbility(EShinobiAbilityInputID::Sprint, TEXT("IA_Sprint"), EKeys::LeftShift, EKeys::Gamepad_LeftThumbstick);
-	AddAbility(EShinobiAbilityInputID::ChakraCharge, TEXT("IA_ChakraCharge"), EKeys::C, EKeys::Gamepad_LeftShoulder);
-	AddAbility(EShinobiAbilityInputID::Dismount, TEXT("IA_Dismount"), EKeys::X, EKeys::Gamepad_DPad_Down); // off the dragon, on any page
-	AddAbility(EShinobiAbilityInputID::Revive, TEXT("IA_Revive"), EKeys::E, EKeys::Gamepad_FaceButton_Top); // RB + Y is jutsu 4 (JutsuContext wins)
-	AddAbility(EShinobiAbilityInputID::Block, TEXT("IA_Block"), EKeys::F, EKeys::Gamepad_LeftTrigger); // hold
-
+	AddAbility(EShinobiAbilityInputID::Melee, TEXT("IA_Melee"));
+	AddAbility(EShinobiAbilityInputID::Dodge, TEXT("IA_Dodge"));
+	AddAbility(EShinobiAbilityInputID::Sprint, TEXT("IA_Sprint"));
+	AddAbility(EShinobiAbilityInputID::ChakraCharge, TEXT("IA_ChakraCharge"));
+	AddAbility(EShinobiAbilityInputID::Dismount, TEXT("IA_Dismount")); // off the dragon, whatever is in the slots
+	AddAbility(EShinobiAbilityInputID::Revive, TEXT("IA_Revive"));
+	AddAbility(EShinobiAbilityInputID::Block, TEXT("IA_Block")); // hold
+	for (int32 Slot = 0; Slot < ShinobiLoadout::NumSlots; ++Slot)
+	{
+		AddAbility(ShinobiLoadout::SlotInputID(Slot), *FString::Printf(TEXT("IA_Jutsu%d"), Slot + 1));
+	}
 	Config->LockOn = MakeAction(Config, TEXT("IA_LockOn"), EInputActionValueType::Boolean);
-	Ctx->MapKey(Config->LockOn, EKeys::Tab);
-	Ctx->MapKey(Config->LockOn, EKeys::Gamepad_RightThumbstick);
+	Config->SkillsScreen = MakeAction(Config, TEXT("IA_SkillsScreen"), EInputActionValueType::Boolean);
+	Config->MapToggle = MakeAction(Config, TEXT("IA_MapToggle"), EInputActionValueType::Boolean);
+	Config->MapZoomIn = MakeAction(Config, TEXT("IA_MapZoomIn"), EInputActionValueType::Boolean);
+	Config->MapZoomOut = MakeAction(Config, TEXT("IA_MapZoomOut"), EInputActionValueType::Boolean);
 
+	// Fixed: Esc / Menu pause, so there's always a way back to CONTROLS.
 	Config->Pause = MakeAction(Config, TEXT("IA_Pause"), EInputActionValueType::Boolean);
 	Ctx->MapKey(Config->Pause, EKeys::Escape);
 	Ctx->MapKey(Config->Pause, EKeys::Gamepad_Special_Right);
 
-	// Jutsu slots 1-8: one keyboard key each here. The pad reaches the current pad page's four through PadJutsuActions,
-	// face buttons in JutsuContext, which the player adds while RB is held.
-	Config->JutsuModifier = MakeAction(Config, TEXT("IA_JutsuModifier"), EInputActionValueType::Boolean);
-	Ctx->MapKey(Config->JutsuModifier, EKeys::Gamepad_RightShoulder);
-	UInputMappingContext* JutsuCtx = NewObject<UInputMappingContext>(Config, TEXT("IMC_ShinobiJutsu"));
-	Config->JutsuContext = JutsuCtx;
-	const FKey SlotKeys[ShinobiLoadout::NumSlots] = { EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::R, EKeys::T, EKeys::G, EKeys::CapsLock };
-	for (int32 Slot = 0; Slot < ShinobiLoadout::NumSlots; ++Slot)
-	{
-		UInputAction* Action = MakeAction(Config, *FString::Printf(TEXT("IA_Jutsu%d"), Slot + 1), EInputActionValueType::Boolean);
-		Ctx->MapKey(Action, SlotKeys[Slot]);
-		Config->AbilityActions.Add(ShinobiLoadout::SlotInputID(Slot), Action);
-	}
-	const FKey FaceKeys[] = { EKeys::Gamepad_FaceButton_Bottom, EKeys::Gamepad_FaceButton_Right, EKeys::Gamepad_FaceButton_Left, EKeys::Gamepad_FaceButton_Top };
-	for (int32 Face = 0; Face < UE_ARRAY_COUNT(FaceKeys); ++Face)
-	{
-		UInputAction* Action = MakeAction(Config, *FString::Printf(TEXT("IA_PadJutsu%d"), Face + 1), EInputActionValueType::Boolean);
-		JutsuCtx->MapKey(Action, FaceKeys[Face]);
-		Config->PadJutsuActions.Add(Action);
-	}
-
-	// Alt + key bindings chord on this (ShinobiKeyBindings).
+	// The chord actions: Alt for Alt + key, RB / RT for a controller combo. None does anything by itself.
 	Config->AltModifier = MakeAction(Config, TEXT("IA_AltModifier"), EInputActionValueType::Boolean);
 	Ctx->MapKey(Config->AltModifier, EKeys::LeftAlt);
 	Ctx->MapKey(Config->AltModifier, EKeys::RightAlt);
-
-	Config->SkillsScreen = MakeAction(Config, TEXT("IA_SkillsScreen"), EInputActionValueType::Boolean);
-	Ctx->MapKey(Config->SkillsScreen, EKeys::K);
-
-	// Pad jutsu pages (slots 1-4 / 5-8): the D-pad while RB is held. The keyboard has a key per slot.
-	Config->JutsuPageNext = MakeAction(Config, TEXT("IA_JutsuPageNext"), EInputActionValueType::Boolean);
-	JutsuCtx->MapKey(Config->JutsuPageNext, EKeys::Gamepad_DPad_Right);
-	Config->JutsuPagePrev = MakeAction(Config, TEXT("IA_JutsuPagePrev"), EInputActionValueType::Boolean);
-	JutsuCtx->MapKey(Config->JutsuPagePrev, EKeys::Gamepad_DPad_Left);
+	Config->PadHoldRB = MakeAction(Config, TEXT("IA_PadHoldRB"), EInputActionValueType::Boolean);
+	Ctx->MapKey(Config->PadHoldRB, EKeys::Gamepad_RightShoulder);
+	Config->PadHoldRT = MakeAction(Config, TEXT("IA_PadHoldRT"), EInputActionValueType::Boolean);
+	Ctx->MapKey(Config->PadHoldRT, EKeys::Gamepad_RightTrigger);
 
 	// Mouse wheel axis: positive values zoom in, negative values zoom out.
 	Config->CameraZoom = MakeAction(Config, TEXT("IA_CameraZoom"), EInputActionValueType::Axis1D);
 	Ctx->MapKey(Config->CameraZoom, EKeys::MouseWheelAxis);
-
-	Config->MapToggle = MakeAction(Config, TEXT("IA_MapToggle"), EInputActionValueType::Boolean);
-	Ctx->MapKey(Config->MapToggle, EKeys::M);
-	Ctx->MapKey(Config->MapToggle, EKeys::Gamepad_Special_Left);
-	// D-pad down is Dismount, so the pad only zooms in: past the closest level it wraps back to the whole map.
-	Config->MapZoom = MakeAction(Config, TEXT("IA_MapZoom"), EInputActionValueType::Axis1D);
-	Ctx->MapKey(Config->MapZoom, EKeys::Equals);
-	Ctx->MapKey(Config->MapZoom, EKeys::Add);
-	Ctx->MapKey(Config->MapZoom, EKeys::Gamepad_DPad_Up);
-	AddModifier<UInputModifierNegate>(Ctx->MapKey(Config->MapZoom, EKeys::Hyphen), Ctx);
-	AddModifier<UInputModifierNegate>(Ctx->MapKey(Config->MapZoom, EKeys::Subtract), Ctx);
 
 	Config->ApplyKeyBindings(); // the defaults above, replaced by this machine's saved shortcuts
 	return Config;
@@ -183,6 +148,8 @@ UInputAction* UShinobiInputConfig::ActionForBindable(uint8 Bindable) const
 	case EBindable::Jump: return Jump;
 	case EBindable::Dismount: return Ability(EShinobiAbilityInputID::Dismount);
 	case EBindable::Map: return MapToggle;
+	case EBindable::MapZoomIn: return MapZoomIn;
+	case EBindable::MapZoomOut: return MapZoomOut;
 	default: return nullptr;
 	}
 }
@@ -190,17 +157,19 @@ UInputAction* UShinobiInputConfig::ActionForBindable(uint8 Bindable) const
 void UShinobiInputConfig::ApplyKeyBindings() const
 {
 	UInputMappingContext* Ctx = Context;
-	for (int32 Index = 0; Index < static_cast<int32>(ShinobiKeyBindings::EBindable::Num); ++Index)
+	if (!Ctx)
+	{
+		return;
+	}
+	constexpr int32 NumBindables = static_cast<int32>(ShinobiKeyBindings::EBindable::Num);
+	// Off with every rebindable action's old keys and buttons first.
+	for (int32 Index = 0; Index < NumBindables; ++Index)
 	{
 		UInputAction* Action = ActionForBindable(static_cast<uint8>(Index));
-		if (!Ctx || !Action)
-		{
-			continue;
-		}
 		TArray<FKey> OldKeys;
 		for (const FEnhancedActionKeyMapping& Mapping : Ctx->GetMappings())
 		{
-			if (Mapping.Action == Action && !Mapping.Key.IsGamepadKey())
+			if (Action && Mapping.Action == Action)
 			{
 				OldKeys.Add(Mapping.Key);
 			}
@@ -209,14 +178,41 @@ void UShinobiInputConfig::ApplyKeyBindings() const
 		{
 			Ctx->UnmapKey(Action, Key);
 		}
-		const ShinobiKeyBindings::FBinding Binding = ShinobiKeyBindings::Get(static_cast<ShinobiKeyBindings::EBindable>(Index));
-		FEnhancedActionKeyMapping& Mapping = Ctx->MapKey(Action, Binding.Key);
-		if (Binding.bAlt)
+	}
+	// Then the combos (Alt + key, RB / RT + button), then the plain ones: Enhanced Input blocks a key's plain mappings while
+	// a combo's first key is held only when they come after the combo, so RB + A doesn't also jump.
+	for (const bool bCombos : { true, false })
+	{
+		for (int32 Index = 0; Index < NumBindables; ++Index)
 		{
-			// Only while Alt is held; Enhanced Input itself blocks the same key's plain mapping meanwhile.
-			UInputTriggerChordAction* Chord = NewObject<UInputTriggerChordAction>(Ctx);
-			Chord->ChordAction = AltModifier;
-			Mapping.Triggers.Add(Chord);
+			const ShinobiKeyBindings::EBindable Which = static_cast<ShinobiKeyBindings::EBindable>(Index);
+			UInputAction* Action = ActionForBindable(static_cast<uint8>(Index));
+			if (!Action)
+			{
+				continue;
+			}
+			const ShinobiKeyBindings::FBinding Binding = ShinobiKeyBindings::Get(Which);
+			if (Binding.bAlt == bCombos)
+			{
+				FEnhancedActionKeyMapping& Mapping = Ctx->MapKey(Action, Binding.Key);
+				if (bCombos)
+				{
+					UInputTriggerChordAction* Chord = NewObject<UInputTriggerChordAction>(Ctx);
+					Chord->ChordAction = AltModifier;
+					Mapping.Triggers.Add(Chord);
+				}
+			}
+			const ShinobiKeyBindings::FPadBinding Pad = ShinobiKeyBindings::GetPad(Which);
+			if (Pad.IsBound() && Pad.Hold.IsValid() == bCombos)
+			{
+				FEnhancedActionKeyMapping& Mapping = Ctx->MapKey(Action, Pad.Button);
+				if (bCombos)
+				{
+					UInputTriggerChordAction* Chord = NewObject<UInputTriggerChordAction>(Ctx);
+					Chord->ChordAction = Pad.Hold == EKeys::Gamepad_RightTrigger ? PadHoldRT : PadHoldRB;
+					Mapping.Triggers.Add(Chord);
+				}
+			}
 		}
 	}
 	if (!GEngine)

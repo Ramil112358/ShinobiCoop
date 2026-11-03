@@ -21,6 +21,7 @@
 #include "Shinobi/UI/ShinobiDropdown.h"
 #include "Shinobi/UI/ShinobiPauseMenuWidget.h"
 #include "Shinobi/UI/ShinobiShortcutsWidget.h"
+#include "Shinobi/UI/ShinobiKeyBindings.h"
 #include "GameFramework/GameUserSettings.h"
 #include "Shinobi/UI/ShinobiRosterPage.h"
 #include "Shinobi/UI/ShinobiSkillsWidget.h"
@@ -301,6 +302,31 @@ bool FShinobiPauseMenuTabsTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("CONTROLS is the key bindings"), Cast<UShinobiShortcutsWidget>(Menu->GetTabPage(EShinobiPauseTab::Controls)));
 	TestNotNull(TEXT("JUTSU is the Skills screen"), Cast<UShinobiSkillsWidget>(Menu->GetTabPage(EShinobiPauseTab::Jutsu)));
 	TestFalse(TEXT("Leave isn't armed until pressed"), Menu->IsLeaveArmed());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiControlsDeviceTabsTest, "ShinobiCoop.UI.ControlsDeviceTabs", ShinobiTestFlags)
+bool FShinobiControlsDeviceTabsTest::RunTest(const FString& Parameters)
+{
+	using ShinobiKeyBindings::EBindable;
+	FShinobiTestWorld W;
+	UShinobiShortcutsWidget* Controls = CreateWidget<UShinobiShortcutsWidget>(W.World, UShinobiShortcutsWidget::StaticClass());
+	Controls->TakeWidget();
+	TestFalse(TEXT("the main menu opens on the keyboard"), Controls->IsShowingPad());
+	for (int32 Index = 0; Index < static_cast<int32>(EBindable::Num); ++Index)
+	{
+		const EBindable Which = static_cast<EBindable>(Index);
+		TestEqual(*FString::Printf(TEXT("%s: its key"), *ShinobiKeyBindings::Label(Which).ToString()),
+			Controls->GetChipText(Index).ToString(), ShinobiKeyBindings::KeyLabel(ShinobiKeyBindings::Get(Which)).ToString());
+	}
+	Controls->ShowDevice(true);
+	TestTrue(TEXT("CONTROLLER tab"), Controls->IsShowingPad());
+	for (int32 Index = 0; Index < static_cast<int32>(EBindable::Num); ++Index)
+	{
+		const EBindable Which = static_cast<EBindable>(Index);
+		TestEqual(*FString::Printf(TEXT("%s: its button(s)"), *ShinobiKeyBindings::Label(Which).ToString()),
+			Controls->GetChipText(Index).ToString(), ShinobiKeyBindings::PadLabel(ShinobiKeyBindings::GetPad(Which)).ToString());
+	}
 	return true;
 }
 
@@ -926,8 +952,15 @@ bool FShinobiMainMenuHintsFollowDeviceTest::RunTest(const FString& Parameters)
 	Menu->UseGamepadHints(false);
 	const FString Mouse = Menu->GetHintText().ToString();
 	TestTrue(TEXT("mouse hints"), Mouse.Contains(TEXT("Wheel")) && Mouse.Contains(TEXT("Drag")));
+	for (int32 Index = 0; Index < 2; ++Index)
+	{
+		const UWidget* Icon = Menu->GetHintIcon(Index);
+		TestTrue(TEXT("a mouse picture per hint, shown for the mouse"), Icon && Icon->GetVisibility() != ESlateVisibility::Collapsed);
+	}
 	Menu->UseGamepadHints(true);
 	TestTrue(TEXT("gamepad hints"), Menu->GetHintText().ToString().Contains(TEXT("RS")));
+	const UWidget* ZoomIcon = Menu->GetHintIcon(0);
+	TestTrue(TEXT("no mouse picture for a gamepad"), ZoomIcon && ZoomIcon->GetVisibility() == ESlateVisibility::Collapsed);
 	return true;
 }
 

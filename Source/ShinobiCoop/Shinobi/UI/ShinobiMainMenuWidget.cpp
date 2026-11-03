@@ -181,18 +181,32 @@ TSharedRef<SWidget> UShinobiMainMenuWidget::RebuildWidget()
 		MainMenuPlace(Root, MessageText, FAnchors(0.5f, 1.f), FMargin(0.f, -24.f, 0.f, 0.f), FVector2D(0.5f, 1.f))->SetAutoSize(true);
 
 		Hints = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
-		for (int32 Hint = 0; Hint < 2; ++Hint)
+		for (const EShinobiMouseIcon Control : { EShinobiMouseIcon::Wheel, EShinobiMouseIcon::RightButton })
 		{
+			// The label, then its control (the Mutable sample's order): a mouse picture, or a key badge for a gamepad.
+			HintTexts.Add(ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 13, FLinearColor::White));
+			UHorizontalBoxSlot* Label = Hints->AddChildToHorizontalBox(HintTexts.Last());
+			Label->SetVerticalAlignment(VAlign_Center);
+			Label->SetPadding(FMargin(HintTexts.Num() > 1 ? 24.f : 0.f, 0.f, 0.f, 0.f));
 			UBorder* Badge = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
 			Badge->SetBrush(ShinobiMenuStyle::ColorBrush(FLinearColor(0.f, 0.f, 0.f, 0.6f)));
 			Badge->SetPadding(FMargin(8.f, 3.f));
 			HintTexts.Add(ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 12, ShinobiMenuStyle::Accent));
 			Badge->SetContent(HintTexts.Last());
-			Hints->AddChildToHorizontalBox(Badge)->SetVerticalAlignment(VAlign_Center);
-			HintTexts.Add(ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 13, FLinearColor::White));
-			UHorizontalBoxSlot* Label = Hints->AddChildToHorizontalBox(HintTexts.Last());
-			Label->SetVerticalAlignment(VAlign_Center);
-			Label->SetPadding(FMargin(8.f, 0.f, 24.f, 0.f));
+			UHorizontalBoxSlot* BadgeSlot = Hints->AddChildToHorizontalBox(Badge);
+			BadgeSlot->SetVerticalAlignment(VAlign_Center);
+			BadgeSlot->SetPadding(FMargin(8.f, 0.f, 0.f, 0.f));
+			HintBadges.Add(Badge);
+			UImage* Mouse = nullptr;
+			if (UTexture2D* Picture = ShinobiMenuArt::MouseIcon(Control))
+			{
+				Mouse = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
+				Mouse->SetBrush(ShinobiMenuStyle::TextureBrush(Picture, FVector2D(32.f, 32.f)));
+				UHorizontalBoxSlot* MouseSlot = Hints->AddChildToHorizontalBox(Mouse);
+				MouseSlot->SetVerticalAlignment(VAlign_Center);
+				MouseSlot->SetPadding(FMargin(4.f, 0.f, 0.f, 0.f));
+			}
+			HintIcons.Add(Mouse);
 		}
 		Hints->SetVisibility(ESlateVisibility::Collapsed);
 		MainMenuPlace(Root, Hints, FAnchors(1.f, 1.f), FMargin(-32.f, -20.f, 0.f, 0.f), FVector2D(1.f, 1.f))->SetAutoSize(true);
@@ -389,6 +403,23 @@ void UShinobiMainMenuWidget::NativeConstruct()
 	SelectTab(EShinobiMenuTab::Play);
 	ShowPlayed();
 	UpdateBackdrop();
+	DeviceConnectionHandle = IPlatformInputDeviceMapper::Get().GetOnInputDeviceConnectionChange().AddUObject(this,
+		&UShinobiMainMenuWidget::OnInputDeviceConnectionChange);
+}
+
+void UShinobiMainMenuWidget::NativeDestruct()
+{
+	IPlatformInputDeviceMapper::Get().GetOnInputDeviceConnectionChange().Remove(DeviceConnectionHandle);
+	DeviceConnectionHandle.Reset();
+	Super::NativeDestruct();
+}
+
+void UShinobiMainMenuWidget::OnInputDeviceConnectionChange(EInputDeviceConnectionState NewState, FPlatformUserId PlatformUser, FInputDeviceId InputDevice)
+{
+	if (NewState == EInputDeviceConnectionState::Connected || NewState == EInputDeviceConnectionState::Disconnected)
+	{
+		UseGamepadHints(NewState == EInputDeviceConnectionState::Connected);
+	}
 }
 
 void UShinobiMainMenuWidget::ShowPlayed()
@@ -653,12 +684,28 @@ AShinobiMenuStage* UShinobiMainMenuWidget::GetPreviewStage() const
 void UShinobiMainMenuWidget::UseGamepadHints(bool bGamepad)
 {
 	bGamepadHints = bGamepad;
-	const TCHAR* const Texts[] = { bGamepad ? TEXT("RS \u2195") : TEXT("Wheel"), TEXT("Zoom in/out"),
-		bGamepad ? TEXT("RS \u2194") : TEXT("RMB drag"), TEXT("Rotate Camera") };
+	// (The mouse's key names stay in the hidden badges: GetHintText reads them.)
+	const TCHAR* const Texts[] = { TEXT("Zoom in/out"), bGamepad ? TEXT("RS \u2195") : TEXT("Wheel"),
+		TEXT("Rotate Camera"), bGamepad ? TEXT("RS \u2194") : TEXT("RMB drag") };
 	for (int32 Index = 0; Index < HintTexts.Num(); ++Index)
 	{
 		HintTexts[Index]->SetText(FText::FromString(Texts[Index]));
 	}
+	for (int32 Index = 0; Index < HintBadges.Num(); ++Index)
+	{
+		UWidget* Icon = HintIcons[Index];
+		const bool bPicture = Icon && !bGamepad;
+		HintBadges[Index]->SetVisibility(bPicture ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+		if (Icon)
+		{
+			Icon->SetVisibility(bPicture ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		}
+	}
+}
+
+UWidget* UShinobiMainMenuWidget::GetHintIcon(int32 Index) const
+{
+	return HintIcons.IsValidIndex(Index) ? HintIcons[Index].Get() : nullptr;
 }
 
 FText UShinobiMainMenuWidget::GetHintText() const
