@@ -88,6 +88,8 @@ public:
 	/** The preview hints for a gamepad (right stick) or a mouse (wheel, drag): the last device used picks. */
 	void UseGamepadHints(bool bGamepad);
 	FText GetHintText() const;
+	/** Hint Index's mouse picture (0 zoom, 1 rotate), shown instead of its key badge while the mouse leads; null if not made. */
+	UWidget* GetHintIcon(int32 Index) const;
 	/** The open stage behind the pages: the only place a drag turns, or the wheel zooms, the preview. */
 	UWidget* GetPreviewCatcher() const { return PreviewCatcher; }
 	/** The stage when this tab previews a character (SHINOBI and its creator), else null. */
@@ -190,11 +192,16 @@ private:
 	TObjectPtr<UShinobiIndexButton> RefreshButton;
 	UPROPERTY()
 	TObjectPtr<UShinobiIndexButton> QuitButton;
-	/** Bottom right: the preview's zoom and rotate hints, (key, label) twice. */
+	/** Bottom right: the preview's zoom and rotate hints, (label, key badge, mouse picture) twice. */
 	UPROPERTY()
 	TObjectPtr<UHorizontalBox> Hints;
+	/** (label, key) twice. */
 	UPROPERTY()
 	TArray<TObjectPtr<UTextBlock>> HintTexts;
+	UPROPERTY()
+	TArray<TObjectPtr<UWidget>> HintBadges;
+	UPROPERTY()
+	TArray<TObjectPtr<UWidget>> HintIcons;
 	UPROPERTY()
 	TObjectPtr<UBorder> Blackout;
 	UPROPERTY()

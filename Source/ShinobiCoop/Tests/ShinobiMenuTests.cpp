@@ -926,8 +926,15 @@ bool FShinobiMainMenuHintsFollowDeviceTest::RunTest(const FString& Parameters)
 	Menu->UseGamepadHints(false);
 	const FString Mouse = Menu->GetHintText().ToString();
 	TestTrue(TEXT("mouse hints"), Mouse.Contains(TEXT("Wheel")) && Mouse.Contains(TEXT("Drag")));
+	for (int32 Index = 0; Index < 2; ++Index)
+	{
+		const UWidget* Icon = Menu->GetHintIcon(Index);
+		TestTrue(TEXT("a mouse picture per hint, shown for the mouse"), Icon && Icon->GetVisibility() != ESlateVisibility::Collapsed);
+	}
 	Menu->UseGamepadHints(true);
 	TestTrue(TEXT("gamepad hints"), Menu->GetHintText().ToString().Contains(TEXT("RS")));
+	const UWidget* ZoomIcon = Menu->GetHintIcon(0);
+	TestTrue(TEXT("no mouse picture for a gamepad"), ZoomIcon && ZoomIcon->GetVisibility() == ESlateVisibility::Collapsed);
 	return true;
 }
 
