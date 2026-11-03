@@ -562,14 +562,6 @@ UWidget* UShinobiMainMenuWidget::GetFocusTarget(EShinobiMenuTab Which) const
 	return FocusTargets.IsValidIndex(int32(Which)) ? FocusTargets[int32(Which)].Get() : nullptr;
 }
 
-void UShinobiMainMenuWidget::SetFocusTarget(EShinobiMenuTab Which, UWidget* Target)
-{
-	if (FocusTargets.IsValidIndex(int32(Which)))
-	{
-		FocusTargets[int32(Which)] = Target;
-	}
-}
-
 AShinobiMenuStage* UShinobiMainMenuWidget::GetStage() const
 {
 	UWorld* World = GetWorld();

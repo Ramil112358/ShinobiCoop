@@ -68,9 +68,14 @@ void UShinobiSurfaceFxComponent::TickComponent(float DeltaTime, ELevelTick TickT
 	{
 		return;
 	}
-	Fade = Movement->CanSurfaceTraverse()
+	const float NewFade = Movement->CanSurfaceTraverse()
 		? FMath::FInterpConstantTo(Fade, Movement->IsSurfaceTraversing() ? 1.f : 0.f, DeltaTime, 1.f / FadeTime)
 		: 0.f; // death, downed and mounting hide it at once
+	if (NewFade <= 0.f && Fade <= 0.f)
+	{
+		return; // off and already shown off (nearly every frame): the glow, light and shells were set when it faded out
+	}
+	Fade = NewFade;
 	Age += DeltaTime;
 	Glow->SetScalarParameterValue(TEXT("Fade"), Fade * (0.85f + 0.15f * FMath::Sin(Age * 6.f)));
 	if (Light)

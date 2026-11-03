@@ -23,8 +23,6 @@ protected:
 	void SetInfinitePeriodic(float PeriodSeconds);
 	/** Target gets this tag while the effect is active. */
 	void GrantTag(const FGameplayTag& Tag);
-	/** Effect is not applied at all if the target has this tag. */
-	void IgnoreApplicationIfTargetHas(const FGameplayTag& Tag);
 	/** Effect stays applied but does nothing while the target has this tag. */
 	void InhibitWhileTargetHas(const FGameplayTag& Tag);
 	/** Deal damage through UShinobiDamageExec, which reads SetByCaller Data.Damage. */

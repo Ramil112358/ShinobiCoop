@@ -33,12 +33,6 @@ class SHINOBICOOP_API UShinobiHUDWidget : public UUserWidget
 public:
 	static constexpr int32 NumJutsuSlots = 8; // ShinobiLoadout::NumSlots
 
-	/** The width the jutsu slot Index takes up (its icon and its name); every slot is the same, whatever the name. For tests. */
-	float GetJutsuSlotWidth(int32 Index) const;
-
-	/** Whether the dragon crosshair is showing, and where (viewport pixels). For tests. */
-	bool IsDragonCrosshairShown() const;
-
 	/** M: the level's map large in the middle of the screen, in place of the minimap. Stays shut on a level without a map. */
 	void ToggleBigMap();
 	bool IsBigMapOpen() const { return bBigMap; }
@@ -239,10 +233,6 @@ private:
 	/** The jutsu being cast, above the bar (the slots carry no names). */
 	UPROPERTY()
 	TObjectPtr<UTextBlock> CastNameText;
-
-	/** Each slot's column (frame + name): hidden when the current page has no jutsu there. */
-	UPROPERTY()
-	TArray<TObjectPtr<UVerticalBox>> SlotColumns;
 
 	UPROPERTY()
 	TObjectPtr<class USizeBox> DragonCrosshair;

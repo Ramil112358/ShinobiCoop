@@ -45,6 +45,16 @@
 
 namespace
 {
+	/** The HUD rebuilds its labels every frame (counts, timers): only an actual change goes to the text block, so an
+	 * unchanged label costs no FText allocation and no Slate attribute update. */
+	void SetTextIfChanged(UTextBlock* Block, const FString& String)
+	{
+		if (Block && !Block->GetText().ToString().Equals(String, ESearchCase::CaseSensitive))
+		{
+			Block->SetText(FText::FromString(String));
+		}
+	}
+
 	const FLinearColor HealthColor(0.72f, 0.06f, 0.06f); // tints the grey fill of the SpriteCook bar
 	const FLinearColor LowHealthColor(1.f, 0.3f, 0.05f);
 	const FLinearColor TrailColor(1.f, 0.85f, 0.6f, 0.9f);
@@ -403,7 +413,6 @@ void UShinobiHUDWidget::BuildJutsuSlots(UCanvasPanel* Root)
 		KeySlot->SetHorizontalAlignment(HAlign_Center);
 		KeySlot->SetPadding(FMargin(0.f, -7.f, 0.f, 0.f)); // overlapping the frame's lower edge
 
-		SlotColumns.Add(Column);
 		SlotFrames.Add(Frame);
 		SlotIcons.Add(Icon);
 		SlotFallbacks.Add(Fallback);
@@ -422,16 +431,6 @@ void UShinobiHUDWidget::BuildJutsuSlots(UCanvasPanel* Root)
 	NameSlot->SetAlignment(FVector2D(0.5f, 1.f));
 	NameSlot->SetPosition(FVector2D(0.f, -32.f - SlotSize - 30.f));
 	NameSlot->SetAutoSize(true);
-}
-
-float UShinobiHUDWidget::GetJutsuSlotWidth(int32 Index) const
-{
-	return SlotColumns.IsValidIndex(Index) ? SlotColumns[Index]->GetDesiredSize().X : 0.f;
-}
-
-bool UShinobiHUDWidget::IsDragonCrosshairShown() const
-{
-	return DragonCrosshair && DragonCrosshair->GetVisibility() != ESlateVisibility::Collapsed;
 }
 
 void UShinobiHUDWidget::BuildDragonCrosshair(UCanvasPanel* Root)
@@ -652,9 +651,9 @@ void UShinobiHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	// character behind it (a look code) shows the player's.
 	const bool bRoster = Player && Player->GetCharacterIndex() < UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster);
 	const bool bMade = Player && Player->GetCharacterIndex() == AShinobiPlayerCharacter::CustomCharacter && !ShownMadeName.IsEmpty();
-	NameText->SetText(bRoster ? FText::FromString(AShinobiPlayerCharacter::Roster[Player->GetCharacterIndex()].Name)
-		: bMade ? FText::FromString(ShownMadeName)
-		: Me ? FText::FromString(Me->GetPlayerName()) : FText::GetEmpty());
+	SetTextIfChanged(NameText, bRoster ? FString(AShinobiPlayerCharacter::Roster[Player->GetCharacterIndex()].Name)
+		: bMade ? ShownMadeName
+		: Me ? Me->GetPlayerName() : FString());
 
 	const float HealthRatio = Stats->GetHealth() / FMath::Max(Stats->GetMaxHealth(), 1.f);
 	HealthBar->SetPercent(HealthRatio);
@@ -674,9 +673,9 @@ void UShinobiHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 	}
 	LastHealthRatio = HealthRatio;
 	HealthTrailBar->SetPercent(HealthTrail);
-	HealthText->SetText(FText::FromString(FString::Printf(TEXT("%d / %d"), FMath::CeilToInt(Stats->GetHealth()), FMath::RoundToInt(Stats->GetMaxHealth()))));
+	SetTextIfChanged(HealthText, FString::Printf(TEXT("%d / %d"), FMath::CeilToInt(Stats->GetHealth()), FMath::RoundToInt(Stats->GetMaxHealth())));
 	ChakraBar->SetPercent(Stats->GetChakra() / FMath::Max(Stats->GetMaxChakra(), 1.f));
-	ChakraText->SetText(FText::FromString(FString::Printf(TEXT("%d / %d"), FMath::FloorToInt(Stats->GetChakra()), FMath::RoundToInt(Stats->GetMaxChakra()))));
+	SetTextIfChanged(ChakraText, FString::Printf(TEXT("%d / %d"), FMath::FloorToInt(Stats->GetChakra()), FMath::RoundToInt(Stats->GetMaxChakra())));
 	StaminaBar->SetPercent(Stats->GetStamina() / FMath::Max(Stats->GetMaxStamina(), 1.f));
 
 	const int32 Charges = FMath::RoundToInt(Stats->GetSubstitutionCharges());
@@ -935,7 +934,7 @@ void UShinobiHUDWidget::UpdateCompass()
 				return;
 			}
 			UTextBlock* Label = CompassLabel(Used++);
-			Label->SetText(FText::FromString(Text));
+			SetTextIfChanged(Label, Text);
 			Label->SetColorAndOpacity(FSlateColor(Colour));
 			Label->SetVisibility(ESlateVisibility::HitTestInvisible);
 			Cast<UCanvasPanelSlot>(Label->Slot)->SetPosition(FVector2D(Delta / 90.f * CompassHalfWidth, 62.f));
@@ -1062,12 +1061,12 @@ void UShinobiHUDWidget::UpdateArena(const AShinobiPlayerCharacter* Player)
 		}
 	}
 	const bool bPvp = State && State->IsPvp();
-	WaveText->SetText(FText::FromString(Wave));
-	TeamText->SetText(FText::FromString(Team));
-	OpponentText->SetText(FText::FromString(bPvp ? OpponentList(Player) : FString()));
-	BoostText->SetText(FText::FromString(bPvp ? BoostList(Player) : FString()));
-	BannerText->SetText(FText::FromString(Banner));
-	HintText->SetText(FText::FromString(Hint));
+	SetTextIfChanged(WaveText, Wave);
+	SetTextIfChanged(TeamText, Team);
+	SetTextIfChanged(OpponentText, bPvp ? OpponentList(Player) : FString());
+	SetTextIfChanged(BoostText, bPvp ? BoostList(Player) : FString());
+	SetTextIfChanged(BannerText, Banner);
+	SetTextIfChanged(HintText, Hint);
 }
 
 FString UShinobiHUDWidget::OpponentList(const AShinobiPlayerCharacter* Player) const
@@ -1186,7 +1185,7 @@ void UShinobiHUDWidget::UpdateJutsuSlots(const UAbilitySystemComponent& ASC, con
 		SlotIcons[Index]->SetColorAndOpacity(bUsable ? FLinearColor::White : DimIconColor);
 		SlotFallbacks[Index]->SetRenderOpacity(bUsable ? 1.f : 0.35f);
 		SlotCosts[Index]->SetColorAndOpacity(FSlateColor(State.bAffordable ? CostColor : NoChakraColor));
-		SlotCooldownTexts[Index]->SetText(bCooling ? FText::AsNumber(FMath::CeilToInt(State.CooldownRemaining)) : FText::GetEmpty());
+		SetTextIfChanged(SlotCooldownTexts[Index], bCooling ? FString::FromInt(FMath::CeilToInt(State.CooldownRemaining)) : FString());
 		SlotShades[Index]->SetHeightOverride(bCooling ? (SlotSize - 2.f * SlotBorder) * State.CooldownRemaining / State.CooldownDuration : 0.f);
 		if (bFrameArt)
 		{

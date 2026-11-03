@@ -58,11 +58,6 @@ UTargetTagRequirementsGameplayEffectComponent& UShinobiEffect::Requirements()
 	return *RequirementsComponent;
 }
 
-void UShinobiEffect::IgnoreApplicationIfTargetHas(const FGameplayTag& Tag)
-{
-	Requirements().ApplicationTagRequirements.IgnoreTags.AddTag(Tag);
-}
-
 void UShinobiEffect::InhibitWhileTargetHas(const FGameplayTag& Tag)
 {
 	Requirements().OngoingTagRequirements.IgnoreTags.AddTag(Tag);

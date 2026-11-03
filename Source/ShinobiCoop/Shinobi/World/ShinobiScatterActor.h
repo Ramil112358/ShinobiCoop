@@ -27,7 +27,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Shinobi|World")
 	int32 GetInstanceCount() const;
 
+	virtual void PostRegisterAllComponents() override;
+
+	/**
+	 * Beyond this distance (cm) the foliage material's wind (World Position Offset) stops. Moving Nanite geometry
+	 * invalidates its cached Virtual Shadow Map pages every frame and needs the costlier programmable raster path, so
+	 * far-off sway nobody can make out still costs shadow and raster time. Ground cover with a short cull distance
+	 * stops at half its cull distance when that is nearer. 0 keeps the wind at every distance.
+	 */
+	UPROPERTY(EditAnywhere, Category = "Shinobi|Performance", meta = (ClampMin = "0", Units = "cm"))
+	float WindDisableDistance = 8000.f;
+
 private:
+	void ApplyWindDistance(UHierarchicalInstancedStaticMeshComponent* Component) const;
+
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")
 	TArray<TObjectPtr<UHierarchicalInstancedStaticMeshComponent>> Instances;
 };

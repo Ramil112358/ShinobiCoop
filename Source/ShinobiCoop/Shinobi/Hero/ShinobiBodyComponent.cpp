@@ -590,18 +590,6 @@ bool UShinobiBodyComponent::SetFaceShape(FName Slider, float Value)
 	return Shape && Shape->SetFaceShape(Slider, Value);
 }
 
-void UShinobiBodyComponent::SetBodyMorph(FName Morph, float Weight)
-{
-	SetMorphTarget(Morph, Weight);
-	for (const TWeakObjectPtr<USkinnedMeshComponent>& Follower : GetFollowerPoseComponents())
-	{
-		if (USkeletalMeshComponent* Follows = Cast<USkeletalMeshComponent>(Follower.Get()))
-		{
-			Follows->SetMorphTarget(Morph, Weight);
-		}
-	}
-}
-
 void UShinobiBodyComponent::WearMetaHumanParts(const TCHAR* ClassPath)
 {
 	for (UActorComponent* Part : MetaHumanParts)
