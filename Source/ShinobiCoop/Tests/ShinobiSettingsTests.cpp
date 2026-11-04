@@ -17,7 +17,7 @@ namespace
 	struct FShinobiGraphicsKeysGuard
 	{
 		const TCHAR* Section = TEXT("/Script/ShinobiCoop.ShinobiSettings");
-		TArray<FString> Keys = { TEXT("Upscaler"), TEXT("UpscalingQuality"), TEXT("AntiAliasing"), TEXT("Sharpness"), TEXT("bRayTracing"),
+		TArray<FString> Keys = { TEXT("Upscaler"), TEXT("UpscalingQuality"), TEXT("AntiAliasing"), TEXT("Sharpness"), TEXT("bRayTracing"), TEXT("bMegaLights"),
 			TEXT("bRayReconstruction"), TEXT("FrameGeneration"), TEXT("ReflexMode"), TEXT("bLowLatency") };
 		TMap<FString, FString> Old;
 		float OldScale = 100.f;
@@ -265,8 +265,8 @@ namespace
 	void ExpectValuesAreOptions(FAutomationTestBase& Test, const TCHAR* When)
 	{
 		using ShinobiSettings::ERow;
-		for (const ERow Row : { ERow::Upscaler, ERow::RenderScale, ERow::AntiAliasing, ERow::Sharpness, ERow::DynamicResolution, ERow::FrameGeneration,
-			ERow::LowLatency, ERow::RayTracing, ERow::RayReconstruction, ERow::WindowMode, ERow::Resolution, ERow::VSync })
+		for (const ERow Row : { ERow::LightingQuality, ERow::Upscaler, ERow::RenderScale, ERow::AntiAliasing, ERow::Sharpness, ERow::DynamicResolution,
+			ERow::FrameGeneration, ERow::LowLatency, ERow::RayTracing, ERow::RayReconstruction, ERow::MegaLights, ERow::WindowMode, ERow::Resolution, ERow::VSync })
 		{
 			const FString Value = ShinobiSettings::RowValue(Row);
 			Test.TestTrue(FString::Printf(TEXT("%s: %s shows one of its options (%s)"), When, *ShinobiSettings::RowName(Row), *Value),
@@ -293,13 +293,13 @@ bool FShinobiSettingsGraphicsTechTest::RunTest(const FString& Parameters)
 	using ShinobiSettings::ERow;
 	using ShinobiGraphics::EUpscaler;
 	using ShinobiGraphics::EAntiAliasing;
-	const ERow GraphicsRows[] = { ERow::Upscaler, ERow::RenderScale, ERow::AntiAliasing, ERow::Sharpness, ERow::DynamicResolution, ERow::FrameGeneration,
-		ERow::LowLatency, ERow::RayTracing, ERow::RayReconstruction };
+	const ERow GraphicsRows[] = { ERow::LightingQuality, ERow::Upscaler, ERow::RenderScale, ERow::AntiAliasing, ERow::Sharpness, ERow::DynamicResolution,
+		ERow::FrameGeneration, ERow::LowLatency, ERow::RayTracing, ERow::RayReconstruction, ERow::MegaLights };
 
 	// A PC with none of it: every row is still listed; DLSS / DLAA, frame generation, Reflex and ray tracing are locked, with reasons.
 	ShinobiGraphics::FCaps None;
 	None.DLSSLock = None.RayReconstructionLock = None.ReflexLock = None.FrameGenLock = TEXT("Requires an NVIDIA GeForce RTX graphics card.");
-	None.RayTracingLock = TEXT("Requires a graphics card with hardware ray tracing, running DirectX 12.");
+	None.RayTracingLock = None.MegaLightsLock = TEXT("Requires a graphics card with hardware ray tracing, running DirectX 12.");
 	None.FrameGenAllModes = { TEXT("Off"), TEXT("On2X"), TEXT("On3X"), TEXT("On4X") };
 	None.FrameGenModes = { TEXT("Off") };
 	ShinobiGraphics::SetCapsOverride(&None);
@@ -308,7 +308,7 @@ bool FShinobiSettingsGraphicsTechTest::RunTest(const FString& Parameters)
 		TestTrue(FString::Printf(TEXT("row %d: listed"), int32(Row)), ShinobiSettings::RowsFor(true).Contains(Row));
 	}
 	TestTrue(TEXT("Resolution is listed, under Screen mode"), ShinobiSettings::RowsFor(true).IndexOfByKey(ERow::Resolution) == ShinobiSettings::RowsFor(true).IndexOfByKey(ERow::WindowMode) + 1);
-	for (const ERow Row : { ERow::FrameGeneration, ERow::LowLatency, ERow::RayTracing, ERow::RayReconstruction })
+	for (const ERow Row : { ERow::FrameGeneration, ERow::LowLatency, ERow::RayTracing, ERow::RayReconstruction, ERow::MegaLights })
 	{
 		TestFalse(FString::Printf(TEXT("row %d: locked, with a reason"), int32(Row)), ShinobiSettings::RowLock(Row).IsEmpty());
 		TestTrue(FString::Printf(TEXT("row %d: the note says it's locked"), int32(Row)), ShinobiSettings::RowNote(Row).StartsWith(TEXT("Locked: ")));
@@ -342,7 +342,7 @@ bool FShinobiSettingsGraphicsTechTest::RunTest(const FString& Parameters)
 
 	// An RTX 40-class PC with the plugins: 2X frame generation, not 3X / 4X (RTX 50).
 	ShinobiGraphics::FCaps Rtx40;
-	Rtx40.bDLSS = Rtx40.bRayReconstruction = Rtx40.bReflex = Rtx40.bRayTracing = true;
+	Rtx40.bDLSS = Rtx40.bRayReconstruction = Rtx40.bReflex = Rtx40.bRayTracing = Rtx40.bMegaLights = true;
 	Rtx40.FrameGenAllModes = { TEXT("Off"), TEXT("On2X"), TEXT("On3X"), TEXT("On4X") };
 	Rtx40.FrameGenModes = { TEXT("Off"), TEXT("On2X") };
 	ShinobiGraphics::SetCapsOverride(&Rtx40);
@@ -352,7 +352,7 @@ bool FShinobiSettingsGraphicsTechTest::RunTest(const FString& Parameters)
 
 	// An RTX 50-class PC.
 	ShinobiGraphics::FCaps Rtx;
-	Rtx.bDLSS = Rtx.bRayReconstruction = Rtx.bReflex = Rtx.bRayTracing = true;
+	Rtx.bDLSS = Rtx.bRayReconstruction = Rtx.bReflex = Rtx.bRayTracing = Rtx.bMegaLights = true;
 	Rtx.FrameGenAllModes = Rtx.FrameGenModes = { TEXT("Off"), TEXT("On2X"), TEXT("On3X"), TEXT("On4X"), TEXT("OnDynamic") };
 	ShinobiGraphics::SetCapsOverride(&Rtx);
 	for (const ERow Row : GraphicsRows)

@@ -76,6 +76,10 @@ def fresh_material(name, blend, shading):
     material = TOOLS.create_asset(name, VFX_DIR, unreal.Material, unreal.MaterialFactoryNew())
     material.set_editor_property("blend_mode", blend)
     material.set_editor_property("shading_model", shading)
+    # The shower is drawn as instanced static meshes (UShinobiInstancedVfxSubsystem): a cooked build needs the usage baked in.
+    MEL.set_base_material_usage(material, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES, True)
+    if blend != unreal.BlendMode.BLEND_OPAQUE:
+        material.set_editor_property("output_translucent_velocity", True)  # motion vectors for TSR / DLSS
     return material
 
 

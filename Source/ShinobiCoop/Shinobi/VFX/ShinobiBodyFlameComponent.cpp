@@ -82,7 +82,7 @@ void UShinobiBodyFlameComponent::BeginPlay()
 		Light->SetupAttachment(this);
 		Light->SetIntensity(400.f);
 		Light->SetAttenuationRadius(300.f);
-		Light->SetCastShadows(false);
+		ShinobiVfx::ApplyEffectLight(Light); // shadows while MegaLights is on
 		Light->SetSpecularScale(0.f);
 		Light->SetVisibility(false);
 		Light->RegisterComponent();

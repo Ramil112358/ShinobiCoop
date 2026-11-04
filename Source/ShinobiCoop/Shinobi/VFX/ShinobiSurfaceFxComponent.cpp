@@ -53,7 +53,7 @@ void UShinobiSurfaceFxComponent::BeginPlay()
 	Light->SetupAttachment(this);
 	Light->SetLightColor(ShinobiVfx::Colors::Chakra);
 	Light->SetAttenuationRadius(LightRadius);
-	Light->SetCastShadows(false);
+	ShinobiVfx::ApplyEffectLight(Light); // shadows while MegaLights is on
 	Light->SetSpecularScale(0.f);
 	Light->SetIntensity(0.f);
 	Light->RegisterComponent();

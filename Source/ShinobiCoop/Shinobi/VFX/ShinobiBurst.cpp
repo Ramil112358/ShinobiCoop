@@ -74,7 +74,7 @@ AShinobiBurst::AShinobiBurst()
 
 	Light = CreateDefaultSubobject<UPointLightComponent>(TEXT("Light"));
 	Light->SetupAttachment(Sphere);
-	Light->SetCastShadows(false);
+	ShinobiVfx::MarkEffectLight(Light); // (shadows: ApplyEffectLight at BeginPlay)
 	Light->SetSpecularScale(0.f);
 	Light->SetVisibility(false);
 }
@@ -108,6 +108,7 @@ void AShinobiBurst::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 void AShinobiBurst::BeginPlay()
 {
 	Super::BeginPlay();
+	ShinobiVfx::ApplyEffectLight(Light); // shadows while MegaLights is on
 	if (IsNetMode(NM_DedicatedServer))
 	{
 		SetActorTickEnabled(false);

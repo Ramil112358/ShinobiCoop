@@ -21,9 +21,9 @@ namespace ShinobiSettings
 	enum class ERow : uint8
 	{
 		Character, Face, Outfit,
-		Quality,
+		Quality, LightingQuality,
 		Upscaler, RenderScale, AntiAliasing, Sharpness, DynamicResolution, FrameGeneration, LowLatency,
-		RayTracing, RayReconstruction,
+		RayTracing, RayReconstruction, MegaLights,
 		WindowMode, Resolution, FrameCap, VSync,
 		Outline, Snow,
 		Num

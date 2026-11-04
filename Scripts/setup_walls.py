@@ -163,6 +163,7 @@ def build_water():
     height^8 * crest noise (the top fifth); coverage likewise higher at the rim and crest. Height is LocalPosition.z / 320 (the mesh's)."""
     m = fresh_material("M_WaterCurtain")
     m.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    m.set_editor_property("output_translucent_velocity", True)  # motion vectors for TSR / DLSS (setup_motion_vectors.py)
     m.set_editor_property("translucency_pass", unreal.MaterialTranslucencyPass.MTP_AFTER_DOF)
     m.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
     m.set_editor_property("two_sided", True)

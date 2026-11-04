@@ -42,6 +42,8 @@ namespace ShinobiGraphics
 		bool bReflex = false;
 		/** Hardware ray tracing is on for this run (DX12 SM6 or Vulkan with an RT-capable GPU, r.RayTracing in the project). */
 		bool bRayTracing = false;
+		/** MegaLights can run: it traces its shadows with hardware ray tracing (r.MegaLights.EnableForProject exists). */
+		bool bMegaLights = false;
 		/** Every frame generation mode the plugin has, by its own enum names (e.g. "Off", "On2X", "On3X", "On4X"). "Off" is
 		 * first. Without the plugin: Off, On2X, On3X, On4X (shown, locked). */
 		TArray<FString> FrameGenAllModes;
@@ -53,6 +55,7 @@ namespace ShinobiGraphics
 		FString RayReconstructionLock;
 		FString ReflexLock;
 		FString RayTracingLock;
+		FString MegaLightsLock;
 		FString FrameGenLock;
 
 		bool HasFrameGen() const { return FrameGenModes.Num() > 1; }
@@ -94,6 +97,11 @@ namespace ShinobiGraphics
 	/** Lumen traces hardware rays (r.Lumen.HardwareRayTracing) instead of software distance fields. Off when unsupported. */
 	SHINOBICOOP_API bool IsRayTracing();
 	SHINOBICOOP_API void SetRayTracing(bool bOn);
+
+	/** MegaLights (production-ready in 5.8): local lights are shaded and shadowed by stochastic ray-traced sampling at a fixed
+	 * cost. On, jutsu and effect lights cast shadows (ShinobiVfx::ApplyEffectLight). Off by default; off when unsupported. */
+	SHINOBICOOP_API bool IsMegaLights();
+	SHINOBICOOP_API void SetMegaLights(bool bOn);
 
 	/** DLSS Ray Reconstruction denoises the ray-traced lighting. Only in effect with DLSS and ray tracing both on. */
 	SHINOBICOOP_API bool IsRayReconstruction();

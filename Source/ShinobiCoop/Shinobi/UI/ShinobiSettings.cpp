@@ -14,6 +14,8 @@
 namespace
 {
 	const TCHAR* QualityNames[] = { TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic"), TEXT("Cinematic") };
+	// Lighting quality: the global illumination and reflections scalability groups together. In 5.8 Medium is Lumen Lite.
+	const TCHAR* LightingNames[] = { TEXT("Low"), TEXT("Medium (Lumen Lite)"), TEXT("High"), TEXT("Epic"), TEXT("Cinematic") };
 	// Upscaling (ShinobiGraphics): the method, its quality (the vendors' mode names), and native anti-aliasing while it's off.
 	const TCHAR* UpscalerNames[] = { TEXT("Off"), TEXT("TSR"), TEXT("NVIDIA DLSS") }; // (ShinobiGraphics::EUpscaler's order)
 	const TCHAR* UpscalingQualityNames[] = { TEXT("Quality"), TEXT("Balanced"), TEXT("Performance"), TEXT("Ultra Performance") };
@@ -168,6 +170,8 @@ FString ShinobiSettings::RowName(ERow Row)
 	case ERow::Face: return TEXT("Face");
 	case ERow::Outfit: return TEXT("Outfit");
 	case ERow::Quality: return TEXT("Graphics quality");
+	case ERow::LightingQuality: return TEXT("Lighting quality");
+	case ERow::MegaLights: return TEXT("MegaLights");
 	case ERow::Upscaler: return TEXT("Upscaling method");
 	case ERow::RenderScale: return TEXT("Upscaling quality");
 	case ERow::AntiAliasing: return TEXT("Anti-aliasing");
@@ -215,6 +219,10 @@ FString ShinobiSettings::RowValue(ERow Row)
 		const int32 Level = S->GetOverallScalabilityLevel();
 		return Level >= 0 && Level < UE_ARRAY_COUNT(QualityNames) ? QualityNames[Level] : TEXT("Custom");
 	}
+	case ERow::LightingQuality:
+		return LightingNames[RowIndex(Row)];
+	case ERow::MegaLights:
+		return OnOff(ShinobiGraphics::IsMegaLights());
 	case ERow::Upscaler:
 		return UpscalerNames[uint8(ShinobiGraphics::GetUpscaler())];
 	case ERow::RenderScale:
@@ -273,6 +281,8 @@ FString ShinobiSettings::RowDescription(ERow Row)
 	case ERow::Face: return TEXT("The face your character wears, on characters that have more than one.");
 	case ERow::Outfit: return TEXT("What your character wears over their own clothes.");
 	case ERow::Quality: return TEXT("The overall graphics preset. Lower it for more FPS. Custom means a single setting was changed elsewhere.");
+	case ERow::LightingQuality: return TEXT("Bounce light and reflections (Lumen). Medium is Lumen Lite: about half the cost of High, with softer, simpler bounce light; the biggest single FPS win. Low turns Lumen off. Graphics quality sets this too.");
+	case ERow::MegaLights: return TEXT("Lights from jutsu, fires and chakra cast soft shadows, shaded by Unreal's MegaLights at a fixed cost however many there are. Needs hardware ray tracing (DirectX 12); greyed out otherwise.");
 	case ERow::Upscaler: return TEXT("Draws the scene below your screen's resolution and rebuilds it sharp, for more FPS. TSR is Unreal's own and runs on any card. NVIDIA DLSS uses a GeForce RTX card's AI cores and usually looks sharper; it's greyed out in the list without one. Off draws every pixel.");
 	case ERow::RenderScale: return TEXT("How much the upscaler upscales. Quality looks closest to native, Ultra Performance gives the most FPS. Greyed out while Upscaling method is Off (it's kept for when you turn upscaling back on).");
 	case ERow::AntiAliasing: return TEXT("Smooths jagged edges at native resolution. NVIDIA DLAA (DLSS without upscaling, GeForce RTX only) gives the sharpest, most stable image for a little more GPU time than TSR. Greyed out while upscaling, because the upscaler smooths edges itself; your pick applies again when Upscaling method is Off.");
@@ -301,6 +311,7 @@ FString ShinobiSettings::RowSection(ERow Row)
 	case ERow::Outfit:
 		return TEXT("CHARACTER");
 	case ERow::Quality:
+	case ERow::LightingQuality:
 		return TEXT("GRAPHICS");
 	case ERow::Upscaler:
 	case ERow::RenderScale:
@@ -312,6 +323,7 @@ FString ShinobiSettings::RowSection(ERow Row)
 		return TEXT("UPSCALING & FRAME GENERATION");
 	case ERow::RayTracing:
 	case ERow::RayReconstruction:
+	case ERow::MegaLights:
 		return TEXT("RAY TRACING");
 	case ERow::WindowMode:
 	case ERow::Resolution:
@@ -362,6 +374,8 @@ FString ShinobiSettings::RowLock(ERow Row)
 		return Caps.bRayTracing ? FString() : Caps.RayTracingLock;
 	case ERow::RayReconstruction:
 		return Caps.bRayReconstruction ? FString() : Caps.RayReconstructionLock;
+	case ERow::MegaLights:
+		return Caps.bMegaLights ? FString() : Caps.MegaLightsLock;
 	case ERow::VSync:
 		return ShinobiGraphics::IsFrameGenOn() ? FString(VSyncFrameGenLock) : FString();
 	case ERow::RenderScale:
@@ -502,6 +516,12 @@ TArray<FString> ShinobiSettings::RowOptions(ERow Row)
 			Options.Add(Name);
 		}
 		break;
+	case ERow::LightingQuality:
+		for (const TCHAR* Name : LightingNames)
+		{
+			Options.Add(Name);
+		}
+		break;
 	case ERow::Upscaler:
 		for (const TCHAR* Name : UpscalerNames)
 		{
@@ -553,6 +573,7 @@ TArray<FString> ShinobiSettings::RowOptions(ERow Row)
 	case ERow::DynamicResolution:
 	case ERow::RayTracing:
 	case ERow::RayReconstruction:
+	case ERow::MegaLights:
 	case ERow::VSync:
 	case ERow::Outline:
 		Options = { TEXT("Off"), TEXT("On") };
@@ -604,6 +625,10 @@ int32 ShinobiSettings::RowIndex(ERow Row)
 		const int32 Level = S->GetOverallScalabilityLevel();
 		return Level >= 0 && Level < UE_ARRAY_COUNT(QualityNames) ? Level : INDEX_NONE; // Custom: none of them
 	}
+	case ERow::LightingQuality:
+		return FMath::Clamp(S->GetGlobalIlluminationQuality(), 0, int32(UE_ARRAY_COUNT(LightingNames)) - 1);
+	case ERow::MegaLights:
+		return ShinobiGraphics::IsMegaLights() ? 1 : 0;
 	case ERow::Upscaler:
 		return int32(ShinobiGraphics::GetUpscaler());
 	case ERow::RenderScale:
@@ -743,6 +768,13 @@ void ShinobiSettings::SetRowIndex(ERow Row, UWorld* World, int32 Index)
 	case ERow::Quality:
 		S->SetOverallScalabilityLevel(Index);
 		break;
+	case ERow::LightingQuality:
+		S->SetGlobalIlluminationQuality(Index); // (Medium: Lumen Lite in 5.8, for both)
+		S->SetReflectionQuality(Index);
+		break;
+	case ERow::MegaLights:
+		ShinobiGraphics::SetMegaLights(Index == 1);
+		return;
 	case ERow::Upscaler:
 		ShinobiGraphics::SetUpscaler(ShinobiGraphics::EUpscaler(Index));
 		return;

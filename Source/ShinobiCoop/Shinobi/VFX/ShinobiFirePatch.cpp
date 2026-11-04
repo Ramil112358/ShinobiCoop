@@ -78,7 +78,7 @@ AShinobiFirePatch::AShinobiFirePatch()
 	Light = CreateDefaultSubobject<UPointLightComponent>(TEXT("Light"));
 	Light->SetupAttachment(RootComponent);
 	Light->SetRelativeLocation(FVector(0.f, 0.f, 50.f));
-	Light->SetCastShadows(false);
+	ShinobiVfx::MarkEffectLight(Light); // (shadows: ApplyEffectLight at BeginPlay)
 	Light->SetSpecularScale(0.f);
 }
 
@@ -117,6 +117,7 @@ void AShinobiFirePatch::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 void AShinobiFirePatch::BeginPlay()
 {
 	Super::BeginPlay();
+	ShinobiVfx::ApplyEffectLight(Light); // shadows while MegaLights is on
 	const bool bBlack = Kind == EShinobiFirePatch::BlackFlame;
 	const bool bTairn = Kind == EShinobiFirePatch::TairnFire;
 	const bool bDragon = bTairn || Kind == EShinobiFirePatch::CrimsonFire;

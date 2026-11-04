@@ -11,6 +11,9 @@
 #include "Modules/ModuleManager.h"
 #include "RenderUtils.h"
 #include "Shinobi/UI/ShinobiSettings.h"
+#include "Shinobi/VFX/ShinobiVfx.h"
+#include "Components/LightComponent.h"
+#include "UObject/UObjectIterator.h"
 #include "UObject/Class.h"
 #include "UObject/UnrealType.h"
 
@@ -24,6 +27,7 @@ namespace
 	const TCHAR* AntiAliasingKey = TEXT("AntiAliasing");
 	const TCHAR* SharpnessKey = TEXT("Sharpness");
 	const TCHAR* RayTracingKey = TEXT("bRayTracing");
+	const TCHAR* MegaLightsKey = TEXT("bMegaLights");
 	const TCHAR* RayReconstructionKey = TEXT("bRayReconstruction");
 	const TCHAR* FrameGenKey = TEXT("FrameGeneration");
 	const TCHAR* ReflexModeKey = TEXT("ReflexMode");
@@ -45,7 +49,9 @@ namespace
 	const TCHAR* CVarReflexMode = TEXT("t.Streamline.Reflex.Mode"); // 0 off, 1 low latency, 2 low latency + boost
 	const TCHAR* CVarLumenHWRT = TEXT("r.Lumen.HardwareRayTracing");
 	const TCHAR* CVarSharpen = TEXT("r.Tonemapper.Sharpen");
-	const TCHAR* const ReportedCVars[] = { CVarDLSS, CVarDLAA, CVarDLSSDenoiser, CVarDLSSG, CVarReflex, CVarReflexMode, CVarLumenHWRT, CVarSharpen,
+	const TCHAR* CVarMegaLights = TEXT("r.MegaLights.EnableForProject");
+	const TCHAR* const ReportedCVars[] = { CVarDLSS, CVarDLAA, CVarDLSSDenoiser, CVarDLSSG, CVarReflex, CVarReflexMode, CVarLumenHWRT, CVarSharpen, CVarMegaLights,
+		TEXT("r.Lumen.FinalGatherMethod"), TEXT("sg.GlobalIlluminationQuality"), TEXT("sg.ReflectionQuality"), TEXT("r.Velocity.EnableVertexDeformation"),
 		TEXT("r.ScreenPercentage"), TEXT("r.AntiAliasingMethod"), TEXT("r.RayTracing"), TEXT("r.DynamicRes.OperationMode") };
 
 	/** Upscaling quality: Quality, Balanced, Performance, Ultra Performance (the vendors' per-axis ratios). */
@@ -468,6 +474,8 @@ namespace
 		Caps.bReflex = ProbeFeature(ReflexLibrary, CVarReflex, TEXT("IsReflexSupported"), TEXT("QueryReflexSupport"), LockNeedsGeForce, false, Caps.ReflexLock);
 		Caps.bRayTracing = IsRayTracingEnabled() && FindCVar(CVarLumenHWRT);
 		Caps.RayTracingLock = Caps.bRayTracing ? FString() : FString(LockNeedsRayTracingGpu);
+		Caps.bMegaLights = Caps.bRayTracing && FindCVar(CVarMegaLights);
+		Caps.MegaLightsLock = Caps.bMegaLights ? FString() : !Caps.bRayTracing ? FString(LockNeedsRayTracingGpu) : FString(TEXT("Not available in this build."));
 		ProbeFrameGen(Caps);
 		if (Caps.bRayReconstruction && !Caps.bRayTracing)
 		{
@@ -542,6 +550,7 @@ namespace
 		Feature(TEXT("DLSS Ray Reconstruction"), Caps.bRayReconstruction, Caps.RayReconstructionLock);
 		Feature(TEXT("NVIDIA Reflex"), Caps.bReflex, Caps.ReflexLock);
 		Feature(TEXT("Ray tracing"), Caps.bRayTracing, Caps.RayTracingLock);
+		Feature(TEXT("MegaLights"), Caps.bMegaLights, Caps.MegaLightsLock);
 		Feature(TEXT("DLSS Frame Generation"), Caps.HasFrameGen(), Caps.FrameGenLock);
 		Lines.Add(FString::Printf(TEXT("=> frame generation modes: all [%s], this PC [%s]"), *FString::Join(Caps.FrameGenAllModes, TEXT(", ")), *FString::Join(Caps.FrameGenModes, TEXT(", "))));
 		// What the plugins say is running now (after the menu's picks were applied).
@@ -832,6 +841,21 @@ void ShinobiGraphics::SetRayTracing(bool bOn)
 	ApplySaved();
 }
 
+bool ShinobiGraphics::IsMegaLights()
+{
+	return Caps().bMegaLights && GetSavedBool(MegaLightsKey, false);
+}
+
+void ShinobiGraphics::SetMegaLights(bool bOn)
+{
+	if (bOn && !Caps().bMegaLights)
+	{
+		return;
+	}
+	SaveBool(MegaLightsKey, bOn);
+	ApplySaved();
+}
+
 bool ShinobiGraphics::IsRayReconstruction()
 {
 	return Caps().bRayReconstruction && GetSavedBool(RayReconstructionKey, false) && IsDLSSActive() && IsRayTracing();
@@ -982,6 +1006,18 @@ void ShinobiGraphics::ApplySaved()
 
 	// Hardware ray tracing for Lumen (the project builds the ray-tracing shaders: r.RayTracing in DefaultEngine.ini).
 	SetCVar(CVarLumenHWRT, IsRayTracing() ? 1 : 0);
+
+	// MegaLights, and the effect lights already in the world casting shadows with it (new ones do at BeginPlay).
+	const bool bMegaLights = IsMegaLights();
+	SetCVar(CVarMegaLights, bMegaLights ? 1 : 0);
+	for (TObjectIterator<ULightComponent> It; It; ++It)
+	{
+		const UWorld* World = It->GetWorld();
+		if (World && World->IsGameWorld() && It->ComponentTags.Contains(ShinobiVfx::EffectLightTag) && It->CastShadows != bMegaLights)
+		{
+			It->SetCastShadows(bMegaLights);
+		}
+	}
 
 	if (Caps().HasFrameGen())
 	{

@@ -117,7 +117,7 @@ void UShinobiChakraAuraComponent::BeginPlay()
 	// No specular: its floor glint lands between pawn and camera and follows the camera around.
 	Light->SetSpecularScale(0.f);
 	Light->SetAttenuationRadius(LightRadius);
-	Light->SetCastShadows(false);
+	ShinobiVfx::ApplyEffectLight(Light); // shadows while MegaLights is on
 	Light->SetVisibility(false);
 	Light->RegisterComponent();
 

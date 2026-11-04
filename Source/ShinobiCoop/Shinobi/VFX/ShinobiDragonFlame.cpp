@@ -30,7 +30,7 @@ AShinobiDragonFlame::AShinobiDragonFlame()
 	Light->SetLightColor(FLinearColor(0.45f, 0.65f, 1.f));
 	Light->SetIntensity(0.f);
 	Light->SetAttenuationRadius(1800.f);
-	Light->SetCastShadows(false);
+	ShinobiVfx::MarkEffectLight(Light); // (shadows: ApplyEffectLight at BeginPlay)
 }
 
 void AShinobiDragonFlame::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -106,6 +106,7 @@ void AShinobiDragonFlame::AddParticle(UStaticMesh* Plane, uint8 Sprite, const FL
 void AShinobiDragonFlame::BeginPlay()
 {
 	Super::BeginPlay();
+	ShinobiVfx::ApplyEffectLight(Light); // shadows while MegaLights is on
 	if (IsNetMode(NM_DedicatedServer))
 	{
 		SetActorTickEnabled(HasAuthority()); // only the server's following of the aim is needed

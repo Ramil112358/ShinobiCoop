@@ -52,7 +52,7 @@ AShinobiProjectile::AShinobiProjectile()
 	Light->SetLightColor(ShinobiVfx::Colors::Fire);
 	Light->SetIntensity(5000.f);
 	Light->SetAttenuationRadius(400.f);
-	Light->SetCastShadows(false);
+	ShinobiVfx::MarkEffectLight(Light); // (shadows: ApplyEffectLight at BeginPlay)
 
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.bStartWithTickEnabled = false; // only the Fireball's trail ticks
@@ -67,6 +67,7 @@ AShinobiProjectile::AShinobiProjectile()
 void AShinobiProjectile::BeginPlay()
 {
 	Super::BeginPlay();
+	ShinobiVfx::ApplyEffectLight(Light); // shadows while MegaLights is on
 	if (Scale != 1.f)
 	{
 		Collision->SetSphereRadius(Collision->GetUnscaledSphereRadius() * Scale);

@@ -290,6 +290,28 @@ Select-String -Path Plugins\DLSS\Source\*\Private\*.cpp, Plugins\Streamline*\Sou
 - The image-quality items in section 5 (VFX motion vectors, foliage velocity, the outline's post-process location). These aren't done yet.
 - Ray tracing on: London's glass and the water, and buildings whose Nanite fallback is coarse (the BVH uses the fallback).
 
+## 10. Implemented: frame-rate wins (section 7) and image quality (section 5)
+
+**Run once in the editor:** `Scripts/run_python.ps1 -Script Scripts/setup_motion_vectors.py` (with the editor closed). It changes the existing
+assets in place and doesn't rebuild the VFX, the hail or the maps. The builder scripts (`setup_vfx.py`, `setup_walls.py`, `setup_ice_hail.py`,
+`world/look.py`) set the same flags, so a later rebuild keeps them.
+
+| Change | Where | Notes |
+| --- | --- | --- |
+| **Lighting quality** row (GRAPHICS): Low / **Medium (Lumen Lite)** / High / Epic / Cinematic | `ShinobiSettings` (`SetGlobalIlluminationQuality` + `SetReflectionQuality`) | In 5.8, Medium GI and reflections quality *is* Lumen Lite (Epic: about 2x cheaper than High). The row lets players take it alone instead of dropping the whole preset. A forum report notes dark blocks under moving objects at Medium in 5.8: check the valley at Medium. |
+| **MegaLights** row (RAY TRACING), Off by default | `ShinobiGraphics` (`r.MegaLights.EnableForProject` at runtime), `ShinobiVfx::MarkEffectLight` / `ApplyEffectLight` | Needs hardware ray tracing, so it's locked without it. While it's on, every jutsu and effect light casts shadows (fireball, meteor, bursts, fire patches, dragon fire, cast flashes, auras, black flames, wall-run glow, camp fires). They're tagged `ShinobiEffectLight`, and the ones already burning switch too. Without MegaLights they stay shadowless, because each shadowed point light would cost six virtual-shadow-map views. Compare `stat gpu` (Lights) with a few jutsu on screen, Off vs On. |
+| **Ice Meteor shower drawn instanced** | `UShinobiInstancedVfxSubsystem` (new), `AShinobiMeteor` | A shower used to make 60 shards × 4 mesh components (shard, frost trail, 2 chips) = 240 components. Now the shards draw from at most 4 instanced meshes (3 shard variants, the trail). Each shard is still an actor (landing, damage, replication and the bots' dodging are unchanged). Each frame's instance transforms are committed in one batch with last frame's as the previous ones, so the falling shards write motion vectors. M_IceShard / M_IceTrail need the Instanced Static Meshes usage (the script adds it). |
+| Kunai: **not** instanced | — | Kunai are physical projectiles (collision, hits, replicated movement), and only a few fly at once. Instancing them would need a projectile manager. The same goes for the per-particle flame cards, which each have their own material instance (sprite frame, fade). |
+| **Characters stay off Nanite** | test `ShinobiCoop.Render.CharactersStayOffNanite` | Fails if any roster body, any outfit fitted to it, or any skinned mesh a spawned player wears has Nanite turned on. Nanite skinning isn't production-ready, and MetaHuman grooms, Mutable bodies and Chaos cloth make the hero the worst case. |
+| **Jutsu mesh effects write motion vectors** | `setup_motion_vectors.py`: *Output Depth and Velocity* on M_ChakraBodyAura (every glow / orb / burst / aura), M_Flame, M_FlameDark, M_Phased, M_Susanoo, M_SusanooBlade, M_WaterWall, M_PushDome, M_ChakraPillar, M_IceTrail, M_WaterCurtain | Fixes the ghosting trail behind moving jutsu with TSR, DLSS and frame generation. The soft sprite cards (M_Sprite*) are left out on purpose: their velocity would overwrite the background's behind their faint edges and smear it instead. |
+| **Foliage wind writes motion vectors** | `Config/DefaultEngine.ini`: `r.Velocity.EnableVertexDeformation=1` | World Position Offset (wind, inflating jutsu shells) outputs velocity, so swaying leaves don't smear under upscaling. AMD's FSR guide lists this setting as required. It costs a little in the velocity pass. |
+| **Outline after the upscaler** | `Scripts/world/look.py` (rebuilt in place by the script) | M_OutlinePost moves from *Scene Color After DOF* (render resolution, then upscaled: the 1–2 px line shimmered) to *After Tonemapping* (output resolution, sharp). Its stencil and depth lookups go through `ViewportUVToSceneTextureUV`, because the colour is at output resolution and the scene textures at render resolution. That mismatch is why outlines slid off the characters at 4K when this location was first tried. Thickness is 1.5 render pixels per 1080 render lines, never under 1. Colours are display-space now (friends darkened, enemies deep red). |
+
+Check after running the script: an arena at *Performance* upscaling with DLSS and with TSR. Look for outlines sitting on the characters at 4K,
+no ghost trail behind a Fireball or a Rasengan, a frame-generation capture of the Ice Meteor shower, and the valley's trees in wind.
+`Shinobi.GraphicsReport` now also lists `r.MegaLights.EnableForProject`, `r.Lumen.FinalGatherMethod`, `sg.GlobalIlluminationQuality`,
+`sg.ReflectionQuality` and `r.Velocity.EnableVertexDeformation`.
+
 ## Sources
 
 - [UE 5.8 release notes](https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-5-8-release-notes),
