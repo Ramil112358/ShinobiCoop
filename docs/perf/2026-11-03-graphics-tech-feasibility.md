@@ -228,18 +228,27 @@ The rows scroll when they don't fit.
 
 | Section | Row | Values | What it drives | Locked when |
 | --- | --- | --- | --- | --- |
-| UPSCALING & FRAME GENERATION | *Upscaling method* | TSR / NVIDIA DLSS (DLSS by default where it runs) | `r.NGX.DLSS.Enable`, `r.NGX.DLAA.Enable` at 100 % | the DLSS option: no RTX card / no plugin (`QueryDLSSSupport`) |
-| | *Upscaling quality* | Native AA (DLAA with DLSS) · Quality 67 % · Balanced 58 % · Performance 50 % · Ultra Performance 33 % | engine screen percentage, which TSR and DLSS follow | never |
+| UPSCALING & FRAME GENERATION | *Upscaling method* | Off / TSR / NVIDIA DLSS (first run: Off at a 100 % render scale, else DLSS where it runs) | `UDLSSLibrary::EnableDLSS` | the DLSS option: no RTX card / no plugin (`QueryDLSSSupport`) |
+| | *Upscaling quality* | Quality 66.7 % · Balanced 58 % · Performance 50 % · Ultra Performance 33.3 % | screen percentage (kept while upscaling is off) | while upscaling is Off |
+| | *Anti-aliasing* | TSR / NVIDIA DLAA (DLAA by default where it runs), at native resolution | `EnableDLSS` + `EnableDLAA` | while upscaling (the upscaler smooths edges itself); the DLAA option without DLSS |
 | | *Sharpness* | Off / Low / Medium / High | `r.Tonemapper.Sharpen` 0 / 0.4 / 0.8 / 1.2 | never |
 | | *Dynamic resolution* | Off / On | `UGameUserSettings::SetDynamicResolutionEnabled`; budget = frame cap (60 FPS uncapped), range 50 %–upscaling quality | never |
-| | *DLSS Frame Generation* | Off / 2X / 3X / 4X … / Dynamic (the plugin's own mode list) | `UStreamlineLibraryDLSSG::SetDLSSGMode`, else `r.Streamline.DLSSG.Enable` | row: no RTX 40+ / no plugin / HAGS off (`QueryDLSSGSupport`). Options the GPU can't run (3X+ below RTX 50, from `GetSupportedDLSSGModes`) |
-| | *NVIDIA Reflex Low Latency* | Off / On / On + Boost | `t.Streamline.Reflex.Enable`, `t.Streamline.Reflex.Mode` | row: no GeForce / no plugin. *Off* while frame generation is on |
+| | *DLSS Frame Generation* | Off / 2X … 6X / Dynamic (the plugin's own mode list; its legacy *Auto* is dropped when *OnDynamic* exists) | `UStreamlineLibraryDLSSG::SetDLSSGMode`, else `r.Streamline.DLSSG.Enable` | row: no RTX 40+ / no plugin / HAGS off (`QueryDLSSGSupport`). Options the GPU can't run (3X+ below RTX 50, from `GetSupportedDLSSGModes`) |
+| | *NVIDIA Reflex Low Latency* | Off / On / On + Boost | `UStreamlineLibraryReflex::SetReflexMode` | row: no GeForce / no plugin. *Off* while frame generation is on |
 | RAY TRACING | *Ray tracing* | Off / On (Off by default: today's look) | `r.Lumen.HardwareRayTracing` | no RT GPU or not DX12/Vulkan SM6 (`IsRayTracingEnabled()`) |
-| | *DLSS Ray Reconstruction* | Off / On (On also picks DLSS + ray tracing) | `r.NGX.DLSS.DenoiserMode` | no DLSS RR (`QueryDLSSRRSupport`) or no ray tracing |
-| DISPLAY | *VSync* | Off / On | engine VSync | locked off while DLSS Frame Generation is on |
+| | *DLSS Ray Reconstruction* | Off / On (On also turns on DLSS, or DLAA with upscaling off, and ray tracing) | `UDLSSLibrary::EnableDLSSRR` | no DLSS RR (`QueryDLSSRRSupport`) or no ray tracing |
+| DISPLAY | *Screen mode* (was *Window*) | Fullscreen / Borderless / Windowed | `SetFullscreenMode` (Borderless also takes the desktop resolution) | never |
+| | *Resolution* | the monitor's fullscreen modes (windowed: the sizes that fit), 1280 × 720 and up, largest first | `SetScreenResolution` + `ApplyResolutionSettings` | in Borderless (it always covers the screen) |
+| | *VSync* | Off / On | engine VSync | locked off while DLSS Frame Generation is on |
 
 `UShinobiGraphicsSubsystem` applies the saved picks at startup, after the PostEngineInit plugins have loaded. The settings panel probes again
-every time it opens.
+every time it opens. The plugins' own functions do the switching. Where a function is missing, the code falls back to the console variable, set at
+**code priority**. At game-setting priority, `r.Lumen.HardwareRayTracing=False` in `DefaultEngine.ini` (project-setting priority) silently won, so
+the *Ray tracing* setting did nothing.
+
+DLAA is not an *Upscaling quality*. As in Battlefield 6 (native anti-aliasing TAA / DLAA / FSR Native / XeSS Native, apart from the upscaler and its
+mode) and The Witcher 3 next-gen (anti-aliasing apart from resolution scaling), it's the native-resolution *Anti-aliasing* pick, used while
+*Upscaling method* is Off.
 
 ### Checking what was found: `Shinobi.GraphicsReport`
 
@@ -249,7 +258,9 @@ the in-game console (~) probes again and writes it again. It lists:
 - each NVIDIA plugin (found / enabled / mounted, its folder, and whether each of its modules loaded);
 - the console variables above (value, or *MISSING*);
 - every function of `UDLSSLibrary`, `UStreamlineLibraryDLSSG` and `UStreamlineLibraryReflex`, with parameter and return types (or *MISSING*);
-- what the menu concluded (available / locked, and why) and the frame generation modes.
+- what the menu concluded (available / locked, and why) and the frame generation modes;
+- `=> in effect:` what the plugins say is running now (`IsDLSSEnabled`, `IsDLAAEnabled`, `IsDLSSRREnabled`, `GetDLSSMode`, `GetDLSSGMode`,
+  `GetReflexMode`) and the screen percentage. After changing a setting, run the command again to check it took.
 
 That is how to confirm the names this code uses: each one should appear in the report. To check them in the plugin's source instead (PowerShell,
 from the project folder):

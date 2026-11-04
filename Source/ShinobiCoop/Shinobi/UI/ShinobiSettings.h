@@ -14,15 +14,17 @@ namespace ShinobiSettings
 	/**
 	 * Every row is always listed. A row (or one of its options) the machine can't use is locked, with the reason (RowLock,
 	 * OptionLock), like the graphics menus of current PC games: DLSS, frame generation, Reflex and ray tracing depend on the
-	 * GPU and NVIDIA's plugins (ShinobiGraphics). RenderScale is shown as "Upscaling quality" (Native / DLAA ... Ultra Performance).
+	 * GPU and NVIDIA's plugins (ShinobiGraphics). As in Battlefield 6 / The Witcher 3 next-gen, the upscaler (Off / TSR / NVIDIA
+	 * DLSS) and its quality (RenderScale: Quality ... Ultra Performance) are apart from native anti-aliasing (TSR / NVIDIA DLAA),
+	 * which applies while upscaling is off.
 	 */
 	enum class ERow : uint8
 	{
 		Character, Face, Outfit,
 		Quality,
-		Upscaler, RenderScale, Sharpness, DynamicResolution, FrameGeneration, LowLatency,
+		Upscaler, RenderScale, AntiAliasing, Sharpness, DynamicResolution, FrameGeneration, LowLatency,
 		RayTracing, RayReconstruction,
-		WindowMode, FrameCap, VSync,
+		WindowMode, Resolution, FrameCap, VSync,
 		Outline, Snow,
 		Num
 	};
@@ -46,7 +48,7 @@ namespace ShinobiSettings
 	SHINOBICOOP_API int32 RowIndex(ERow Row);
 	/** Sets Row to RowOptions(Row)[Index] (out of range, a locked row or option: nothing), then applies and saves. */
 	SHINOBICOOP_API void SetRowIndex(ERow Row, UWorld* World, int32 Index);
-	/** More than two options, or the upscaler: the settings panel picks from a dropdown list (locked options greyed out in it);
+	/** More than two options, or anti-aliasing: the settings panel picks from a dropdown list (locked options greyed out in it);
 	 * On / Off rows step. */
 	SHINOBICOOP_API bool UsesDropdown(ERow Row);
 	/** Step(Row, World, +1). */

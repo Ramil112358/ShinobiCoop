@@ -21,8 +21,15 @@
  */
 namespace ShinobiGraphics
 {
-	/** Which temporal upscaler (or native anti-aliasing at 100 %) draws the scene. */
-	enum class EUpscaler : uint8 { TSR, DLSS };
+	/**
+	 * How the scene is drawn, as in current PC games (Battlefield 6, The Witcher 3 next-gen): an upscaler draws below the screen's
+	 * resolution at an Upscaling quality and rebuilds it (smoothing edges itself), or upscaling is Off and the scene is drawn at
+	 * native resolution with the Anti-aliasing pick (TSR, or NVIDIA DLAA: DLSS at 100 %).
+	 */
+	enum class EUpscaler : uint8 { Off, TSR, DLSS };
+	enum class EAntiAliasing : uint8 { TSR, DLAA };
+	/** Upscaling quality: Quality, Balanced, Performance, Ultra Performance. */
+	constexpr int32 UpscalingQualities = 4;
 
 	/** What this machine can do, and why not. Probed by Caps() / RefreshCaps(), or set by tests (SetCapsOverride). */
 	struct FCaps
@@ -57,9 +64,27 @@ namespace ShinobiGraphics
 	/** Tests: pretend the machine can do Caps (nullptr: probe the real one again). Doesn't apply anything. */
 	SHINOBICOOP_API void SetCapsOverride(const FCaps* Caps);
 
-	/** The upscaler in use: the saved pick when this machine supports it, else TSR. */
+	/** The upscaler in use: the saved pick when this machine supports it (DLSS falls back to TSR). First run: Off at a 100 %
+	 * render scale, else DLSS where it runs, else TSR. */
 	SHINOBICOOP_API EUpscaler GetUpscaler();
+	/** Picking DLSS without DLSS support: nothing. */
 	SHINOBICOOP_API void SetUpscaler(EUpscaler Upscaler);
+
+	/** The upscaling quality (0 Quality ... 3 Ultra Performance), kept while upscaling is off. */
+	SHINOBICOOP_API int32 GetUpscalingQuality();
+	SHINOBICOOP_API void SetUpscalingQuality(int32 Quality);
+	/** The scene's resolution at Quality (66.7 / 58 / 50 / 33.3 %), the vendors' ratios. */
+	SHINOBICOOP_API float UpscalingQualityPercent(int32 Quality);
+
+	/** Native anti-aliasing (used while upscaling is off): DLAA where DLSS runs by default, else TSR. */
+	SHINOBICOOP_API EAntiAliasing GetAntiAliasing();
+	/** Picking DLAA without DLSS support: nothing. */
+	SHINOBICOOP_API void SetAntiAliasing(EAntiAliasing AntiAliasing);
+
+	/** DLSS draws the scene: DLSS upscaling, or DLAA at native resolution. */
+	SHINOBICOOP_API bool IsDLSSActive();
+	/** The screen percentage the picks ask for: 100 with upscaling off, else the upscaling quality's. */
+	SHINOBICOOP_API float GetTargetScreenPercentage();
 
 	/** Sharpening after upscaling (r.Tonemapper.Sharpen): 0 off, 1 low, 2 medium, 3 high. */
 	SHINOBICOOP_API int32 GetSharpness();
@@ -72,7 +97,7 @@ namespace ShinobiGraphics
 
 	/** DLSS Ray Reconstruction denoises the ray-traced lighting. Only in effect with DLSS and ray tracing both on. */
 	SHINOBICOOP_API bool IsRayReconstruction();
-	/** Saves the pick; turning it on also picks DLSS and ray tracing, which it needs. */
+	/** Saves the pick; turning it on also turns on DLSS (DLAA with upscaling off) and ray tracing, which it needs. */
 	SHINOBICOOP_API void SetRayReconstruction(bool bOn);
 
 	/** Frame generation options as shown, one per FCaps::FrameGenAllModes: "Off", "2X", "3X", "4X"... "Dynamic". */
@@ -92,9 +117,11 @@ namespace ShinobiGraphics
 	constexpr int32 ReflexModes = 3;
 
 	/**
-	 * Writes every console variable from the saved picks: the upscaler (and DLAA at 100 %), sharpness, Ray Reconstruction,
-	 * hardware Lumen, frame generation, Reflex, and the dynamic resolution budget (frame cap, upscaling quality). Call after any
-	 * of these or UGameUserSettings::ApplyNonResolutionSettings, which resets some of them. Missing console variables are skipped.
+	 * Applies every saved pick: the screen percentage, DLSS / DLAA / Ray Reconstruction (UDLSSLibrary::EnableDLSS, EnableDLAA,
+	 * EnableDLSSRR), sharpness, hardware Lumen, frame generation (SetDLSSGMode), Reflex (SetReflexMode), and the dynamic
+	 * resolution budget. Console variables are set at code priority, above the project's DefaultEngine.ini (which sets
+	 * r.Lumen.HardwareRayTracing). Call after any of these or UGameUserSettings::ApplyNonResolutionSettings, which resets some
+	 * of them. Missing plugin functions fall back to their console variables; missing console variables are skipped.
 	 */
 	SHINOBICOOP_API void ApplySaved();
 

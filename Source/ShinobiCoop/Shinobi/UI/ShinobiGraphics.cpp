@@ -20,6 +20,8 @@ namespace
 {
 	const TCHAR* GraphicsSection = TEXT("/Script/ShinobiCoop.ShinobiSettings");
 	const TCHAR* UpscalerKey = TEXT("Upscaler");
+	const TCHAR* UpscalingQualityKey = TEXT("UpscalingQuality");
+	const TCHAR* AntiAliasingKey = TEXT("AntiAliasing");
 	const TCHAR* SharpnessKey = TEXT("Sharpness");
 	const TCHAR* RayTracingKey = TEXT("bRayTracing");
 	const TCHAR* RayReconstructionKey = TEXT("bRayReconstruction");
@@ -36,7 +38,7 @@ namespace
 
 	// Their console variables, and the engine's.
 	const TCHAR* CVarDLSS = TEXT("r.NGX.DLSS.Enable");
-	const TCHAR* CVarDLAA = TEXT("r.NGX.DLAA.Enable"); // (older plugins; newer ones run DLAA at 100 % on their own)
+	const TCHAR* CVarDLAA = TEXT("r.NGX.DLAA.Enable"); // (older plugins; newer ones have UDLSSLibrary::EnableDLAA)
 	const TCHAR* CVarDLSSDenoiser = TEXT("r.NGX.DLSS.DenoiserMode"); // 1: Ray Reconstruction
 	const TCHAR* CVarDLSSG = TEXT("r.Streamline.DLSSG.Enable");
 	const TCHAR* CVarReflex = TEXT("t.Streamline.Reflex.Enable");
@@ -45,6 +47,9 @@ namespace
 	const TCHAR* CVarSharpen = TEXT("r.Tonemapper.Sharpen");
 	const TCHAR* const ReportedCVars[] = { CVarDLSS, CVarDLAA, CVarDLSSDenoiser, CVarDLSSG, CVarReflex, CVarReflexMode, CVarLumenHWRT, CVarSharpen,
 		TEXT("r.ScreenPercentage"), TEXT("r.AntiAliasingMethod"), TEXT("r.RayTracing"), TEXT("r.DynamicRes.OperationMode") };
+
+	/** Upscaling quality: Quality, Balanced, Performance, Ultra Performance (the vendors' per-axis ratios). */
+	const float QualityPercents[ShinobiGraphics::UpscalingQualities] = { 66.7f, 58.f, 50.f, 33.3f };
 
 	/** Sharpness Off / Low / Medium / High. */
 	const float SharpenAmounts[ShinobiGraphics::SharpnessLevels] = { 0.f, 0.4f, 0.8f, 1.2f };
@@ -79,11 +84,13 @@ namespace
 		return IConsoleManager::Get().FindConsoleVariable(Name);
 	}
 
+	// At code priority: game-setting priority is below the project's DefaultEngine.ini (r.Lumen.HardwareRayTracing=False there
+	// silently won over it) and below what plugins set from code. Only the console (and the command line) win over this.
 	void SetCVar(const TCHAR* Name, int32 Value)
 	{
 		if (IConsoleVariable* CVar = FindCVar(Name); CVar && CVar->GetInt() != Value)
 		{
-			CVar->Set(Value, ECVF_SetByGameSetting);
+			CVar->Set(Value, ECVF_SetByCode);
 		}
 	}
 
@@ -91,7 +98,7 @@ namespace
 	{
 		if (IConsoleVariable* CVar = FindCVar(Name); CVar && !FMath::IsNearlyEqual(CVar->GetFloat(), Value))
 		{
-			CVar->Set(Value, ECVF_SetByGameSetting);
+			CVar->Set(Value, ECVF_SetByCode);
 		}
 	}
 
@@ -218,6 +225,42 @@ namespace
 
 	void IgnoreReturn(FProperty&, const void*)
 	{
+	}
+
+	/** Calls a library function taking one bool (UDLSSLibrary::EnableDLSS etc.); false when it isn't there. */
+	bool CallWithBool(const TCHAR* ClassName, const TCHAR* FunctionName, bool bValue)
+	{
+		return CallLibrary(ClassName, FunctionName, [bValue](FProperty& Property, void* Value)
+		{
+			if (FBoolProperty* Bool = CastField<FBoolProperty>(&Property))
+			{
+				Bool->SetPropertyValue(Value, bValue);
+				return true;
+			}
+			return FillWorldContext(Property, Value);
+		}, IgnoreReturn);
+	}
+
+	/** Calls a library function taking one enum (SetDLSSGMode, SetReflexMode); Pick chooses the value from the enum
+	 * (INDEX_NONE: don't call). False when the function isn't there or nothing was picked. */
+	bool CallWithEnum(const TCHAR* ClassName, const TCHAR* FunctionName, TFunctionRef<int64(const UEnum&)> Pick)
+	{
+		return CallLibrary(ClassName, FunctionName, [&Pick](FProperty& Property, void* Value)
+		{
+			UEnum* Enum = nullptr;
+			FNumericProperty* Numeric = nullptr;
+			if (EnumOf(Property, Enum, Numeric))
+			{
+				const int64 EnumValue = Pick(*Enum);
+				if (EnumValue == INDEX_NONE)
+				{
+					return false;
+				}
+				Numeric->SetIntPropertyValue(Value, EnumValue);
+				return true;
+			}
+			return FillWorldContext(Property, Value);
+		}, IgnoreReturn);
 	}
 
 	/** A parameterless bool function, e.g. UDLSSLibrary::IsDLSSSupported; unset when it isn't there. */
@@ -371,6 +414,11 @@ namespace
 		{
 			Caps.FrameGenAllModes = FindCVar(CVarDLSSG) ? TArray<FString>{ TEXT("Off"), TEXT("On") } : TArray<FString>{ TEXT("Off"), TEXT("On2X"), TEXT("On3X"), TEXT("On4X") };
 		}
+		// The legacy "Auto" mode reads "Dynamic" like Dynamic Multi Frame Generation ("OnDynamic"); list only the latter.
+		if (Caps.FrameGenAllModes.ContainsByPredicate([](const FString& Mode) { return Mode != TEXT("Auto") && ShinobiGraphics::FrameGenLabel(Mode) == TEXT("Dynamic"); }))
+		{
+			Caps.FrameGenAllModes.Remove(TEXT("Auto"));
+		}
 		SortModes(Caps.FrameGenAllModes);
 		Caps.FrameGenModes = { Caps.FrameGenAllModes[0] };
 
@@ -496,6 +544,21 @@ namespace
 		Feature(TEXT("Ray tracing"), Caps.bRayTracing, Caps.RayTracingLock);
 		Feature(TEXT("DLSS Frame Generation"), Caps.HasFrameGen(), Caps.FrameGenLock);
 		Lines.Add(FString::Printf(TEXT("=> frame generation modes: all [%s], this PC [%s]"), *FString::Join(Caps.FrameGenAllModes, TEXT(", ")), *FString::Join(Caps.FrameGenModes, TEXT(", "))));
+		// What the plugins say is running now (after the menu's picks were applied).
+		const auto Bool = [](const TCHAR* Library, const TCHAR* Function)
+		{
+			const TOptional<bool> Value = CallBool(Library, Function);
+			return Value.IsSet() ? FString(Value.GetValue() ? TEXT("1") : TEXT("0")) : FString(TEXT("?"));
+		};
+		const auto Enum = [](const TCHAR* Library, const TCHAR* Function)
+		{
+			const FString Value = CallEnumName(Library, Function);
+			return Value.IsEmpty() ? FString(TEXT("?")) : Value;
+		};
+		Lines.Add(FString::Printf(TEXT("=> in effect: DLSS %s, DLAA %s, Ray Reconstruction %s, DLSS mode %s, frame generation %s, Reflex %s, screen percentage %s"),
+			*Bool(DLSSLibrary, TEXT("IsDLSSEnabled")), *Bool(DLSSLibrary, TEXT("IsDLAAEnabled")), *Bool(DLSSLibrary, TEXT("IsDLSSRREnabled")),
+			*Enum(DLSSLibrary, TEXT("GetDLSSMode")), *Enum(DLSSGLibrary, TEXT("GetDLSSGMode")), *Enum(ReflexLibrary, TEXT("GetReflexMode")),
+			FindCVar(TEXT("r.ScreenPercentage")) ? *FindCVar(TEXT("r.ScreenPercentage"))->GetString() : TEXT("?")));
 		return FString::Join(Lines, TEXT("\n"));
 	}
 
@@ -521,25 +584,49 @@ namespace
 	/** Sets the plugin's frame generation mode by enum name (UStreamlineLibraryDLSSG::SetDLSSGMode), else its console variable. */
 	void ApplyFrameGen(const FString& Mode)
 	{
-		const bool bSet = CallLibrary(DLSSGLibrary, TEXT("SetDLSSGMode"), [&Mode](FProperty& Property, void* Value)
-		{
-			UEnum* Enum = nullptr;
-			FNumericProperty* Numeric = nullptr;
-			if (EnumOf(Property, Enum, Numeric))
-			{
-				const int64 EnumValue = Enum->GetValueByNameString(Mode);
-				if (EnumValue == INDEX_NONE)
-				{
-					return false;
-				}
-				Numeric->SetIntPropertyValue(Value, EnumValue);
-				return true;
-			}
-			return FillWorldContext(Property, Value);
-		}, IgnoreReturn);
-		if (!bSet)
+		if (!CallWithEnum(DLSSGLibrary, TEXT("SetDLSSGMode"), [&Mode](const UEnum& Enum) { return Enum.GetValueByNameString(Mode); }))
 		{
 			SetCVar(CVarDLSSG, FrameGenOrder(Mode) == 0 ? 0 : 1);
+		}
+	}
+
+	/** 0 off, 1 on, 2 on + boost, for a Reflex mode enum name (EStreamlineReflexMode: Off, Enabled, Boost...). */
+	int32 ReflexModeLevel(const FString& Name)
+	{
+		return Name.Contains(TEXT("Boost")) ? 2 : (Name.Contains(TEXT("Off")) || Name.Contains(TEXT("Disabled"))) ? 0 : 1;
+	}
+
+	/** Sets Reflex (UStreamlineLibraryReflex::SetReflexMode), else its console variables. */
+	void ApplyReflex(int32 Level)
+	{
+		const bool bSet = CallWithEnum(ReflexLibrary, TEXT("SetReflexMode"), [Level](const UEnum& Enum) -> int64
+		{
+			for (int32 Index = 0; Index < Enum.NumEnums(); ++Index)
+			{
+				const FString Name = Enum.GetNameStringByIndex(Index);
+				if (!Name.EndsWith(TEXT("MAX")) && ReflexModeLevel(Name) == Level)
+				{
+					return Enum.GetValueByIndex(Index);
+				}
+			}
+			return INDEX_NONE;
+		});
+		if (!bSet)
+		{
+			SetCVar(CVarReflex, Level > 0 ? 1 : 0);
+			if (Level > 0)
+			{
+				SetCVar(CVarReflexMode, Level);
+			}
+		}
+	}
+
+	/** Turns a DLSS feature on or off through the plugin (UDLSSLibrary::EnableDLSS etc.), else its console variable. */
+	void ApplyDLSSFeature(const TCHAR* Function, const TCHAR* CVar, bool bOn)
+	{
+		if (!CallWithBool(DLSSLibrary, Function, bOn))
+		{
+			SetCVar(CVar, bOn ? 1 : 0);
 		}
 	}
 }
@@ -614,13 +701,41 @@ FString ShinobiGraphics::FrameGenLabel(const FString& ModeName)
 	return Digits.IsEmpty() ? FString(TEXT("2X")) : Digits + TEXT("X"); // "On" (no multiplier): plain frame generation
 }
 
+namespace
+{
+	/** The saved upscaler, or what the first run picks: Off at a 100 % render scale (today's look), else DLSS / TSR. */
+	ShinobiGraphics::EUpscaler SavedUpscaler()
+	{
+		const FString Saved = GetSavedString(UpscalerKey);
+		if (Saved == TEXT("Off"))
+		{
+			return ShinobiGraphics::EUpscaler::Off;
+		}
+		if (Saved == TEXT("TSR"))
+		{
+			return ShinobiGraphics::EUpscaler::TSR;
+		}
+		if (Saved == TEXT("DLSS"))
+		{
+			return ShinobiGraphics::EUpscaler::DLSS;
+		}
+		if (ShinobiSettings::GetRenderScale() >= 99.5f)
+		{
+			return ShinobiGraphics::EUpscaler::Off;
+		}
+		return ShinobiGraphics::Caps().bDLSS ? ShinobiGraphics::EUpscaler::DLSS : ShinobiGraphics::EUpscaler::TSR;
+	}
+
+	const TCHAR* UpscalerKeyValue(ShinobiGraphics::EUpscaler Upscaler)
+	{
+		return Upscaler == ShinobiGraphics::EUpscaler::Off ? TEXT("Off") : Upscaler == ShinobiGraphics::EUpscaler::TSR ? TEXT("TSR") : TEXT("DLSS");
+	}
+}
+
 ShinobiGraphics::EUpscaler ShinobiGraphics::GetUpscaler()
 {
-	if (!Caps().bDLSS)
-	{
-		return EUpscaler::TSR;
-	}
-	return GetSavedString(UpscalerKey) == TEXT("TSR") ? EUpscaler::TSR : EUpscaler::DLSS; // DLSS by default where it runs
+	const EUpscaler Saved = SavedUpscaler();
+	return Saved == EUpscaler::DLSS && !Caps().bDLSS ? EUpscaler::TSR : Saved;
 }
 
 void ShinobiGraphics::SetUpscaler(EUpscaler Upscaler)
@@ -629,8 +744,66 @@ void ShinobiGraphics::SetUpscaler(EUpscaler Upscaler)
 	{
 		return;
 	}
-	SaveString(UpscalerKey, Upscaler == EUpscaler::DLSS ? TEXT("DLSS") : TEXT("TSR"));
+	SaveString(UpscalerKey, UpscalerKeyValue(Upscaler));
 	ApplySaved();
+}
+
+int32 ShinobiGraphics::GetUpscalingQuality()
+{
+	int32 Quality = INDEX_NONE;
+	if (!GConfig->GetInt(GraphicsSection, UpscalingQualityKey, Quality, GGameUserSettingsIni))
+	{
+		// First run: the preset nearest the render scale (the menu used to set it directly), Quality at 100 %.
+		const float Scale = ShinobiSettings::GetRenderScale();
+		Quality = 0;
+		for (int32 Index = 1; Index < UpscalingQualities && Scale < 99.5f; ++Index)
+		{
+			if (FMath::Abs(QualityPercents[Index] - Scale) < FMath::Abs(QualityPercents[Quality] - Scale))
+			{
+				Quality = Index;
+			}
+		}
+	}
+	return FMath::Clamp(Quality, 0, UpscalingQualities - 1);
+}
+
+void ShinobiGraphics::SetUpscalingQuality(int32 Quality)
+{
+	SaveInt(UpscalingQualityKey, FMath::Clamp(Quality, 0, UpscalingQualities - 1));
+	ApplySaved();
+}
+
+float ShinobiGraphics::UpscalingQualityPercent(int32 Quality)
+{
+	return QualityPercents[FMath::Clamp(Quality, 0, UpscalingQualities - 1)];
+}
+
+ShinobiGraphics::EAntiAliasing ShinobiGraphics::GetAntiAliasing()
+{
+	const FString Saved = GetSavedString(AntiAliasingKey);
+	const bool bDLAA = Saved.IsEmpty() ? Caps().bDLSS : Saved == TEXT("DLAA"); // (DLAA by default where it runs)
+	return bDLAA && Caps().bDLSS ? EAntiAliasing::DLAA : EAntiAliasing::TSR;
+}
+
+void ShinobiGraphics::SetAntiAliasing(EAntiAliasing AntiAliasing)
+{
+	if (AntiAliasing == EAntiAliasing::DLAA && !Caps().bDLSS)
+	{
+		return;
+	}
+	SaveString(AntiAliasingKey, AntiAliasing == EAntiAliasing::DLAA ? TEXT("DLAA") : TEXT("TSR"));
+	ApplySaved();
+}
+
+bool ShinobiGraphics::IsDLSSActive()
+{
+	const EUpscaler Upscaler = GetUpscaler();
+	return Upscaler == EUpscaler::DLSS || (Upscaler == EUpscaler::Off && GetAntiAliasing() == EAntiAliasing::DLAA);
+}
+
+float ShinobiGraphics::GetTargetScreenPercentage()
+{
+	return GetUpscaler() == EUpscaler::Off ? 100.f : UpscalingQualityPercent(GetUpscalingQuality());
 }
 
 int32 ShinobiGraphics::GetSharpness()
@@ -661,7 +834,7 @@ void ShinobiGraphics::SetRayTracing(bool bOn)
 
 bool ShinobiGraphics::IsRayReconstruction()
 {
-	return Caps().bRayReconstruction && GetSavedBool(RayReconstructionKey, false) && GetUpscaler() == EUpscaler::DLSS && IsRayTracing();
+	return Caps().bRayReconstruction && GetSavedBool(RayReconstructionKey, false) && IsDLSSActive() && IsRayTracing();
 }
 
 void ShinobiGraphics::SetRayReconstruction(bool bOn)
@@ -673,7 +846,15 @@ void ShinobiGraphics::SetRayReconstruction(bool bOn)
 	SaveBool(RayReconstructionKey, bOn);
 	if (bOn)
 	{
-		SaveString(UpscalerKey, TEXT("DLSS")); // (it denoises inside DLSS, and only ray-traced lighting)
+		// It denoises inside DLSS, and only ray-traced lighting: DLSS (DLAA with upscaling off) and ray tracing come on with it.
+		if (GetUpscaler() == EUpscaler::Off)
+		{
+			SaveString(AntiAliasingKey, TEXT("DLAA"));
+		}
+		else
+		{
+			SaveString(UpscalerKey, TEXT("DLSS"));
+		}
 		SaveBool(RayTracingKey, true);
 	}
 	ApplySaved();
@@ -757,29 +938,46 @@ void ShinobiGraphics::ApplySaved()
 	{
 		return;
 	}
+	// The first run's derived picks are kept, so they don't drift as the render scale changes under them.
+	if (GetSavedString(UpscalerKey).IsEmpty())
+	{
+		SaveString(UpscalerKey, UpscalerKeyValue(SavedUpscaler()));
+	}
+	if (GetSavedInt(UpscalingQualityKey, INDEX_NONE) == INDEX_NONE)
+	{
+		SaveInt(UpscalingQualityKey, GetUpscalingQuality());
+	}
+
 	const bool bFrameGen = IsFrameGenOn();
+	const float ScreenPercentage = GetTargetScreenPercentage();
+	bool bApplySettings = false;
 	if (bFrameGen && Settings->IsVSyncEnabled())
 	{
 		// Frame generation paces the generated frames itself (with Reflex); engine VSync on top adds latency and judder.
 		Settings->SetVSyncEnabled(false);
+		bApplySettings = true;
+	}
+	if (!FMath::IsNearlyEqual(ShinobiSettings::GetRenderScale(), ScreenPercentage, 0.1f))
+	{
+		ShinobiSettings::SetRenderScale(ScreenPercentage); // (kept in GameUserSettings.ini too)
+		bApplySettings = true;
+	}
+	if (bApplySettings)
+	{
 		Settings->ApplyNonResolutionSettings();
 		Settings->SaveSettings();
 	}
 
 	// Reflex first: frame generation needs it.
-	const int32 Reflex = GetReflexMode();
-	SetCVar(CVarReflex, Reflex > 0 ? 1 : 0);
-	if (Reflex > 0)
-	{
-		SetCVar(CVarReflexMode, Reflex);
-	}
+	ApplyReflex(GetReflexMode());
 
-	// The upscaler. DLSS follows the engine's screen percentage (the Upscaling quality row); at 100 % it's DLAA.
-	const bool bDLSS = GetUpscaler() == EUpscaler::DLSS;
-	const float RenderScale = ShinobiSettings::GetRenderScale();
-	SetCVar(CVarDLSS, bDLSS ? 1 : 0);
-	SetCVar(CVarDLAA, bDLSS && RenderScale >= 99.5f ? 1 : 0);
-	SetCVar(CVarDLSSDenoiser, IsRayReconstruction() ? 1 : 0);
+	// DLSS: upscaling, or DLAA at native resolution; Ray Reconstruction inside it. TSR when it's off.
+	const bool bDLSS = IsDLSSActive();
+	ApplyDLSSFeature(TEXT("EnableDLSS"), CVarDLSS, bDLSS);
+	ApplyDLSSFeature(TEXT("EnableDLAA"), CVarDLAA, bDLSS && GetUpscaler() == EUpscaler::Off);
+	ApplyDLSSFeature(TEXT("EnableDLSSRR"), CVarDLSSDenoiser, IsRayReconstruction());
+	// The scene's resolution comes from GameUserSettings (above); if a plugin call changed it, put it back (at code priority).
+	SetCVarFloat(TEXT("r.ScreenPercentage"), ScreenPercentage);
 	SetCVarFloat(CVarSharpen, SharpenAmounts[GetSharpness()]);
 
 	// Hardware ray tracing for Lumen (the project builds the ray-tracing shaders: r.RayTracing in DefaultEngine.ini).
@@ -790,13 +988,13 @@ void ShinobiGraphics::ApplySaved()
 		ApplyFrameGen(Caps().FrameGenAllModes[GetFrameGen()]);
 	}
 
-	// Dynamic resolution: aim at the frame cap (60 FPS uncapped), from the upscaling quality's scale down to 50 %.
+	// Dynamic resolution: aim at the frame cap (60 FPS uncapped), from the picked resolution down to 50 %.
 	if (Settings->IsDynamicResolutionEnabled())
 	{
 		const float Cap = Settings->GetFrameRateLimit();
 		SetCVarFloat(TEXT("r.DynamicRes.FrameTimeBudget"), 1000.f / (Cap > 0.f ? Cap : DynamicResDefaultFps));
-		SetCVarFloat(TEXT("r.DynamicRes.MaxScreenPercentage"), RenderScale);
-		SetCVarFloat(TEXT("r.DynamicRes.MinScreenPercentage"), FMath::Min(RenderScale, DynamicResMinPercent));
+		SetCVarFloat(TEXT("r.DynamicRes.MaxScreenPercentage"), ScreenPercentage);
+		SetCVarFloat(TEXT("r.DynamicRes.MinScreenPercentage"), FMath::Min(ScreenPercentage, DynamicResMinPercent));
 	}
 }
 

@@ -11,6 +11,54 @@
 #include "Shinobi/UI/ShinobiGraphics.h"
 #include "Shinobi/UI/ShinobiSettings.h"
 
+namespace
+{
+	/** Keeps the machine's graphics picks (GameUserSettings.ini) across a test: removed for it, put back after. */
+	struct FShinobiGraphicsKeysGuard
+	{
+		const TCHAR* Section = TEXT("/Script/ShinobiCoop.ShinobiSettings");
+		TArray<FString> Keys = { TEXT("Upscaler"), TEXT("UpscalingQuality"), TEXT("AntiAliasing"), TEXT("Sharpness"), TEXT("bRayTracing"),
+			TEXT("bRayReconstruction"), TEXT("FrameGeneration"), TEXT("ReflexMode"), TEXT("bLowLatency") };
+		TMap<FString, FString> Old;
+		float OldScale = 100.f;
+
+		FShinobiGraphicsKeysGuard()
+		{
+			OldScale = ShinobiSettings::GetRenderScale();
+			for (const FString& Key : Keys)
+			{
+				FString Value;
+				if (GConfig->GetString(Section, *Key, Value, GGameUserSettingsIni))
+				{
+					Old.Add(Key, Value);
+				}
+				GConfig->RemoveKey(Section, *Key, GGameUserSettingsIni);
+			}
+		}
+
+		~FShinobiGraphicsKeysGuard()
+		{
+			ShinobiGraphics::SetCapsOverride(nullptr);
+			for (const FString& Key : Keys)
+			{
+				if (const FString* Value = Old.Find(Key))
+				{
+					GConfig->SetString(Section, *Key, **Value, GGameUserSettingsIni);
+				}
+				else
+				{
+					GConfig->RemoveKey(Section, *Key, GGameUserSettingsIni);
+				}
+			}
+			GConfig->Flush(false, GGameUserSettingsIni);
+			ShinobiSettings::SetRenderScale(OldScale);
+			GEngine->GetGameUserSettings()->ApplyNonResolutionSettings();
+			GEngine->GetGameUserSettings()->SaveSettings();
+			ShinobiGraphics::ApplySaved();
+		}
+	};
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSettingsCycleTest, "ShinobiCoop.UI.SettingsCycleAndSave", ShinobiTestFlags)
 bool FShinobiSettingsCycleTest::RunTest(const FString& Parameters)
 {
@@ -62,10 +110,15 @@ bool FShinobiSettingsCycleTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Frame cap 144 -> unlimited"), Settings->GetFrameRateLimit(), 0.f);
 	TestTrue(TEXT("Unlimited label"), ShinobiSettings::Label(ShinobiSettings::ERow::FrameCap).Contains(TEXT("Unlimited")));
 
-	ShinobiSettings::SetRenderScale(67.f);
-	ShinobiSettings::Cycle(ShinobiSettings::ERow::RenderScale, W.World);
-	TestEqual(TEXT("Upscaling quality Quality (67 %) -> Balanced (58 %)"), FMath::RoundToInt(ShinobiSettings::GetRenderScale()), 58);
-	TestEqual(TEXT("shown by name"), ShinobiSettings::RowValue(ShinobiSettings::ERow::RenderScale), FString(TEXT("Balanced")));
+	{
+		FShinobiGraphicsKeysGuard Graphics;
+		ShinobiGraphics::SetUpscaler(ShinobiGraphics::EUpscaler::TSR);
+		ShinobiGraphics::SetUpscalingQuality(0);
+		ShinobiSettings::Cycle(ShinobiSettings::ERow::RenderScale, W.World);
+		TestEqual(TEXT("Upscaling quality Quality -> Balanced"), ShinobiGraphics::GetUpscalingQuality(), 1);
+		TestEqual(TEXT("...draws at 58 %"), FMath::RoundToInt(ShinobiSettings::GetRenderScale()), 58);
+		TestEqual(TEXT("shown by name"), ShinobiSettings::RowValue(ShinobiSettings::ERow::RenderScale), FString(TEXT("Balanced")));
+	}
 
 	ShinobiLook::SetOutlineEnabled(W.World, true);
 	AShinobiPlayerCharacter* Player = W.Spawn<AShinobiPlayerCharacter>(FVector::ZeroVector);
@@ -123,11 +176,19 @@ bool FShinobiSettingsStepBackTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Frame cap unlimited, back -> 144"), Settings->GetFrameRateLimit(), 144.f);
 	TestEqual(TEXT("Frame cap value"), ShinobiSettings::RowValue(ERow::FrameCap), FString(TEXT("144 FPS")));
 
-	ShinobiSettings::SetRenderScale(100.f);
-	ShinobiSettings::Step(ERow::RenderScale, W.World, -1);
-	TestEqual(TEXT("Upscaling quality Native AA, back -> Ultra Performance"), FMath::RoundToInt(ShinobiSettings::GetRenderScale()), 33);
-	ShinobiSettings::SetRenderScale(75.f);
-	TestEqual(TEXT("a scale off the list shows as a percentage"), ShinobiSettings::RowValue(ERow::RenderScale), FString(TEXT("75%")));
+	{
+		FShinobiGraphicsKeysGuard Graphics;
+		ShinobiGraphics::SetUpscaler(ShinobiGraphics::EUpscaler::TSR);
+		ShinobiGraphics::SetUpscalingQuality(0);
+		ShinobiSettings::Step(ERow::RenderScale, W.World, -1);
+		TestEqual(TEXT("Upscaling quality Quality, back -> Ultra Performance"), ShinobiSettings::RowValue(ERow::RenderScale), FString(TEXT("Ultra Performance")));
+		TestEqual(TEXT("...draws at 33 %"), FMath::RoundToInt(ShinobiSettings::GetRenderScale()), 33);
+		ShinobiGraphics::SetUpscaler(ShinobiGraphics::EUpscaler::Off);
+		TestEqual(TEXT("upscaling off: native resolution"), FMath::RoundToInt(ShinobiSettings::GetRenderScale()), 100);
+		TestFalse(TEXT("...and the quality is locked"), ShinobiSettings::RowLock(ERow::RenderScale).IsEmpty());
+		ShinobiSettings::Step(ERow::RenderScale, W.World, 1);
+		TestEqual(TEXT("...it doesn't step"), ShinobiGraphics::GetUpscalingQuality(), 3);
+	}
 
 	GConfig->SetString(Section, TEXT("Outfit"), AShinobiPlayerCharacter::Outfits[0].Name, GGameUserSettingsIni);
 	ShinobiSettings::Step(ERow::Outfit, W.World, -1);
@@ -205,24 +266,16 @@ bool FShinobiSettingsGraphicsTechTest::RunTest(const FString& Parameters)
 	UGameUserSettings* Settings = GEngine->GetGameUserSettings();
 	const bool bOldVSync = Settings->IsVSyncEnabled();
 	const bool bOldDynamicRes = Settings->IsDynamicResolutionEnabled();
-	const float OldScale = ShinobiSettings::GetRenderScale();
-	const TCHAR* Section = TEXT("/Script/ShinobiCoop.ShinobiSettings");
-	const TCHAR* Keys[] = { TEXT("Upscaler"), TEXT("Sharpness"), TEXT("bRayTracing"), TEXT("bRayReconstruction"), TEXT("FrameGeneration"), TEXT("ReflexMode"), TEXT("bLowLatency") };
-	TMap<FString, FString> OldValues;
-	for (const TCHAR* Key : Keys)
-	{
-		FString Value;
-		if (GConfig->GetString(Section, Key, Value, GGameUserSettingsIni))
-		{
-			OldValues.Add(FString(Key), Value);
-		}
-		GConfig->RemoveKey(Section, Key, GGameUserSettingsIni);
-	}
+	FShinobiGraphicsKeysGuard Graphics;
+	const TCHAR* Section = Graphics.Section;
 	FShinobiTestWorld W;
 	using ShinobiSettings::ERow;
-	const ERow GraphicsRows[] = { ERow::Upscaler, ERow::RenderScale, ERow::Sharpness, ERow::DynamicResolution, ERow::FrameGeneration, ERow::LowLatency, ERow::RayTracing, ERow::RayReconstruction };
+	using ShinobiGraphics::EUpscaler;
+	using ShinobiGraphics::EAntiAliasing;
+	const ERow GraphicsRows[] = { ERow::Upscaler, ERow::RenderScale, ERow::AntiAliasing, ERow::Sharpness, ERow::DynamicResolution, ERow::FrameGeneration,
+		ERow::LowLatency, ERow::RayTracing, ERow::RayReconstruction };
 
-	// A PC with none of it: every row is still listed; DLSS, frame generation, Reflex and ray tracing are locked, with reasons.
+	// A PC with none of it: every row is still listed; DLSS / DLAA, frame generation, Reflex and ray tracing are locked, with reasons.
 	ShinobiGraphics::FCaps None;
 	None.DLSSLock = None.RayReconstructionLock = None.ReflexLock = None.FrameGenLock = TEXT("Requires an NVIDIA GeForce RTX graphics card.");
 	None.RayTracingLock = TEXT("Requires a graphics card with hardware ray tracing, running DirectX 12.");
@@ -233,29 +286,34 @@ bool FShinobiSettingsGraphicsTechTest::RunTest(const FString& Parameters)
 	{
 		TestTrue(FString::Printf(TEXT("row %d: listed"), int32(Row)), ShinobiSettings::RowsFor(true).Contains(Row));
 	}
+	TestTrue(TEXT("Resolution is listed, under Screen mode"), ShinobiSettings::RowsFor(true).IndexOfByKey(ERow::Resolution) == ShinobiSettings::RowsFor(true).IndexOfByKey(ERow::WindowMode) + 1);
 	for (const ERow Row : { ERow::FrameGeneration, ERow::LowLatency, ERow::RayTracing, ERow::RayReconstruction })
 	{
 		TestFalse(FString::Printf(TEXT("row %d: locked, with a reason"), int32(Row)), ShinobiSettings::RowLock(Row).IsEmpty());
 		TestTrue(FString::Printf(TEXT("row %d: the note says it's locked"), int32(Row)), ShinobiSettings::RowNote(Row).StartsWith(TEXT("Locked: ")));
 	}
-	TestTrue(TEXT("the upscaler row itself isn't locked (TSR)"), ShinobiSettings::RowLock(ERow::Upscaler).IsEmpty());
-	TestEqual(TEXT("upscaler options"), FString::Join(ShinobiSettings::RowOptions(ERow::Upscaler), TEXT(",")), FString(TEXT("TSR,NVIDIA DLSS")));
-	TestFalse(TEXT("...NVIDIA DLSS is locked"), ShinobiSettings::OptionLock(ERow::Upscaler, 1).IsEmpty());
+	TestEqual(TEXT("upscaler options"), FString::Join(ShinobiSettings::RowOptions(ERow::Upscaler), TEXT(",")), FString(TEXT("Off,TSR,NVIDIA DLSS")));
+	TestEqual(TEXT("upscaling quality options: no DLAA / native among them"), FString::Join(ShinobiSettings::RowOptions(ERow::RenderScale), TEXT(",")),
+		FString(TEXT("Quality,Balanced,Performance,Ultra Performance")));
+	TestEqual(TEXT("anti-aliasing options"), FString::Join(ShinobiSettings::RowOptions(ERow::AntiAliasing), TEXT(",")), FString(TEXT("TSR,NVIDIA DLAA")));
+	TestFalse(TEXT("NVIDIA DLSS is locked"), ShinobiSettings::OptionLock(ERow::Upscaler, 2).IsEmpty());
 	TestTrue(TEXT("...and the note says why"), ShinobiSettings::RowNote(ERow::Upscaler).StartsWith(TEXT("NVIDIA DLSS: ")));
-	TestTrue(TEXT("the upscaler is a dropdown, to show the locked option"), ShinobiSettings::UsesDropdown(ERow::Upscaler));
+	ShinobiGraphics::SetUpscaler(EUpscaler::TSR);
 	ShinobiSettings::Step(ERow::Upscaler, W.World, 1);
-	TestEqual(TEXT("stepping skips the locked DLSS"), ShinobiSettings::RowValue(ERow::Upscaler), FString(TEXT("TSR")));
-	ShinobiSettings::SetRowIndex(ERow::Upscaler, W.World, 1);
-	TestEqual(TEXT("...and it can't be picked"), ShinobiSettings::RowValue(ERow::Upscaler), FString(TEXT("TSR")));
+	TestEqual(TEXT("stepping on from TSR skips the locked DLSS (to Off)"), ShinobiSettings::RowValue(ERow::Upscaler), FString(TEXT("Off")));
+	ShinobiSettings::SetRowIndex(ERow::Upscaler, W.World, 2);
+	TestEqual(TEXT("...and DLSS can't be picked"), ShinobiSettings::RowValue(ERow::Upscaler), FString(TEXT("Off")));
+	TestTrue(TEXT("upscaling off: anti-aliasing can be picked"), ShinobiSettings::RowLock(ERow::AntiAliasing).IsEmpty());
+	TestTrue(TEXT("...TSR, without DLSS"), ShinobiGraphics::GetAntiAliasing() == EAntiAliasing::TSR);
+	TestFalse(TEXT("...NVIDIA DLAA is locked"), ShinobiSettings::OptionLock(ERow::AntiAliasing, 1).IsEmpty());
+	TestTrue(TEXT("anti-aliasing is a dropdown, to show the locked DLAA"), ShinobiSettings::UsesDropdown(ERow::AntiAliasing));
 	ShinobiSettings::Step(ERow::RayTracing, W.World, 1);
 	TestEqual(TEXT("a locked row doesn't step"), ShinobiSettings::RowValue(ERow::RayTracing), FString(TEXT("Off")));
 	GConfig->SetString(Section, TEXT("Upscaler"), TEXT("DLSS"), GGameUserSettingsIni);
-	TestTrue(TEXT("a saved DLSS pick falls back to TSR"), ShinobiGraphics::GetUpscaler() == ShinobiGraphics::EUpscaler::TSR);
+	TestTrue(TEXT("a saved DLSS pick falls back to TSR"), ShinobiGraphics::GetUpscaler() == EUpscaler::TSR);
 	GConfig->SetBool(Section, TEXT("bRayTracing"), true, GGameUserSettingsIni);
 	TestFalse(TEXT("saved ray tracing is off without hardware support"), ShinobiGraphics::IsRayTracing());
 	TestEqual(TEXT("frame generation options are listed anyway"), FString::Join(ShinobiSettings::RowOptions(ERow::FrameGeneration), TEXT(",")), FString(TEXT("Off,2X,3X,4X")));
-	ShinobiSettings::SetRenderScale(100.f);
-	TestEqual(TEXT("100 % with TSR: Native AA"), ShinobiSettings::RowValue(ERow::RenderScale), FString(TEXT("Native AA")));
 
 	// An RTX 40-class PC with the plugins: 2X frame generation, not 3X / 4X (RTX 50).
 	ShinobiGraphics::FCaps Rtx40;
@@ -270,31 +328,54 @@ bool FShinobiSettingsGraphicsTechTest::RunTest(const FString& Parameters)
 	// An RTX 50-class PC.
 	ShinobiGraphics::FCaps Rtx;
 	Rtx.bDLSS = Rtx.bRayReconstruction = Rtx.bReflex = Rtx.bRayTracing = true;
-	Rtx.FrameGenAllModes = Rtx.FrameGenModes = { TEXT("Off"), TEXT("On2X"), TEXT("On3X"), TEXT("On4X"), TEXT("Auto") };
+	Rtx.FrameGenAllModes = Rtx.FrameGenModes = { TEXT("Off"), TEXT("On2X"), TEXT("On3X"), TEXT("On4X"), TEXT("OnDynamic") };
 	ShinobiGraphics::SetCapsOverride(&Rtx);
 	for (const ERow Row : GraphicsRows)
 	{
-		TestTrue(FString::Printf(TEXT("row %d: unlocked"), int32(Row)), ShinobiSettings::RowLock(Row).IsEmpty());
+		TestTrue(FString::Printf(TEXT("row %d: no option locked"), int32(Row)), ShinobiSettings::RowNote(Row).IsEmpty() || Row == ERow::AntiAliasing || Row == ERow::RenderScale);
 	}
 	TestEqual(TEXT("frame generation options"), FString::Join(ShinobiSettings::RowOptions(ERow::FrameGeneration), TEXT(",")), FString(TEXT("Off,2X,3X,4X,Dynamic")));
 	TestEqual(TEXT("Reflex options"), FString::Join(ShinobiSettings::RowOptions(ERow::LowLatency), TEXT(",")), FString(TEXT("Off,On,On + Boost")));
-	TestTrue(TEXT("rows keep their order: Upscaling method before Upscaling quality"),
-		ShinobiSettings::RowsFor(false).IndexOfByKey(ERow::Upscaler) < ShinobiSettings::RowsFor(false).IndexOfByKey(ERow::RenderScale));
 
+	// First run: no saved upscaler. A 100 % render scale keeps native resolution (with DLAA where it runs); below it, DLSS.
 	GConfig->RemoveKey(Section, TEXT("Upscaler"), GGameUserSettingsIni);
-	TestEqual(TEXT("DLSS by default where it runs"), ShinobiSettings::RowValue(ERow::Upscaler), FString(TEXT("NVIDIA DLSS")));
-	TestEqual(TEXT("100 % with DLSS: DLAA"), ShinobiSettings::RowValue(ERow::RenderScale), FString(TEXT("DLAA")));
+	GConfig->RemoveKey(Section, TEXT("AntiAliasing"), GGameUserSettingsIni);
+	GConfig->RemoveKey(Section, TEXT("UpscalingQuality"), GGameUserSettingsIni);
+	ShinobiSettings::SetRenderScale(100.f);
+	TestTrue(TEXT("first run at 100 %: upscaling off"), ShinobiGraphics::GetUpscaler() == EUpscaler::Off);
+	TestTrue(TEXT("...anti-aliased by DLAA where DLSS runs"), ShinobiGraphics::GetAntiAliasing() == EAntiAliasing::DLAA);
+	TestTrue(TEXT("...so DLSS draws it"), ShinobiGraphics::IsDLSSActive());
+	TestEqual(TEXT("...the row reads NVIDIA DLAA"), ShinobiSettings::RowValue(ERow::AntiAliasing), FString(TEXT("NVIDIA DLAA")));
+	ShinobiSettings::SetRenderScale(66.7f);
+	TestTrue(TEXT("first run below 100 %: DLSS where it runs"), ShinobiGraphics::GetUpscaler() == EUpscaler::DLSS);
+	TestEqual(TEXT("...at the nearest quality"), ShinobiGraphics::GetUpscalingQuality(), 0);
+
+	ShinobiSettings::SetRowIndex(ERow::Upscaler, W.World, 2);
+	TestEqual(TEXT("upscaling with DLSS"), ShinobiSettings::RowValue(ERow::Upscaler), FString(TEXT("NVIDIA DLSS")));
+	TestFalse(TEXT("...anti-aliasing is locked (DLSS smooths edges itself)"), ShinobiSettings::RowLock(ERow::AntiAliasing).IsEmpty());
+	TestEqual(TEXT("...and reads the upscaler"), ShinobiSettings::RowValue(ERow::AntiAliasing), FString(TEXT("NVIDIA DLSS")));
+	ShinobiSettings::SetRowIndex(ERow::RenderScale, W.World, 2);
+	TestEqual(TEXT("Performance: 50 %"), FMath::RoundToInt(ShinobiGraphics::GetTargetScreenPercentage()), 50);
 	ShinobiSettings::Step(ERow::Upscaler, W.World, 1);
-	TestEqual(TEXT("NVIDIA DLSS -> TSR"), ShinobiSettings::RowValue(ERow::Upscaler), FString(TEXT("TSR")));
+	TestEqual(TEXT("NVIDIA DLSS -> Off (wraps)"), ShinobiSettings::RowValue(ERow::Upscaler), FString(TEXT("Off")));
+	TestEqual(TEXT("upscaling off: 100 %"), FMath::RoundToInt(ShinobiGraphics::GetTargetScreenPercentage()), 100);
+	TestEqual(TEXT("...the quality is kept for later"), ShinobiGraphics::GetUpscalingQuality(), 2);
 
 	ShinobiSettings::SetRowIndex(ERow::Sharpness, W.World, 2);
 	TestEqual(TEXT("sharpness"), ShinobiSettings::RowValue(ERow::Sharpness), FString(TEXT("Medium")));
 
-	GConfig->SetBool(Section, TEXT("bRayTracing"), false, GGameUserSettingsIni);
+	// Ray Reconstruction needs DLSS and ray tracing: with upscaling off it turns DLAA on, while upscaling it picks DLSS.
+	ShinobiGraphics::SetAntiAliasing(EAntiAliasing::TSR);
+	ShinobiGraphics::SetRayTracing(false);
 	ShinobiSettings::SetRowIndex(ERow::RayReconstruction, W.World, 1);
 	TestTrue(TEXT("Ray Reconstruction on"), ShinobiGraphics::IsRayReconstruction());
-	TestTrue(TEXT("...turned DLSS on"), ShinobiGraphics::GetUpscaler() == ShinobiGraphics::EUpscaler::DLSS);
+	TestTrue(TEXT("...turned DLAA on (upscaling is off)"), ShinobiGraphics::GetAntiAliasing() == EAntiAliasing::DLAA);
 	TestTrue(TEXT("...and ray tracing"), ShinobiGraphics::IsRayTracing());
+	ShinobiGraphics::SetUpscaler(EUpscaler::TSR);
+	TestFalse(TEXT("TSR upscaling: no Ray Reconstruction"), ShinobiGraphics::IsRayReconstruction());
+	ShinobiSettings::SetRowIndex(ERow::RayReconstruction, W.World, 0);
+	ShinobiSettings::SetRowIndex(ERow::RayReconstruction, W.World, 1);
+	TestTrue(TEXT("...turning it on picks DLSS upscaling"), ShinobiGraphics::GetUpscaler() == EUpscaler::DLSS);
 	ShinobiSettings::SetRowIndex(ERow::RayTracing, W.World, 0);
 	TestFalse(TEXT("no ray tracing: no Ray Reconstruction"), ShinobiGraphics::IsRayReconstruction());
 
@@ -311,7 +392,6 @@ bool FShinobiSettingsGraphicsTechTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("VSync is locked while frame generation is on"), ShinobiSettings::RowLock(ERow::VSync).IsEmpty());
 	ShinobiSettings::SetRowIndex(ERow::VSync, W.World, 1);
 	TestFalse(TEXT("...and stays off"), Settings->IsVSyncEnabled());
-	ShinobiSettings::SetRowIndex(ERow::LowLatency, W.World, 0); // (locked: nothing)
 	ShinobiSettings::SetRowIndex(ERow::FrameGeneration, W.World, 0);
 	TestEqual(TEXT("frame generation off: Reflex back to the pick"), ShinobiSettings::RowValue(ERow::LowLatency), FString(TEXT("On + Boost")));
 	TestTrue(TEXT("VSync unlocked"), ShinobiSettings::RowLock(ERow::VSync).IsEmpty());
@@ -325,30 +405,18 @@ bool FShinobiSettingsGraphicsTechTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("labels: plain On is 2X"), ShinobiGraphics::FrameGenLabel(TEXT("On")), FString(TEXT("2X")));
 	TestEqual(TEXT("labels: Off"), ShinobiGraphics::FrameGenLabel(TEXT("Off")), FString(TEXT("Off")));
 	TestEqual(TEXT("labels: 6X"), ShinobiGraphics::FrameGenLabel(TEXT("On6X")), FString(TEXT("6X")));
-	TestEqual(TEXT("labels: Dynamic"), ShinobiGraphics::FrameGenLabel(TEXT("Dynamic")), FString(TEXT("Dynamic")));
+	TestEqual(TEXT("labels: Dynamic"), ShinobiGraphics::FrameGenLabel(TEXT("OnDynamic")), FString(TEXT("Dynamic")));
 	TestFalse(TEXT("the report has the probe's findings"), ShinobiGraphics::Report().IsEmpty());
 
-	// Leave the machine as it was.
-	ShinobiGraphics::SetCapsOverride(nullptr);
-	for (const TCHAR* Key : Keys)
-	{
-		if (const FString* Value = OldValues.Find(FString(Key)))
-		{
-			GConfig->SetString(Section, Key, **Value, GGameUserSettingsIni);
-		}
-		else
-		{
-			GConfig->RemoveKey(Section, Key, GGameUserSettingsIni);
-		}
-	}
-	GConfig->Flush(false, GGameUserSettingsIni);
+	// Resolution: listed under Screen mode, its index on its list (or none), locked in borderless.
+	const int32 ResolutionIndex = ShinobiSettings::RowIndex(ERow::Resolution);
+	TestTrue(TEXT("resolution: its index is on its list (or none)"), ResolutionIndex == INDEX_NONE || ShinobiSettings::RowOptions(ERow::Resolution).IsValidIndex(ResolutionIndex));
+	TestTrue(TEXT("resolution: locked only in borderless"),
+		ShinobiSettings::RowLock(ERow::Resolution).IsEmpty() == (Settings->GetFullscreenMode() != EWindowMode::WindowedFullscreen));
+
 	Settings->SetVSyncEnabled(bOldVSync);
 	Settings->SetDynamicResolutionEnabled(bOldDynamicRes);
-	ShinobiSettings::SetRenderScale(OldScale);
-	Settings->ApplyNonResolutionSettings();
-	Settings->SaveSettings();
-	ShinobiGraphics::ApplySaved();
-	return true;
+	return true; // (Graphics puts the machine's picks back)
 }
 
 #endif // WITH_DEV_AUTOMATION_TESTS
