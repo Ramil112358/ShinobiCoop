@@ -154,6 +154,8 @@ UTextBlock* UShinobiMenuWidget::AddText(UVerticalBox* Box, const FString& Text, 
 namespace
 {
 	constexpr float SettingsPanelWidth = 640.f;
+	/** A locked row's opacity (greyed out, still readable). */
+	constexpr float SettingsLockedOpacity = 0.4f;
 	/** The rows scroll past this height (slate units): the panel, its help line and the tab bar fit a 1080p screen. */
 	constexpr float SettingsRowsMaxHeight = 700.f;
 	constexpr float SettingsValueWidth = 190.f;
@@ -261,7 +263,6 @@ TSharedRef<SWidget> UShinobiSettingsWidget::RebuildWidget()
 			Cast<UButtonSlot>(Line->Slot)->SetHorizontalAlignment(HAlign_Fill);
 			Column->AddChildToVerticalBox(Button)->SetPadding(FMargin(0.f, 3.f));
 			EntryButtons.Add(Button);
-			NameTexts.Add(Name);
 			ValueTexts.Add(Value);
 			BackArrows.Add(Back);
 			Fields.Add(Field);
@@ -356,12 +357,11 @@ void UShinobiSettingsWidget::RefreshValues()
 		{
 			ValueTexts[Index]->SetText(Value);
 		}
-		// A locked row (no RTX card, VSync under frame generation...) is greyed out; the help line says why.
-		const FSlateColor Color = ShinobiSettings::RowLock(Rows[Index]).IsEmpty() ? FSlateColor(FLinearColor::White) : FSlateColor(ShinobiMenuStyle::TextDim);
-		ValueTexts[Index]->SetColorAndOpacity(Color);
-		if (NameTexts.IsValidIndex(Index))
+		// A locked row (no RTX card, VSync under frame generation, quality with upscaling off...) is greyed out as a whole (name,
+		// value, arrows, field) and keeps showing its own value; it can still be focused, and the help line says why.
+		if (EntryButtons.IsValidIndex(Index))
 		{
-			NameTexts[Index]->SetColorAndOpacity(Color);
+			EntryButtons[Index]->SetRenderOpacity(ShinobiSettings::RowLock(Rows[Index]).IsEmpty() ? 1.f : SettingsLockedOpacity);
 		}
 	}
 	bDescriptionStale = true; // (one change can lock or unlock others: the help line is written again)

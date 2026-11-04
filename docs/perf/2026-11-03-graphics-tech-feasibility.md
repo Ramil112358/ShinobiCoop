@@ -222,7 +222,9 @@ Code: `Source/ShinobiCoop/Shinobi/UI/ShinobiGraphics.*` (new) and `ShinobiSettin
 plus updated settings and menu tests.
 
 Every row is always listed, like the graphics menus of current PC games (Cyberpunk 2077, Battlefield 6, The Witcher 3 next-gen). What this PC
-can't use is greyed out, and the help line under the rows says why. The reason comes from the plugin's own support query: no RTX card, driver
+can't use is greyed out as a whole row (as in Throne and Liberty), and still shows one of its own options: the saved pick, or Off. For
+example, *Anti-aliasing* reads TSR or NVIDIA DLAA even while upscaling, never the upscaler's name. Each row's description says when it's greyed
+out, and the help line under the rows says why. The reason comes from the plugin's own support query: no RTX card, driver
 out of date, Hardware-accelerated GPU scheduling off, plugin not loaded... Locked options in a dropdown are greyed out and tagged *Locked*.
 The rows scroll when they don't fit.
 
@@ -230,7 +232,7 @@ The rows scroll when they don't fit.
 | --- | --- | --- | --- | --- |
 | UPSCALING & FRAME GENERATION | *Upscaling method* | Off / TSR / NVIDIA DLSS (first run: Off at a 100 % render scale, else DLSS where it runs) | `UDLSSLibrary::EnableDLSS` | the DLSS option: no RTX card / no plugin (`QueryDLSSSupport`) |
 | | *Upscaling quality* | Quality 66.7 % · Balanced 58 % · Performance 50 % · Ultra Performance 33.3 % | screen percentage (kept while upscaling is off) | while upscaling is Off |
-| | *Anti-aliasing* | TSR / NVIDIA DLAA (DLAA by default where it runs), at native resolution | `EnableDLSS` + `EnableDLAA` | while upscaling (the upscaler smooths edges itself); the DLAA option without DLSS |
+| | *Anti-aliasing* | TSR / NVIDIA DLAA (DLAA by default where it runs), at native resolution | `EnableDLSS` + `EnableDLAA` | while upscaling (the upscaler smooths edges itself; the pick is kept and shown greyed out); the DLAA option without DLSS |
 | | *Sharpness* | Off / Low / Medium / High | `r.Tonemapper.Sharpen` 0 / 0.4 / 0.8 / 1.2 | never |
 | | *Dynamic resolution* | Off / On | `UGameUserSettings::SetDynamicResolutionEnabled`; budget = frame cap (60 FPS uncapped), range 50 %–upscaling quality | never |
 | | *DLSS Frame Generation* | Off / 2X … 6X / Dynamic (the plugin's own mode list; its legacy *Auto* is dropped when *OnDynamic* exists) | `UStreamlineLibraryDLSSG::SetDLSSGMode`, else `r.Streamline.DLSSG.Enable` | row: no RTX 40+ / no plugin / HAGS off (`QueryDLSSGSupport`). Options the GPU can't run (3X+ below RTX 50, from `GetSupportedDLSSGModes`) |

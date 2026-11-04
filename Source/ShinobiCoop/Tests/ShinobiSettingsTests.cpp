@@ -258,6 +258,27 @@ bool FShinobiSettingsOptionsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+namespace
+{
+	/** Every graphics and display row, locked or not, shows one of its own options (a locked one greyed out), never another
+	 * row's value. */
+	void ExpectValuesAreOptions(FAutomationTestBase& Test, const TCHAR* When)
+	{
+		using ShinobiSettings::ERow;
+		for (const ERow Row : { ERow::Upscaler, ERow::RenderScale, ERow::AntiAliasing, ERow::Sharpness, ERow::DynamicResolution, ERow::FrameGeneration,
+			ERow::LowLatency, ERow::RayTracing, ERow::RayReconstruction, ERow::WindowMode, ERow::Resolution, ERow::VSync })
+		{
+			const FString Value = ShinobiSettings::RowValue(Row);
+			Test.TestTrue(FString::Printf(TEXT("%s: %s shows one of its options (%s)"), When, *ShinobiSettings::RowName(Row), *Value),
+				ShinobiSettings::RowOptions(Row).Contains(Value));
+			Test.TestEqual(FString::Printf(TEXT("%s: %s's index is its value"), When, *ShinobiSettings::RowName(Row)),
+				ShinobiSettings::RowOptions(Row).IndexOfByKey(Value), ShinobiSettings::RowIndex(Row));
+			const FString Description = ShinobiSettings::RowDescription(Row);
+			Test.TestFalse(FString::Printf(TEXT("%s: %s has a description"), When, *ShinobiSettings::RowName(Row)), Description.IsEmpty());
+		}
+	}
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSettingsGraphicsTechTest, "ShinobiCoop.UI.SettingsUpscalerFrameGenRayTracing", ShinobiTestFlags)
 bool FShinobiSettingsGraphicsTechTest::RunTest(const FString& Parameters)
 {
@@ -309,6 +330,10 @@ bool FShinobiSettingsGraphicsTechTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("anti-aliasing is a dropdown, to show the locked DLAA"), ShinobiSettings::UsesDropdown(ERow::AntiAliasing));
 	ShinobiSettings::Step(ERow::RayTracing, W.World, 1);
 	TestEqual(TEXT("a locked row doesn't step"), ShinobiSettings::RowValue(ERow::RayTracing), FString(TEXT("Off")));
+	ExpectValuesAreOptions(*this, TEXT("no RTX, upscaling off"));
+	ShinobiGraphics::SetUpscaler(EUpscaler::TSR);
+	ExpectValuesAreOptions(*this, TEXT("no RTX, TSR upscaling"));
+	ShinobiGraphics::SetUpscaler(EUpscaler::Off);
 	GConfig->SetString(Section, TEXT("Upscaler"), TEXT("DLSS"), GGameUserSettingsIni);
 	TestTrue(TEXT("a saved DLSS pick falls back to TSR"), ShinobiGraphics::GetUpscaler() == EUpscaler::TSR);
 	GConfig->SetBool(Section, TEXT("bRayTracing"), true, GGameUserSettingsIni);
@@ -353,12 +378,14 @@ bool FShinobiSettingsGraphicsTechTest::RunTest(const FString& Parameters)
 	ShinobiSettings::SetRowIndex(ERow::Upscaler, W.World, 2);
 	TestEqual(TEXT("upscaling with DLSS"), ShinobiSettings::RowValue(ERow::Upscaler), FString(TEXT("NVIDIA DLSS")));
 	TestFalse(TEXT("...anti-aliasing is locked (DLSS smooths edges itself)"), ShinobiSettings::RowLock(ERow::AntiAliasing).IsEmpty());
-	TestEqual(TEXT("...and reads the upscaler"), ShinobiSettings::RowValue(ERow::AntiAliasing), FString(TEXT("NVIDIA DLSS")));
+	TestEqual(TEXT("...and keeps showing its own pick, greyed out"), ShinobiSettings::RowValue(ERow::AntiAliasing), FString(TEXT("NVIDIA DLAA")));
+	ExpectValuesAreOptions(*this, TEXT("RTX, DLSS upscaling"));
 	ShinobiSettings::SetRowIndex(ERow::RenderScale, W.World, 2);
 	TestEqual(TEXT("Performance: 50 %"), FMath::RoundToInt(ShinobiGraphics::GetTargetScreenPercentage()), 50);
 	ShinobiSettings::Step(ERow::Upscaler, W.World, 1);
 	TestEqual(TEXT("NVIDIA DLSS -> Off (wraps)"), ShinobiSettings::RowValue(ERow::Upscaler), FString(TEXT("Off")));
 	TestEqual(TEXT("upscaling off: 100 %"), FMath::RoundToInt(ShinobiGraphics::GetTargetScreenPercentage()), 100);
+	ExpectValuesAreOptions(*this, TEXT("RTX, upscaling off"));
 	TestEqual(TEXT("...the quality is kept for later"), ShinobiGraphics::GetUpscalingQuality(), 2);
 
 	ShinobiSettings::SetRowIndex(ERow::Sharpness, W.World, 2);
@@ -390,6 +417,7 @@ bool FShinobiSettingsGraphicsTechTest::RunTest(const FString& Parameters)
 	ShinobiSettings::SetRowIndex(ERow::LowLatency, W.World, 2);
 	TestEqual(TEXT("...but On + Boost can be picked"), ShinobiSettings::RowValue(ERow::LowLatency), FString(TEXT("On + Boost")));
 	TestFalse(TEXT("VSync is locked while frame generation is on"), ShinobiSettings::RowLock(ERow::VSync).IsEmpty());
+	ExpectValuesAreOptions(*this, TEXT("RTX, frame generation on"));
 	ShinobiSettings::SetRowIndex(ERow::VSync, W.World, 1);
 	TestFalse(TEXT("...and stays off"), Settings->IsVSyncEnabled());
 	ShinobiSettings::SetRowIndex(ERow::FrameGeneration, W.World, 0);

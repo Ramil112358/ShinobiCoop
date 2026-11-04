@@ -148,8 +148,6 @@ private:
 	TObjectPtr<class UScrollBox> RowsScroll;
 	int32 ScrolledToRow = INDEX_NONE;
 	UPROPERTY()
-	TArray<TObjectPtr<UTextBlock>> NameTexts;
-	UPROPERTY()
 	TArray<TObjectPtr<UTextBlock>> ValueTexts;
 	/** Each stepper row's < (a press over it steps back); null on dropdown rows. */
 	UPROPERTY()

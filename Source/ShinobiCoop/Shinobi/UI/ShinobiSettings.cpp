@@ -92,7 +92,6 @@ namespace
 		{
 			UKismetSystemLibrary::GetSupportedFullscreenResolutions(Found);
 		}
-		Found.Add(S->GetScreenResolution());
 		TArray<FIntPoint> List;
 		for (const FIntPoint& Resolution : Found)
 		{
@@ -101,6 +100,8 @@ namespace
 				List.AddUnique(Resolution);
 			}
 		}
+		// The one in use is always listed, so the row shows one of its options (borderless: the desktop's).
+		List.AddUnique(S->GetFullscreenMode() == EWindowMode::WindowedFullscreen ? S->GetDesktopResolution() : S->GetScreenResolution());
 		List.Sort([](const FIntPoint& A, const FIntPoint& B) { return A.X != B.X ? A.X > B.X : A.Y > B.Y; });
 		return List;
 	}
@@ -219,9 +220,7 @@ FString ShinobiSettings::RowValue(ERow Row)
 	case ERow::RenderScale:
 		return UpscalingQualityNames[ShinobiGraphics::GetUpscalingQuality()]; // (kept, greyed out, while upscaling is off)
 	case ERow::AntiAliasing:
-		// While upscaling, the upscaler smooths edges itself: it's shown (greyed out) in place of a pick.
-		return ShinobiGraphics::GetUpscaler() == ShinobiGraphics::EUpscaler::Off ? AntiAliasingNames[uint8(ShinobiGraphics::GetAntiAliasing())]
-			: UpscalerNames[uint8(ShinobiGraphics::GetUpscaler())];
+		return AntiAliasingNames[uint8(ShinobiGraphics::GetAntiAliasing())]; // (kept, greyed out, while upscaling)
 	case ERow::Sharpness:
 		return SharpnessNames[ShinobiGraphics::GetSharpness()];
 	case ERow::DynamicResolution:
@@ -274,19 +273,19 @@ FString ShinobiSettings::RowDescription(ERow Row)
 	case ERow::Face: return TEXT("The face your character wears, on characters that have more than one.");
 	case ERow::Outfit: return TEXT("What your character wears over their own clothes.");
 	case ERow::Quality: return TEXT("The overall graphics preset. Lower it for more FPS. Custom means a single setting was changed elsewhere.");
-	case ERow::Upscaler: return TEXT("Draws the scene below your screen's resolution and rebuilds it sharp, for more FPS. TSR is Unreal's own and runs on any card. NVIDIA DLSS uses an RTX card's AI cores and usually looks sharper. Off draws every pixel.");
-	case ERow::RenderScale: return TEXT("How much the upscaler upscales. Quality looks closest to native, Ultra Performance gives the most FPS.");
-	case ERow::AntiAliasing: return TEXT("Smooths jagged edges while upscaling is off. NVIDIA DLAA is DLSS at native resolution: the sharpest, most stable image, for a little more GPU time than TSR.");
-	case ERow::Sharpness: return TEXT("Sharpens the upscaled picture. Raise it if the image looks soft at lower upscaling quality.");
-	case ERow::DynamicResolution: return TEXT("Lowers the resolution for a moment when a big jutsu would drop the frame rate below your frame cap (60 FPS without one).");
-	case ERow::FrameGeneration: return TEXT("Your RTX card's AI adds frames between the rendered ones: 2X doubles the frame rate, 3X and 4X more (RTX 50 Series). Smoother motion, slightly more input delay. Best from 60 FPS up. Turns VSync off and NVIDIA Reflex on.");
-	case ERow::LowLatency: return TEXT("Cuts the delay between your input and the screen. On + Boost also keeps the GPU clocks up for the lowest latency, at more power. Always on with DLSS Frame Generation.");
-	case ERow::RayTracing: return TEXT("Lights and reflects the world with your GPU's ray-tracing cores: more accurate bounce light and reflections on water and glass. Costs FPS.");
-	case ERow::RayReconstruction: return TEXT("DLSS's AI cleans up ray-traced light and reflections: sharper and more stable than the usual denoisers. Turning it on also turns on NVIDIA DLSS and ray tracing.");
+	case ERow::Upscaler: return TEXT("Draws the scene below your screen's resolution and rebuilds it sharp, for more FPS. TSR is Unreal's own and runs on any card. NVIDIA DLSS uses a GeForce RTX card's AI cores and usually looks sharper; it's greyed out in the list without one. Off draws every pixel.");
+	case ERow::RenderScale: return TEXT("How much the upscaler upscales. Quality looks closest to native, Ultra Performance gives the most FPS. Greyed out while Upscaling method is Off (it's kept for when you turn upscaling back on).");
+	case ERow::AntiAliasing: return TEXT("Smooths jagged edges at native resolution. NVIDIA DLAA (DLSS without upscaling, GeForce RTX only) gives the sharpest, most stable image for a little more GPU time than TSR. Greyed out while upscaling, because the upscaler smooths edges itself; your pick applies again when Upscaling method is Off.");
+	case ERow::Sharpness: return TEXT("Sharpens the final picture. Raise it if the image looks soft at a lower upscaling quality.");
+	case ERow::DynamicResolution: return TEXT("Lowers the resolution for a moment when a big jutsu would drop the frame rate below your frame cap (60 FPS without one), then raises it again.");
+	case ERow::FrameGeneration: return TEXT("AI adds frames between the rendered ones: 2X doubles the frame rate, 3X and up multiply it further, Dynamic picks the multiplier for your monitor. Smoother motion, slightly more input delay; best from 60 FPS up. Turns VSync off and NVIDIA Reflex on. Needs a GeForce RTX 40 Series card or newer (3X and up, and Dynamic: RTX 50 Series); greyed out otherwise.");
+	case ERow::LowLatency: return TEXT("Cuts the delay between your input and the screen. On + Boost also keeps the GPU clocks up for the lowest latency, at more power. Needs an NVIDIA GeForce card; greyed out otherwise. Off is greyed out while DLSS Frame Generation is on, which needs it.");
+	case ERow::RayTracing: return TEXT("Lights and reflects the world with your GPU's ray-tracing cores: more accurate bounce light and reflections on water and glass. Costs FPS. Needs a graphics card with hardware ray tracing (DirectX 12); greyed out otherwise.");
+	case ERow::RayReconstruction: return TEXT("DLSS's AI cleans up ray-traced light and reflections: sharper and more stable than the usual denoiser. Works with NVIDIA DLSS or DLAA and Ray tracing, so turning it on turns those on too. Needs a GeForce RTX card; greyed out otherwise.");
 	case ERow::WindowMode: return TEXT("Exclusive fullscreen, a borderless window the size of the screen, or a normal window.");
-	case ERow::Resolution: return TEXT("The resolution of the game's window or screen. Your monitor's native resolution looks sharpest; use upscaling for more FPS instead of lowering it.");
+	case ERow::Resolution: return TEXT("The resolution of the game's screen or window. Your monitor's native resolution looks sharpest: for more FPS, use upscaling instead of lowering it. Greyed out in Borderless, which always covers the screen at your desktop's resolution.");
 	case ERow::FrameCap: return TEXT("The highest frame rate the game runs at. A cap saves power and keeps fans quiet.");
-	case ERow::VSync: return TEXT("Matches frames to your monitor's refresh rate so the picture doesn't tear. Adds a little input delay.");
+	case ERow::VSync: return TEXT("Matches frames to your monitor's refresh rate so the picture doesn't tear. Adds a little input delay. Greyed out (off) while DLSS Frame Generation is on: it paces its own frames.");
 	case ERow::Outline: return TEXT("Draws a thin outline round characters so they stand out from the scenery.");
 	case ERow::Snow: return TEXT("Snowfall in games you host. In someone else's game the host's pick applies to everyone.");
 	default: return FString();
@@ -610,7 +609,7 @@ int32 ShinobiSettings::RowIndex(ERow Row)
 	case ERow::RenderScale:
 		return ShinobiGraphics::GetUpscalingQuality();
 	case ERow::AntiAliasing:
-		return ShinobiGraphics::GetUpscaler() == ShinobiGraphics::EUpscaler::Off ? int32(ShinobiGraphics::GetAntiAliasing()) : INDEX_NONE;
+		return int32(ShinobiGraphics::GetAntiAliasing());
 	case ERow::Resolution:
 		return ResolutionList().IndexOfByKey(ShownResolution());
 	case ERow::DynamicResolution:
