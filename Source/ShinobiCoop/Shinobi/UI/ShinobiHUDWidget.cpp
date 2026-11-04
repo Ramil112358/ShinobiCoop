@@ -1109,10 +1109,10 @@ const TArray<TWeakObjectPtr<AShinobiCamp>>& UShinobiHUDWidget::GetCamps()
 
 FString UShinobiHUDWidget::OpponentList(const AShinobiPlayerCharacter* Player) const
 {
-	FString Opponents;
+	FString List;
 	if (!Player || !GetWorld())
 	{
-		return Opponents;
+		return List;
 	}
 	int32 BotNumber = 0;
 	for (TActorIterator<AShinobiCharacterBase> It(GetWorld()); It; ++It)
@@ -1127,10 +1127,10 @@ FString UShinobiHUDWidget::OpponentList(const AShinobiPlayerCharacter* Player) c
 		const FString Name = Owner ? Owner->GetPlayerName() : FString::Printf(TEXT("Bot %d"), ++BotNumber);
 		const UAbilitySystemComponent* ASC = Body->GetAbilitySystemComponent();
 		const TCHAR* Status = ASC->HasMatchingGameplayTag(ShinobiTags::State_Dead) ? TEXT("  DEAD") : TEXT("");
-		Opponents += FString::Printf(TEXT("%s  %d / %d%s\n"), *Name, FMath::RoundToInt(Body->GetAttributes()->GetHealth()),
+		List += FString::Printf(TEXT("%s  %d / %d%s\n"), *Name, FMath::RoundToInt(Body->GetAttributes()->GetHealth()),
 			FMath::RoundToInt(Body->GetAttributes()->GetMaxHealth()), Status);
 	}
-	return Opponents;
+	return List;
 }
 
 FString UShinobiHUDWidget::BoostList(const AShinobiPlayerCharacter* Player) const
