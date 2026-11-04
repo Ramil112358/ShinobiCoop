@@ -25,6 +25,8 @@ AShinobiCamp::AShinobiCamp()
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
 	bAlwaysRelevant = true; // the compass shows every camp's state
+	// Its only changing replicated value is State (a few times a game): dormant, woken (FlushNetDormancy) just before each change.
+	NetDormancy = DORM_DormantAll;
 
 	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	Flame = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Flame"));
@@ -135,6 +137,7 @@ int32 AShinobiCamp::NumPlayers() const
 
 void AShinobiCamp::Activate()
 {
+	FlushNetDormancy();
 	State = EShinobiCampState::Active;
 	WaveIndex = 0;
 	EmptyTime = 0.f;
@@ -208,6 +211,7 @@ void AShinobiCamp::OnBossHealthChanged(const FOnAttributeChangeData& Data)
 
 void AShinobiCamp::Clear()
 {
+	FlushNetDormancy();
 	State = EShinobiCampState::Cleared;
 	Encounter.KillAll(); // a boss's summons fall with it
 	UE_LOG(LogShinobiCoop, Log, TEXT("Camp %s: cleared"), *CampId.ToString());
@@ -222,6 +226,7 @@ void AShinobiCamp::ResetEncounter()
 		return;
 	}
 	Encounter.DespawnAll();
+	FlushNetDormancy();
 	State = EShinobiCampState::Idle;
 	EmptyTime = 0.f;
 	UpdateFlame();

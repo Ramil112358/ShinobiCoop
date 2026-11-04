@@ -1,4 +1,5 @@
 #include "Shinobi/ShinobiPlayerController.h"
+#include "Shinobi/VFX/ShinobiVfx.h"
 #include "Components/DecalComponent.h"
 #include "NiagaraComponent.h"
 #include "NiagaraFunctionLibrary.h"
@@ -55,6 +56,7 @@ void AShinobiPlayerController::BeginPlay()
 	{
 		return;
 	}
+	ShinobiVfx::PreloadEffects(); // (the jutsu's effect assets, in the background: no disk stall on a jutsu's first cast)
 	FShinobiAppearance Coded; // -ShinobiLookCode=<code>: that look, whatever is saved (Scripts/smoke_m4.ps1)
 	if (FString Code; FParse::Value(FCommandLine::Get(), TEXT("ShinobiLookCode="), Code) && FShinobiAppearance::FromCode(Code, Coded))
 	{
@@ -81,6 +83,7 @@ void AShinobiPlayerController::BeginPlay()
 			Hud->AddToViewport();
 		}
 	}
+#if !UE_BUILD_SHIPPING // (the smoke tests and screenshot harnesses: not in the release build)
 	if (GetNetMode() == NM_Client && FParse::Param(FCommandLine::Get(), TEXT("ShinobiSmoke")))
 	{
 		RunSmokeTest();
@@ -185,6 +188,7 @@ void AShinobiPlayerController::BeginPlay()
 	{
 		RunWorldTourTest();
 	}
+#endif
 }
 
 void AShinobiPlayerController::SetupInputComponent()
@@ -462,26 +466,35 @@ void AShinobiPlayerController::ServerPickOutfit_Implementation(uint8 Index)
 
 void AShinobiPlayerController::ShinobiDamageSelf(float Amount)
 {
+#if !UE_BUILD_SHIPPING // (a cheat: does nothing in the release build)
 	ServerDamageSelf(Amount);
+#endif
 }
 
 void AShinobiPlayerController::ServerDamageSelf_Implementation(float Amount)
 {
+#if !UE_BUILD_SHIPPING // (a cheat: does nothing in the release build)
 	ApplyToOwnPawn(UGE_Damage::StaticClass(), ShinobiTags::Data_Damage, Amount);
+#endif
 }
 
 void AShinobiPlayerController::ShinobiDrainChakra(float Amount)
 {
+#if !UE_BUILD_SHIPPING // (a cheat: does nothing in the release build)
 	ServerDrainChakra(Amount);
+#endif
 }
 
 void AShinobiPlayerController::ServerDrainChakra_Implementation(float Amount)
 {
+#if !UE_BUILD_SHIPPING // (a cheat: does nothing in the release build)
 	ApplyToOwnPawn(UGE_ChakraGain::StaticClass(), ShinobiTags::Data_ChakraGain, -Amount);
+#endif
 }
 
 void AShinobiPlayerController::ShinobiCast(int32 JutsuSlot)
 {
+#if !UE_BUILD_SHIPPING // (a cheat: does nothing in the release build)
 	AShinobiCharacterBase* Shinobi = GetPawn<AShinobiCharacterBase>();
 	if (!Shinobi || JutsuSlot < 1 || JutsuSlot > ShinobiLoadout::NumSlots)
 	{
@@ -490,10 +503,12 @@ void AShinobiPlayerController::ShinobiCast(int32 JutsuSlot)
 	const int32 Input = static_cast<int32>(ShinobiLoadout::SlotInputID(JutsuSlot - 1));
 	Shinobi->GetAbilitySystemComponent()->AbilityLocalInputPressed(Input);
 	Shinobi->GetAbilitySystemComponent()->AbilityLocalInputReleased(Input);
+#endif
 }
 
 void AShinobiPlayerController::ShinobiEquipPage(int32 Page)
 {
+#if !UE_BUILD_SHIPPING // (a cheat: does nothing in the release build)
 	AShinobiPlayerCharacter* Shinobi = GetPawn<AShinobiPlayerCharacter>();
 	if (!Shinobi)
 	{
@@ -508,10 +523,12 @@ void AShinobiPlayerController::ShinobiEquipPage(int32 Page)
 	{
 		Shinobi->RequestLoadout(Slots, false); // a cheat: never the player's saved bar
 	}
+#endif
 }
 
 void AShinobiPlayerController::ShinobiCastHold(int32 JutsuSlot, float Seconds)
 {
+#if !UE_BUILD_SHIPPING // (a cheat: does nothing in the release build)
 	AShinobiCharacterBase* Shinobi = GetPawn<AShinobiCharacterBase>();
 	if (!Shinobi || JutsuSlot < 1 || JutsuSlot > ShinobiLoadout::NumSlots)
 	{
@@ -527,6 +544,7 @@ void AShinobiPlayerController::ShinobiCastHold(int32 JutsuSlot, float Seconds)
 			Held->GetAbilitySystemComponent()->AbilityLocalInputReleased(Input);
 		}
 	}), FMath::Max(Seconds, 0.01f), false);
+#endif
 }
 
 void AShinobiPlayerController::ApplyToOwnPawn(TSubclassOf<UGameplayEffect> EffectClass, const FGameplayTag& DataTag, float Magnitude)
@@ -544,6 +562,7 @@ void AShinobiPlayerController::ApplyToOwnPawn(TSubclassOf<UGameplayEffect> Effec
 
 void AShinobiPlayerController::ShinobiDumpStats()
 {
+#if !UE_BUILD_SHIPPING // (a cheat: does nothing in the release build)
 	for (TActorIterator<AShinobiCharacterBase> It(GetWorld()); It; ++It)
 	{
 		const UShinobiAttributeSet* Stats = It->GetAttributes();
@@ -578,7 +597,11 @@ void AShinobiPlayerController::ShinobiDumpStats()
 	}
 	const AShinobiPlayerCharacter* Me = GetPawn<AShinobiPlayerCharacter>();
 	UE_LOG(LogShinobiCoop, Display, TEXT("ShinobiJutsuWorld Slot1=%s Barriers=%d Kunai=%d Meteors=%d Summons=%d Dragons=%d"), Me && Me->GetLoadout().Num() > 0 && Me->GetLoadout()[0] ? *Me->GetLoadout()[0]->GetName() : TEXT("none"), Barriers, Kunai, Meteors, Summons, Dragons);
+#endif
 }
+
+// --- Smoke tests and screenshot harnesses (Scripts/*.ps1): development builds only. ---
+#if !UE_BUILD_SHIPPING
 
 void AShinobiPlayerController::RunSmokeTest()
 {
@@ -1845,3 +1868,5 @@ void AShinobiPlayerController::RunJutsuShotTest()
 	At(75.6f, [ShotUI]() { ShotUI(TEXT("ShinobiJutsuShot_34_HudPage5")); });
 	At(76.2f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
+
+#endif // !UE_BUILD_SHIPPING

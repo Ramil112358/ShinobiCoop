@@ -209,16 +209,19 @@ void AShinobiBurst::BeginPlay()
 	else if (Kind == EShinobiBurst::MeteorImpact)
 	{
 		// The one standout fire in the game: a Niagara Fluids 3D gas fire simulation rising from the crater, for a few seconds
-		// (the Fab fire patch burns at the foot of it). It is heavy, hence a single Meteor each.
+		// (the Fab fire patch burns at the foot of it). It is heavy, hence a single Meteor each. Effects quality: High and up
+		// simulate 96 cells along the longest axis; Medium 48 (an eighth of the cells, a softer flame); Low none (the fire
+		// patch, the flash cards and the crater remain).
+		const int32 Effects = ShinobiVfx::EffectsQuality();
 		const TCHAR* Path = TEXT("/NiagaraFluids/Templates/Gas/3D/Systems/Grid3D_Gas_Fire.Grid3D_Gas_Fire");
-		if (UNiagaraSystem* System = LoadObject<UNiagaraSystem>(nullptr, Path))
+		if (UNiagaraSystem* System = Effects > 0 ? LoadObject<UNiagaraSystem>(nullptr, Path) : nullptr)
 		{
 			UNiagaraComponent* Fluid = UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), System, GetActorLocation(), FRotator::ZeroRotator, FVector::OneVector, true, false);
 			if (Fluid)
 			{
 				Fluid->SetVariableBool(TEXT("User.DrawBounds"), false);
 				Fluid->SetVariableVec3(TEXT("User.WorldSpaceSize"), FVector(300.f, 300.f, 700.f) * Scale); // the simulated box: the fire fills its lower part
-				Fluid->SetVariableInt(TEXT("User.ResolutionMaxAxis"), 96);
+				Fluid->SetVariableInt(TEXT("User.ResolutionMaxAxis"), Effects >= 2 ? 96 : 48);
 				Fluid->Activate(true);
 				Fluid->AdvanceSimulationByTime(2.f, 1.f / 20.f); // the sim takes seconds to build a flame: start it going (one hitch, under the flash)
 				FTimerHandle Stop;

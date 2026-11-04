@@ -87,6 +87,9 @@ AShinobiVillager::AShinobiVillager(const FObjectInitializer& ObjectInitializer)
 	GetCharacterMovement()->GetNavMovementProperties()->bUseAccelerationForPaths = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.f, 300.f, 0.f);
 	bUseControllerRotationYaw = false;
+	// Cosmetic walkers: 10 network updates a second (2 when nothing changes) instead of 100; clients smooth in between.
+	SetNetUpdateFrequency(10.f);
+	SetMinNetUpdateFrequency(2.f);
 
 	static ConstructorHelpers::FObjectFinder<USkeletalMesh> Quinn(TEXT("/Game/Characters/Mannequins/Meshes/SKM_Quinn_Simple.SKM_Quinn_Simple"));
 	static ConstructorHelpers::FClassFinder<UAnimInstance> Walk(TEXT("/Game/Characters/Mannequins/Anims/Unarmed/ABP_Unarmed"));

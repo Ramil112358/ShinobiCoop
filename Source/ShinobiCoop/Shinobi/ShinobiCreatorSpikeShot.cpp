@@ -20,6 +20,9 @@
 #include "UnrealClient.h"
 #if WITH_EDITOR
 #include "ShaderCompiler.h"
+
+// Screenshot harness (Scripts/shot_chakra.ps1): development builds only.
+#if !UE_BUILD_SHIPPING
 #endif
 
 // -ShinobiCreatorSpike (character creator phase 0; Scripts/setup_creator.py spike assets): the MetaHuman body in the
@@ -981,3 +984,4 @@ void AShinobiPlayerController::RunCloakShot()
 	At(T, [this]() { ConsoleCommand(TEXT("quit")); });
 }
 
+#endif // !UE_BUILD_SHIPPING

@@ -13,6 +13,9 @@
 #include "TimerManager.h"
 #include "UnrealClient.h"
 
+// Screenshot harness (Scripts/shot_chakra.ps1): development builds only.
+#if !UE_BUILD_SHIPPING
+
 // -ShinobiOutfitShot=<Outfit> (Scripts/shot_chakra.ps1 -Outfit <Outfit>): the outfit on every roster body, filmed from the
 // front, the side and behind while idle, walking, running, mid-jump and settled again, for checking its cloth and hide
 // mask in the game (docs/character/outfit-steps.md). Shots: ShinobiOutfitShot_<Outfit>_<Body>_<Phase>_<View>.
@@ -118,3 +121,5 @@ void AShinobiPlayerController::RunOutfitShotTest(const FString& Outfit)
 	}
 	At(1.f + UE_ARRAY_COUNT(AShinobiPlayerCharacter::Roster) * BodySeconds + 0.5f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
+
+#endif // !UE_BUILD_SHIPPING

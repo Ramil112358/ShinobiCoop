@@ -4,6 +4,7 @@
 #include "NavigationInvokerComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Misc/App.h"
 #include "Net/UnrealNetwork.h"
 #include "Shinobi/Hero/ShinobiBodyComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -35,6 +36,29 @@ AShinobiEnemyCharacter::AShinobiEnemyCharacter(const FObjectInitializer& ObjectI
 	NavInvoker->SetGenerationRadii(5000.f, 6000.f);
 	Body = CreateDefaultSubobject<UShinobiBodyComponent>(TEXT("Body"));
 	Body->SetupAttachment(GetMesh());
+
+	// 30 updates a second instead of 100 (the movement component smooths in between on clients); summons too. A wave's
+	// worth of enemies at 100 Hz was most of the server's replication time (docs/perf/2026-11-03-performance-audit.md, item 8).
+	SetNetUpdateFrequency(EnemyNetUpdateFrequency);
+}
+
+void AShinobiEnemyCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	// Clients: the hidden driver skeleton (GetMesh) animates and the worn body copies its pose. While the body is off screen
+	// nobody sees that pose, so the driver keeps ticking (montages, notifies, timing) but skips its bone refresh, the
+	// expensive part. The server keeps refreshing: attacks and hits read its bones.
+	USkeletalMeshComponent* Driver = GetMesh();
+	if (Body && Driver && !HasAuthority() && FApp::CanEverRender())
+	{
+		const EVisibilityBasedAnimTickOption Wanted = Body->WasRecentlyRendered(OffScreenBoneGrace)
+			? EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones
+			: EVisibilityBasedAnimTickOption::AlwaysTickPose;
+		if (Driver->VisibilityBasedAnimTickOption != Wanted)
+		{
+			Driver->VisibilityBasedAnimTickOption = Wanted;
+		}
+	}
 }
 
 void AShinobiEnemyCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -170,5 +194,6 @@ AShinobiBotFighter::AShinobiBotFighter(const FObjectInitializer& ObjectInitializ
 void AShinobiBotFighter::BeginPlay()
 {
 	Super::BeginPlay();
+	SetNetUpdateFrequency(BotNetUpdateFrequency); // a PvP opponent moves like a player: more than a wave enemy's 30 Hz
 	HealthText->SetNameMode(TEXT("Bot"));
 }

@@ -110,3 +110,24 @@ Sources: [UE 5.8 release notes](https://dev.epicgames.com/documentation/unreal-e
 [Tom Looman – UE 5.7 performance highlights](https://tomlooman.com/unreal-engine-5-7-performance-highlights/),
 [Epic forums – VSM with Nanite foliage (WPO)](https://forums.unrealengine.com/t/vsm-with-nanite-foliage-wpo/776406),
 [Epic forums – ShadowDepth cost with Nanite/VSM foliage](https://forums.unrealengine.com/t/shadowdepth-tanking-fps-with-nanite-vsm-foliage-ue-5-3/2072806).
+
+## 3. Done (2026-11-04): quick wins, game-thread and network cost, effects, builds and hitches
+
+Not compiled or profiled where it was written. Build, run `Scripts/run_tests.ps1`, then measure as section 2 says. The new tests are
+`ShinobiCoop.Render.EffectsQualityCutsHeavyEffects`, `NetworkRatesAndDormancy`, `SummonHiddenMannequinOnlyTicksMontages` and
+`ScatterUsesPlainInstancingForNanite`.
+
+| Item | What changed | Visible difference at a given setting |
+| --- | --- | --- |
+| 5. Shader count | `r.128BitBPPSCompilation.Allow=0` (DefaultEngine.ini) | None. No material here renders to a 128-bit target. One that did would fail to compile, naming itself. |
+| 6. Plugins | `PCG` and `Terminal` editor-only (`TargetAllowList`). `AnimGenExample` is **kept**: the villager AnimBP still uses its trained controller `AGC_AnimGenNPC`. | None. If the cook reports a missing `/Script/PCG` class, a cooked asset still uses PCG: remove its `TargetAllowList`. |
+| 7. Animation | Clients: an enemy's hidden driver skeleton skips its bone refresh while its worn body is off screen (montages, notifies and timing keep running). Summons: the hidden capsule mannequin only ticks montages, on every machine. The server is unchanged (attacks read bones). Villagers were already limited (rendered-only parts, AnimGen LOD 2, driver gated on the crowd body). | None while visible. An enemy coming back on screen after 0.25 s off it may show its old pose for one frame. |
+| 8. Network | Enemies and summons 30 updates/s (PvP bots 60), villagers 10 (2 when idle), camps and pickups dormant between changes (`FlushNetDormancy` before each). Players keep 100. | Clients only: villagers' and enemies' positions arrive less often, smoothed by the movement component. Barely visible; a distant villager may corner slightly wider. |
+| 9. Instancing | `AShinobiScatterActor`: Nanite meshes get plain instanced components, others stay hierarchical. Run `Scripts/run_python.ps1 -TimeoutSec 3600 -Script Scripts/world/convert_scatter_ism.py` to switch already-built chunks (valley, London, the four arenas) in place. | None (Nanite already culls and LODs per instance). |
+| 10. HUD | Camps are looked up every 2 s (not a scan of every actor each frame); the PvP opponent list is rebuilt 4 times a second. | The opponent list's health and DEAD can lag up to 0.25 s. |
+| 11. Shipping | The smoke tests and screenshot harnesses (`Run*Shot*`, the `*Shot.cpp` files, the `-Shinobi*Shot` flags) are compiled out of Shipping; the cheats (`ShinobiDamageSelf`, `ShinobiDrainChakra` and their server RPCs, `ShinobiCast*`, `ShinobiEquipPage`, `ShinobiDumpStats`) do nothing there. | None. |
+| 12. Effects scalability | Below High *Effects quality* (a Graphics quality preset sets it): the dragon's fire, fire patches and Susanoo sparks use 3/4 of their cards at Medium and 1/2 at Low; the Fire Meteor's fluid fire runs at half resolution at Medium and not at Low; effect lights light nothing at Low. | Only at Medium / Low effects: thinner fire, a softer meteor flame (none at Low), no jutsu light on the surroundings at Low. High and up are unchanged. |
+| 13. Hitches | Every jutsu's effect assets (materials, textures, meshes, Niagara systems) load in the background when a local player starts (`ShinobiVfx::PreloadEffects`). Bundled PSO cache: `r.ShaderPipelineCache.Enabled=1`, `NeedsShaderStableKeys=true`, and `Scripts/pso_cache.ps1` (`-Record` plays a Development build through the jutsu harnesses with `-logPSO`, `-Expand` builds `Build/Windows/PipelineCaches/PSO_ShinobiCoop_PCD3D_SM6.spc`; package again to bundle it). | None. The script hasn't been run; its file locations follow Epic's PSO cache docs, so check them on the first run. |
+
+Still open: the Animation Budget Allocator (needs the crowd's components swapped for `USkeletalMeshComponentBudgeted`), Iris, Nanite Foliage,
+Mass crowds and Mover (items 14–16).

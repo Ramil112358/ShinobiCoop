@@ -87,6 +87,10 @@ namespace
 	constexpr float TrailDrainPerSecond = 0.6f;
 	constexpr int32 NumPips = 3; // MaxSubstitutionCharges
 	constexpr float CompassHalfWidth = 220.f;
+	/** The camp list is looked up again this often (World Partition streams camps in and out). */
+	constexpr double CampScanSeconds = 2.0;
+	/** The PvP opponent list (names, health, DEAD) is rebuilt this often. */
+	constexpr double OpponentRefreshSeconds = 0.25;
 	// Compass and minimap markers.
 	const FLinearColor VillageMarkColor(0.95f, 0.9f, 0.7f);
 	const FLinearColor CampMarkColor(1.f, 0.3f, 0.2f);
@@ -861,11 +865,16 @@ void UShinobiHUDWidget::UpdateMiniMap(const AShinobiCharacterBase* Pawn, const F
 	if (State && State->NumCamps > 0)
 	{
 		MiniMapDot(Used++, ToMap(State->VillageLocation), 12.f * Mark, VillageMarkColor);
-		for (TActorIterator<AShinobiCamp> It(GetWorld()); It; ++It)
+		for (const TWeakObjectPtr<AShinobiCamp>& Each : GetCamps())
 		{
-			const bool bCleared = It->GetState() == EShinobiCampState::Cleared;
-			MiniMapDot(Used++, ToMap(It->GetActorLocation()), (It->bBoss ? 14.f : 10.f) * Mark,
-				bCleared ? ClearedMarkColor : (It->bBoss ? BossMarkColor : CampMarkColor));
+			const AShinobiCamp* Camp = Each.Get();
+			if (!Camp)
+			{
+				continue;
+			}
+			const bool bCleared = Camp->GetState() == EShinobiCampState::Cleared;
+			MiniMapDot(Used++, ToMap(Camp->GetActorLocation()), (Camp->bBoss ? 14.f : 10.f) * Mark,
+				bCleared ? ClearedMarkColor : (Camp->bBoss ? BossMarkColor : CampMarkColor));
 		}
 	}
 	// Teammates: every other player on our side (never the opposing side in a PvP arena).
@@ -949,11 +958,16 @@ void UShinobiHUDWidget::UpdateCompass()
 		Mark(90.f, TEXT("S"), FLinearColor(0.8f, 0.8f, 0.8f));
 		Mark(180.f, TEXT("W"), FLinearColor(0.8f, 0.8f, 0.8f));
 		MarkAt(State->VillageLocation, State->HubName, VillageMarkColor);
-		for (TActorIterator<AShinobiCamp> It(GetWorld()); It; ++It)
+		for (const TWeakObjectPtr<AShinobiCamp>& Each : GetCamps())
 		{
-			const bool bCleared = It->GetState() == EShinobiCampState::Cleared;
-			const FLinearColor Colour = bCleared ? ClearedMarkColor : (It->bBoss ? BossMarkColor : CampMarkColor);
-			MarkAt(It->GetActorLocation(), It->bBoss ? TEXT("Boss") : TEXT("Camp"), Colour);
+			const AShinobiCamp* Camp = Each.Get();
+			if (!Camp)
+			{
+				continue;
+			}
+			const bool bCleared = Camp->GetState() == EShinobiCampState::Cleared;
+			const FLinearColor Colour = bCleared ? ClearedMarkColor : (Camp->bBoss ? BossMarkColor : CampMarkColor);
+			MarkAt(Camp->GetActorLocation(), Camp->bBoss ? TEXT("Boss") : TEXT("Camp"), Colour);
 		}
 	}
 	for (int32 Index = Used; Index < CompassLabels.Num(); ++Index)
@@ -1063,10 +1077,34 @@ void UShinobiHUDWidget::UpdateArena(const AShinobiPlayerCharacter* Player)
 	const bool bPvp = State && State->IsPvp();
 	SetTextIfChanged(WaveText, Wave);
 	SetTextIfChanged(TeamText, Team);
-	SetTextIfChanged(OpponentText, bPvp ? OpponentList(Player) : FString());
+	if (bPvp)
+	{
+		const double Now = GetWorld()->GetRealTimeSeconds();
+		if (OpponentsBuiltAt < 0.0 || Now - OpponentsBuiltAt >= OpponentRefreshSeconds)
+		{
+			Opponents = OpponentList(Player);
+			OpponentsBuiltAt = Now;
+		}
+	}
+	SetTextIfChanged(OpponentText, bPvp ? Opponents : FString());
 	SetTextIfChanged(BoostText, bPvp ? BoostList(Player) : FString());
 	SetTextIfChanged(BannerText, Banner);
 	SetTextIfChanged(HintText, Hint);
+}
+
+const TArray<TWeakObjectPtr<AShinobiCamp>>& UShinobiHUDWidget::GetCamps()
+{
+	const double Now = GetWorld() ? GetWorld()->GetRealTimeSeconds() : 0.0;
+	if (GetWorld() && (CampsScannedAt < 0.0 || Now - CampsScannedAt >= CampScanSeconds))
+	{
+		CampsScannedAt = Now;
+		Camps.Reset();
+		for (TActorIterator<AShinobiCamp> It(GetWorld()); It; ++It)
+		{
+			Camps.Add(*It);
+		}
+	}
+	return Camps;
 }
 
 FString UShinobiHUDWidget::OpponentList(const AShinobiPlayerCharacter* Player) const

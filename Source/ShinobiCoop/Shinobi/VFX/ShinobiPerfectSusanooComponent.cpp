@@ -400,7 +400,7 @@ void UShinobiPerfectSusanooComponent::EnsureFigure()
 
 	// Sparks: small star bursts drifting up through and around the figure, flickering between the sheet's variants.
 	FRandomStream Random(GetTypeHash(Owner->GetFName()));
-	for (int32 Index = 0; Plane && Index < SusanooSparkCount; ++Index)
+	for (int32 Index = 0, Count = ShinobiVfx::EffectCount(SusanooSparkCount); Plane && Index < Count; ++Index) // (fewer below High effects quality)
 	{
 		FSpark Spark;
 		const float Angle = Random.FRandRange(0.f, 2.f * PI);

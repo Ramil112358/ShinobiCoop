@@ -82,7 +82,10 @@
 		},
 		{
 			"Name": "PCG",
-			"Enabled": true
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
 		},
 		{
 			"Name": "AllToolsets",
@@ -90,7 +93,10 @@
 		},
 		{
 			"Name": "Terminal",
-			"Enabled": true
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
 		},
 		{
 			"Name": "PoseSearch",
@@ -162,7 +168,7 @@
 			"Enabled": true
 		},
 		{
-		"Name": "MutableClothing",
+			"Name": "MutableClothing",
 			"Enabled": true
 		},
 		{

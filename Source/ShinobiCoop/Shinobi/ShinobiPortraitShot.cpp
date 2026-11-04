@@ -16,6 +16,9 @@
 #include "UnrealClient.h"
 #if WITH_EDITOR
 #include "ShaderCompiler.h"
+
+// Screenshot harness (Scripts/shot_chakra.ps1): development builds only.
+#if !UE_BUILD_SHIPPING
 #endif
 
 // -ShinobiPortraitShot=<Character> (Scripts/shot_chakra.ps1 -Portrait <Character>): the character's face from 110 cm in
@@ -117,3 +120,5 @@ void AShinobiPlayerController::RunPortraitShotTest(const FString& Who)
 	}
 	At(10.f + UE_ARRAY_COUNT(Views) * 1.5f + 0.5f, [this]() { ConsoleCommand(TEXT("quit")); });
 }
+
+#endif // !UE_BUILD_SHIPPING

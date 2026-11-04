@@ -1013,9 +1013,9 @@ void ShinobiGraphics::ApplySaved()
 	for (TObjectIterator<ULightComponent> It; It; ++It)
 	{
 		const UWorld* World = It->GetWorld();
-		if (World && World->IsGameWorld() && It->ComponentTags.Contains(ShinobiVfx::EffectLightTag) && It->CastShadows != bMegaLights)
+		if (World && World->IsGameWorld() && It->ComponentTags.Contains(ShinobiVfx::EffectLightTag))
 		{
-			It->SetCastShadows(bMegaLights);
+			ShinobiVfx::ApplyEffectLight(*It); // (shadows with MegaLights; none at Low effects quality)
 		}
 	}
 
