@@ -109,6 +109,8 @@ private:
 	void OnTravelFailure(UWorld* World, ETravelFailure::Type FailureType, const FString& Error);
 	void OnMapLoaded(UWorld* World);
 	void ReturnToMenu(const FString& Reason);
+	/** Puts the loading screen up for travel to MapPath (UShinobiLoadingScreenSubsystem::Begin), before the travel starts. */
+	void BeginLoadingScreen(const FString& MapPath, const FString& Format) const;
 
 	TSharedPtr<FOnlineSessionSearch> Search;
 	TArray<FOnlineSessionSearchResult> Results;
@@ -116,6 +118,9 @@ private:
 	TFunction<void()> AfterDestroy;
 	int32 HostMapIndex = 0;
 	EShinobiPvpFormat HostFormat = EShinobiPvpFormat::None;
+	/** The game being joined: its map's path (empty if unknown) and format, for the loading screen. */
+	FString JoinMapPath;
+	FString JoinFormat;
 	FString Message;
 	bool bBusy = false;
 	/** Set on a disconnect: the engine loads GameDefaultMap, and the next map load goes on to the menu. */

@@ -1,4 +1,5 @@
 #include "Shinobi/Online/ShinobiSessionSubsystem.h"
+#include "Shinobi/UI/ShinobiLoadingScreen.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
@@ -195,6 +196,7 @@ void UShinobiSessionSubsystem::OnCreated(FName SessionName, bool bOk)
 		return;
 	}
 	SetMessage(FString(), false);
+	BeginLoadingScreen(GetMaps()[HostMapIndex].Path, HostFormat == EShinobiPvpFormat::TwoVsTwo ? TEXT("2v2") : HostFormat == EShinobiPvpFormat::OneVsOne ? TEXT("1v1") : TEXT(""));
 	UGameplayStatics::OpenLevel(GetWorld(), FName(GetMaps()[HostMapIndex].Path), true, MakeTravelOptions(GetMaps()[HostMapIndex], HostFormat));
 }
 
@@ -253,6 +255,13 @@ void UShinobiSessionSubsystem::JoinGame(int32 Index)
 
 void UShinobiSessionSubsystem::Join(const FOnlineSessionSearchResult& Result)
 {
+	// Where the game is, for the loading screen while connecting.
+	FString MapName;
+	Result.Session.SessionSettings.Get(MapKey, MapName);
+	const int32 MapIndex = FindMapByName(MapName);
+	JoinMapPath = MapIndex != INDEX_NONE ? GetMaps()[MapIndex].Path : FString();
+	JoinFormat.Reset();
+	Result.Session.SessionSettings.Get(FormatKey, JoinFormat);
 	SetMessage(TEXT("Joining..."), true);
 	WithoutSession([this, Result]
 	{
@@ -278,6 +287,7 @@ void UShinobiSessionSubsystem::OnJoined(FName SessionName, EOnJoinSessionComplet
 	SetMessage(FString(), false);
 	if (APlayerController* PC = GetGameInstance()->GetFirstLocalPlayerController())
 	{
+		BeginLoadingScreen(JoinMapPath, JoinFormat);
 		PC->ClientTravel(Address, TRAVEL_Absolute);
 	}
 }
@@ -346,6 +356,7 @@ void UShinobiSessionSubsystem::OnMapLoaded(UWorld* World)
 	bReturnToMenuOnLoad = false;
 	if (!World->GetOutermost()->GetName().EndsWith(TEXT("Lvl_MainMenu")))
 	{
+		BeginLoadingScreen(MenuMap, FString());
 		UGameplayStatics::OpenLevel(World, FName(MenuMap));
 	}
 }
@@ -353,5 +364,14 @@ void UShinobiSessionSubsystem::OnMapLoaded(UWorld* World)
 void UShinobiSessionSubsystem::ReturnToMenu(const FString& Reason)
 {
 	SetMessage(Reason, false);
+	BeginLoadingScreen(MenuMap, FString());
 	UGameplayStatics::OpenLevel(GetWorld(), FName(MenuMap));
+}
+
+void UShinobiSessionSubsystem::BeginLoadingScreen(const FString& MapPath, const FString& Format) const
+{
+	if (UShinobiLoadingScreenSubsystem* LoadingScreen = GetGameInstance()->GetSubsystem<UShinobiLoadingScreenSubsystem>())
+	{
+		LoadingScreen->Begin(MapPath, Format);
+	}
 }

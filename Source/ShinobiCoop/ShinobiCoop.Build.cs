@@ -50,7 +50,8 @@ public class ShinobiCoop : ModuleRules
 			"ClothingSystemRuntimeCommon", // ...and the clothing assets (tests read their painted maps)
 			"ChaosCloth", // ...and each cloth's own gravity (wall-runs)
 			"CustomizableObject", // Mutable: made characters' generated bodies (CO_Shinobi)
-			"Niagara" // the Fab fire systems (M5VFXVOL2) on the ground fire
+			"Niagara", // the Fab fire systems (M5VFXVOL2) on the ground fire
+			"MoviePlayer" // the loading screen keeps animating on the Slate loading thread through a blocking map load
 		});
 
 		if (Target.bBuildEditor)
