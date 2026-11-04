@@ -14,13 +14,20 @@ MATERIAL = "/Game/Shinobi/Materials/M_OutlinePost"
 VOLUME_LABEL = "ShinobiLookPost"
 
 OUTLINE_HLSL = r"""
-float2 uv = GetDefaultSceneTextureUV(Parameters, 14);
+// After tonemapping: this runs after the upscaler (TSR / DLSS) at the output resolution, so the outline is drawn sharp at
+// any upscaling quality and frame generation sees it as part of the picture. The colour (SC) is at output resolution,
+// but custom depth, scene depth and the stencil are still the render-resolution scene textures: every lookup goes
+// through ViewportUVToSceneTextureUV, or the outline slides off the characters when the two differ (4K, upscaling).
+float2 vp = GetViewportUV(Parameters);
+float2 uv = ViewportUVToSceneTextureUV(vp, 25);
 float3 col = SC.rgb;
 // A stencil sample counts only where the character is actually visible (custom depth not behind the scene).
 #define VISIBLE_STENCIL(p) (SceneTextureLookup(p, 13, false).r <= SceneTextureLookup(p, 1, false).r * 1.002 + 2.0 ? SceneTextureLookup(p, 25, false).r : 0.0)
 float s0 = VISIBLE_STENCIL(uv);
-float px = 1.5 * max(1.0, (1.0 / Texel.y) / 1080.0); // 1.5 px at 1080p, scaled with resolution
-float2 o = Texel * px;
+// 1.5 render pixels at a 1080-line render, scaled with the render height: the same thickness on screen at any upscaling
+// quality, and never under one render pixel (or neighbours are missed at low render scales).
+float px = max(1.0, 1.5 * View.ViewSizeAndInvSize.y / 1080.0);
+float2 o = View.BufferSizeAndInvSize.zw * px;
 float2 offs[4] = { float2(o.x, 0), float2(-o.x, 0), float2(0, o.y), float2(0, -o.y) };
 float nmax = 0;
 for (int i = 0; i < 4; i++)
@@ -30,8 +37,8 @@ for (int i = 0; i < 4; i++)
 if (s0 < 0.5 && nmax > 0.5)
 {
     bool enemy = nmax > 1.5;
-    // Linear HDR here (before tonemapping): darken for friends, tint toward a deep red for enemies.
-    col = enemy ? lerp(col, float3(0.5, 0.02, 0.01) * max(dot(col, float3(0.3, 0.59, 0.11)), 0.05) * 2.0, 0.6) : col * 0.12;
+    // Display colour here (after tonemapping): darken for friends, a deep red for enemies.
+    col = enemy ? lerp(col, float3(0.62, 0.04, 0.03), 0.65) : col * 0.15;
 }
 return col;
 """
@@ -44,15 +51,19 @@ def _custom_input(name):
 
 
 def outline_material():
-    """Builds (or rebuilds) M_OutlinePost."""
+    """Builds M_OutlinePost, or rebuilds it in place (its graph is replaced, the asset kept, so the post-process volumes in
+    the valley, London and the arenas keep pointing at it)."""
     if unreal.EditorAssetLibrary.does_asset_exist(MATERIAL):
-        unreal.EditorAssetLibrary.delete_asset(MATERIAL)
-    folder, name = MATERIAL.rsplit("/", 1)
-    m = TOOLS.create_asset(name, folder, unreal.Material, unreal.MaterialFactoryNew())
+        m = unreal.load_asset(MATERIAL)
+        MEL.delete_all_material_expressions(m)
+    else:
+        folder, name = MATERIAL.rsplit("/", 1)
+        m = TOOLS.create_asset(name, folder, unreal.Material, unreal.MaterialFactoryNew())
     m.set_editor_property("material_domain", unreal.MaterialDomain.MD_POST_PROCESS)
-    # Before the upscaler (TSR): scene colour, depth and stencil then share the render resolution. After tonemapping
-    # the colour is at output resolution while the stencil is not, which shifted outlines off the characters at 4K.
-    m.set_editor_property("blendable_location", unreal.BlendableLocation.BL_SCENE_COLOR_AFTER_DOF)
+    # After tonemapping: after the upscaler, at output resolution (sharp under TSR / DLSS, no reconstruction shimmer on
+    # a 1-2 px line). Its lookups map viewport UVs to the render-resolution scene textures (OUTLINE_HLSL); without that,
+    # outlines slid off the characters at 4K when the material first tried this location.
+    m.set_editor_property("blendable_location", unreal.BlendableLocation.BL_SCENE_COLOR_AFTER_TONEMAPPING)
     scene = MEL.create_material_expression(m, unreal.MaterialExpressionSceneTexture, -700, 0)
     scene.set_editor_property("scene_texture_id", unreal.SceneTextureId.PPI_POST_PROCESS_INPUT0)
     # Referencing the stencil and custom depth makes the material bind those scene textures for the HLSL lookups.
@@ -60,14 +71,12 @@ def outline_material():
     stencil.set_editor_property("scene_texture_id", unreal.SceneTextureId.PPI_CUSTOM_STENCIL)
     depth = MEL.create_material_expression(m, unreal.MaterialExpressionSceneTexture, -700, 350)
     depth.set_editor_property("scene_texture_id", unreal.SceneTextureId.PPI_CUSTOM_DEPTH)
-    texel = MEL.create_material_expression(m, unreal.MaterialExpressionSceneTexelSize, -700, 500)
     custom = MEL.create_material_expression(m, unreal.MaterialExpressionCustom, -300, 0)
     custom.set_editor_property("code", OUTLINE_HLSL)
     custom.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT3)
     custom.set_editor_property("description", "Outline")
-    custom.set_editor_property("inputs", [_custom_input(n) for n in ("SC", "Texel", "CS", "CD")])
+    custom.set_editor_property("inputs", [_custom_input(n) for n in ("SC", "CS", "CD")])
     MEL.connect_material_expressions(scene, "Color", custom, "SC")
-    MEL.connect_material_expressions(texel, "", custom, "Texel")
     MEL.connect_material_expressions(stencil, "Color", custom, "CS")
     MEL.connect_material_expressions(depth, "Color", custom, "CD")
     if not MEL.connect_material_property(custom, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR):

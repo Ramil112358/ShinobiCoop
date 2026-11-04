@@ -2,11 +2,13 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Shinobi/VFX/ShinobiInstancedVfx.h"
 #include "ShinobiMeteor.generated.h"
 
 class AShinobiCharacterBase;
 class UGameplayEffect;
 class UPointLightComponent;
+class UStaticMesh;
 class UStaticMeshComponent;
 
 UENUM()
@@ -55,12 +57,26 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	/** Ice: the shard, its frost trail and its two chips, drawn as instances (UShinobiInstancedVfxSubsystem; tests). */
+	int32 GetInstancedPieceCount() const { return IcePieces.Num(); }
+
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
+	/** An ice shard's piece: its mesh, where it sits on the shard, its instance. */
+	struct FIcePiece
+	{
+		UStaticMesh* Mesh = nullptr;
+		FTransform Local;
+		FShinobiVfxInstance Instance;
+	};
+
 	/** Server: the landing. */
 	void Land();
+	/** Where Piece is drawn this frame (bSpins: the shard itself, turning about its length; queued: zero scale). */
+	FTransform IcePieceTransform(const FIcePiece& Piece, bool bSpins) const;
 
 	UPROPERTY(Replicated)
 	EShinobiMeteor Kind = EShinobiMeteor::Fire;
@@ -88,6 +104,9 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UPointLightComponent> Light;
+
+	/** Ice: the pieces drawn as instances (meshes are loaded assets, kept alive by the instanced components). */
+	TArray<FIcePiece> IcePieces;
 
 	FShinobiMeteorImpact Impact;
 	TWeakObjectPtr<AShinobiCharacterBase> Caster;

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 
+class ULightComponent;
 class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class UObject;
@@ -122,4 +123,14 @@ namespace ShinobiVfx
 
 	/** Flat unlit colour (M_Streak): the blood under Amaterasu's eyes. Null, with an ensure, if the asset is missing. */
 	SHINOBICOOP_API UMaterialInstanceDynamic* MakeStreak(UObject* Outer, const FLinearColor& Color);
+
+	/** The component tag of jutsu / effect lights (fire, chakra, cast flashes, camp fires): MegaLights shadows reach them. */
+	SHINOBICOOP_API extern const FName EffectLightTag;
+	/** Constructors: tags Light as an effect light, without shadows (a constructor's values can be replaced by the class
+	 * default's when the actor is made: ApplyEffectLight at BeginPlay sets the real ones). */
+	SHINOBICOOP_API void MarkEffectLight(ULightComponent* Light);
+	/** BeginPlay, or right after making a light at runtime: tags it, and it casts shadows while MegaLights is on
+	 * (ShinobiGraphics::IsMegaLights: hundreds of shadowed lights at a fixed cost), not otherwise (a shadowed point light
+	 * without MegaLights renders six shadow views into the virtual shadow map). Null: nothing. */
+	SHINOBICOOP_API void ApplyEffectLight(ULightComponent* Light);
 }

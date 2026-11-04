@@ -205,7 +205,7 @@ void UShinobiCastFxComponent::BeginPlay()
 	Light = NewObject<UPointLightComponent>(GetOwner(), MakeUniqueObjectName(GetOwner(), UPointLightComponent::StaticClass(), TEXT("CastLight")));
 	Light->SetupAttachment(Orb);
 	Light->SetAttenuationRadius(250.f);
-	Light->SetCastShadows(false);
+	ShinobiVfx::ApplyEffectLight(Light); // shadows while MegaLights is on
 	Light->SetSpecularScale(0.f);
 	Light->SetVisibility(false);
 	Light->RegisterComponent();
@@ -244,7 +244,7 @@ void UShinobiCastFxComponent::BeginPlay()
 	RingLight->SetUsingAbsoluteLocation(true);
 	RingLight->SetLightColor(ShinobiVfx::Colors::Lightning);
 	RingLight->SetAttenuationRadius(350.f);
-	RingLight->SetCastShadows(false);
+	ShinobiVfx::ApplyEffectLight(RingLight); // shadows while MegaLights is on
 	RingLight->SetSpecularScale(0.f);
 	RingLight->SetVisibility(false);
 	RingLight->RegisterComponent();
@@ -254,7 +254,7 @@ void UShinobiCastFxComponent::BeginPlay()
 	MouthLight->SetupAttachment(MouthFlame);
 	MouthLight->SetLightColor(ShinobiVfx::Colors::Fire);
 	MouthLight->SetAttenuationRadius(150.f);
-	MouthLight->SetCastShadows(false);
+	ShinobiVfx::ApplyEffectLight(MouthLight); // shadows while MegaLights is on
 	MouthLight->SetSpecularScale(0.f);
 	MouthLight->SetVisibility(false);
 	MouthLight->RegisterComponent();

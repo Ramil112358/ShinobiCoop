@@ -1,4 +1,6 @@
 #include "Shinobi/VFX/ShinobiVfx.h"
+#include "Components/LightComponent.h"
+#include "Shinobi/UI/ShinobiGraphics.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Components/DecalComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -321,5 +323,26 @@ namespace ShinobiVfx
 			});
 		}), FMath::Max(Linger - 0.6f, 0.1f), false);
 		Pile->SetLifeSpan(Linger);
+	}
+}
+
+const FName ShinobiVfx::EffectLightTag(TEXT("ShinobiEffectLight"));
+
+void ShinobiVfx::MarkEffectLight(ULightComponent* Light)
+{
+	if (Light)
+	{
+		Light->ComponentTags.AddUnique(EffectLightTag);
+		Light->SetCastShadows(false);
+	}
+}
+
+void ShinobiVfx::ApplyEffectLight(ULightComponent* Light)
+{
+	if (Light)
+	{
+		Light->ComponentTags.AddUnique(EffectLightTag);
+		// (a dedicated server draws nothing: no GPU probe there)
+		Light->SetCastShadows(!IsRunningDedicatedServer() && ShinobiGraphics::IsMegaLights());
 	}
 }

@@ -43,7 +43,7 @@ AShinobiCamp::AShinobiCamp()
 	Light->SetRelativeLocation(FVector(0.f, 0.f, 60.f));
 	Light->SetIntensity(6000.f);
 	Light->SetAttenuationRadius(900.f);
-	Light->SetCastShadows(false);
+	ShinobiVfx::MarkEffectLight(Light); // (shadows: ApplyEffectLight at BeginPlay)
 }
 
 void AShinobiCamp::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -57,6 +57,7 @@ void AShinobiCamp::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 void AShinobiCamp::BeginPlay()
 {
 	Super::BeginPlay();
+	ShinobiVfx::ApplyEffectLight(Light); // shadows while MegaLights is on
 	UpdateFlame();
 }
 

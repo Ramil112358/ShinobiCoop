@@ -192,6 +192,50 @@
 		{
 			"Name": "ChaosClothAsset",
 			"Enabled": true
+		},
+		{
+			"Name": "DLSS",
+			"Enabled": true,
+			"Optional": true,
+			"PlatformAllowList": [
+				"Win64"
+			],
+			"TargetDenyList": [
+				"Server"
+			]
+		},
+		{
+			"Name": "StreamlineCore",
+			"Enabled": true,
+			"Optional": true,
+			"PlatformAllowList": [
+				"Win64"
+			],
+			"TargetDenyList": [
+				"Server"
+			]
+		},
+		{
+			"Name": "StreamlineDLSSG",
+			"Enabled": true,
+			"Optional": true,
+			"PlatformAllowList": [
+				"Win64"
+			],
+			"TargetDenyList": [
+				"Server"
+			]
+		},
+		{
+			"Name": "StreamlineReflex",
+			"Enabled": true,
+			"Optional": true,
+			"PlatformAllowList": [
+				"Win64"
+			],
+			"TargetDenyList": [
+				"Server"
+			]
 		}
 	]
 }

@@ -98,7 +98,7 @@ protected:
 
 /**
  * The settings panel (ShinobiSettings rows), a tab page of the main menu (SETTINGS) and the pause menu (SETTINGS): rows
- * under CHARACTER / GRAPHICS / DISPLAY / EFFECTS headings. A row with many values (quality, render scale, frame cap,
+ * under CHARACTER / GRAPHICS / DISPLAY / EFFECTS headings. A row with many values (quality, upscaling quality, frame cap,
  * character...) is a dropdown: a click (A / Enter) opens the list of them to pick from. An On / Off row is a stepper
  * "< Value >": a click flips it. Left / Right (keys, D-pad, stick) step the focused row either way. Every change applies
  * and saves at once. The line under the rows explains the hovered or focused row.
@@ -139,8 +139,14 @@ private:
 	/** The row whose button has keyboard / gamepad focus, else INDEX_NONE. */
 	int32 GetFocusedRow() const;
 	void RefreshValues();
+	/** The help line for the Row-th row shown: its description, then why it or some of its options are locked. */
+	FString DescribeRow(int32 Row) const;
 
 	TArray<ShinobiSettings::ERow> Rows;
+	/** The rows' scroll box (more rows than fit a 1080p screen). */
+	UPROPERTY()
+	TObjectPtr<class UScrollBox> RowsScroll;
+	int32 ScrolledToRow = INDEX_NONE;
 	UPROPERTY()
 	TArray<TObjectPtr<UTextBlock>> ValueTexts;
 	/** Each stepper row's < (a press over it steps back); null on dropdown rows. */
@@ -153,6 +159,8 @@ private:
 	TObjectPtr<UTextBlock> DescriptionText;
 	/** The row the help line explains (INDEX_NONE: the general note). */
 	int32 DescribedRow = -2;
+	/** Set when values change (a lock may have changed): the help line is written again. */
+	bool bDescriptionStale = false;
 	/** Set by a press over a row's <, used by that row's click. */
 	int32 PendingStep = 0;
 };

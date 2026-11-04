@@ -30,7 +30,8 @@ namespace
 
 // --- UShinobiDropdownList ---
 
-UShinobiDropdownList* UShinobiDropdownList::Open(UWidget& InAnchor, const TArray<FString>& InOptions, int32 InSelected, TFunction<void(int32)> InOnPick, UWidget* PlaceUnder)
+UShinobiDropdownList* UShinobiDropdownList::Open(UWidget& InAnchor, const TArray<FString>& InOptions, int32 InSelected, TFunction<void(int32)> InOnPick, UWidget* PlaceUnder,
+	const TArray<FString>& InLocked)
 {
 	UWorld* World = InAnchor.GetWorld();
 	if (!World || !World->GetGameViewport() || InOptions.Num() == 0)
@@ -45,6 +46,7 @@ UShinobiDropdownList* UShinobiDropdownList::Open(UWidget& InAnchor, const TArray
 		return nullptr;
 	}
 	Popup->Options = InOptions;
+	Popup->Locked = InLocked;
 	Popup->Selected = FMath::Clamp(InSelected, 0, InOptions.Num() - 1);
 	Popup->OnPick = MoveTemp(InOnPick);
 	Popup->Anchor = &InAnchor;
@@ -127,10 +129,19 @@ TSharedRef<SWidget> UShinobiDropdownList::RebuildWidget()
 			TickBox->SetWidthOverride(22.f);
 			TickBox->AddChild(ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(bCurrent ? TEXT("✓") : TEXT("")), 14, ShinobiMenuStyle::Accent));
 			Line->AddChildToHorizontalBox(TickBox)->SetVerticalAlignment(VAlign_Center);
-			UTextBlock* Name = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Options[Index]), 15, bCurrent ? ShinobiMenuStyle::Accent : FLinearColor::White);
+			const bool bLocked = IsOptionLocked(Index);
+			UTextBlock* Name = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Options[Index]), 15,
+				bLocked ? ShinobiMenuStyle::TextDim : bCurrent ? ShinobiMenuStyle::Accent : FLinearColor::White);
 			UHorizontalBoxSlot* NameSlot = Line->AddChildToHorizontalBox(Name);
 			NameSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 			NameSlot->SetVerticalAlignment(VAlign_Center);
+			if (bLocked)
+			{
+				// Greyed out with a tag; the full reason is on the settings help line.
+				UHorizontalBoxSlot* TagSlot = Line->AddChildToHorizontalBox(ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(TEXT("Locked")), 12, ShinobiMenuStyle::TextDim));
+				TagSlot->SetVerticalAlignment(VAlign_Center);
+				TagSlot->SetPadding(FMargin(8.f, 0.f, 6.f, 0.f));
+			}
 			ShinobiMenuStyle::StyleListItem(*Item, false);
 			List->AddChild(Item);
 			Cast<UButtonSlot>(Line->Slot)->SetHorizontalAlignment(HAlign_Fill);
@@ -191,6 +202,10 @@ void UShinobiDropdownList::NativeTick(const FGeometry& Geometry, float DeltaTime
 
 void UShinobiDropdownList::Pick(int32 Index)
 {
+	if (IsOptionLocked(Index))
+	{
+		return; // stays open: pick another
+	}
 	TFunction<void(int32)> Picked = MoveTemp(OnPick);
 	Dismiss();
 	if (Picked && Options.IsValidIndex(Index))

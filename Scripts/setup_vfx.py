@@ -66,6 +66,9 @@ def fresh_material(name, two_sided, blend=unreal.BlendMode.BLEND_ADDITIVE):
     material.set_editor_property("translucency_pass", unreal.MaterialTranslucencyPass.MTP_AFTER_DOF)
     material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
     material.set_editor_property("two_sided", two_sided)
+    if blend not in (unreal.BlendMode.BLEND_OPAQUE, unreal.BlendMode.BLEND_MASKED):
+        # Motion vectors for TSR / DLSS / frame generation, or the effect ghosts as it moves (setup_motion_vectors.py).
+        material.set_editor_property("output_translucent_velocity", True)
     return material
 
 

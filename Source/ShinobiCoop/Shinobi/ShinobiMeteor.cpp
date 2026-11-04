@@ -10,6 +10,7 @@
 #include "Shinobi/ShinobiCombat.h"
 #include "Shinobi/VFX/ShinobiBurst.h"
 #include "Shinobi/VFX/ShinobiFirePatch.h"
+#include "Shinobi/VFX/ShinobiInstancedVfx.h"
 #include "Shinobi/VFX/ShinobiVfx.h"
 
 namespace
@@ -41,7 +42,7 @@ AShinobiMeteor::AShinobiMeteor()
 	}
 	Light = CreateDefaultSubobject<UPointLightComponent>(TEXT("Light"));
 	Light->SetupAttachment(RootComponent);
-	Light->SetCastShadows(false);
+	ShinobiVfx::MarkEffectLight(Light); // (shadows: ApplyEffectLight at BeginPlay)
 	Light->SetSpecularScale(0.f);
 }
 
@@ -88,32 +89,37 @@ void AShinobiMeteor::BeginPlay()
 	{
 		return; // nothing to draw; the tick still runs the fall and the landing
 	}
+	ShinobiVfx::ApplyEffectLight(Light);
 	if (Kind == EShinobiMeteor::Ice)
 	{
 		// A faceted ice shard (Scripts/setup_ice_hail.py), point first and turning about its length so its facets glint,
 		// a soft frost streak behind it and two small chips of hail following it. No glow, no light: it is ice, not fire.
+		// A shower drops 60 of these: they're drawn as instances of one instanced mesh per mesh (UShinobiInstancedVfxSubsystem),
+		// not four mesh components each, so the shard's own Core / Shell stay empty.
 		const float Size = VisualScale * FMath::FRandRange(0.85f, 1.15f); // the shard mesh is 1 m long, 22 cm across
-		auto Shard = [](UStaticMeshComponent* Part)
+		auto ShardMesh = []()
 		{
 			const int32 Variant = FMath::RandRange(0, 2);
-			Part->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, *FString::Printf(TEXT("/Game/Shinobi/VFX/SM_IceShard_%d.SM_IceShard_%d"), Variant, Variant)));
+			return LoadObject<UStaticMesh>(nullptr, *FString::Printf(TEXT("/Game/Shinobi/VFX/SM_IceShard_%d.SM_IceShard_%d"), Variant, Variant));
 		};
-		Shard(Core);
-		Core->SetRelativeScale3D(FVector(Size));
-		Shell->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Shinobi/VFX/SM_IceTrail.SM_IceTrail"))); // 1 m long, 1 cm radius
-		Shell->SetRelativeLocation(FVector(-30.f * Size, 0.f, 0.f));
-		Shell->SetRelativeScale3D(FVector(4.f, 6.f, 6.f) * Size);
+		Core->SetStaticMesh(nullptr); // (the constructor's sphere is the fire meteor's)
+		Shell->SetStaticMesh(nullptr);
+		IcePieces.Reset();
+		IcePieces.Add({ ShardMesh(), FTransform(FQuat::Identity, FVector::ZeroVector, FVector(Size)) }); // [0]: the shard, which spins
+		IcePieces.Add({ LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Shinobi/VFX/SM_IceTrail.SM_IceTrail")), // 1 m long, 1 cm radius
+			FTransform(FQuat::Identity, FVector(-30.f * Size, 0.f, 0.f), FVector(4.f, 6.f, 6.f) * Size) });
 		for (int32 Index = 0; Index < 2; ++Index)
 		{
-			UStaticMeshComponent* Chip = NewObject<UStaticMeshComponent>(this);
-			Shard(Chip);
-			Chip->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-			Chip->SetCastShadow(false);
-			Chip->SetupAttachment(RootComponent);
-			Chip->SetRelativeLocation(FVector(FMath::FRandRange(-260.f, -130.f), Index ? 30.f : -30.f, FMath::FRandRange(-25.f, 25.f)) * Size);
-			Chip->SetRelativeRotation(FRotator(FMath::FRandRange(-15.f, 15.f), FMath::FRandRange(-15.f, 15.f), FMath::FRandRange(0.f, 360.f)));
-			Chip->SetRelativeScale3D(FVector(FMath::FRandRange(0.2f, 0.3f) * Size));
-			Chip->RegisterComponent();
+			const FRotator Turn(FMath::FRandRange(-15.f, 15.f), FMath::FRandRange(-15.f, 15.f), FMath::FRandRange(0.f, 360.f));
+			const FVector Spot = FVector(FMath::FRandRange(-260.f, -130.f), Index ? 30.f : -30.f, FMath::FRandRange(-25.f, 25.f)) * Size;
+			IcePieces.Add({ ShardMesh(), FTransform(Turn.Quaternion(), Spot, FVector(FMath::FRandRange(0.2f, 0.3f) * Size)) });
+		}
+		if (UShinobiInstancedVfxSubsystem* Instances = GetWorld()->GetSubsystem<UShinobiInstancedVfxSubsystem>())
+		{
+			for (FIcePiece& Piece : IcePieces)
+			{
+				Piece.Instance = Instances->Add(Piece.Mesh, IcePieceTransform(Piece, &Piece == &IcePieces[0]));
+			}
 		}
 		Spin = FMath::FRandRange(360.f, 720.f) * (FMath::RandBool() ? 1.f : -1.f);
 		Light->DestroyComponent(); // ice gives off no light
@@ -150,11 +156,44 @@ void AShinobiMeteor::Tick(float DeltaSeconds)
 	}
 	const float Alpha = FMath::Clamp(Falling / FallSeconds, 0.f, 1.f);
 	SetActorLocation(FMath::Lerp(StartPoint, ImpactPoint, FMath::Pow(Alpha, 1.6f))); // speeding up as it falls
+	if (IcePieces.Num() > 0)
+	{
+		if (UShinobiInstancedVfxSubsystem* Instances = GetWorld()->GetSubsystem<UShinobiInstancedVfxSubsystem>())
+		{
+			for (int32 Index = 0; Index < IcePieces.Num(); ++Index)
+			{
+				Instances->Update(IcePieces[Index].Instance, IcePieceTransform(IcePieces[Index], Index == 0));
+			}
+		}
+	}
 	if (Falling >= FallSeconds && HasAuthority())
 	{
 		Land();
 		Destroy();
 	}
+}
+
+FTransform AShinobiMeteor::IcePieceTransform(const FIcePiece& Piece, bool bSpins) const
+{
+	if (bPartsHidden)
+	{
+		return FTransform(FQuat::Identity, GetActorLocation(), FVector::ZeroVector); // queued in the sky: out of sight
+	}
+	const FTransform Local = bSpins ? FTransform(FRotator(0.f, 0.f, Age * Spin).Quaternion(), Piece.Local.GetLocation(), Piece.Local.GetScale3D()) : Piece.Local;
+	return Local * GetActorTransform();
+}
+
+void AShinobiMeteor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (UShinobiInstancedVfxSubsystem* Instances = GetWorld() ? GetWorld()->GetSubsystem<UShinobiInstancedVfxSubsystem>() : nullptr)
+	{
+		for (FIcePiece& Piece : IcePieces)
+		{
+			Instances->Remove(Piece.Instance);
+		}
+	}
+	IcePieces.Reset();
+	Super::EndPlay(EndPlayReason);
 }
 
 void AShinobiMeteor::Land()
