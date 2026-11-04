@@ -73,6 +73,14 @@ private:
 	FString BoostList(const class AShinobiPlayerCharacter* Player) const;
 	/** Open world: the compass strip (cardinal points, village, camps, boss) around the camera's yaw. */
 	void UpdateCompass();
+	/** The level's camps (minimap and compass), found once and again every CampScanSeconds (World Partition streams them),
+	 * not by a scan of every actor each frame. */
+	const TArray<TWeakObjectPtr<class AShinobiCamp>>& GetCamps();
+	TArray<TWeakObjectPtr<class AShinobiCamp>> Camps;
+	double CampsScannedAt = -1.0;
+	/** PvP: OpponentList, rebuilt every OpponentRefreshSeconds rather than every frame (a scan of every character). */
+	FString Opponents;
+	double OpponentsBuiltAt = -1.0;
 	UTextBlock* CompassLabel(int32 Index);
 
 	/** Bottom-right: the level's baked map (UShinobiMiniMapData::ForLevel), north-up; hidden when none is baked. */

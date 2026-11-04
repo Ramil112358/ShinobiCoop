@@ -1,5 +1,8 @@
 #include "Shinobi/VFX/ShinobiVfx.h"
 #include "Components/LightComponent.h"
+#include "HAL/IConsoleManager.h"
+#include "Engine/AssetManager.h"
+#include "Engine/StreamableManager.h"
 #include "Shinobi/UI/ShinobiGraphics.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Components/DecalComponent.h"
@@ -344,5 +347,65 @@ void ShinobiVfx::ApplyEffectLight(ULightComponent* Light)
 		Light->ComponentTags.AddUnique(EffectLightTag);
 		// (a dedicated server draws nothing: no GPU probe there)
 		Light->SetCastShadows(!IsRunningDedicatedServer() && ShinobiGraphics::IsMegaLights());
+		// (hidden in game rather than invisible: effects switch their lights' visibility on and off as they play)
+		Light->SetHiddenInGame(EffectsQuality() == 0);
 	}
+}
+
+int32 ShinobiVfx::EffectsQuality()
+{
+	static const TConsoleVariableData<int32>* CVar = IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("sg.EffectsQuality"));
+	return CVar ? FMath::Clamp(CVar->GetValueOnGameThread(), 0, 4) : 3;
+}
+
+int32 ShinobiVfx::EffectCount(int32 Count)
+{
+	const int32 Quality = EffectsQuality();
+	const int32 Scaled = Quality >= 2 ? Count : Quality == 1 ? (Count * 3 + 3) / 4 : (Count + 1) / 2;
+	return Count > 0 ? FMath::Max(1, Scaled) : 0;
+}
+
+namespace
+{
+	/** Everything the jutsu effects load by path on their first cast (ShinobiVfx, the bursts, fire patches, hail, walls,
+	 * Susanoo, freeze, the meteor's fluid fire). */
+	const TCHAR* const PreloadedEffects[] = {
+		TEXT("/Game/Shinobi/VFX/M_ChakraBodyAura.M_ChakraBodyAura"), TEXT("/Game/Shinobi/VFX/M_ChakraPillar.M_ChakraPillar"),
+		TEXT("/Game/Shinobi/VFX/M_Flame.M_Flame"), TEXT("/Game/Shinobi/VFX/M_FlameDark.M_FlameDark"), TEXT("/Game/Shinobi/VFX/M_IceShard.M_IceShard"),
+		TEXT("/Game/Shinobi/VFX/M_PerfectSusanoo.M_PerfectSusanoo"), TEXT("/Game/Shinobi/VFX/M_Phased.M_Phased"), TEXT("/Game/Shinobi/VFX/M_PushDome.M_PushDome"),
+		TEXT("/Game/Shinobi/VFX/M_Sprite.M_Sprite"), TEXT("/Game/Shinobi/VFX/M_SpriteDark.M_SpriteDark"), TEXT("/Game/Shinobi/VFX/M_SpriteDust.M_SpriteDust"),
+		TEXT("/Game/Shinobi/VFX/M_SpriteScorchDecal.M_SpriteScorchDecal"), TEXT("/Game/Shinobi/VFX/M_SpriteSmoke.M_SpriteSmoke"), TEXT("/Game/Shinobi/VFX/M_Streak.M_Streak"),
+		TEXT("/Game/Shinobi/VFX/M_Susanoo.M_Susanoo"), TEXT("/Game/Shinobi/VFX/M_SusanooBlade.M_SusanooBlade"), TEXT("/Game/Shinobi/VFX/M_WaterWall.M_WaterWall"),
+		TEXT("/Game/Shinobi/VFX/T_ChakraFlow.T_ChakraFlow"), TEXT("/Game/Shinobi/VFX/T_ChidoriOrb.T_ChidoriOrb"), TEXT("/Game/Shinobi/VFX/T_CrimsonFire.T_CrimsonFire"),
+		TEXT("/Game/Shinobi/VFX/T_Energy.T_Energy"), TEXT("/Game/Shinobi/VFX/T_Flames.T_Flames"), TEXT("/Game/Shinobi/VFX/T_IceShatter.T_IceShatter"),
+		TEXT("/Game/Shinobi/VFX/T_PushDust.T_PushDust"), TEXT("/Game/Shinobi/VFX/T_RasenganOrb.T_RasenganOrb"), TEXT("/Game/Shinobi/VFX/T_SmokeEmbers.T_SmokeEmbers"),
+		TEXT("/Game/Shinobi/VFX/T_TairnFire.T_TairnFire"),
+		TEXT("/Game/Shinobi/VFX/SM_IceShard_0.SM_IceShard_0"), TEXT("/Game/Shinobi/VFX/SM_IceShard_1.SM_IceShard_1"), TEXT("/Game/Shinobi/VFX/SM_IceShard_2.SM_IceShard_2"),
+		TEXT("/Game/Shinobi/VFX/SM_IceTrail.SM_IceTrail"), TEXT("/Game/Shinobi/VFX/Walls/SM_EarthWall.SM_EarthWall"), TEXT("/Game/Shinobi/VFX/Walls/SM_WaterWall.SM_WaterWall"),
+		TEXT("/Game/Shinobi/Jutsu/SM_MarkerKunai.SM_MarkerKunai"), TEXT("/Game/Shinobi/Jutsu/SM_SusanooRibs.SM_SusanooRibs"),
+		TEXT("/Game/Shinobi/VFX/Freeze/NS_FreezeAura.NS_FreezeAura"), TEXT("/Game/Shinobi/VFX/Freeze/NS_FreezeIce.NS_FreezeIce"),
+		TEXT("/Game/M5VFXVOL2/Niagara/Fire/NFire_01.NFire_01"), TEXT("/Game/M5VFXVOL2/Niagara/Fire/NFire_02.NFire_02"), TEXT("/Game/M5VFXVOL2/Niagara/Fire/NFire_03.NFire_03"),
+		TEXT("/NiagaraFluids/Templates/Gas/3D/Systems/Grid3D_Gas_Fire.Grid3D_Gas_Fire"),
+	};
+
+	TSharedPtr<FStreamableHandle> EffectsPreload;
+}
+
+void ShinobiVfx::PreloadEffects()
+{
+	if (EffectsPreload.IsValid() || IsRunningDedicatedServer() || !UAssetManager::IsInitialized())
+	{
+		return;
+	}
+	TArray<FSoftObjectPath> Paths;
+	for (const TCHAR* Path : PreloadedEffects)
+	{
+		Paths.Emplace(Path);
+	}
+	EffectsPreload = UAssetManager::GetStreamableManager().RequestAsyncLoad(MoveTemp(Paths), FStreamableDelegate(), FStreamableManager::DefaultAsyncLoadPriority);
+}
+
+bool ShinobiVfx::AreEffectsPreloaded()
+{
+	return EffectsPreload.IsValid() && EffectsPreload->HasLoadCompleted();
 }

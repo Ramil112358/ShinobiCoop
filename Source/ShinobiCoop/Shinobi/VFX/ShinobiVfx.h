@@ -124,6 +124,20 @@ namespace ShinobiVfx
 	/** Flat unlit colour (M_Streak): the blood under Amaterasu's eyes. Null, with an ensure, if the asset is missing. */
 	SHINOBICOOP_API UMaterialInstanceDynamic* MakeStreak(UObject* Outer, const FLinearColor& Color);
 
+	/** The Effects quality in effect (sg.EffectsQuality: Graphics quality presets set it): 0 Low, 1 Medium, 2 High, 3 Epic,
+	 * 4 Cinematic. The heaviest effects are cut down below High (EffectCount, the Fire Meteor's fluid fire, effect lights). */
+	SHINOBICOOP_API int32 EffectsQuality();
+	/** How many of an effect's Count cards (flame tongues, smoke, embers, sparks) to make: all from High up, three quarters
+	 * at Medium, half at Low; at least one. */
+	SHINOBICOOP_API int32 EffectCount(int32 Count);
+
+	/** Starts loading every jutsu effect's materials, textures, meshes and Niagara systems in the background, once per run
+	 * (local players' BeginPlay). Effects load them by path the first time they're cast (LoadObject): already in memory, that
+	 * first cast no longer stalls the frame on disk reads. Kept loaded for the rest of the run. */
+	SHINOBICOOP_API void PreloadEffects();
+	/** Whether PreloadEffects has finished (tests). */
+	SHINOBICOOP_API bool AreEffectsPreloaded();
+
 	/** The component tag of jutsu / effect lights (fire, chakra, cast flashes, camp fires): MegaLights shadows reach them. */
 	SHINOBICOOP_API extern const FName EffectLightTag;
 	/** Constructors: tags Light as an effect light, without shadows (a constructor's values can be replaced by the class
@@ -131,6 +145,7 @@ namespace ShinobiVfx
 	SHINOBICOOP_API void MarkEffectLight(ULightComponent* Light);
 	/** BeginPlay, or right after making a light at runtime: tags it, and it casts shadows while MegaLights is on
 	 * (ShinobiGraphics::IsMegaLights: hundreds of shadowed lights at a fixed cost), not otherwise (a shadowed point light
-	 * without MegaLights renders six shadow views into the virtual shadow map). Null: nothing. */
+	 * without MegaLights renders six shadow views into the virtual shadow map). At Low effects quality it lights nothing
+	 * (the effect's own glow stays). Null: nothing. */
 	SHINOBICOOP_API void ApplyEffectLight(ULightComponent* Light);
 }

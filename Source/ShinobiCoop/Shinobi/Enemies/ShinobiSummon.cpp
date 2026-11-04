@@ -174,6 +174,9 @@ void AShinobiSummon::WearCreature()
 		Anim->Setup(Clips);
 	}
 	GetMesh()->SetVisibility(false); // the mannequin only carries the capsule's old look; hidden under the creature
+	// ...so its pose is never seen and nothing reads its bones (the creature has its own animation, attached to the mesh
+	// itself, not a bone): only its montages tick (ability timing, root motion), on every machine.
+	GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::OnlyTickMontagesWhenNotRendered;
 }
 
 bool AShinobiSummon::CanTarget(const AShinobiCharacterBase& Candidate) const

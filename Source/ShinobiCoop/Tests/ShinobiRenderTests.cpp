@@ -14,6 +14,15 @@
 #include "Shinobi/UI/ShinobiSettings.h"
 #include "Shinobi/VFX/ShinobiInstancedVfx.h"
 #include "Shinobi/VFX/ShinobiVfx.h"
+#include "Components/HierarchicalInstancedStaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "HAL/IConsoleManager.h"
+#include "Shinobi/Enemies/ShinobiEnemyCharacter.h"
+#include "Shinobi/Enemies/ShinobiSummon.h"
+#include "Shinobi/Pvp/ShinobiPickup.h"
+#include "Shinobi/World/ShinobiCamp.h"
+#include "Shinobi/World/ShinobiScatterActor.h"
+#include "Shinobi/World/ShinobiVillager.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiCharactersOffNaniteTest, "ShinobiCoop.Render.CharactersStayOffNanite", ShinobiTestFlags)
 bool FShinobiCharactersOffNaniteTest::RunTest(const FString& Parameters)
@@ -176,6 +185,93 @@ bool FShinobiLightingQualityTest::RunTest(const FString& Parameters)
 	Settings->SetReflectionQuality(OldReflections);
 	Settings->ApplyNonResolutionSettings();
 	Settings->SaveSettings();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiEffectsQualityTest, "ShinobiCoop.Render.EffectsQualityCutsHeavyEffects", ShinobiTestFlags)
+bool FShinobiEffectsQualityTest::RunTest(const FString& Parameters)
+{
+	// Below High effects quality the card-heavy effects make fewer cards and effect lights light nothing; High and up are
+	// untouched.
+	IConsoleVariable* Effects = IConsoleManager::Get().FindConsoleVariable(TEXT("sg.EffectsQuality"));
+	if (!TestNotNull(TEXT("sg.EffectsQuality"), Effects))
+	{
+		return false;
+	}
+	const int32 Old = Effects->GetInt();
+	FShinobiTestWorld W;
+	AActor* Holder = W.World->SpawnActor<AActor>();
+	UPointLightComponent* Light = NewObject<UPointLightComponent>(Holder);
+	const int32 Expected[] = { 22, 33, 44, 44, 44 };
+	for (int32 Level = 0; Level <= 4; ++Level)
+	{
+		Effects->Set(Level, ECVF_SetByConsole);
+		TestEqual(FString::Printf(TEXT("effects %d: the dragon's 44 flame tongues"), Level), ShinobiVfx::EffectCount(44), Expected[Level]);
+		ShinobiVfx::ApplyEffectLight(Light);
+		TestEqual(FString::Printf(TEXT("effects %d: the effect light lights the world"), Level), !Light->bHiddenInGame, Level > 0);
+	}
+	Effects->Set(0, ECVF_SetByConsole);
+	TestEqual(TEXT("never under one card"), ShinobiVfx::EffectCount(1), 1);
+	TestEqual(TEXT("none stays none"), ShinobiVfx::EffectCount(0), 0);
+	Effects->Set(Old, ECVF_SetByConsole);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiNetRatesTest, "ShinobiCoop.Render.NetworkRatesAndDormancy", ShinobiTestFlags)
+bool FShinobiNetRatesTest::RunTest(const FString& Parameters)
+{
+	// Fewer network updates for what doesn't need 100 a second; camps and pickups sleep between their few changes.
+	TestEqual(TEXT("enemies: 30 a second"), GetDefault<AShinobiEnemyCharacter>()->GetNetUpdateFrequency(), 30.f);
+	TestEqual(TEXT("summons inherit it"), GetDefault<AShinobiSummon>()->GetNetUpdateFrequency(), 30.f);
+	TestEqual(TEXT("villagers: 10 a second"), GetDefault<AShinobiVillager>()->GetNetUpdateFrequency(), 10.f);
+	TestEqual(TEXT("...2 when idle"), GetDefault<AShinobiVillager>()->GetMinNetUpdateFrequency(), 2.f);
+	TestTrue(TEXT("camps are dormant"), GetDefault<AShinobiCamp>()->NetDormancy == DORM_DormantAll);
+	TestTrue(TEXT("pickups are dormant"), GetDefault<AShinobiPickup>()->NetDormancy == DORM_DormantAll);
+	TestTrue(TEXT("players keep the default rate"), GetDefault<AShinobiPlayerCharacter>()->GetNetUpdateFrequency() > 30.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSummonMannequinTest, "ShinobiCoop.Render.SummonHiddenMannequinOnlyTicksMontages", ShinobiTestFlags)
+bool FShinobiSummonMannequinTest::RunTest(const FString& Parameters)
+{
+	// A summon's capsule mannequin is hidden under its creature: its pose is never drawn or read, so only montages tick.
+	FShinobiTestWorld W;
+	AShinobiSummon* Summon = W.Spawn<AShinobiSummon>(FVector(300.f, 0.f, 0.f));
+	if (!TestNotNull(TEXT("a summon"), Summon))
+	{
+		return false;
+	}
+	if (!Summon->GetMesh()->IsVisible())
+	{
+		TestTrue(TEXT("the hidden mannequin only ticks montages"),
+			Summon->GetMesh()->VisibilityBasedAnimTickOption == EVisibilityBasedAnimTickOption::OnlyTickMontagesWhenNotRendered);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiScatterInstancingTest, "ShinobiCoop.Render.ScatterUsesPlainInstancingForNanite", ShinobiTestFlags)
+bool FShinobiScatterInstancingTest::RunTest(const FString& Parameters)
+{
+	// A Nanite mesh's instances go in a plain instanced component (Nanite culls per instance); others keep the hierarchical one.
+	FShinobiTestWorld W;
+	AShinobiScatterActor* Chunk = W.World->SpawnActor<AShinobiScatterActor>();
+	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	if (!TestNotNull(TEXT("a chunk"), Chunk) || !TestNotNull(TEXT("the engine cube"), Cube))
+	{
+		return false;
+	}
+	Chunk->AddInstances(Cube, { FTransform(FVector(0.f, 0.f, 0.f)), FTransform(FVector(500.f, 0.f, 0.f)) }, 5000.f);
+	TArray<UInstancedStaticMeshComponent*> Parts;
+	Chunk->GetComponents<UInstancedStaticMeshComponent>(Parts);
+	TestEqual(TEXT("one component"), Parts.Num(), 1);
+	if (Parts.Num() == 1)
+	{
+		TestEqual(TEXT("hierarchical only without Nanite"), Parts[0]->IsA<UHierarchicalInstancedStaticMeshComponent>(), !Cube->HasValidNaniteData());
+		TestEqual(TEXT("both instances"), Parts[0]->GetInstanceCount(), 2);
+	}
+	TestEqual(TEXT("no Nanite mesh left hierarchical"), Chunk->CountHierarchicalNanite(), 0);
+	TestEqual(TEXT("nothing to convert"), Chunk->ConvertNaniteToInstanced(), 0);
+	TestEqual(TEXT("instances kept"), Chunk->GetInstanceCount(), 2);
 	return true;
 }
 

@@ -88,8 +88,16 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	/** Clients: the hidden driver skips its bone refresh while the worn body is off screen. */
+	virtual void Tick(float DeltaSeconds) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void HandleOutOfHealth() override;
+
+	/** Network updates a second (summons inherit it; PvP bots use BotNetUpdateFrequency). */
+	static constexpr float EnemyNetUpdateFrequency = 30.f;
+	static constexpr float BotNetUpdateFrequency = 60.f;
+	/** Clients: how long after the body was last drawn its driver still refreshes bones (covers a turn of the camera). */
+	static constexpr float OffScreenBoneGrace = 0.25f;
 
 	/** Visible body over the hidden mannequin; removed when none of BodyPool is imported. */
 	UPROPERTY(VisibleAnywhere, Category = "Shinobi")

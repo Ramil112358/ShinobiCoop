@@ -126,32 +126,33 @@ void AShinobiDragonFlame::BeginPlay()
 	// down the jet with its base leading... its long axis along the fire, widening as it goes, so the overlapping tongues read as one stream
 	// that starts at the mouth and goes straight out in a narrow cone.
 	const uint8 Fire = static_cast<uint8>(bTairn ? ESprite::TairnFire : ESprite::CrimsonFire);
-	for (int32 Index = 0; Index < 44; ++Index)
+	// (fewer cards below High effects quality: ShinobiVfx::EffectCount)
+	for (int32 Index = 0, Count = ShinobiVfx::EffectCount(44); Index < Count; ++Index)
 	{
-		AddParticle(Plane, Fire, White, 2.4f, Index / 44.f, FMath::FRandRange(0.5f, 0.7f), FMath::FRandRange(300.f, 440.f), 0.05f, FMath::FRandRange(0.88f, 1.f));
+		AddParticle(Plane, Fire, White, 2.4f, Index / float(Count), FMath::FRandRange(0.5f, 0.7f), FMath::FRandRange(300.f, 440.f), 0.05f, FMath::FRandRange(0.88f, 1.f));
 	}
 	// A hotter, narrower core near the mouth.
-	for (int32 Index = 0; Index < 12; ++Index)
+	for (int32 Index = 0, Count = ShinobiVfx::EffectCount(12); Index < Count; ++Index)
 	{
-		AddParticle(Plane, Fire, FLinearColor(1.4f, 1.4f, 1.4f), 3.2f, Index / 12.f, 0.3f, FMath::FRandRange(120.f, 190.f), 0.02f, 0.5f);
+		AddParticle(Plane, Fire, FLinearColor(1.4f, 1.4f, 1.4f), 3.2f, Index / float(Count), 0.3f, FMath::FRandRange(120.f, 190.f), 0.02f, 0.5f);
 	}
 	if (bTairn)
 	{
 		// Bolts of lightning forking along the jet.
-		for (int32 Index = 0; Index < 12; ++Index)
+		for (int32 Index = 0, Count = ShinobiVfx::EffectCount(12); Index < Count; ++Index)
 		{
-			AddParticle(Plane, static_cast<uint8>(ESprite::Lightning), FLinearColor(0.8f, 0.9f, 1.f), 3.5f, Index / 12.f, FMath::FRandRange(0.16f, 0.3f), FMath::FRandRange(160.f, 260.f), 0.06f, FMath::FRandRange(0.6f, 1.f));
+			AddParticle(Plane, static_cast<uint8>(ESprite::Lightning), FLinearColor(0.8f, 0.9f, 1.f), 3.5f, Index / float(Count), FMath::FRandRange(0.16f, 0.3f), FMath::FRandRange(160.f, 260.f), 0.06f, FMath::FRandRange(0.6f, 1.f));
 		}
 	}
 	else
 	{
-		for (int32 Index = 0; Index < 10; ++Index)
+		for (int32 Index = 0, Count = ShinobiVfx::EffectCount(10); Index < Count; ++Index)
 		{
-			AddParticle(Plane, static_cast<uint8>(ESprite::Ember), White, 2.f, Index / 10.f, FMath::FRandRange(0.6f, 0.9f), FMath::FRandRange(120.f, 200.f), 0.08f, 1.1f);
+			AddParticle(Plane, static_cast<uint8>(ESprite::Ember), White, 2.f, Index / float(Count), FMath::FRandRange(0.6f, 0.9f), FMath::FRandRange(120.f, 200.f), 0.08f, 1.1f);
 		}
-		for (int32 Index = 0; Index < 6; ++Index)
+		for (int32 Index = 0, Count = ShinobiVfx::EffectCount(6); Index < Count; ++Index)
 		{
-			AddParticle(Plane, static_cast<uint8>(ESprite::Smoke), FLinearColor(0.25f, 0.2f, 0.18f), 1.f, Index / 6.f, 0.9f, FMath::FRandRange(380.f, 560.f), 0.07f, 1.05f);
+			AddParticle(Plane, static_cast<uint8>(ESprite::Smoke), FLinearColor(0.25f, 0.2f, 0.18f), 1.f, Index / float(Count), 0.9f, FMath::FRandRange(380.f, 560.f), 0.07f, 1.05f);
 		}
 	}
 }

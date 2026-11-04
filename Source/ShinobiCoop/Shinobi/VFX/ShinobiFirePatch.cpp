@@ -158,7 +158,8 @@ void AShinobiFirePatch::BeginPlay()
 		Fire->RegisterComponent();
 		Fire->AdvanceSimulationByTime(1.6f, 1.f / 30.f); // the fire takes a couple of seconds to build, and a patch lasts only a few: start it going
 	}
-	for (int32 Index = 0; Index < (Fire ? 0 : PatchFlameCount); ++Index)
+	// (fewer cards below High effects quality: ShinobiVfx::EffectCount)
+	for (int32 Index = 0; Index < (Fire ? 0 : ShinobiVfx::EffectCount(PatchFlameCount)); ++Index)
 	{
 		// Spread over most of the radius, taller in the middle.
 		const float Angle = Random.FRandRange(0.f, 2.f * PI);
@@ -168,12 +169,12 @@ void AShinobiFirePatch::BeginPlay()
 	}
 	if (!bBlack && !Fire)
 	{
-		for (int32 Index = 0; Index < (bDragon ? PatchSmokeCount + 2 : PatchSmokeCount); ++Index)
+		for (int32 Index = 0; Index < ShinobiVfx::EffectCount(bDragon ? PatchSmokeCount + 2 : PatchSmokeCount); ++Index)
 		{
 			Smokes.Add(MakeCard(Plane, ShinobiVfx::MakeSprite(this, ESprite::Smoke, Index, bTairn ? FLinearColor(0.07f, 0.08f, 0.12f) : FLinearColor(0.08f, 0.08f, 0.09f), 1.f), FVector2D::ZeroVector, Index / static_cast<float>(PatchSmokeCount), Index));
 		}
 	}
-	for (int32 Index = 0; Index < (Fire ? 0 : bDragon ? PatchEmberCount + 3 : PatchEmberCount); ++Index)
+	for (int32 Index = 0; Index < (Fire ? 0 : ShinobiVfx::EffectCount(bDragon ? PatchEmberCount + 3 : PatchEmberCount)); ++Index)
 	{
 		UMaterialInstanceDynamic* Material = ShinobiVfx::MakeSprite(this, ESprite::Ember, Index, bBlack ? FLinearColor(0.6f, 0.3f, 1.f) : bTairn ? FLinearColor(0.55f, 0.75f, 1.f) : FLinearColor::White, 2.f);
 		Embers.Add(MakeCard(Plane, Material, FVector2D(Random.FRandRange(-0.3f, 0.3f) * GetRadius(), Random.FRandRange(-0.3f, 0.3f) * GetRadius()), Random.FRand(), Index));

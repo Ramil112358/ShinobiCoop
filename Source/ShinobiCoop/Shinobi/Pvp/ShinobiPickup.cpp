@@ -43,6 +43,7 @@ AShinobiPickup::AShinobiPickup()
 	bReplicates = true;
 	SetReplicateMovement(false);
 	bAlwaysRelevant = true; // a handful per arena, and players should see them from across it
+	NetDormancy = DORM_DormantAll; // only bTaken changes (SetTaken wakes it first)
 	PrimaryActorTick.bCanEverTick = true;
 
 	Trigger = CreateDefaultSubobject<USphereComponent>(TEXT("Trigger"));
@@ -187,6 +188,10 @@ void AShinobiPickup::OnTriggerOverlap(UPrimitiveComponent* Overlapped, AActor* O
 
 void AShinobiPickup::SetTaken(bool bNowTaken)
 {
+	if (HasAuthority())
+	{
+		FlushNetDormancy();
+	}
 	bTaken = bNowTaken;
 	if (HasAuthority())
 	{
