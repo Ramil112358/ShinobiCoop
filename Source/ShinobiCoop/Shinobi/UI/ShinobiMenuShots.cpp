@@ -122,7 +122,20 @@ void UShinobiMenuShotSubsystem::OnWorldBeginPlay(UWorld& World)
 		}
 	});
 	View(EShinobiMenuTab::Jutsu, TEXT("ShinobiMenuTour_7_Jutsu"), nullptr);
-	View(EShinobiMenuTab::Settings, TEXT("ShinobiMenuTour_8_Settings"), nullptr);
+	// SETTINGS: each of its category tabs.
+	const auto SettingsCategory = [](ShinobiSettings::ECategory Category)
+	{
+		return [Category](UShinobiMainMenuWidget& M)
+		{
+			if (UShinobiSettingsWidget* Settings = Cast<UShinobiSettingsWidget>(M.GetTabPage(EShinobiMenuTab::Settings)))
+			{
+				Settings->SelectCategory(Category, true);
+			}
+		};
+	};
+	View(EShinobiMenuTab::Settings, TEXT("ShinobiMenuTour_8_Settings"), SettingsCategory(ShinobiSettings::ECategory::Display));
+	View(EShinobiMenuTab::Settings, TEXT("ShinobiMenuTour_8b_SettingsGraphics"), SettingsCategory(ShinobiSettings::ECategory::Graphics));
+	View(EShinobiMenuTab::Settings, TEXT("ShinobiMenuTour_8c_SettingsUpscaling"), SettingsCategory(ShinobiSettings::ECategory::Upscaling));
 	View(EShinobiMenuTab::Controls, TEXT("ShinobiMenuTour_9_Controls"), nullptr);
 	RunSteps(MoveTemp(Steps), 1.5f);
 }

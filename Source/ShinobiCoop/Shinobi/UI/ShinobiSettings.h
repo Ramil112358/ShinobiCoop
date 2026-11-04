@@ -29,6 +29,26 @@ namespace ShinobiSettings
 		Num
 	};
 
+	/**
+	 * The settings panel's category tabs, in order. Like the settings screens of current games (Call of Duty: Display /
+	 * Quality, Battlefield 6: Display / Graphics, Cyberpunk 2077 / Fortnite: a tab per kind of setting), the screen is split
+	 * by what a row is for instead of one long list: CHARACTER (in game only), DISPLAY (screen and frame rate), GRAPHICS
+	 * (quality, ray tracing, effects) and UPSCALING (upscaler, anti-aliasing, frame generation, latency).
+	 */
+	enum class ECategory : uint8
+	{
+		Character, Display, Graphics, Upscaling,
+		Num
+	};
+
+	/** "CHARACTER", "DISPLAY", "GRAPHICS" or "UPSCALING": the category's tab label. */
+	SHINOBICOOP_API FString CategoryName(ECategory Category);
+	/** The category tab Row is listed on. */
+	SHINOBICOOP_API ECategory RowCategory(ERow Row);
+	/** The category tabs the settings panel shows, in order: all of them, but the main menu leaves out CHARACTER (its
+	 * SHINOBI tab has those rows). */
+	SHINOBICOOP_API TArray<ECategory> CategoriesFor(bool bMainMenu);
+
 	/** "Graphics quality: High" etc. (RowName: RowValue). */
 	SHINOBICOOP_API FString Label(ERow Row);
 	/** "Graphics quality" etc. */
@@ -37,7 +57,8 @@ namespace ShinobiSettings
 	SHINOBICOOP_API FString RowValue(ERow Row);
 	/** One or two sentences on what the row does, for the settings panel's help line. */
 	SHINOBICOOP_API FString RowDescription(ERow Row);
-	/** The heading the row is listed under: CHARACTER, GRAPHICS, UPSCALING & FRAME GENERATION, RAY TRACING, DISPLAY or EFFECTS. */
+	/** The heading the row is listed under on its category tab (RowCategory): SCREEN, FRAME RATE, QUALITY, RAY TRACING, EFFECTS,
+	 * UPSCALING & ANTI-ALIASING, FRAME GENERATION & LATENCY... A tab with a single section shows no heading. */
 	SHINOBICOOP_API FString RowSection(ERow Row);
 	/** Moves Row Delta values on (negative: back), wrapping and skipping locked options, then applies and saves (a locked row:
 	 * nothing). World is used by the outline toggle and the in-game character switch. */
@@ -75,8 +96,8 @@ namespace ShinobiSettings
 	SHINOBICOOP_API TArray<FString> OptionLocks(ERow Row);
 	/** The line under a row's description: why it, or some of its options, are locked ("" when nothing is). */
 	SHINOBICOOP_API FString RowNote(ERow Row);
-	/** The rows the settings panel shows: all of them, but the main menu leaves out Character, Face and Outfit (its SHINOBI tab
-	 * has them). */
+	/** The rows the settings panel shows, grouped by category tab (CategoriesFor order; within a tab, ERow order): all of
+	 * them, but the main menu leaves out Character, Face and Outfit (its SHINOBI tab has them). */
 	SHINOBICOOP_API TArray<ERow> RowsFor(bool bMainMenu);
 
 	/** Snow weather this machine picks when it hosts (Off by default). In a session the host's pick applies to everyone. */

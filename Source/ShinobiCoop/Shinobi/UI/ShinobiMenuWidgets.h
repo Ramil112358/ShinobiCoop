@@ -97,11 +97,14 @@ protected:
 };
 
 /**
- * The settings panel (ShinobiSettings rows), a tab page of the main menu (SETTINGS) and the pause menu (SETTINGS): rows
- * under CHARACTER / GRAPHICS / DISPLAY / EFFECTS headings. A row with many values (quality, upscaling quality, frame cap,
- * character...) is a dropdown: a click (A / Enter) opens the list of them to pick from. An On / Off row is a stepper
- * "< Value >": a click flips it. Left / Right (keys, D-pad, stick) step the focused row either way. Every change applies
- * and saves at once. The line under the rows explains the hovered or focused row.
+ * The settings panel (ShinobiSettings rows), a tab page of the main menu (SETTINGS) and the pause menu (SETTINGS). As in
+ * current games' settings screens, the rows are split over category tabs along its top (CHARACTER in game only, DISPLAY,
+ * GRAPHICS, UPSCALING: ShinobiSettings::ECategory), each with its own headings (SCREEN / FRAME RATE, QUALITY / RAY TRACING /
+ * EFFECTS...). Click a category, or LT / RT (as on CONTROLS), to switch; Left / Right on a focused category tab walk them.
+ * The panel keeps one size whichever is shown, and reopens on the category it was last left on. A row with many values
+ * (quality, upscaling quality, frame cap, character...) is a dropdown: a click (A / Enter) opens the list of them to pick
+ * from. An On / Off row is a stepper "< Value >": a click flips it. Left / Right (keys, D-pad, stick) step the focused row
+ * either way. Every change applies and saves at once. The line under the rows explains the hovered or focused row.
  */
 UCLASS()
 class SHINOBICOOP_API UShinobiSettingsWidget : public UShinobiMenuWidget
@@ -123,9 +126,25 @@ public:
 	/** The help line under the rows. */
 	FText GetDescriptionText() const;
 
+	/** The category tabs shown, in order (ShinobiSettings::CategoriesFor). */
+	const TArray<ShinobiSettings::ECategory>& GetCategories() const { return Categories; }
+	/** Shows Category's rows (one that isn't shown: nothing). bFocusRow moves keyboard / gamepad focus to its first row. */
+	void SelectCategory(ShinobiSettings::ECategory Category, bool bFocusRow = false);
+	ShinobiSettings::ECategory GetCategory() const;
+	/** The category tab's button: a click on it shows that category. Null when it isn't shown. */
+	UShinobiIndexButton* GetCategoryButton(ShinobiSettings::ECategory Category) const;
+	/** The shown category's first row: focus goes there when the panel's tab opens (null only before it's built). */
+	UWidget* GetFocusTarget() const;
+	/** Whether the Index-th row is on the shown category. */
+	bool IsRowShown(int32 Index) const;
+	/** The Index-th row's button (null out of range). */
+	UShinobiIndexButton* GetRowButton(int32 Index) const { return EntryButtons.IsValidIndex(Index) ? EntryButtons[Index].Get() : nullptr; }
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
+	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& Geometry, float DeltaTime) override;
+	virtual FReply NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event) override;
 	virtual FNavigationReply NativeOnNavigation(const FGeometry& Geometry, const FNavigationEvent& Event, const FNavigationReply& DefaultReply) override;
 	virtual FReply NativeOnPreviewMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& Event) override;
 	/** In the main menu's SETTINGS tab the panel sits right of the stage's character. */
@@ -138,14 +157,29 @@ protected:
 private:
 	/** The row whose button has keyboard / gamepad focus, else INDEX_NONE. */
 	int32 GetFocusedRow() const;
+	/** The category tab whose button has keyboard / gamepad focus (an index into Categories), else INDEX_NONE. */
+	int32 GetFocusedCategoryTab() const;
+	void OnCategoryButton(int32 Index);
+	/** Shows the Index-th category tab (an index into Categories). */
+	void ShowCategoryTab(int32 Index, bool bFocusRow);
 	void RefreshValues();
 	/** The help line for the Row-th row shown: its description, then why it or some of its options are locked. */
 	FString DescribeRow(int32 Row) const;
 
 	TArray<ShinobiSettings::ERow> Rows;
-	/** The rows' scroll box (more rows than fit a 1080p screen). */
+	/** Each row's category tab (an index into Categories). */
+	TArray<int32> RowTabs;
+	TArray<ShinobiSettings::ECategory> Categories;
+	/** The shown category tab (an index into Categories). */
+	int32 ShownTab = 0;
 	UPROPERTY()
-	TObjectPtr<class UScrollBox> RowsScroll;
+	TArray<TObjectPtr<UShinobiIndexButton>> CategoryButtons;
+	/** A page of rows per category tab; the shown one is active. */
+	UPROPERTY()
+	TObjectPtr<class UWidgetSwitcher> CategoryPages;
+	/** Each category page's scroll box (its rows scroll if they don't fit). */
+	UPROPERTY()
+	TArray<TObjectPtr<class UScrollBox>> RowsScrolls;
 	int32 ScrolledToRow = INDEX_NONE;
 	UPROPERTY()
 	TArray<TObjectPtr<UTextBlock>> ValueTexts;

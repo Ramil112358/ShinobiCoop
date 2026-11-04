@@ -165,6 +165,8 @@ private:
 	UPROPERTY()
 	TObjectPtr<class UShinobiCreatorPage> CreatorPage;
 	UPROPERTY()
+	TObjectPtr<UShinobiSettingsWidget> SettingsPage;
+	UPROPERTY()
 	TObjectPtr<class UShinobiShortcutsWidget> ControlsPage;
 	UPROPERTY()
 	TObjectPtr<UImage> Backdrop;

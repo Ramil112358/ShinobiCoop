@@ -165,11 +165,10 @@ TSharedRef<SWidget> UShinobiMainMenuWidget::RebuildWidget()
 		Pages->AddChild(Jutsu);
 		Jutsu->TakeWidget();
 		FocusTargets[int32(EShinobiMenuTab::Jutsu)] = Jutsu->GetFocusTarget();
-		UShinobiSettingsWidget* Settings = CreateWidget<UShinobiSettingsWidget>(this, UShinobiSettingsWidget::StaticClass());
-		Settings->bMainMenu = true;
-		Pages->AddChild(Settings);
-		Settings->TakeWidget(); // builds its rows now, so it has a first one to focus
-		FocusTargets[int32(EShinobiMenuTab::Settings)] = Settings->GetFirstEntry();
+		SettingsPage = CreateWidget<UShinobiSettingsWidget>(this, UShinobiSettingsWidget::StaticClass());
+		SettingsPage->bMainMenu = true;
+		Pages->AddChild(SettingsPage);
+		SettingsPage->TakeWidget(); // builds its rows now, so it has one to focus (GetFocusTarget asks it: the shown category's first)
 		ControlsPage = CreateWidget<UShinobiShortcutsWidget>(this, UShinobiShortcutsWidget::StaticClass());
 		ControlsPage->PanelAnchor = FVector2D(0.66f, 0.5f); // right of the stage's character, like SETTINGS
 		Pages->AddChild(ControlsPage);
@@ -558,6 +557,10 @@ UWidget* UShinobiMainMenuWidget::GetFocusTarget(EShinobiMenuTab Which) const
 	if (Which == EShinobiMenuTab::Shinobi && RosterPage)
 	{
 		return RosterPage->GetFocusTarget();
+	}
+	if (Which == EShinobiMenuTab::Settings && SettingsPage)
+	{
+		return SettingsPage->GetFocusTarget(); // the shown category's first row
 	}
 	return FocusTargets.IsValidIndex(int32(Which)) ? FocusTargets[int32(Which)].Get() : nullptr;
 }
