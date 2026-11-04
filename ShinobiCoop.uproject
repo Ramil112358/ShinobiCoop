@@ -155,14 +155,30 @@
 		},
 		{
 			"Name": "MetaHumanGenerator",
-			"Enabled": true
+			"Enabled": false
 		},
 		{
 			"Name": "Mutable",
 			"Enabled": true
 		},
 		{
+		"Name": "MutableClothing",
+			"Enabled": true
+		},
+		{
+			"Name": "HairStrandsMutable",
+			"Enabled": true
+		},
+		{
 			"Name": "NiagaraFluids",
+			"Enabled": true
+		},
+		{
+			"Name": "WaterAdvanced",
+			"Enabled": true
+		},
+		{
+			"Name": "NiagaraNanite",
 			"Enabled": true
 		},
 		{
