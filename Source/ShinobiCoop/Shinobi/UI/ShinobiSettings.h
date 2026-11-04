@@ -82,6 +82,11 @@ namespace ShinobiSettings
 	/** Snow weather this machine picks when it hosts (Off by default). In a session the host's pick applies to everyone. */
 	SHINOBICOOP_API EShinobiSnow GetSavedSnow();
 
+	/** The Graphics quality preset (0 Low ... 4 Cinematic) every quality group is at, or INDEX_NONE (Custom) when they differ.
+	 * The render resolution doesn't count: Upscaling method / quality own it (UGameUserSettings::GetOverallScalabilityLevel
+	 * also wants the preset's own resolution, so it would read Custom whenever upscaling picks another one). */
+	SHINOBICOOP_API int32 GetQualityPreset();
+
 	SHINOBICOOP_API float GetRenderScale();
 	SHINOBICOOP_API void SetRenderScale(float Percent);
 }

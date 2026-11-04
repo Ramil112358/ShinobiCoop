@@ -1000,8 +1000,8 @@ void ShinobiGraphics::ApplySaved()
 	ApplyDLSSFeature(TEXT("EnableDLSS"), CVarDLSS, bDLSS);
 	ApplyDLSSFeature(TEXT("EnableDLAA"), CVarDLAA, bDLSS && GetUpscaler() == EUpscaler::Off);
 	ApplyDLSSFeature(TEXT("EnableDLSSRR"), CVarDLSSDenoiser, IsRayReconstruction());
-	// The scene's resolution comes from GameUserSettings (above); if a plugin call changed it, put it back (at code priority).
-	SetCVarFloat(TEXT("r.ScreenPercentage"), ScreenPercentage);
+	// (The scene's resolution comes from GameUserSettings, above: r.ScreenPercentage stays at scalability priority, which the
+	// Graphics quality presets write too. Set from code it would lock them out.)
 	SetCVarFloat(CVarSharpen, SharpenAmounts[GetSharpness()]);
 
 	// Hardware ray tracing for Lumen (the project builds the ray-tracing shaders: r.RayTracing in DefaultEngine.ini).
