@@ -219,21 +219,45 @@ Implementation notes for `ShinobiSettings`:
 ## 9. Implemented: steps 1–3 and the ray-tracing setting
 
 Code: `Source/ShinobiCoop/Shinobi/UI/ShinobiGraphics.*` (new) and `ShinobiSettings.*`. Tests: `ShinobiCoop.UI.SettingsUpscalerFrameGenRayTracing`
-plus updated settings and menu tests. It was written without a compiler or editor, so build it and run `Scripts/run_tests.ps1` first.
+plus updated settings and menu tests.
 
-| Row (section) | Values | What it drives | Shown when |
-| --- | --- | --- | --- |
-| *Upscaler* (GRAPHICS) | TSR / DLSS (DLSS by default where it runs) | `r.NGX.DLSS.Enable`, `r.NGX.DLAA.Enable` at Native | DLSS plugin loaded and `UDLSSLibrary::IsDLSSSupported` |
-| *Upscaling quality* (was *Render scale*) | Ultra Performance 33 % · Performance 50 % · Balanced 58 % · Quality 67 % · Native 100 % | engine screen percentage (`SetResolutionScaleValueEx`), which TSR and DLSS both follow | always |
-| *Dynamic resolution* | Off / On | `UGameUserSettings::SetDynamicResolutionEnabled`; budget `r.DynamicRes.FrameTimeBudget` = frame cap (60 FPS uncapped), range 50 %–upscaling quality | always |
-| *Ray tracing* | Off / On (Off by default: today's look) | `r.Lumen.HardwareRayTracing` | `IsRayTracingEnabled()` (RT GPU, DX12/Vulkan SM6) |
-| *Ray Reconstruction* | Off / On (On also picks DLSS + ray tracing) | `r.NGX.DLSS.DenoiserMode` | DLSS plugin reports `IsDLSSRRSupported` and ray tracing is available |
-| *Frame generation* (DISPLAY) | Off / 2x / 3x / 4x … / Dynamic (whatever `GetSupportedDLSSGModes` lists for the GPU) | `UStreamlineLibraryDLSSG::SetDLSSGMode`, else `r.Streamline.DLSSG.Enable` | Streamline DLSSG plugin and `IsDLSSGSupported` (RTX 40+) |
-| *NVIDIA Reflex* | Off / On (On by default; forced on with frame generation) | `t.Streamline.Reflex.Enable` | Streamline Reflex plugin and `IsReflexSupported` |
+Every row is always listed, like the graphics menus of current PC games (Cyberpunk 2077, Battlefield 6, The Witcher 3 next-gen). What this PC
+can't use is greyed out, and the help line under the rows says why. The reason comes from the plugin's own support query: no RTX card, driver
+out of date, Hardware-accelerated GPU scheduling off, plugin not loaded... Locked options in a dropdown are greyed out and tagged *Locked*.
+The rows scroll when they don't fit.
 
-Frame generation turns *VSync* off and keeps it off while it's on (the row reads "Off (frame generation)").
-`UShinobiGraphicsSubsystem` applies the saved picks at startup, after the PostEngineInit plugins have loaded.
-The rows only exist on machines that support them. With no plugin, the game behaves as before, plus the new upscaling presets and dynamic resolution.
+| Section | Row | Values | What it drives | Locked when |
+| --- | --- | --- | --- | --- |
+| UPSCALING & FRAME GENERATION | *Upscaling method* | TSR / NVIDIA DLSS (DLSS by default where it runs) | `r.NGX.DLSS.Enable`, `r.NGX.DLAA.Enable` at 100 % | the DLSS option: no RTX card / no plugin (`QueryDLSSSupport`) |
+| | *Upscaling quality* | Native AA (DLAA with DLSS) · Quality 67 % · Balanced 58 % · Performance 50 % · Ultra Performance 33 % | engine screen percentage, which TSR and DLSS follow | never |
+| | *Sharpness* | Off / Low / Medium / High | `r.Tonemapper.Sharpen` 0 / 0.4 / 0.8 / 1.2 | never |
+| | *Dynamic resolution* | Off / On | `UGameUserSettings::SetDynamicResolutionEnabled`; budget = frame cap (60 FPS uncapped), range 50 %–upscaling quality | never |
+| | *DLSS Frame Generation* | Off / 2X / 3X / 4X … / Dynamic (the plugin's own mode list) | `UStreamlineLibraryDLSSG::SetDLSSGMode`, else `r.Streamline.DLSSG.Enable` | row: no RTX 40+ / no plugin / HAGS off (`QueryDLSSGSupport`). Options the GPU can't run (3X+ below RTX 50, from `GetSupportedDLSSGModes`) |
+| | *NVIDIA Reflex Low Latency* | Off / On / On + Boost | `t.Streamline.Reflex.Enable`, `t.Streamline.Reflex.Mode` | row: no GeForce / no plugin. *Off* while frame generation is on |
+| RAY TRACING | *Ray tracing* | Off / On (Off by default: today's look) | `r.Lumen.HardwareRayTracing` | no RT GPU or not DX12/Vulkan SM6 (`IsRayTracingEnabled()`) |
+| | *DLSS Ray Reconstruction* | Off / On (On also picks DLSS + ray tracing) | `r.NGX.DLSS.DenoiserMode` | no DLSS RR (`QueryDLSSRRSupport`) or no ray tracing |
+| DISPLAY | *VSync* | Off / On | engine VSync | locked off while DLSS Frame Generation is on |
+
+`UShinobiGraphicsSubsystem` applies the saved picks at startup, after the PostEngineInit plugins have loaded. The settings panel probes again
+every time it opens.
+
+### Checking what was found: `Shinobi.GraphicsReport`
+
+The first probe of each run writes a report to the log (`LogShinobiGraphics`, in `Saved/Logs/ShinobiCoop.log`). Typing `Shinobi.GraphicsReport` in
+the in-game console (~) probes again and writes it again. It lists:
+- the GPU and RHI;
+- each NVIDIA plugin (found / enabled / mounted, its folder, and whether each of its modules loaded);
+- the console variables above (value, or *MISSING*);
+- every function of `UDLSSLibrary`, `UStreamlineLibraryDLSSG` and `UStreamlineLibraryReflex`, with parameter and return types (or *MISSING*);
+- what the menu concluded (available / locked, and why) and the frame generation modes.
+
+That is how to confirm the names this code uses: each one should appear in the report. To check them in the plugin's source instead (PowerShell,
+from the project folder):
+
+```powershell
+Select-String -Path Plugins\DLSS\Source\*\Public\*.h, Plugins\Streamline*\Source\*\Public\*.h -Pattern "static .*\(" | Select-Object -ExpandProperty Line
+Select-String -Path Plugins\DLSS\Source\*\Private\*.cpp, Plugins\Streamline*\Source\*\Private\*.cpp -Pattern 'TEXT\("(r|t)\.(NGX|Streamline)\.' | Select-Object -ExpandProperty Line
+```
 
 ### Installing NVIDIA's plugins (each Windows build machine)
 

@@ -14,11 +14,22 @@ namespace
 {
 	const TCHAR* QualityNames[] = { TEXT("Low"), TEXT("Medium"), TEXT("High"), TEXT("Epic"), TEXT("Cinematic") };
 	// Upscaling quality: the scene's resolution (screen percentage) before TSR / DLSS scales it up to the screen. The same
-	// ratios as the vendor upscalers' modes; Native is 100 % (anti-aliasing only: TSR, or DLAA with DLSS).
-	const float RenderScales[] = { 33.f, 50.f, 58.f, 67.f, 100.f };
-	const TCHAR* RenderScaleNames[] = { TEXT("Ultra Performance"), TEXT("Performance"), TEXT("Balanced"), TEXT("Quality"), TEXT("Native") };
+	// ratios and names as the vendor upscalers' modes; 100 % is anti-aliasing only ("Native AA" with TSR, "DLAA" with DLSS).
+	const float RenderScales[] = { 100.f, 67.f, 58.f, 50.f, 33.f };
+	const TCHAR* RenderScaleNames[] = { TEXT("Native AA"), TEXT("Quality"), TEXT("Balanced"), TEXT("Performance"), TEXT("Ultra Performance") };
 	static_assert(UE_ARRAY_COUNT(RenderScales) == UE_ARRAY_COUNT(RenderScaleNames));
-	const TCHAR* UpscalerNames[] = { TEXT("TSR"), TEXT("DLSS") }; // (ShinobiGraphics::EUpscaler's order)
+	const TCHAR* UpscalerNames[] = { TEXT("TSR"), TEXT("NVIDIA DLSS") }; // (ShinobiGraphics::EUpscaler's order)
+	const TCHAR* SharpnessNames[] = { TEXT("Off"), TEXT("Low"), TEXT("Medium"), TEXT("High") };
+	static_assert(int32(UE_ARRAY_COUNT(SharpnessNames)) == ShinobiGraphics::SharpnessLevels);
+	const TCHAR* ReflexNames[] = { TEXT("Off"), TEXT("On"), TEXT("On + Boost") };
+	static_assert(int32(UE_ARRAY_COUNT(ReflexNames)) == ShinobiGraphics::ReflexModes);
+	const TCHAR* VSyncFrameGenLock = TEXT("Off while DLSS Frame Generation is on: it paces its own frames.");
+
+	/** "Native AA" reads "DLAA" when DLSS draws it. */
+	FString RenderScaleName(int32 Index)
+	{
+		return Index == 0 && ShinobiGraphics::GetUpscaler() == ShinobiGraphics::EUpscaler::DLSS ? FString(TEXT("DLAA")) : FString(RenderScaleNames[Index]);
+	}
 
 	const TCHAR* OnOff(bool bOn)
 	{
@@ -122,16 +133,17 @@ FString ShinobiSettings::RowName(ERow Row)
 	case ERow::Face: return TEXT("Face");
 	case ERow::Outfit: return TEXT("Outfit");
 	case ERow::Quality: return TEXT("Graphics quality");
-	case ERow::Upscaler: return TEXT("Upscaler");
+	case ERow::Upscaler: return TEXT("Upscaling method");
 	case ERow::RenderScale: return TEXT("Upscaling quality");
+	case ERow::Sharpness: return TEXT("Sharpness");
 	case ERow::DynamicResolution: return TEXT("Dynamic resolution");
+	case ERow::FrameGeneration: return TEXT("DLSS Frame Generation");
+	case ERow::LowLatency: return TEXT("NVIDIA Reflex Low Latency");
 	case ERow::RayTracing: return TEXT("Ray tracing");
-	case ERow::RayReconstruction: return TEXT("Ray Reconstruction");
+	case ERow::RayReconstruction: return TEXT("DLSS Ray Reconstruction");
 	case ERow::WindowMode: return TEXT("Window");
 	case ERow::FrameCap: return TEXT("Frame cap");
 	case ERow::VSync: return TEXT("VSync");
-	case ERow::FrameGeneration: return TEXT("Frame generation");
-	case ERow::LowLatency: return TEXT("NVIDIA Reflex");
 	case ERow::Outline: return TEXT("Character outline");
 	case ERow::Snow: return TEXT("Snow weather");
 	default: return FString();
@@ -171,8 +183,10 @@ FString ShinobiSettings::RowValue(ERow Row)
 	case ERow::RenderScale:
 	{
 		const int32 Index = RowIndex(Row);
-		return Index != INDEX_NONE ? FString(RenderScaleNames[Index]) : FString::Printf(TEXT("%d%%"), FMath::RoundToInt(GetRenderScale()));
+		return Index != INDEX_NONE ? RenderScaleName(Index) : FString::Printf(TEXT("%d%%"), FMath::RoundToInt(GetRenderScale()));
 	}
+	case ERow::Sharpness:
+		return SharpnessNames[ShinobiGraphics::GetSharpness()];
 	case ERow::DynamicResolution:
 		return OnOff(S->IsDynamicResolutionEnabled());
 	case ERow::RayTracing:
@@ -182,7 +196,7 @@ FString ShinobiSettings::RowValue(ERow Row)
 	case ERow::FrameGeneration:
 		return ShinobiGraphics::FrameGenOptions()[ShinobiGraphics::GetFrameGen()];
 	case ERow::LowLatency:
-		return ShinobiGraphics::IsFrameGenOn() ? TEXT("On (frame generation)") : OnOff(ShinobiGraphics::IsLowLatency());
+		return ReflexNames[ShinobiGraphics::GetReflexMode()];
 	case ERow::WindowMode:
 	{
 		const EWindowMode::Type Mode = S->GetFullscreenMode();
@@ -194,7 +208,7 @@ FString ShinobiSettings::RowValue(ERow Row)
 		return Cap <= 0.f ? FString(TEXT("Unlimited")) : FString::Printf(TEXT("%d FPS"), FMath::RoundToInt(Cap));
 	}
 	case ERow::VSync:
-		return ShinobiGraphics::IsFrameGenOn() ? TEXT("Off (frame generation)") : OnOff(S->IsVSyncEnabled());
+		return OnOff(S->IsVSyncEnabled() && !ShinobiGraphics::IsFrameGenOn());
 	case ERow::Outline:
 		return ShinobiLook::IsOutlineEnabled() ? TEXT("On") : TEXT("Off");
 	case ERow::Snow:
@@ -221,16 +235,17 @@ FString ShinobiSettings::RowDescription(ERow Row)
 	case ERow::Face: return TEXT("The face your character wears, on characters that have more than one.");
 	case ERow::Outfit: return TEXT("What your character wears over their own clothes.");
 	case ERow::Quality: return TEXT("The overall graphics preset. Lower it for more FPS. Custom means a single setting was changed elsewhere.");
-	case ERow::Upscaler: return TEXT("What scales the scene up to your screen and smooths its edges. TSR is Unreal's own. DLSS uses your RTX card's AI cores, usually sharper.");
-	case ERow::RenderScale: return TEXT("How much of the screen's resolution the scene is drawn at before it's scaled up. Lower gives more FPS but a softer picture. Native draws every pixel.");
+	case ERow::Upscaler: return TEXT("What renders the scene below your screen's resolution and rebuilds it sharp, for more FPS. TSR is Unreal's own and runs on any card. NVIDIA DLSS uses an RTX card's AI cores and usually looks sharper.");
+	case ERow::RenderScale: return TEXT("How much the scene is upscaled. Quality looks closest to native, Ultra Performance gives the most FPS. Native AA / DLAA draws every pixel and only smooths edges.");
+	case ERow::Sharpness: return TEXT("Sharpens the upscaled picture. Raise it if the image looks soft at lower upscaling quality.");
 	case ERow::DynamicResolution: return TEXT("Lowers the resolution for a moment when a big jutsu would drop the frame rate below your frame cap (60 FPS without one).");
-	case ERow::RayTracing: return TEXT("Lights and reflects the world with your GPU's ray-tracing cores: truer reflections on water and glass. Costs FPS.");
-	case ERow::RayReconstruction: return TEXT("DLSS cleans up the ray-traced light and reflections with AI. Turning it on also turns on DLSS and ray tracing.");
+	case ERow::FrameGeneration: return TEXT("Your RTX card's AI adds frames between the rendered ones: 2X doubles the frame rate, 3X and 4X more (RTX 50 Series). Smoother motion, slightly more input delay. Best from 60 FPS up. Turns VSync off and NVIDIA Reflex on.");
+	case ERow::LowLatency: return TEXT("Cuts the delay between your input and the screen. On + Boost also keeps the GPU clocks up for the lowest latency, at more power. Always on with DLSS Frame Generation.");
+	case ERow::RayTracing: return TEXT("Lights and reflects the world with your GPU's ray-tracing cores: more accurate bounce light and reflections on water and glass. Costs FPS.");
+	case ERow::RayReconstruction: return TEXT("DLSS's AI cleans up ray-traced light and reflections: sharper and more stable than the usual denoisers. Turning it on also turns on NVIDIA DLSS and ray tracing.");
 	case ERow::WindowMode: return TEXT("Exclusive fullscreen, a borderless window the size of the screen, or a normal window.");
 	case ERow::FrameCap: return TEXT("The highest frame rate the game runs at. A cap saves power and keeps fans quiet.");
-	case ERow::VSync: return TEXT("Matches frames to your monitor's refresh rate so the picture doesn't tear. Adds a little input delay. Off while frame generation is on.");
-	case ERow::FrameGeneration: return TEXT("Your RTX card adds AI frames between the real ones: smoother motion, but slightly more input delay. Best from 60 FPS up. Turns VSync off and NVIDIA Reflex on.");
-	case ERow::LowLatency: return TEXT("Cuts the delay between your input and the screen. Always on with frame generation.");
+	case ERow::VSync: return TEXT("Matches frames to your monitor's refresh rate so the picture doesn't tear. Adds a little input delay.");
 	case ERow::Outline: return TEXT("Draws a thin outline round characters so they stand out from the scenery.");
 	case ERow::Snow: return TEXT("Snowfall in games you host. In someone else's game the host's pick applies to everyone.");
 	default: return FString();
@@ -246,17 +261,20 @@ FString ShinobiSettings::RowSection(ERow Row)
 	case ERow::Outfit:
 		return TEXT("CHARACTER");
 	case ERow::Quality:
+		return TEXT("GRAPHICS");
 	case ERow::Upscaler:
 	case ERow::RenderScale:
+	case ERow::Sharpness:
 	case ERow::DynamicResolution:
+	case ERow::FrameGeneration:
+	case ERow::LowLatency:
+		return TEXT("UPSCALING & FRAME GENERATION");
 	case ERow::RayTracing:
 	case ERow::RayReconstruction:
-		return TEXT("GRAPHICS");
+		return TEXT("RAY TRACING");
 	case ERow::WindowMode:
 	case ERow::FrameCap:
 	case ERow::VSync:
-	case ERow::FrameGeneration:
-	case ERow::LowLatency:
 		return TEXT("DISPLAY");
 	default:
 		return TEXT("EFFECTS");
@@ -289,18 +307,83 @@ void ShinobiSettings::SetSavedOutfit(const FString& Name)
 	}
 }
 
-bool ShinobiSettings::IsRowAvailable(ERow Row)
+FString ShinobiSettings::RowLock(ERow Row)
 {
 	const ShinobiGraphics::FCaps& Caps = ShinobiGraphics::Caps();
 	switch (Row)
 	{
-	case ERow::Upscaler: return Caps.bDLSS; // (TSR alone: nothing to pick)
-	case ERow::RayTracing: return Caps.bRayTracing;
-	case ERow::RayReconstruction: return Caps.bRayReconstruction && Caps.bRayTracing;
-	case ERow::FrameGeneration: return Caps.HasFrameGen();
-	case ERow::LowLatency: return Caps.bReflex;
-	default: return Row < ERow::Num;
+	case ERow::FrameGeneration:
+		return Caps.HasFrameGen() ? FString() : (Caps.FrameGenLock.IsEmpty() ? FString(TEXT("Not supported on this PC.")) : Caps.FrameGenLock);
+	case ERow::LowLatency:
+		return Caps.bReflex ? FString() : Caps.ReflexLock;
+	case ERow::RayTracing:
+		return Caps.bRayTracing ? FString() : Caps.RayTracingLock;
+	case ERow::RayReconstruction:
+		return Caps.bRayReconstruction ? FString() : Caps.RayReconstructionLock;
+	case ERow::VSync:
+		return ShinobiGraphics::IsFrameGenOn() ? FString(VSyncFrameGenLock) : FString();
+	default:
+		return FString();
 	}
+}
+
+FString ShinobiSettings::OptionLock(ERow Row, int32 Option)
+{
+	if (const FString Locked = RowLock(Row); !Locked.IsEmpty())
+	{
+		return Locked;
+	}
+	const ShinobiGraphics::FCaps& Caps = ShinobiGraphics::Caps();
+	switch (Row)
+	{
+	case ERow::Upscaler:
+		return Option == int32(ShinobiGraphics::EUpscaler::DLSS) && !Caps.bDLSS ? Caps.DLSSLock : FString();
+	case ERow::FrameGeneration:
+		return ShinobiGraphics::FrameGenOptionLock(Option);
+	case ERow::LowLatency:
+		return Option == 0 && ShinobiGraphics::IsFrameGenOn() ? FString(TEXT("DLSS Frame Generation needs NVIDIA Reflex on.")) : FString();
+	default:
+		return FString();
+	}
+}
+
+TArray<FString> ShinobiSettings::OptionLocks(ERow Row)
+{
+	TArray<FString> Locks;
+	const int32 Count = RowOptions(Row).Num();
+	for (int32 Option = 0; Option < Count; ++Option)
+	{
+		Locks.Add(OptionLock(Row, Option));
+	}
+	return Locks;
+}
+
+FString ShinobiSettings::RowNote(ERow Row)
+{
+	if (const FString Locked = RowLock(Row); !Locked.IsEmpty())
+	{
+		return FString::Printf(TEXT("Locked: %s"), *Locked);
+	}
+	// Locked options, grouped by reason: "3X, 4X: Requires a GeForce RTX 50 Series graphics card."
+	const TArray<FString> Options = RowOptions(Row);
+	TArray<FString> Reasons;
+	TArray<TArray<FString>> Names;
+	for (int32 Option = 0; Option < Options.Num(); ++Option)
+	{
+		const FString Locked = OptionLock(Row, Option);
+		if (!Locked.IsEmpty())
+		{
+			const int32 Reason = Reasons.AddUnique(Locked);
+			Names.SetNum(Reasons.Num());
+			Names[Reason].Add(Options[Option]);
+		}
+	}
+	TArray<FString> Lines;
+	for (int32 Reason = 0; Reason < Reasons.Num(); ++Reason)
+	{
+		Lines.Add(FString::Printf(TEXT("%s: %s"), *FString::Join(Names[Reason], TEXT(", ")), *Reasons[Reason]));
+	}
+	return FString::Join(Lines, TEXT("\n"));
 }
 
 TArray<ShinobiSettings::ERow> ShinobiSettings::RowsFor(bool bMainMenu)
@@ -308,10 +391,6 @@ TArray<ShinobiSettings::ERow> ShinobiSettings::RowsFor(bool bMainMenu)
 	TArray<ERow> Rows;
 	for (uint8 Row = 0; Row < uint8(ERow::Num); ++Row)
 	{
-		if (!IsRowAvailable(ERow(Row)))
-		{
-			continue;
-		}
 		if (!bMainMenu || (ERow(Row) != ERow::Character && ERow(Row) != ERow::Face && ERow(Row) != ERow::Outfit))
 		{
 			Rows.Add(ERow(Row));
@@ -371,14 +450,25 @@ TArray<FString> ShinobiSettings::RowOptions(ERow Row)
 		}
 		break;
 	case ERow::Upscaler:
-		Options.Add(UpscalerNames[0]);
-		if (ShinobiGraphics::Caps().bDLSS)
+		for (const TCHAR* Name : UpscalerNames)
 		{
-			Options.Add(UpscalerNames[1]);
+			Options.Add(Name);
 		}
 		break;
 	case ERow::RenderScale:
-		for (const TCHAR* Name : RenderScaleNames)
+		for (int32 Index = 0; Index < UE_ARRAY_COUNT(RenderScaleNames); ++Index)
+		{
+			Options.Add(RenderScaleName(Index));
+		}
+		break;
+	case ERow::Sharpness:
+		for (const TCHAR* Name : SharpnessNames)
+		{
+			Options.Add(Name);
+		}
+		break;
+	case ERow::LowLatency:
+		for (const TCHAR* Name : ReflexNames)
 		{
 			Options.Add(Name);
 		}
@@ -399,7 +489,6 @@ TArray<FString> ShinobiSettings::RowOptions(ERow Row)
 	case ERow::RayTracing:
 	case ERow::RayReconstruction:
 	case ERow::VSync:
-	case ERow::LowLatency:
 	case ERow::Outline:
 		Options = { TEXT("Off"), TEXT("On") };
 		break;
@@ -462,8 +551,10 @@ int32 ShinobiSettings::RowIndex(ERow Row)
 		return ShinobiGraphics::IsRayReconstruction() ? 1 : 0;
 	case ERow::FrameGeneration:
 		return ShinobiGraphics::GetFrameGen();
+	case ERow::Sharpness:
+		return ShinobiGraphics::GetSharpness();
 	case ERow::LowLatency:
-		return ShinobiGraphics::IsLowLatency() ? 1 : 0;
+		return ShinobiGraphics::GetReflexMode();
 	case ERow::WindowMode:
 		for (int32 Index = 0; Index < UE_ARRAY_COUNT(WindowModes); ++Index)
 		{
@@ -488,26 +579,36 @@ int32 ShinobiSettings::RowIndex(ERow Row)
 
 bool ShinobiSettings::UsesDropdown(ERow Row)
 {
-	return RowOptions(Row).Num() > 2;
+	return Row == ERow::Upscaler || RowOptions(Row).Num() > 2; // (the upscaler: so a locked DLSS shows, greyed out, in its list)
 }
 
 void ShinobiSettings::Step(ERow Row, UWorld* World, int32 Delta)
 {
 	const int32 Count = RowOptions(Row).Num();
-	if (Count < 2)
+	if (Count < 2 || !RowLock(Row).IsEmpty())
 	{
-		return; // nothing to change to (a character with one face)
+		return; // nothing to change to (a character with one face), or locked
 	}
 	const int32 Current = RowIndex(Row);
 	// A value off the list (Custom quality, a render scale set elsewhere) steps to the first one, or back to the last.
-	SetRowIndex(Row, World, Current == INDEX_NONE ? (Delta >= 0 ? 0 : Count - 1) : SettingsWrap(Current + Delta, Count));
+	int32 Next = Current == INDEX_NONE ? (Delta >= 0 ? 0 : Count - 1) : SettingsWrap(Current + Delta, Count);
+	// Locked options are stepped over (DLSS without an RTX card, 4X frame generation on an RTX 40...).
+	const int32 Direction = Delta >= 0 ? 1 : -1;
+	for (int32 Tries = 0; Tries < Count && !OptionLock(Row, Next).IsEmpty(); ++Tries)
+	{
+		Next = SettingsWrap(Next + Direction, Count);
+	}
+	if (Next != Current && OptionLock(Row, Next).IsEmpty())
+	{
+		SetRowIndex(Row, World, Next);
+	}
 }
 
 void ShinobiSettings::SetRowIndex(ERow Row, UWorld* World, int32 Index)
 {
-	if (!RowOptions(Row).IsValidIndex(Index))
+	if (!RowOptions(Row).IsValidIndex(Index) || !OptionLock(Row, Index).IsEmpty())
 	{
-		return;
+		return; // (OptionLock covers a locked row too)
 	}
 	UGameUserSettings* S = Settings();
 	switch (Row)
@@ -591,8 +692,11 @@ void ShinobiSettings::SetRowIndex(ERow Row, UWorld* World, int32 Index)
 	case ERow::FrameGeneration:
 		ShinobiGraphics::SetFrameGen(Index); // (VSync off, Reflex on)
 		return;
+	case ERow::Sharpness:
+		ShinobiGraphics::SetSharpness(Index);
+		return;
 	case ERow::LowLatency:
-		ShinobiGraphics::SetLowLatency(Index == 1);
+		ShinobiGraphics::SetReflexMode(Index);
 		return;
 	case ERow::WindowMode:
 		S->SetFullscreenMode(WindowModes[Index]);
@@ -602,11 +706,7 @@ void ShinobiSettings::SetRowIndex(ERow Row, UWorld* World, int32 Index)
 		S->SetFrameRateLimit(FrameCaps[Index]);
 		break;
 	case ERow::VSync:
-		if (Index == 1 && ShinobiGraphics::IsFrameGenOn())
-		{
-			return; // frame generation paces its own frames: VSync stays off while it's on
-		}
-		S->SetVSyncEnabled(Index == 1);
+		S->SetVSyncEnabled(Index == 1); // (locked off while frame generation is on: RowLock)
 		break;
 	case ERow::Outline:
 		if ((Index == 1) != ShinobiLook::IsOutlineEnabled())

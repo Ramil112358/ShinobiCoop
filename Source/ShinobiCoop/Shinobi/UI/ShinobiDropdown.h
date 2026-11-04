@@ -23,18 +23,21 @@ class SHINOBICOOP_API UShinobiDropdownList : public UUserWidget
 public:
 	/** Opens InOptions under PlaceUnder (null: InAnchor) with InSelected marked; InOnPick gets the chosen index (not called
 	 * when dismissed). Focus goes back to InAnchor when it closes. Closes any other open list first. Null when there's no game
-	 * viewport to show it in (tests). */
-	static UShinobiDropdownList* Open(UWidget& InAnchor, const TArray<FString>& InOptions, int32 InSelected, TFunction<void(int32)> InOnPick, UWidget* PlaceUnder = nullptr);
+	 * viewport to show it in (tests). InLocked (empty, or one per option) greys out the options with a non-empty reason: they
+	 * are listed and can be focused, but not picked (the settings help line says why). */
+	static UShinobiDropdownList* Open(UWidget& InAnchor, const TArray<FString>& InOptions, int32 InSelected, TFunction<void(int32)> InOnPick, UWidget* PlaceUnder = nullptr,
+		const TArray<FString>& InLocked = TArray<FString>());
 	/** The list on screen, if any. */
 	static UShinobiDropdownList* GetOpen();
 	/** Dismisses the list on screen, if any. */
 	static void CloseOpen();
 
-	/** Chooses Options[Index]: the list closes, then OnPick runs. */
+	/** Chooses Options[Index]: the list closes, then OnPick runs. A locked option: nothing. */
 	void Pick(int32 Index);
 	/** Closes without choosing. */
 	void Dismiss();
 	int32 GetOptionCount() const { return Options.Num(); }
+	bool IsOptionLocked(int32 Index) const { return Locked.IsValidIndex(Index) && !Locked[Index].IsEmpty(); }
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -48,6 +51,8 @@ private:
 	int32 GetFocusedItem() const;
 
 	TArray<FString> Options;
+	/** Why each option can't be picked ("" when it can); may be empty. */
+	TArray<FString> Locked;
 	int32 Selected = 0;
 	TFunction<void(int32)> OnPick;
 	TWeakObjectPtr<UWidget> Anchor;

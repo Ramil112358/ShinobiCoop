@@ -3,8 +3,12 @@
 #include "Engine/World.h"
 #include "GameFramework/GameUserSettings.h"
 #include "HAL/IConsoleManager.h"
+#include "HAL/PlatformMisc.h"
+#include "Interfaces/IPluginManager.h"
+#include "Misc/App.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/CoreDelegates.h"
+#include "Modules/ModuleManager.h"
 #include "RenderUtils.h"
 #include "Shinobi/UI/ShinobiSettings.h"
 #include "UObject/Class.h"
@@ -16,33 +20,54 @@ namespace
 {
 	const TCHAR* GraphicsSection = TEXT("/Script/ShinobiCoop.ShinobiSettings");
 	const TCHAR* UpscalerKey = TEXT("Upscaler");
+	const TCHAR* SharpnessKey = TEXT("Sharpness");
 	const TCHAR* RayTracingKey = TEXT("bRayTracing");
 	const TCHAR* RayReconstructionKey = TEXT("bRayReconstruction");
 	const TCHAR* FrameGenKey = TEXT("FrameGeneration");
-	const TCHAR* LowLatencyKey = TEXT("bLowLatency");
+	const TCHAR* ReflexModeKey = TEXT("ReflexMode");
+	const TCHAR* OldLowLatencyKey = TEXT("bLowLatency"); // (before Reflex had On + Boost)
 
-	// NVIDIA's plugin Blueprint libraries (UDLSSLibrary, UStreamlineLibraryDLSSG, UStreamlineLibraryReflex), by class name.
+	// NVIDIA's plugins (their .uplugin names) and Blueprint libraries (UDLSSLibrary, UStreamlineLibraryDLSSG, UStreamlineLibraryReflex).
+	const TCHAR* const NvidiaPlugins[] = { TEXT("DLSS"), TEXT("StreamlineCore"), TEXT("StreamlineDLSSG"), TEXT("StreamlineReflex") };
 	const TCHAR* DLSSLibrary = TEXT("DLSSLibrary");
 	const TCHAR* DLSSGLibrary = TEXT("StreamlineLibraryDLSSG");
 	const TCHAR* ReflexLibrary = TEXT("StreamlineLibraryReflex");
+	const TCHAR* const NvidiaLibraries[] = { DLSSLibrary, DLSSGLibrary, ReflexLibrary };
 
 	// Their console variables, and the engine's.
 	const TCHAR* CVarDLSS = TEXT("r.NGX.DLSS.Enable");
-	const TCHAR* CVarDLAA = TEXT("r.NGX.DLAA.Enable");
+	const TCHAR* CVarDLAA = TEXT("r.NGX.DLAA.Enable"); // (older plugins; newer ones run DLAA at 100 % on their own)
 	const TCHAR* CVarDLSSDenoiser = TEXT("r.NGX.DLSS.DenoiserMode"); // 1: Ray Reconstruction
 	const TCHAR* CVarDLSSG = TEXT("r.Streamline.DLSSG.Enable");
 	const TCHAR* CVarReflex = TEXT("t.Streamline.Reflex.Enable");
+	const TCHAR* CVarReflexMode = TEXT("t.Streamline.Reflex.Mode"); // 0 off, 1 low latency, 2 low latency + boost
 	const TCHAR* CVarLumenHWRT = TEXT("r.Lumen.HardwareRayTracing");
+	const TCHAR* CVarSharpen = TEXT("r.Tonemapper.Sharpen");
+	const TCHAR* const ReportedCVars[] = { CVarDLSS, CVarDLAA, CVarDLSSDenoiser, CVarDLSSG, CVarReflex, CVarReflexMode, CVarLumenHWRT, CVarSharpen,
+		TEXT("r.ScreenPercentage"), TEXT("r.AntiAliasingMethod"), TEXT("r.RayTracing"), TEXT("r.DynamicRes.OperationMode") };
+
+	/** Sharpness Off / Low / Medium / High. */
+	const float SharpenAmounts[ShinobiGraphics::SharpnessLevels] = { 0.f, 0.4f, 0.8f, 1.2f };
 
 	/** Dynamic resolution aims at the frame cap, or at this with no cap. */
 	constexpr float DynamicResDefaultFps = 60.f;
 	/** ...and goes no lower than this (or the upscaling quality's own scale when that is lower). */
 	constexpr float DynamicResMinPercent = 50.f;
 
+	// Player-facing reasons a feature is locked.
+	const TCHAR* LockNotInBuild = TEXT("Not available in this build: NVIDIA's plugin isn't loaded (Shinobi.GraphicsReport in the console says why).");
+	const TCHAR* LockNeedsRtx = TEXT("Requires an NVIDIA GeForce RTX graphics card.");
+	const TCHAR* LockNeedsGeForce = TEXT("Requires an NVIDIA GeForce graphics card.");
+	const TCHAR* LockFrameGenNeedsRtx40 = TEXT("Requires a GeForce RTX 40 Series graphics card or newer.");
+	const TCHAR* LockMultiFrameGenNeedsRtx50 = TEXT("Requires a GeForce RTX 50 Series graphics card.");
+	const TCHAR* LockNeedsRayTracingGpu = TEXT("Requires a graphics card with hardware ray tracing, running DirectX 12.");
+
 	TOptional<ShinobiGraphics::FCaps> CapsOverride;
 	TOptional<ShinobiGraphics::FCaps> ProbedCaps;
 	/** Set once the PostEngineInit plugins (DLSS, Streamline) are loaded; before that a probe would find none of them. */
 	bool bPluginsLoaded = false;
+	/** The full report is logged with the first probe of a session. */
+	bool bReportLogged = false;
 
 	bool CanProbe()
 	{
@@ -83,6 +108,19 @@ namespace
 		GConfig->Flush(false, GGameUserSettingsIni);
 	}
 
+	int32 GetSavedInt(const TCHAR* Key, int32 Default)
+	{
+		int32 Value = Default;
+		GConfig->GetInt(GraphicsSection, Key, Value, GGameUserSettingsIni);
+		return Value;
+	}
+
+	void SaveInt(const TCHAR* Key, int32 Value)
+	{
+		GConfig->SetInt(GraphicsSection, Key, Value, GGameUserSettingsIni);
+		GConfig->Flush(false, GGameUserSettingsIni);
+	}
+
 	FString GetSavedString(const TCHAR* Key)
 	{
 		FString Value;
@@ -108,6 +146,11 @@ namespace
 		return nullptr;
 	}
 
+	UClass* FindLibrary(const TCHAR* ClassName)
+	{
+		return FindFirstObject<UClass>(ClassName, EFindFirstObjectOptions::NativeFirst);
+	}
+
 	/** An enum parameter (enum class or TEnumAsByte): its UEnum and the numeric property holding its value. */
 	bool EnumOf(FProperty& Property, UEnum*& Enum, FNumericProperty*& Numeric)
 	{
@@ -131,8 +174,8 @@ namespace
 	 */
 	bool CallLibrary(const TCHAR* ClassName, const TCHAR* FunctionName, TFunctionRef<bool(FProperty&, void*)> Fill, TFunctionRef<void(FProperty&, const void*)> Read)
 	{
-		UClass* Class = FindFirstObject<UClass>(ClassName, EFindFirstObjectOptions::NativeFirst);
-		UFunction* Function = Class ? Class->FindFunctionByName(FunctionName) : nullptr;
+		UClass* Class = FindLibrary(ClassName);
+		UFunction* Function = Class ? Class->FindFunctionByName(FName(FunctionName)) : nullptr;
 		if (!Function || !Function->HasAnyFunctionFlags(FUNC_Static))
 		{
 			return false;
@@ -177,36 +220,167 @@ namespace
 	{
 	}
 
-	/** A parameterless bool function, e.g. UDLSSLibrary::IsDLSSSupported; false when it isn't there. */
-	bool CallBool(const TCHAR* ClassName, const TCHAR* FunctionName)
+	/** A parameterless bool function, e.g. UDLSSLibrary::IsDLSSSupported; unset when it isn't there. */
+	TOptional<bool> CallBool(const TCHAR* ClassName, const TCHAR* FunctionName)
 	{
-		bool bResult = false;
-		CallLibrary(ClassName, FunctionName, FillWorldContext, [&bResult](FProperty& Return, const void* Value)
+		TOptional<bool> Result;
+		CallLibrary(ClassName, FunctionName, FillWorldContext, [&Result](FProperty& Return, const void* Value)
 		{
 			if (const FBoolProperty* Bool = CastField<FBoolProperty>(&Return))
 			{
-				bResult = Bool->GetPropertyValue(Value);
+				Result = Bool->GetPropertyValue(Value);
 			}
 		});
-		return bResult;
+		return Result;
 	}
 
-	/** Sorts frame generation modes: off, then by multiplier, the plugin's automatic mode last. */
+	/** A parameterless function returning an enum, e.g. UDLSSLibrary::QueryDLSSSupport: the value's name ("" when missing). */
+	FString CallEnumName(const TCHAR* ClassName, const TCHAR* FunctionName)
+	{
+		FString Result;
+		CallLibrary(ClassName, FunctionName, FillWorldContext, [&Result](FProperty& Return, const void* Value)
+		{
+			UEnum* Enum = nullptr;
+			FNumericProperty* Numeric = nullptr;
+			if (EnumOf(Return, Enum, Numeric))
+			{
+				Result = Enum->GetNameStringByValue(Numeric->GetSignedIntPropertyValue(Value));
+			}
+		});
+		return Result;
+	}
+
+	/**
+	 * The player-facing reason for a plugin's support query result (UDLSSSupport / EStreamlineFeatureSupport value names:
+	 * Supported, NotSupportedIncompatibleHardware, NotSupportedDriverOutOfDate, NotSupportedHardwareSchedulingDisabled...).
+	 * Hardware is the text for an unsuitable GPU. "" when supported.
+	 */
+	FString SupportLock(const FString& Query, const TCHAR* Hardware)
+	{
+		if (Query == TEXT("Supported"))
+		{
+			return FString();
+		}
+		if (Query.Contains(TEXT("Scheduling")))
+		{
+			return TEXT("Turn on Hardware-accelerated GPU scheduling (Windows Settings > System > Display > Graphics), then restart your PC.");
+		}
+		if (Query.Contains(TEXT("Driver")))
+		{
+			return TEXT("Update your NVIDIA graphics driver to use this.");
+		}
+		if (Query.Contains(TEXT("OperatingSystem")))
+		{
+			return TEXT("Update Windows to use this.");
+		}
+		if (Query.Contains(TEXT("Capture")))
+		{
+			return TEXT("Not available while a graphics capture tool (RenderDoc, PIX...) is attached.");
+		}
+		if (Query.Contains(TEXT("RHI")))
+		{
+			return TEXT("Requires DirectX 12.");
+		}
+		if (Query.Contains(TEXT("Platform")))
+		{
+			return TEXT("Not available on this platform.");
+		}
+		if (Query.Contains(TEXT("Hardware")) || Query.IsEmpty())
+		{
+			return Hardware;
+		}
+		return FString::Printf(TEXT("Not supported on this PC (%s)."), *Query);
+	}
+
+	/** Support of a library's feature: its Is...Supported(), else (no such function) the GPU's brand. Lock gets the reason. */
+	bool ProbeFeature(const TCHAR* Library, const TCHAR* CVar, const TCHAR* IsSupported, const TCHAR* Query, const TCHAR* Hardware, bool bNeedsRtx, FString& Lock)
+	{
+		if (!FindLibrary(Library) || !FindCVar(CVar))
+		{
+			Lock = LockNotInBuild;
+			return false;
+		}
+		const TOptional<bool> Supported = CallBool(Library, IsSupported);
+		if (!Supported.IsSet())
+		{
+			// (a plugin version without that function: judge by the GPU, and the plugin works it out itself)
+			const FString Gpu = FPlatformMisc::GetPrimaryGPUBrand();
+			const bool bLooksSupported = Gpu.Contains(TEXT("NVIDIA")) && (!bNeedsRtx || Gpu.Contains(TEXT("RTX")));
+			Lock = bLooksSupported ? FString() : FString(Hardware);
+			return bLooksSupported;
+		}
+		Lock = Supported.GetValue() ? FString() : SupportLock(CallEnumName(Library, Query), Hardware);
+		return Supported.GetValue();
+	}
+
+	/** Sorts frame generation modes: off, then by multiplier, the plugin's automatic / dynamic mode last. */
 	int32 FrameGenOrder(const FString& Mode)
 	{
 		const FString Label = ShinobiGraphics::FrameGenLabel(Mode);
 		return Label == TEXT("Off") ? 0 : Label == TEXT("Dynamic") ? 100 : FCString::Atoi(*Label);
 	}
 
-	TArray<FString> ProbeFrameGenModes()
+	/** The frame generation mode enum (EStreamlineDLSSGMode), from SetDLSSGMode's parameter. */
+	UEnum* FindFrameGenEnum()
 	{
-		TArray<FString> Modes;
-		if (!CallBool(DLSSGLibrary, TEXT("IsDLSSGSupported")))
+		UClass* Class = FindLibrary(DLSSGLibrary);
+		UFunction* Function = Class ? Class->FindFunctionByName(FName(TEXT("SetDLSSGMode"))) : nullptr;
+		if (!Function)
 		{
-			return Modes;
+			return nullptr;
 		}
-		// The modes this GPU runs, as the plugin's enum names (multi frame generation: On2X, On3X, On4X, Auto...).
-		CallLibrary(DLSSGLibrary, TEXT("GetSupportedDLSSGModes"), FillWorldContext, [&Modes](FProperty& Return, const void* Value)
+		for (TFieldIterator<FProperty> It(Function); It && It->HasAnyPropertyFlags(CPF_Parm); ++It)
+		{
+			UEnum* Enum = nullptr;
+			FNumericProperty* Numeric = nullptr;
+			if (!It->HasAnyPropertyFlags(CPF_ReturnParm) && EnumOf(**It, Enum, Numeric))
+			{
+				return Enum;
+			}
+		}
+		return nullptr;
+	}
+
+	void SortModes(TArray<FString>& Modes)
+	{
+		Modes.RemoveAll([](const FString& Mode) { return Mode.IsEmpty() || Mode.EndsWith(TEXT("MAX")); });
+		if (!Modes.ContainsByPredicate([](const FString& Mode) { return ShinobiGraphics::FrameGenLabel(Mode) == TEXT("Off"); }))
+		{
+			Modes.Insert(TEXT("Off"), 0);
+		}
+		Modes.StableSort([](const FString& A, const FString& B) { return FrameGenOrder(A) < FrameGenOrder(B); });
+	}
+
+	void ProbeFrameGen(ShinobiGraphics::FCaps& Caps)
+	{
+		// Every mode the plugin has (shown, the ones this GPU can't run locked).
+		if (UEnum* Enum = FindFrameGenEnum())
+		{
+			for (int32 Index = 0; Index < Enum->NumEnums(); ++Index)
+			{
+#if WITH_METADATA
+				if (Enum->HasMetaData(TEXT("Hidden"), Index))
+				{
+					continue;
+				}
+#endif
+				Caps.FrameGenAllModes.Add(Enum->GetNameStringByIndex(Index));
+			}
+		}
+		else
+		{
+			Caps.FrameGenAllModes = FindCVar(CVarDLSSG) ? TArray<FString>{ TEXT("Off"), TEXT("On") } : TArray<FString>{ TEXT("Off"), TEXT("On2X"), TEXT("On3X"), TEXT("On4X") };
+		}
+		SortModes(Caps.FrameGenAllModes);
+		Caps.FrameGenModes = { Caps.FrameGenAllModes[0] };
+
+		if (!ProbeFeature(DLSSGLibrary, CVarDLSSG, TEXT("IsDLSSGSupported"), TEXT("QueryDLSSGSupport"), LockFrameGenNeedsRtx40, true, Caps.FrameGenLock))
+		{
+			return;
+		}
+		// The modes this GPU runs (multi frame generation: RTX 50).
+		TArray<FString> Supported;
+		CallLibrary(DLSSGLibrary, TEXT("GetSupportedDLSSGModes"), FillWorldContext, [&Supported](FProperty& Return, const void* Value)
 		{
 			UEnum* Enum = nullptr;
 			FNumericProperty* Numeric = nullptr;
@@ -216,35 +390,133 @@ namespace
 				FScriptArrayHelper Helper(Array, Value);
 				for (int32 Index = 0; Index < Helper.Num(); ++Index)
 				{
-					Modes.AddUnique(Enum->GetNameStringByValue(Numeric->GetSignedIntPropertyValue(Helper.GetRawPtr(Index))));
+					Supported.AddUnique(Enum->GetNameStringByValue(Numeric->GetSignedIntPropertyValue(Helper.GetRawPtr(Index))));
 				}
 			}
 		});
-		Modes.RemoveAll([](const FString& Mode) { return Mode.IsEmpty() || Mode.EndsWith(TEXT("MAX")); });
-		if (Modes.Num() <= 1 && FindCVar(CVarDLSSG))
+		for (const FString& Mode : Caps.FrameGenAllModes)
 		{
-			Modes = { TEXT("Off"), TEXT("On") }; // a plugin without the list: plain 2x through its console variable
+			// (no list from the plugin: plain 2x only)
+			const bool bRuns = Supported.Num() > 0 ? Supported.Contains(Mode) : FrameGenOrder(Mode) == 2;
+			if (bRuns && FrameGenOrder(Mode) != 0)
+			{
+				Caps.FrameGenModes.Add(Mode);
+			}
 		}
-		if (!Modes.ContainsByPredicate([](const FString& Mode) { return ShinobiGraphics::FrameGenLabel(Mode) == TEXT("Off"); }))
-		{
-			Modes.Insert(TEXT("Off"), 0);
-		}
-		Modes.StableSort([](const FString& A, const FString& B) { return FrameGenOrder(A) < FrameGenOrder(B); });
-		return Modes;
 	}
 
 	ShinobiGraphics::FCaps Probe()
 	{
 		ShinobiGraphics::FCaps Caps;
-		Caps.bDLSS = FindCVar(CVarDLSS) && CallBool(DLSSLibrary, TEXT("IsDLSSSupported"));
-		Caps.bRayReconstruction = Caps.bDLSS && FindCVar(CVarDLSSDenoiser) && CallBool(DLSSLibrary, TEXT("IsDLSSRRSupported"));
-		Caps.bReflex = FindCVar(CVarReflex) && CallBool(ReflexLibrary, TEXT("IsReflexSupported"));
+		Caps.bDLSS = ProbeFeature(DLSSLibrary, CVarDLSS, TEXT("IsDLSSSupported"), TEXT("QueryDLSSSupport"), LockNeedsRtx, true, Caps.DLSSLock);
+		if (!Caps.bDLSS)
+		{
+			Caps.RayReconstructionLock = Caps.DLSSLock;
+		}
+		else
+		{
+			Caps.bRayReconstruction = ProbeFeature(DLSSLibrary, CVarDLSSDenoiser, TEXT("IsDLSSRRSupported"), TEXT("QueryDLSSRRSupport"), LockNeedsRtx, true, Caps.RayReconstructionLock);
+		}
+		Caps.bReflex = ProbeFeature(ReflexLibrary, CVarReflex, TEXT("IsReflexSupported"), TEXT("QueryReflexSupport"), LockNeedsGeForce, false, Caps.ReflexLock);
 		Caps.bRayTracing = IsRayTracingEnabled() && FindCVar(CVarLumenHWRT);
-		Caps.FrameGenModes = ProbeFrameGenModes();
-		UE_LOG(LogShinobiGraphics, Log, TEXT("Graphics: DLSS %d, Ray Reconstruction %d, Reflex %d, hardware ray tracing %d, frame generation [%s]"),
-			Caps.bDLSS, Caps.bRayReconstruction, Caps.bReflex, Caps.bRayTracing, *FString::Join(Caps.FrameGenModes, TEXT(", ")));
+		Caps.RayTracingLock = Caps.bRayTracing ? FString() : FString(LockNeedsRayTracingGpu);
+		ProbeFrameGen(Caps);
+		if (Caps.bRayReconstruction && !Caps.bRayTracing)
+		{
+			Caps.bRayReconstruction = false;
+			Caps.RayReconstructionLock = Caps.RayTracingLock;
+		}
 		return Caps;
 	}
+
+	FString PropertyText(const FProperty& Property)
+	{
+		return FString::Printf(TEXT("%s %s"), *Property.GetCPPType(), *Property.GetName());
+	}
+
+	FString ReportFor(const ShinobiGraphics::FCaps& Caps)
+	{
+		TArray<FString> Lines;
+		Lines.Add(FString::Printf(TEXT("GPU: %s | RHI: %s | hardware ray tracing enabled: %d"), *FPlatformMisc::GetPrimaryGPUBrand(), *FApp::GetGraphicsRHI(), IsRayTracingEnabled() ? 1 : 0));
+		for (const TCHAR* Name : NvidiaPlugins)
+		{
+			const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(Name);
+			if (!Plugin.IsValid())
+			{
+				Lines.Add(FString::Printf(TEXT("Plugin %s: NOT FOUND (expected Plugins/%s/%s.uplugin)"), Name, Name, Name));
+				continue;
+			}
+			TArray<FString> Modules;
+			for (const FModuleDescriptor& Module : Plugin->GetDescriptor().Modules)
+			{
+				Modules.Add(FString::Printf(TEXT("%s %s"), *Module.Name.ToString(), FModuleManager::Get().IsModuleLoaded(Module.Name) ? TEXT("loaded") : TEXT("NOT LOADED")));
+			}
+			Lines.Add(FString::Printf(TEXT("Plugin %s %s: enabled %d, mounted %d, at %s | modules: %s"), Name, *Plugin->GetDescriptor().VersionName,
+				Plugin->IsEnabled() ? 1 : 0, Plugin->IsMounted() ? 1 : 0, *Plugin->GetBaseDir(), *FString::Join(Modules, TEXT(", "))));
+		}
+		for (const TCHAR* Name : ReportedCVars)
+		{
+			const IConsoleVariable* CVar = FindCVar(Name);
+			Lines.Add(FString::Printf(TEXT("CVar %s = %s"), Name, CVar ? *CVar->GetString() : TEXT("(MISSING)")));
+		}
+		for (const TCHAR* Name : NvidiaLibraries)
+		{
+			UClass* Class = FindLibrary(Name);
+			if (!Class)
+			{
+				Lines.Add(FString::Printf(TEXT("Library U%s: MISSING"), Name));
+				continue;
+			}
+			Lines.Add(FString::Printf(TEXT("Library %s:"), *Class->GetPathName()));
+			for (TFieldIterator<UFunction> It(Class, EFieldIteratorFlags::ExcludeSuper); It; ++It)
+			{
+				TArray<FString> Params;
+				FString Return = TEXT("void");
+				for (TFieldIterator<FProperty> Param(*It); Param && Param->HasAnyPropertyFlags(CPF_Parm); ++Param)
+				{
+					if (Param->HasAnyPropertyFlags(CPF_ReturnParm))
+					{
+						Return = Param->GetCPPType();
+					}
+					else
+					{
+						Params.Add(PropertyText(**Param));
+					}
+				}
+				Lines.Add(FString::Printf(TEXT("    %s %s(%s)%s"), *Return, *It->GetName(), *FString::Join(Params, TEXT(", ")), It->HasAnyFunctionFlags(FUNC_Static) ? TEXT("") : TEXT(" [not static]")));
+			}
+		}
+		const auto Feature = [&Lines](const TCHAR* Name, bool bOn, const FString& Lock)
+		{
+			Lines.Add(FString::Printf(TEXT("=> %s: %s%s"), Name, bOn ? TEXT("available") : TEXT("locked"), Lock.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" (%s)"), *Lock)));
+		};
+		Feature(TEXT("DLSS Super Resolution"), Caps.bDLSS, Caps.DLSSLock);
+		Feature(TEXT("DLSS Ray Reconstruction"), Caps.bRayReconstruction, Caps.RayReconstructionLock);
+		Feature(TEXT("NVIDIA Reflex"), Caps.bReflex, Caps.ReflexLock);
+		Feature(TEXT("Ray tracing"), Caps.bRayTracing, Caps.RayTracingLock);
+		Feature(TEXT("DLSS Frame Generation"), Caps.HasFrameGen(), Caps.FrameGenLock);
+		Lines.Add(FString::Printf(TEXT("=> frame generation modes: all [%s], this PC [%s]"), *FString::Join(Caps.FrameGenAllModes, TEXT(", ")), *FString::Join(Caps.FrameGenModes, TEXT(", "))));
+		return FString::Join(Lines, TEXT("\n"));
+	}
+
+	void LogReport(const FString& Report)
+	{
+		TArray<FString> Lines;
+		Report.ParseIntoArrayLines(Lines, false);
+		for (const FString& Line : Lines)
+		{
+			UE_LOG(LogShinobiGraphics, Display, TEXT("%s"), *Line);
+		}
+	}
+
+	FAutoConsoleCommand GraphicsReportCommand(
+		TEXT("Shinobi.GraphicsReport"),
+		TEXT("Probes the GPU and NVIDIA's DLSS / Streamline plugins again and logs what was found: plugins, modules, console variables, library functions and what the settings menu locks."),
+		FConsoleCommandDelegate::CreateLambda([]()
+		{
+			ShinobiGraphics::RefreshCaps();
+			LogReport(ShinobiGraphics::Report());
+		}));
 
 	/** Sets the plugin's frame generation mode by enum name (UStreamlineLibraryDLSSG::SetDLSSGMode), else its console variable. */
 	void ApplyFrameGen(const FString& Mode)
@@ -267,7 +539,7 @@ namespace
 		}, IgnoreReturn);
 		if (!bSet)
 		{
-			SetCVar(CVarDLSSG, ShinobiGraphics::FrameGenLabel(Mode) == TEXT("Off") ? 0 : 1);
+			SetCVar(CVarDLSSG, FrameGenOrder(Mode) == 0 ? 0 : 1);
 		}
 	}
 }
@@ -286,8 +558,21 @@ const ShinobiGraphics::FCaps& ShinobiGraphics::Caps()
 			return NotYet;
 		}
 		ProbedCaps = Probe();
+		if (!bReportLogged)
+		{
+			bReportLogged = true;
+			LogReport(ReportFor(ProbedCaps.GetValue()));
+		}
 	}
 	return ProbedCaps.GetValue();
+}
+
+void ShinobiGraphics::RefreshCaps()
+{
+	if (CanProbe())
+	{
+		ProbedCaps.Reset();
+	}
 }
 
 void ShinobiGraphics::SetCapsOverride(const FCaps* Override)
@@ -301,6 +586,11 @@ void ShinobiGraphics::SetCapsOverride(const FCaps* Override)
 		CapsOverride.Reset();
 		ProbedCaps.Reset();
 	}
+}
+
+FString ShinobiGraphics::Report()
+{
+	return ReportFor(Caps());
 }
 
 FString ShinobiGraphics::FrameGenLabel(const FString& ModeName)
@@ -321,7 +611,7 @@ FString ShinobiGraphics::FrameGenLabel(const FString& ModeName)
 			Digits.AppendChar(Char);
 		}
 	}
-	return Digits.IsEmpty() ? FString(TEXT("2x")) : Digits + TEXT("x"); // "On" (no multiplier): plain frame generation
+	return Digits.IsEmpty() ? FString(TEXT("2X")) : Digits + TEXT("X"); // "On" (no multiplier): plain frame generation
 }
 
 ShinobiGraphics::EUpscaler ShinobiGraphics::GetUpscaler()
@@ -335,7 +625,22 @@ ShinobiGraphics::EUpscaler ShinobiGraphics::GetUpscaler()
 
 void ShinobiGraphics::SetUpscaler(EUpscaler Upscaler)
 {
+	if (Upscaler == EUpscaler::DLSS && !Caps().bDLSS)
+	{
+		return;
+	}
 	SaveString(UpscalerKey, Upscaler == EUpscaler::DLSS ? TEXT("DLSS") : TEXT("TSR"));
+	ApplySaved();
+}
+
+int32 ShinobiGraphics::GetSharpness()
+{
+	return FMath::Clamp(GetSavedInt(SharpnessKey, 0), 0, SharpnessLevels - 1);
+}
+
+void ShinobiGraphics::SetSharpness(int32 Level)
+{
+	SaveInt(SharpnessKey, FMath::Clamp(Level, 0, SharpnessLevels - 1));
 	ApplySaved();
 }
 
@@ -346,6 +651,10 @@ bool ShinobiGraphics::IsRayTracing()
 
 void ShinobiGraphics::SetRayTracing(bool bOn)
 {
+	if (bOn && !Caps().bRayTracing)
+	{
+		return;
+	}
 	SaveBool(RayTracingKey, bOn);
 	ApplySaved();
 }
@@ -357,6 +666,10 @@ bool ShinobiGraphics::IsRayReconstruction()
 
 void ShinobiGraphics::SetRayReconstruction(bool bOn)
 {
+	if (bOn && !Caps().bRayReconstruction)
+	{
+		return;
+	}
 	SaveBool(RayReconstructionKey, bOn);
 	if (bOn)
 	{
@@ -369,7 +682,7 @@ void ShinobiGraphics::SetRayReconstruction(bool bOn)
 TArray<FString> ShinobiGraphics::FrameGenOptions()
 {
 	TArray<FString> Options;
-	for (const FString& Mode : Caps().FrameGenModes)
+	for (const FString& Mode : Caps().FrameGenAllModes)
 	{
 		Options.Add(FrameGenLabel(Mode));
 	}
@@ -380,9 +693,25 @@ TArray<FString> ShinobiGraphics::FrameGenOptions()
 	return Options;
 }
 
+FString ShinobiGraphics::FrameGenOptionLock(int32 Index)
+{
+	const FCaps& C = Caps();
+	if (!C.FrameGenAllModes.IsValidIndex(Index) || Index == 0 || C.FrameGenModes.Contains(C.FrameGenAllModes[Index]))
+	{
+		return FString();
+	}
+	if (!C.FrameGenLock.IsEmpty())
+	{
+		return C.FrameGenLock;
+	}
+	return FrameGenOrder(C.FrameGenAllModes[Index]) == 2 ? FString(TEXT("Not supported on this PC.")) : FString(LockMultiFrameGenNeedsRtx50);
+}
+
 int32 ShinobiGraphics::GetFrameGen()
 {
-	return FMath::Max(0, Caps().FrameGenModes.IndexOfByKey(GetSavedString(FrameGenKey)));
+	const FCaps& C = Caps();
+	const FString Saved = GetSavedString(FrameGenKey);
+	return C.FrameGenModes.Contains(Saved) ? FMath::Max(0, C.FrameGenAllModes.IndexOfByKey(Saved)) : 0;
 }
 
 bool ShinobiGraphics::IsFrameGenOn()
@@ -392,8 +721,8 @@ bool ShinobiGraphics::IsFrameGenOn()
 
 void ShinobiGraphics::SetFrameGen(int32 Index)
 {
-	const TArray<FString>& Modes = Caps().FrameGenModes;
-	if (!Modes.IsValidIndex(Index))
+	const TArray<FString>& Modes = Caps().FrameGenAllModes;
+	if (!Modes.IsValidIndex(Index) || !FrameGenOptionLock(Index).IsEmpty())
 	{
 		return;
 	}
@@ -401,14 +730,23 @@ void ShinobiGraphics::SetFrameGen(int32 Index)
 	ApplySaved(); // (turns VSync off when it's on)
 }
 
-bool ShinobiGraphics::IsLowLatency()
+int32 ShinobiGraphics::GetReflexMode()
 {
-	return Caps().bReflex && (GetSavedBool(LowLatencyKey, true) || IsFrameGenOn());
+	if (!Caps().bReflex)
+	{
+		return 0;
+	}
+	const int32 Saved = FMath::Clamp(GetSavedInt(ReflexModeKey, GetSavedBool(OldLowLatencyKey, true) ? 1 : 0), 0, ReflexModes - 1);
+	return IsFrameGenOn() ? FMath::Max(Saved, 1) : Saved;
 }
 
-void ShinobiGraphics::SetLowLatency(bool bOn)
+void ShinobiGraphics::SetReflexMode(int32 Mode)
 {
-	SaveBool(LowLatencyKey, bOn);
+	if (!Caps().bReflex)
+	{
+		return;
+	}
+	SaveInt(ReflexModeKey, FMath::Clamp(Mode, 0, ReflexModes - 1));
 	ApplySaved();
 }
 
@@ -429,7 +767,12 @@ void ShinobiGraphics::ApplySaved()
 	}
 
 	// Reflex first: frame generation needs it.
-	SetCVar(CVarReflex, IsLowLatency() ? 1 : 0);
+	const int32 Reflex = GetReflexMode();
+	SetCVar(CVarReflex, Reflex > 0 ? 1 : 0);
+	if (Reflex > 0)
+	{
+		SetCVar(CVarReflexMode, Reflex);
+	}
 
 	// The upscaler. DLSS follows the engine's screen percentage (the Upscaling quality row); at 100 % it's DLAA.
 	const bool bDLSS = GetUpscaler() == EUpscaler::DLSS;
@@ -437,13 +780,14 @@ void ShinobiGraphics::ApplySaved()
 	SetCVar(CVarDLSS, bDLSS ? 1 : 0);
 	SetCVar(CVarDLAA, bDLSS && RenderScale >= 99.5f ? 1 : 0);
 	SetCVar(CVarDLSSDenoiser, IsRayReconstruction() ? 1 : 0);
+	SetCVarFloat(CVarSharpen, SharpenAmounts[GetSharpness()]);
 
 	// Hardware ray tracing for Lumen (the project builds the ray-tracing shaders: r.RayTracing in DefaultEngine.ini).
 	SetCVar(CVarLumenHWRT, IsRayTracing() ? 1 : 0);
 
-	if (!Caps().FrameGenModes.IsEmpty())
+	if (Caps().HasFrameGen())
 	{
-		ApplyFrameGen(Caps().FrameGenModes[GetFrameGen()]);
+		ApplyFrameGen(Caps().FrameGenAllModes[GetFrameGen()]);
 	}
 
 	// Dynamic resolution: aim at the frame cap (60 FPS uncapped), from the upscaling quality's scale down to 50 %.
@@ -473,6 +817,7 @@ void UShinobiGraphicsSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	PostEngineInitHandle = FCoreDelegates::OnPostEngineInit.AddLambda([]()
 	{
 		bPluginsLoaded = true;
+		ShinobiGraphics::RefreshCaps();
 		ShinobiGraphics::ApplySaved();
 	});
 }

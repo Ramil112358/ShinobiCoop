@@ -6,6 +6,7 @@
 #include "Components/CanvasPanelSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
+#include "Components/ScrollBox.h"
 #include "Components/SizeBox.h"
 #include "Components/Spacer.h"
 #include "Components/TextBlock.h"
@@ -14,6 +15,7 @@
 #include "Engine/GameInstance.h"
 #include "Shinobi/Online/ShinobiSessionSubsystem.h"
 #include "Shinobi/UI/ShinobiDropdown.h"
+#include "Shinobi/UI/ShinobiGraphics.h"
 #include "Shinobi/UI/ShinobiMenuStyle.h"
 
 namespace
@@ -152,6 +154,8 @@ UTextBlock* UShinobiMenuWidget::AddText(UVerticalBox* Box, const FString& Text, 
 namespace
 {
 	constexpr float SettingsPanelWidth = 640.f;
+	/** The rows scroll past this height (slate units): the panel, its help line and the tab bar fit a 1080p screen. */
+	constexpr float SettingsRowsMaxHeight = 700.f;
 	constexpr float SettingsValueWidth = 190.f;
 	/** A stepper arrow's hit area: the glyph and its padding. */
 	constexpr float SettingsArrowWidth = 32.f;
@@ -184,9 +188,19 @@ TSharedRef<SWidget> UShinobiSettingsWidget::RebuildWidget()
 		USizeBox* Width = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 		Width->SetWidthOverride(SettingsPanelWidth);
 		Panel->SetContent(Width);
+		UVerticalBox* Outer = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
+		Width->AddChild(Outer);
+		// The rows scroll (there are more than fit a 1080p screen); the help line stays under them.
+		USizeBox* RowsHeight = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		RowsHeight->SetMaxDesiredHeight(SettingsRowsMaxHeight);
+		Outer->AddChildToVerticalBox(RowsHeight);
+		RowsScroll = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass(), TEXT("RowsScroll"));
+		RowsScroll->SetScrollbarThickness(FVector2D(4.f, 4.f));
+		RowsHeight->AddChild(RowsScroll);
 		Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Column"));
-		Width->AddChild(Column);
+		RowsScroll->AddChild(Column);
 
+		ShinobiGraphics::RefreshCaps(); // (what the GPU and NVIDIA's plugins allow decides which rows and options are locked)
 		Rows = ShinobiSettings::RowsFor(bMainMenu);
 		FString LastSection;
 		for (int32 Index = 0; Index < Rows.Num(); ++Index)
@@ -204,7 +218,8 @@ TSharedRef<SWidget> UShinobiSettingsWidget::RebuildWidget()
 			Button->Arm();
 			UHorizontalBox* Line = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 			Button->AddChild(Line);
-			UHorizontalBoxSlot* NameSlot = Line->AddChildToHorizontalBox(ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(ShinobiSettings::RowName(Row)), 16, FLinearColor::White));
+			UTextBlock* Name = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(ShinobiSettings::RowName(Row)), 16, FLinearColor::White);
+			UHorizontalBoxSlot* NameSlot = Line->AddChildToHorizontalBox(Name);
 			NameSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 			NameSlot->SetVerticalAlignment(VAlign_Center);
 			UTextBlock* Value = ShinobiMenuStyle::Text(*WidgetTree, FText::GetEmpty(), 16, FLinearColor::White);
@@ -246,6 +261,7 @@ TSharedRef<SWidget> UShinobiSettingsWidget::RebuildWidget()
 			Cast<UButtonSlot>(Line->Slot)->SetHorizontalAlignment(HAlign_Fill);
 			Column->AddChildToVerticalBox(Button)->SetPadding(FMargin(0.f, 3.f));
 			EntryButtons.Add(Button);
+			NameTexts.Add(Name);
 			ValueTexts.Add(Value);
 			BackArrows.Add(Back);
 			Fields.Add(Field);
@@ -255,13 +271,13 @@ TSharedRef<SWidget> UShinobiSettingsWidget::RebuildWidget()
 		UBorder* Rule = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
 		Rule->SetBrush(ShinobiMenuStyle::ColorBrush(FLinearColor(1.f, 1.f, 1.f, 0.1f)));
 		Rule->SetPadding(FMargin(0.f, 0.5f));
-		Column->AddChildToVerticalBox(Rule)->SetPadding(FMargin(0.f, 16.f, 0.f, 10.f));
+		Outer->AddChildToVerticalBox(Rule)->SetPadding(FMargin(0.f, 16.f, 0.f, 10.f));
 		USizeBox* DescriptionBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		DescriptionBox->SetMinDesiredHeight(40.f);
+		DescriptionBox->SetMinDesiredHeight(60.f); // (a description and a "Locked: ..." line)
 		DescriptionText = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(SettingsGeneralNote), 14, ShinobiMenuStyle::TextDim);
 		DescriptionText->SetAutoWrapText(true);
 		DescriptionBox->AddChild(DescriptionText);
-		Column->AddChildToVerticalBox(DescriptionBox)->SetPadding(FMargin(4.f, 0.f));
+		Outer->AddChildToVerticalBox(DescriptionBox)->SetPadding(FMargin(4.f, 0.f));
 		RefreshValues();
 	}
 	return UUserWidget::RebuildWidget(); // not UShinobiMenuWidget's: this panel has its own layout
@@ -288,6 +304,11 @@ void UShinobiSettingsWidget::OpenRowList(int32 Index)
 	}
 	TWeakObjectPtr<UShinobiSettingsWidget> Self = this;
 	// Under the row's field; focus comes back to the row.
+	if (!ShinobiSettings::RowLock(Rows[Index]).IsEmpty())
+	{
+		return; // a locked row: the help line says why
+	}
+	// Under the row's field; focus comes back to the row. Locked options are listed greyed out.
 	UShinobiDropdownList::Open(*EntryButtons[Index], ShinobiSettings::RowOptions(Rows[Index]), ShinobiSettings::RowIndex(Rows[Index]),
 		[Self, Index](int32 Picked)
 		{
@@ -295,7 +316,7 @@ void UShinobiSettingsWidget::OpenRowList(int32 Index)
 			{
 				Panel->PickRow(Index, Picked);
 			}
-		}, Fields.IsValidIndex(Index) ? Fields[Index].Get() : nullptr);
+		}, Fields.IsValidIndex(Index) ? Fields[Index].Get() : nullptr, ShinobiSettings::OptionLocks(Rows[Index]));
 }
 
 void UShinobiSettingsWidget::PickRow(int32 Index, int32 Option)
@@ -335,7 +356,25 @@ void UShinobiSettingsWidget::RefreshValues()
 		{
 			ValueTexts[Index]->SetText(Value);
 		}
+		// A locked row (no RTX card, VSync under frame generation...) is greyed out; the help line says why.
+		const FSlateColor Color = ShinobiSettings::RowLock(Rows[Index]).IsEmpty() ? FSlateColor(FLinearColor::White) : FSlateColor(ShinobiMenuStyle::TextDim);
+		ValueTexts[Index]->SetColorAndOpacity(Color);
+		if (NameTexts.IsValidIndex(Index))
+		{
+			NameTexts[Index]->SetColorAndOpacity(Color);
+		}
 	}
+	bDescriptionStale = true; // (one change can lock or unlock others: the help line is written again)
+}
+
+FString UShinobiSettingsWidget::DescribeRow(int32 Row) const
+{
+	if (!Rows.IsValidIndex(Row))
+	{
+		return SettingsGeneralNote;
+	}
+	const FString Note = ShinobiSettings::RowNote(Rows[Row]);
+	return Note.IsEmpty() ? ShinobiSettings::RowDescription(Rows[Row]) : ShinobiSettings::RowDescription(Rows[Row]) + TEXT("\n") + Note;
 }
 
 int32 UShinobiSettingsWidget::GetFocusedRow() const
@@ -359,8 +398,14 @@ void UShinobiSettingsWidget::NativeTick(const FGeometry& Geometry, float DeltaTi
 	{
 		Row = EntryButtons[Index]->IsHovered() ? Index : INDEX_NONE;
 	}
-	Row = Row != INDEX_NONE ? Row : GetFocusedRow();
-	if (Row != DescribedRow && DescriptionText)
+	const int32 Focused = GetFocusedRow();
+	if (Focused != ScrolledToRow && RowsScroll && EntryButtons.IsValidIndex(Focused))
+	{
+		RowsScroll->ScrollWidgetIntoView(EntryButtons[Focused], true); // keys / gamepad move focus off the visible rows
+	}
+	ScrolledToRow = Focused;
+	Row = Row != INDEX_NONE ? Row : Focused;
+	if ((Row != DescribedRow || bDescriptionStale) && DescriptionText)
 	{
 		for (int32 Index = 0; Index < Fields.Num(); ++Index)
 		{
@@ -370,7 +415,8 @@ void UShinobiSettingsWidget::NativeTick(const FGeometry& Geometry, float DeltaTi
 			}
 		}
 		DescribedRow = Row;
-		DescriptionText->SetText(FText::FromString(Rows.IsValidIndex(Row) ? ShinobiSettings::RowDescription(Rows[Row]) : FString(SettingsGeneralNote)));
+		bDescriptionStale = false;
+		DescriptionText->SetText(FText::FromString(DescribeRow(Row)));
 	}
 }
 

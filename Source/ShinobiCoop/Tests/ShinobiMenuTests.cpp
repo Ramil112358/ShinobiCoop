@@ -119,13 +119,8 @@ bool FShinobiMenuSettingsRowsTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("main menu: no Character row"), Menu.Contains(ERow::Character));
 	TestFalse(TEXT("main menu: no Face row"), Menu.Contains(ERow::Face));
 	TestFalse(TEXT("main menu: no Outfit row"), Menu.Contains(ERow::Outfit));
-	int32 Available = 0; // (the DLSS / frame generation / ray-tracing rows depend on the machine)
-	for (uint8 Row = 0; Row < uint8(ERow::Num); ++Row)
-	{
-		Available += ShinobiSettings::IsRowAvailable(ERow(Row)) ? 1 : 0;
-	}
-	TestEqual(TEXT("main menu rows"), Menu.Num(), Available - 3);
-	TestEqual(TEXT("pause menu rows"), ShinobiSettings::RowsFor(false).Num(), Available);
+	TestEqual(TEXT("main menu rows (every graphics row, locked or not)"), Menu.Num(), int32(ERow::Num) - 3);
+	TestEqual(TEXT("pause menu rows"), ShinobiSettings::RowsFor(false).Num(), int32(ERow::Num));
 	return true;
 }
 

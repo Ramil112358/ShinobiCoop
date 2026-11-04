@@ -35,6 +35,7 @@ public class ShinobiCoop : ModuleRules
 			"ImageCore",
 			"NavigationSystem",
 			"RenderCore",
+			"Projects", // IPluginManager: Shinobi.GraphicsReport lists NVIDIA's plugins
 			"RHI",
 			"MeshDescription",
 			"StaticMeshDescription",
