@@ -386,11 +386,14 @@ bool FShinobiSettingsPanelStepTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("the row follows"), Panel->GetShownValue(Cap).ToString(), FString(TEXT("30 FPS")));
 	TestFalse(TEXT("a help line"), Panel->GetDescriptionText().IsEmpty());
 	const int32 Quality = Rows.IndexOfByKey(ShinobiSettings::ERow::Quality);
-	const int32 OldQuality = Settings->GetOverallScalabilityLevel();
+	const int32 OldQuality = ShinobiSettings::GetQualityPreset();
 	Panel->PickRow(Quality, 4); // as picked from the row's dropdown
-	TestEqual(TEXT("quality picked from its list"), Settings->GetOverallScalabilityLevel(), 4);
+	TestEqual(TEXT("quality picked from its list"), ShinobiSettings::GetQualityPreset(), 4);
 	TestEqual(TEXT("the row shows it"), Panel->GetShownValue(Quality).ToString(), ShinobiSettings::RowOptions(ShinobiSettings::ERow::Quality)[4]);
-	Settings->SetOverallScalabilityLevel(OldQuality);
+	if (OldQuality != INDEX_NONE)
+	{
+		Settings->SetOverallScalabilityLevel(OldQuality);
+	}
 
 	Settings->SetVSyncEnabled(bOldVSync);
 	Settings->SetFrameRateLimit(OldCap);

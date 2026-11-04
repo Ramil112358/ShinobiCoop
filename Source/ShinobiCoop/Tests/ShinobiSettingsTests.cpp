@@ -63,7 +63,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSettingsCycleTest, "ShinobiCoop.UI.Sett
 bool FShinobiSettingsCycleTest::RunTest(const FString& Parameters)
 {
 	UGameUserSettings* Settings = GEngine->GetGameUserSettings();
-	const int32 OldQuality = Settings->GetOverallScalabilityLevel();
+	const int32 OldQuality = ShinobiSettings::GetQualityPreset();
 	const float OldCap = Settings->GetFrameRateLimit();
 	const bool bOldOutline = ShinobiLook::IsOutlineEnabled();
 	const TCHAR* Section = TEXT("/Script/ShinobiCoop.ShinobiSettings");
@@ -99,7 +99,7 @@ bool FShinobiSettingsCycleTest::RunTest(const FString& Parameters)
 
 	Settings->SetOverallScalabilityLevel(0);
 	ShinobiSettings::Cycle(ShinobiSettings::ERow::Quality, W.World);
-	TestEqual(TEXT("Quality Low -> Medium"), Settings->GetOverallScalabilityLevel(), 1);
+	TestEqual(TEXT("Quality Low -> Medium"), ShinobiSettings::GetQualityPreset(), 1);
 	TestTrue(TEXT("Quality label"), ShinobiSettings::Label(ShinobiSettings::ERow::Quality).Contains(TEXT("Medium")));
 
 	Settings->SetFrameRateLimit(30.f);
@@ -130,7 +130,10 @@ bool FShinobiSettingsCycleTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("New characters honour the setting"), Late->GetBodyMesh()->bRenderCustomDepth);
 
 	// Leave the machine's settings as they were.
-	Settings->SetOverallScalabilityLevel(OldQuality);
+	if (OldQuality != INDEX_NONE)
+	{
+		Settings->SetOverallScalabilityLevel(OldQuality);
+	}
 	Settings->SetFrameRateLimit(OldCap);
 	Settings->ApplyNonResolutionSettings();
 	Settings->SaveSettings();
@@ -151,7 +154,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSettingsStepBackTest, "ShinobiCoop.UI.S
 bool FShinobiSettingsStepBackTest::RunTest(const FString& Parameters)
 {
 	UGameUserSettings* Settings = GEngine->GetGameUserSettings();
-	const int32 OldQuality = Settings->GetOverallScalabilityLevel();
+	const int32 OldQuality = ShinobiSettings::GetQualityPreset();
 	const float OldCap = Settings->GetFrameRateLimit();
 	const float OldScale = ShinobiSettings::GetRenderScale();
 	const TCHAR* Section = TEXT("/Script/ShinobiCoop.ShinobiSettings");
@@ -162,9 +165,9 @@ bool FShinobiSettingsStepBackTest::RunTest(const FString& Parameters)
 
 	Settings->SetOverallScalabilityLevel(0);
 	ShinobiSettings::Step(ERow::Quality, W.World, -1);
-	TestEqual(TEXT("Quality Low, back -> Cinematic"), Settings->GetOverallScalabilityLevel(), 4);
+	TestEqual(TEXT("Quality Low, back -> Cinematic"), ShinobiSettings::GetQualityPreset(), 4);
 	ShinobiSettings::Step(ERow::Quality, W.World, 1);
-	TestEqual(TEXT("Quality Cinematic, on -> Low"), Settings->GetOverallScalabilityLevel(), 0);
+	TestEqual(TEXT("Quality Cinematic, on -> Low"), ShinobiSettings::GetQualityPreset(), 0);
 	TestEqual(TEXT("Quality value"), ShinobiSettings::RowValue(ERow::Quality), FString(TEXT("Low")));
 	TestEqual(TEXT("Quality name"), ShinobiSettings::RowName(ERow::Quality), FString(TEXT("Graphics quality")));
 	TestEqual(TEXT("Label is name: value"), ShinobiSettings::Label(ERow::Quality), FString(TEXT("Graphics quality: Low")));
@@ -202,7 +205,10 @@ bool FShinobiSettingsStepBackTest::RunTest(const FString& Parameters)
 		TestFalse(FString::Printf(TEXT("row %d has a section"), Row), ShinobiSettings::RowSection(ERow(Row)).IsEmpty());
 	}
 
-	Settings->SetOverallScalabilityLevel(OldQuality);
+	if (OldQuality != INDEX_NONE)
+	{
+		Settings->SetOverallScalabilityLevel(OldQuality);
+	}
 	Settings->SetFrameRateLimit(OldCap);
 	ShinobiSettings::SetRenderScale(OldScale);
 	Settings->ApplyNonResolutionSettings();
@@ -212,12 +218,44 @@ bool FShinobiSettingsStepBackTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSettingsPresetWithUpscalingTest, "ShinobiCoop.UI.SettingsPresetSurvivesUpscaling", ShinobiTestFlags)
+bool FShinobiSettingsPresetWithUpscalingTest::RunTest(const FString& Parameters)
+{
+	// The upscaling rows own the render resolution, so a Graphics quality preset still reads as itself at any upscaling quality
+	// (the engine's own overall level would say Custom: it wants each preset's own resolution); a lighting pick off the preset
+	// reads Custom.
+	UGameUserSettings* Settings = GEngine->GetGameUserSettings();
+	const int32 OldQuality = ShinobiSettings::GetQualityPreset();
+	FShinobiGraphicsKeysGuard Graphics;
+	FShinobiTestWorld W;
+	using ShinobiSettings::ERow;
+	ShinobiGraphics::SetUpscaler(ShinobiGraphics::EUpscaler::TSR);
+	ShinobiGraphics::SetUpscalingQuality(2); // Performance: 50 %
+	for (int32 Preset = 0; Preset < ShinobiSettings::RowOptions(ERow::Quality).Num(); ++Preset)
+	{
+		ShinobiSettings::SetRowIndex(ERow::Quality, W.World, Preset);
+		TestEqual(FString::Printf(TEXT("preset %d is kept"), Preset), ShinobiSettings::GetQualityPreset(), Preset);
+		TestEqual(TEXT("...and shown"), ShinobiSettings::RowValue(ERow::Quality), ShinobiSettings::RowOptions(ERow::Quality)[Preset]);
+		TestEqual(TEXT("...while upscaling keeps its resolution"), FMath::RoundToInt(ShinobiSettings::GetRenderScale()), 50);
+	}
+	ShinobiSettings::SetRowIndex(ERow::Quality, W.World, 2);
+	ShinobiSettings::SetRowIndex(ERow::LightingQuality, W.World, 1);
+	TestEqual(TEXT("High with Medium lighting: Custom"), ShinobiSettings::RowValue(ERow::Quality), FString(TEXT("Custom")));
+	if (OldQuality != INDEX_NONE)
+	{
+		Settings->SetOverallScalabilityLevel(OldQuality);
+	}
+	Settings->ApplyNonResolutionSettings();
+	Settings->SaveSettings();
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSettingsOptionsTest, "ShinobiCoop.UI.SettingsOptionsPickDirectly", ShinobiTestFlags)
 bool FShinobiSettingsOptionsTest::RunTest(const FString& Parameters)
 {
 	// Rows with many values are picked from a list (a dropdown), any value in one go; On / Off rows stay steppers.
 	UGameUserSettings* Settings = GEngine->GetGameUserSettings();
-	const int32 OldQuality = Settings->GetOverallScalabilityLevel();
+	const int32 OldQuality = ShinobiSettings::GetQualityPreset();
 	const float OldCap = Settings->GetFrameRateLimit();
 	FShinobiTestWorld W;
 	using ShinobiSettings::ERow;
@@ -234,7 +272,7 @@ bool FShinobiSettingsOptionsTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("five presets"), Quality.Num(), 5);
 	Settings->SetOverallScalabilityLevel(0);
 	ShinobiSettings::SetRowIndex(ERow::Quality, W.World, 3);
-	TestEqual(TEXT("Low straight to Epic"), Settings->GetOverallScalabilityLevel(), 3);
+	TestEqual(TEXT("Low straight to Epic"), ShinobiSettings::GetQualityPreset(), 3);
 	TestEqual(TEXT("the shown value is the picked option"), ShinobiSettings::RowValue(ERow::Quality), Quality[3]);
 	TestEqual(TEXT("its index"), ShinobiSettings::RowIndex(ERow::Quality), 3);
 
@@ -251,7 +289,10 @@ bool FShinobiSettingsOptionsTest::RunTest(const FString& Parameters)
 		TestTrue(FString::Printf(TEXT("row %d: its index is on its list (or none)"), Row), Index == INDEX_NONE || ShinobiSettings::RowOptions(ERow(Row)).IsValidIndex(Index));
 	}
 
-	Settings->SetOverallScalabilityLevel(OldQuality);
+	if (OldQuality != INDEX_NONE)
+	{
+		Settings->SetOverallScalabilityLevel(OldQuality);
+	}
 	Settings->SetFrameRateLimit(OldCap);
 	Settings->ApplyNonResolutionSettings();
 	Settings->SaveSettings();

@@ -150,6 +150,22 @@ EShinobiSnow ShinobiSettings::GetSavedSnow()
 	return EShinobiSnow(FMath::Clamp(Value, 0, int32(UE_ARRAY_COUNT(SnowNames)) - 1));
 }
 
+int32 ShinobiSettings::GetQualityPreset()
+{
+	const UGameUserSettings* S = Settings();
+	const int32 Groups[] = { S->GetViewDistanceQuality(), S->GetAntiAliasingQuality(), S->GetShadowQuality(), S->GetGlobalIlluminationQuality(),
+		S->GetReflectionQuality(), S->GetPostProcessingQuality(), S->GetTextureQuality(), S->GetVisualEffectQuality(), S->GetFoliageQuality(),
+		S->GetShadingQuality() };
+	for (const int32 Level : Groups)
+	{
+		if (Level != Groups[0])
+		{
+			return INDEX_NONE;
+		}
+	}
+	return Groups[0] >= 0 && Groups[0] < UE_ARRAY_COUNT(QualityNames) ? Groups[0] : INDEX_NONE;
+}
+
 float ShinobiSettings::GetRenderScale()
 {
 	float Current = 100.f, Min = 0.f, Max = 0.f, Default = 100.f;
@@ -216,8 +232,8 @@ FString ShinobiSettings::RowValue(ERow Row)
 		return GetSavedOutfit();
 	case ERow::Quality:
 	{
-		const int32 Level = S->GetOverallScalabilityLevel();
-		return Level >= 0 && Level < UE_ARRAY_COUNT(QualityNames) ? QualityNames[Level] : TEXT("Custom");
+		const int32 Level = GetQualityPreset();
+		return Level != INDEX_NONE ? QualityNames[Level] : TEXT("Custom");
 	}
 	case ERow::LightingQuality:
 		return LightingNames[RowIndex(Row)];
@@ -621,10 +637,7 @@ int32 ShinobiSettings::RowIndex(ERow Row)
 	case ERow::Outfit:
 		return AShinobiPlayerCharacter::FindOutfitIndex(GetSavedOutfit());
 	case ERow::Quality:
-	{
-		const int32 Level = S->GetOverallScalabilityLevel();
-		return Level >= 0 && Level < UE_ARRAY_COUNT(QualityNames) ? Level : INDEX_NONE; // Custom: none of them
-	}
+		return GetQualityPreset(); // (Custom: none of them)
 	case ERow::LightingQuality:
 		return FMath::Clamp(S->GetGlobalIlluminationQuality(), 0, int32(UE_ARRAY_COUNT(LightingNames)) - 1);
 	case ERow::MegaLights:
