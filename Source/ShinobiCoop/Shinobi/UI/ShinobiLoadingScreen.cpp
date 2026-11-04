@@ -861,7 +861,7 @@ ShinobiLoadingScreen::FChecks UShinobiLoadingScreenSubsystem::GatherChecks()
 	FChecks Checks;
 	UGameInstance* GameInstance = GetGameInstance();
 	UWorld* World = GameInstance->GetWorld();
-	const FWorldContext* Context = GEngine ? GEngine->GetWorldContextFromGameInstance(GameInstance) : nullptr;
+	const FWorldContext* Context = GameInstance->GetWorldContext();
 
 	Checks.bConnecting = Context && Context->PendingNetGame != nullptr;
 	Checks.bTravelling = bInLoadMap || Checks.bConnecting || !World || (Context && !Context->TravelURL.IsEmpty())
