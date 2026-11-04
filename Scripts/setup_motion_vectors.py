@@ -71,7 +71,9 @@ def main():
         if not m.get_editor_property("output_translucent_velocity"):
             m.set_editor_property("output_translucent_velocity", True)
             changed.add(m)
-            log(f"{m.get_name()}: Output Depth and Velocity on")
+            log(f"{m.get_name()}: Output Depth and Velocity turned on")
+        else:
+            log(f"{m.get_name()}: Output Depth and Velocity already on")
     for path in INSTANCED:
         m = find(path)
         if m is None:
@@ -80,14 +82,17 @@ def main():
         if not MEL.has_material_usage(m, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES):
             MEL.set_base_material_usage(m, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES, True)
             changed.add(m)
-            log(f"{m.get_name()}: Instanced Static Meshes usage on")
+            log(f"{m.get_name()}: Instanced Static Meshes usage turned on")
+        else:
+            log(f"{m.get_name()}: Instanced Static Meshes usage already on")
     for m in changed:
         errors = MEL.recompile_material(m)
         if errors:
             raise RuntimeError(f"{m.get_name()} failed to compile: {errors}")
         EAL.save_loaded_asset(m)
-    look.outline_material()
-    log(f"M_OutlinePost rebuilt after tonemapping; {len(changed)} other material(s) changed")
+    outline = look.outline_material()
+    log(f"M_OutlinePost rebuilt: blendable location {outline.get_editor_property('blendable_location')}; "
+        f"{len(changed)} other material(s) changed (its shaders compile when the editor or game first draws it)")
 
 
 main()
