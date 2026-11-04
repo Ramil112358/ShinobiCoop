@@ -135,8 +135,7 @@ TSharedRef<SWidget> UShinobiPauseMenuWidget::RebuildWidget()
 
 		SettingsPage = CreateWidget<UShinobiSettingsWidget>(this, UShinobiSettingsWidget::StaticClass());
 		Pages->AddChild(SettingsPage);
-		SettingsPage->TakeWidget();
-		FocusTargets[int32(EShinobiPauseTab::Settings)] = SettingsPage->GetFirstEntry();
+		SettingsPage->TakeWidget(); // (its focus target is the shown category's first row: GetFocusTarget asks it)
 
 		ControlsPage = CreateWidget<UShinobiShortcutsWidget>(this, UShinobiShortcutsWidget::StaticClass());
 		Pages->AddChild(ControlsPage);
@@ -263,6 +262,10 @@ UWidget* UShinobiPauseMenuWidget::GetTabPage(EShinobiPauseTab Which) const
 
 UWidget* UShinobiPauseMenuWidget::GetFocusTarget(EShinobiPauseTab Which) const
 {
+	if (Which == EShinobiPauseTab::Settings && SettingsPage)
+	{
+		return SettingsPage->GetFocusTarget(); // the shown category's first row
+	}
 	return FocusTargets.IsValidIndex(int32(Which)) ? FocusTargets[int32(Which)].Get() : nullptr;
 }
 

@@ -326,9 +326,58 @@ FString ShinobiSettings::RowSection(ERow Row)
 	case ERow::Face:
 	case ERow::Outfit:
 		return TEXT("CHARACTER");
+	case ERow::WindowMode:
+	case ERow::Resolution:
+		return TEXT("SCREEN");
+	case ERow::FrameCap:
+	case ERow::VSync:
+		return TEXT("FRAME RATE");
 	case ERow::Quality:
 	case ERow::LightingQuality:
-		return TEXT("GRAPHICS");
+		return TEXT("QUALITY");
+	case ERow::RayTracing:
+	case ERow::RayReconstruction:
+	case ERow::MegaLights:
+		return TEXT("RAY TRACING");
+	case ERow::Upscaler:
+	case ERow::RenderScale:
+	case ERow::AntiAliasing:
+	case ERow::Sharpness:
+	case ERow::DynamicResolution:
+		return TEXT("UPSCALING & ANTI-ALIASING");
+	case ERow::FrameGeneration:
+	case ERow::LowLatency:
+		return TEXT("FRAME GENERATION & LATENCY");
+	default:
+		return TEXT("EFFECTS");
+	}
+}
+
+FString ShinobiSettings::CategoryName(ECategory Category)
+{
+	switch (Category)
+	{
+	case ECategory::Character: return TEXT("CHARACTER");
+	case ECategory::Display: return TEXT("DISPLAY");
+	case ECategory::Graphics: return TEXT("GRAPHICS");
+	case ECategory::Upscaling: return TEXT("UPSCALING");
+	default: return FString();
+	}
+}
+
+ShinobiSettings::ECategory ShinobiSettings::RowCategory(ERow Row)
+{
+	switch (Row)
+	{
+	case ERow::Character:
+	case ERow::Face:
+	case ERow::Outfit:
+		return ECategory::Character;
+	case ERow::WindowMode:
+	case ERow::Resolution:
+	case ERow::FrameCap:
+	case ERow::VSync:
+		return ECategory::Display;
 	case ERow::Upscaler:
 	case ERow::RenderScale:
 	case ERow::AntiAliasing:
@@ -336,19 +385,23 @@ FString ShinobiSettings::RowSection(ERow Row)
 	case ERow::DynamicResolution:
 	case ERow::FrameGeneration:
 	case ERow::LowLatency:
-		return TEXT("UPSCALING & FRAME GENERATION");
-	case ERow::RayTracing:
-	case ERow::RayReconstruction:
-	case ERow::MegaLights:
-		return TEXT("RAY TRACING");
-	case ERow::WindowMode:
-	case ERow::Resolution:
-	case ERow::FrameCap:
-	case ERow::VSync:
-		return TEXT("DISPLAY");
-	default:
-		return TEXT("EFFECTS");
+		return ECategory::Upscaling;
+	default: // quality, ray tracing and effects
+		return ECategory::Graphics;
 	}
+}
+
+TArray<ShinobiSettings::ECategory> ShinobiSettings::CategoriesFor(bool bMainMenu)
+{
+	TArray<ECategory> Categories;
+	for (uint8 Category = 0; Category < uint8(ECategory::Num); ++Category)
+	{
+		if (!bMainMenu || ECategory(Category) != ECategory::Character)
+		{
+			Categories.Add(ECategory(Category));
+		}
+	}
+	return Categories;
 }
 
 void ShinobiSettings::SetSavedCharacter(const FString& Name)
@@ -471,12 +524,16 @@ FString ShinobiSettings::RowNote(ERow Row)
 
 TArray<ShinobiSettings::ERow> ShinobiSettings::RowsFor(bool bMainMenu)
 {
+	// Tab by tab, so the panel's rows (and their indices) run in the order its category tabs show them.
 	TArray<ERow> Rows;
-	for (uint8 Row = 0; Row < uint8(ERow::Num); ++Row)
+	for (const ECategory Category : CategoriesFor(bMainMenu))
 	{
-		if (!bMainMenu || (ERow(Row) != ERow::Character && ERow(Row) != ERow::Face && ERow(Row) != ERow::Outfit))
+		for (uint8 Row = 0; Row < uint8(ERow::Num); ++Row)
 		{
-			Rows.Add(ERow(Row));
+			if (RowCategory(ERow(Row)) == Category)
+			{
+				Rows.Add(ERow(Row));
+			}
 		}
 	}
 	return Rows;

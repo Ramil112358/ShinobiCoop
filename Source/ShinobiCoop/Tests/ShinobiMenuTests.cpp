@@ -402,6 +402,64 @@ bool FShinobiSettingsPanelStepTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiSettingsCategoriesTest, "ShinobiCoop.UI.SettingsCategoryTabs", ShinobiTestFlags)
+bool FShinobiSettingsCategoriesTest::RunTest(const FString& Parameters)
+{
+	using ShinobiSettings::ECategory;
+	using ShinobiSettings::ERow;
+	TestEqual(TEXT("pause menu: every category"), ShinobiSettings::CategoriesFor(false).Num(), int32(ECategory::Num));
+	TestFalse(TEXT("main menu: no CHARACTER category (SHINOBI has it)"), ShinobiSettings::CategoriesFor(true).Contains(ECategory::Character));
+	for (const bool bMainMenu : { true, false })
+	{
+		// Rows run tab by tab, each on a category that's shown.
+		const TArray<ECategory> Categories = ShinobiSettings::CategoriesFor(bMainMenu);
+		const TArray<ERow> Rows = ShinobiSettings::RowsFor(bMainMenu);
+		int32 LastTab = 0;
+		for (const ERow Row : Rows)
+		{
+			const int32 Tab = Categories.IndexOfByKey(ShinobiSettings::RowCategory(Row));
+			TestTrue(FString::Printf(TEXT("row %d: on a shown category"), int32(Row)), Tab != INDEX_NONE);
+			TestTrue(FString::Printf(TEXT("row %d: grouped with its category"), int32(Row)), Tab >= LastTab);
+			LastTab = FMath::Max(LastTab, Tab);
+		}
+		for (const ECategory Category : Categories)
+		{
+			TestFalse(TEXT("a category has a name"), ShinobiSettings::CategoryName(Category).IsEmpty());
+			TestTrue(TEXT("a category has rows"), Rows.ContainsByPredicate([Category](ERow Row) { return ShinobiSettings::RowCategory(Row) == Category; }));
+		}
+
+		FShinobiTestWorld W;
+		UShinobiSettingsWidget* Panel = CreateWidget<UShinobiSettingsWidget>(W.World, UShinobiSettingsWidget::StaticClass());
+		Panel->bMainMenu = bMainMenu;
+		Panel->TakeWidget();
+		TestEqual(TEXT("a tab per category"), Panel->GetCategories().Num(), Categories.Num());
+		for (const ECategory Category : Categories)
+		{
+			UShinobiIndexButton* Button = Panel->GetCategoryButton(Category);
+			if (!TestNotNull(TEXT("a button per category"), Button))
+			{
+				continue;
+			}
+			Button->OnClicked.Broadcast();
+			TestTrue(TEXT("a click shows the category"), Panel->GetCategory() == Category);
+			const int32 First = Rows.IndexOfByPredicate([Category](ERow Row) { return ShinobiSettings::RowCategory(Row) == Category; });
+			TestTrue(TEXT("its first row is the focus target"), First != INDEX_NONE && Panel->GetFocusTarget() == Panel->GetRowButton(First));
+			for (int32 Index = 0; Index < Rows.Num(); ++Index)
+			{
+				TestEqual(FString::Printf(TEXT("row %d: shown only on its category"), int32(Rows[Index])), Panel->IsRowShown(Index), ShinobiSettings::RowCategory(Rows[Index]) == Category);
+			}
+		}
+		Panel->SelectCategory(Categories.Last());
+		TestTrue(TEXT("picked in code"), Panel->GetCategory() == Categories.Last());
+		UShinobiSettingsWidget* Again = CreateWidget<UShinobiSettingsWidget>(W.World, UShinobiSettingsWidget::StaticClass());
+		Again->bMainMenu = bMainMenu;
+		Again->TakeWidget();
+		TestTrue(TEXT("reopens on the category last shown"), Again->GetCategory() == Categories.Last());
+		Again->SelectCategory(Categories[0]);
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FShinobiMainMenuHostRowsTest, "ShinobiCoop.UI.MainMenuHostRowsCoverMaps", ShinobiTestFlags)
 bool FShinobiMainMenuHostRowsTest::RunTest(const FString& Parameters)
 {

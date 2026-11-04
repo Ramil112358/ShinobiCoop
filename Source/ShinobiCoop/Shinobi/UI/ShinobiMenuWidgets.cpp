@@ -12,6 +12,7 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Components/WidgetSwitcher.h"
 #include "Engine/GameInstance.h"
 #include "Shinobi/Online/ShinobiSessionSubsystem.h"
 #include "Shinobi/UI/ShinobiDropdown.h"
@@ -156,8 +157,12 @@ namespace
 	constexpr float SettingsPanelWidth = 640.f;
 	/** A locked row's opacity (greyed out, still readable). */
 	constexpr float SettingsLockedOpacity = 0.4f;
-	/** The rows scroll past this height (slate units): the panel, its help line and the tab bar fit a 1080p screen. */
-	constexpr float SettingsRowsMaxHeight = 700.f;
+	/** The rows' height (slate units), the same on every category tab so the panel doesn't change size when switching; a
+	 * category with more rows scrolls. The panel, its tabs, help line and the menu's bars fit a 1080p screen. */
+	constexpr float SettingsRowsHeight = 470.f;
+	const FMargin SettingsCategoryPadding(16.f, 6.f);
+	/** The category tab last shown: the panel reopens on it (the pause menu builds a new one each time it opens). */
+	ShinobiSettings::ECategory SettingsLastCategory = ShinobiSettings::ECategory::Num;
 	constexpr float SettingsValueWidth = 190.f;
 	/** A stepper arrow's hit area: the glyph and its padding. */
 	constexpr float SettingsArrowWidth = 32.f;
@@ -192,27 +197,76 @@ TSharedRef<SWidget> UShinobiSettingsWidget::RebuildWidget()
 		Panel->SetContent(Width);
 		UVerticalBox* Outer = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
 		Width->AddChild(Outer);
-		// The rows scroll (there are more than fit a 1080p screen); the help line stays under them.
-		USizeBox* RowsHeight = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		RowsHeight->SetMaxDesiredHeight(SettingsRowsMaxHeight);
-		Outer->AddChildToVerticalBox(RowsHeight);
-		RowsScroll = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass(), TEXT("RowsScroll"));
-		RowsScroll->SetScrollbarThickness(FVector2D(4.f, 4.f));
-		RowsHeight->AddChild(RowsScroll);
-		Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Column"));
-		RowsScroll->AddChild(Column);
 
 		ShinobiGraphics::RefreshCaps(); // (what the GPU and NVIDIA's plugins allow decides which rows and options are locked)
 		Rows = ShinobiSettings::RowsFor(bMainMenu);
-		FString LastSection;
+		Categories = ShinobiSettings::CategoriesFor(bMainMenu);
+
+		// The category tabs, along the top (LT / RT switch them, as on CONTROLS).
+		UHorizontalBox* TabRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+		Outer->AddChildToVerticalBox(TabRow);
+		for (int32 Tab = 0; Tab < Categories.Num(); ++Tab)
+		{
+			UShinobiIndexButton* TabButton = WidgetTree->ConstructWidget<UShinobiIndexButton>(UShinobiIndexButton::StaticClass());
+			TabButton->Index = Tab;
+			TabButton->OnIndexClicked = FShinobiIndexClicked::CreateUObject(this, &UShinobiSettingsWidget::OnCategoryButton);
+			TabButton->Arm();
+			TabButton->AddChild(ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(ShinobiSettings::CategoryName(Categories[Tab])), 14, FLinearColor::White));
+			ShinobiMenuStyle::StyleButton(*TabButton, false, SettingsCategoryPadding);
+			TabButton->SetCursor(EMouseCursor::Hand); // a click shows the category
+			TabRow->AddChildToHorizontalBox(TabButton)->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+			CategoryButtons.Add(TabButton);
+		}
+		TabRow->AddChildToHorizontalBox(WidgetTree->ConstructWidget<USpacer>(USpacer::StaticClass()))->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		UHorizontalBoxSlot* TabKeys = TabRow->AddChildToHorizontalBox(ShinobiMenuStyle::Text(*WidgetTree, INVTEXT("LT / RT"), 11, ShinobiMenuStyle::TextDim));
+		TabKeys->SetVerticalAlignment(VAlign_Center);
+		TabKeys->SetPadding(FMargin(6.f, 0.f, 0.f, 0.f));
+		UBorder* TabRule = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass());
+		TabRule->SetBrush(ShinobiMenuStyle::ColorBrush(FLinearColor(1.f, 1.f, 1.f, 0.1f)));
+		TabRule->SetPadding(FMargin(0.f, 0.5f));
+		Outer->AddChildToVerticalBox(TabRule)->SetPadding(FMargin(0.f, 12.f, 0.f, 12.f));
+
+		// A page of rows per category, one shown at a time; each scrolls if its rows don't fit.
+		USizeBox* RowsHeight = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		RowsHeight->SetHeightOverride(SettingsRowsHeight);
+		Outer->AddChildToVerticalBox(RowsHeight);
+		CategoryPages = WidgetTree->ConstructWidget<UWidgetSwitcher>(UWidgetSwitcher::StaticClass(), TEXT("CategoryPages"));
+		RowsHeight->AddChild(CategoryPages);
+		TArray<UVerticalBox*> TabColumns;
+		TArray<TSet<FString>> TabSections;
+		TabSections.SetNum(Categories.Num());
+		for (int32 Tab = 0; Tab < Categories.Num(); ++Tab)
+		{
+			UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass());
+			Scroll->SetScrollbarThickness(FVector2D(4.f, 4.f));
+			CategoryPages->AddChild(Scroll);
+			RowsScrolls.Add(Scroll);
+			TabColumns.Add(WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass()));
+			Scroll->AddChild(TabColumns.Last());
+		}
+		for (const ShinobiSettings::ERow Row : Rows)
+		{
+			if (const int32 Tab = Categories.IndexOfByKey(ShinobiSettings::RowCategory(Row)); TabSections.IsValidIndex(Tab))
+			{
+				TabSections[Tab].Add(ShinobiSettings::RowSection(Row));
+			}
+		}
+		Column = TabColumns.Num() > 0 ? TabColumns[0] : nullptr;
+
+		TArray<FString> LastSections;
+		LastSections.SetNum(Categories.Num());
 		for (int32 Index = 0; Index < Rows.Num(); ++Index)
 		{
 			const ShinobiSettings::ERow Row = Rows[Index];
-			if (const FString Section = ShinobiSettings::RowSection(Row); Section != LastSection)
+			const int32 Tab = FMath::Max(0, Categories.IndexOfByKey(ShinobiSettings::RowCategory(Row)));
+			RowTabs.Add(Tab);
+			UVerticalBox* TabColumn = TabColumns[Tab];
+			// Headings split a category with several sections; a single one would only repeat the tab's name.
+			if (const FString Section = ShinobiSettings::RowSection(Row); TabSections[Tab].Num() > 1 && Section != LastSections[Tab])
 			{
-				LastSection = Section;
+				LastSections[Tab] = Section;
 				UTextBlock* Heading = ShinobiMenuStyle::Text(*WidgetTree, FText::FromString(Section), 13, ShinobiMenuStyle::Accent, true);
-				Column->AddChildToVerticalBox(Heading)->SetPadding(FMargin(4.f, Index == 0 ? 0.f : 16.f, 0.f, 4.f));
+				TabColumn->AddChildToVerticalBox(Heading)->SetPadding(FMargin(4.f, TabColumn->GetChildrenCount() == 0 ? 0.f : 16.f, 0.f, 4.f));
 			}
 			UShinobiIndexButton* Button = WidgetTree->ConstructWidget<UShinobiIndexButton>(UShinobiIndexButton::StaticClass());
 			Button->Index = Index;
@@ -261,7 +315,7 @@ TSharedRef<SWidget> UShinobiSettingsWidget::RebuildWidget()
 			}
 			ShinobiMenuStyle::StyleButton(*Button, false, FMargin(20.f, 7.f, 10.f, 7.f));
 			Cast<UButtonSlot>(Line->Slot)->SetHorizontalAlignment(HAlign_Fill);
-			Column->AddChildToVerticalBox(Button)->SetPadding(FMargin(0.f, 3.f));
+			TabColumn->AddChildToVerticalBox(Button)->SetPadding(FMargin(0.f, 3.f));
 			EntryButtons.Add(Button);
 			ValueTexts.Add(Value);
 			BackArrows.Add(Back);
@@ -279,9 +333,115 @@ TSharedRef<SWidget> UShinobiSettingsWidget::RebuildWidget()
 		DescriptionText->SetAutoWrapText(true);
 		DescriptionBox->AddChild(DescriptionText);
 		Outer->AddChildToVerticalBox(DescriptionBox)->SetPadding(FMargin(4.f, 0.f));
+		const int32 Remembered = Categories.IndexOfByKey(SettingsLastCategory);
+		ShowCategoryTab(Remembered != INDEX_NONE ? Remembered : 0, false);
 		RefreshValues();
 	}
 	return UUserWidget::RebuildWidget(); // not UShinobiMenuWidget's: this panel has its own layout
+}
+
+void UShinobiSettingsWidget::NativeConstruct()
+{
+	Super::NativeConstruct(); // (focuses the very first row, which is on another category when the panel reopens on a later one)
+	if (EntryButtons.Num() > 0 && EntryButtons[0]->HasAnyUserFocus() && !IsRowShown(0))
+	{
+		if (UWidget* Target = GetFocusTarget())
+		{
+			Target->SetKeyboardFocus();
+		}
+	}
+}
+
+void UShinobiSettingsWidget::OnCategoryButton(int32 Index)
+{
+	ShowCategoryTab(Index, false); // (focus stays on the clicked tab)
+}
+
+void UShinobiSettingsWidget::ShowCategoryTab(int32 Index, bool bFocusRow)
+{
+	if (!Categories.IsValidIndex(Index))
+	{
+		return;
+	}
+	ShownTab = Index;
+	SettingsLastCategory = Categories[Index];
+	if (CategoryPages)
+	{
+		CategoryPages->SetActiveWidgetIndex(Index);
+	}
+	for (int32 Tab = 0; Tab < CategoryButtons.Num(); ++Tab)
+	{
+		ShinobiMenuStyle::StyleButton(*CategoryButtons[Tab], Tab == Index, SettingsCategoryPadding); // the shown one is filled
+	}
+	bDescriptionStale = true; // (the row the help line explained may be on the category just hidden)
+	if (bFocusRow)
+	{
+		if (UWidget* Target = GetFocusTarget())
+		{
+			Target->SetKeyboardFocus();
+		}
+	}
+}
+
+void UShinobiSettingsWidget::SelectCategory(ShinobiSettings::ECategory Category, bool bFocusRow)
+{
+	ShowCategoryTab(Categories.IndexOfByKey(Category), bFocusRow);
+}
+
+ShinobiSettings::ECategory UShinobiSettingsWidget::GetCategory() const
+{
+	return Categories.IsValidIndex(ShownTab) ? Categories[ShownTab] : ShinobiSettings::ECategory::Num;
+}
+
+UShinobiIndexButton* UShinobiSettingsWidget::GetCategoryButton(ShinobiSettings::ECategory Category) const
+{
+	const int32 Tab = Categories.IndexOfByKey(Category);
+	return CategoryButtons.IsValidIndex(Tab) ? CategoryButtons[Tab].Get() : nullptr;
+}
+
+UWidget* UShinobiSettingsWidget::GetFocusTarget() const
+{
+	for (int32 Index = 0; Index < EntryButtons.Num(); ++Index)
+	{
+		if (IsRowShown(Index))
+		{
+			return EntryButtons[Index].Get();
+		}
+	}
+	return CategoryButtons.IsValidIndex(ShownTab) ? CategoryButtons[ShownTab].Get() : nullptr;
+}
+
+bool UShinobiSettingsWidget::IsRowShown(int32 Index) const
+{
+	return RowTabs.IsValidIndex(Index) && RowTabs[Index] == ShownTab;
+}
+
+int32 UShinobiSettingsWidget::GetFocusedCategoryTab() const
+{
+	for (int32 Tab = 0; Tab < CategoryButtons.Num(); ++Tab)
+	{
+		if (CategoryButtons[Tab]->HasAnyUserFocus())
+		{
+			return Tab;
+		}
+	}
+	return INDEX_NONE;
+}
+
+FReply UShinobiSettingsWidget::NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event)
+{
+	// LT / RT: the previous / next category (wrapping), focus to its first row. (Q / E and the bumpers stay the menu's tabs.)
+	const FKey Key = Event.GetKey();
+	if ((Key == EKeys::Gamepad_LeftTrigger || Key == EKeys::Gamepad_RightTrigger) && Categories.Num() > 0)
+	{
+		if (!Event.IsRepeat())
+		{
+			const int32 Count = Categories.Num();
+			ShowCategoryTab((ShownTab + (Key == EKeys::Gamepad_RightTrigger ? 1 : Count - 1)) % Count, true);
+		}
+		return FReply::Handled();
+	}
+	return Super::NativeOnKeyDown(Geometry, Event);
 }
 
 void UShinobiSettingsWidget::OnEntry(int32 Index)
@@ -399,9 +559,9 @@ void UShinobiSettingsWidget::NativeTick(const FGeometry& Geometry, float DeltaTi
 		Row = EntryButtons[Index]->IsHovered() ? Index : INDEX_NONE;
 	}
 	const int32 Focused = GetFocusedRow();
-	if (Focused != ScrolledToRow && RowsScroll && EntryButtons.IsValidIndex(Focused))
+	if (Focused != ScrolledToRow && EntryButtons.IsValidIndex(Focused) && RowTabs.IsValidIndex(Focused) && RowsScrolls.IsValidIndex(RowTabs[Focused]))
 	{
-		RowsScroll->ScrollWidgetIntoView(EntryButtons[Focused], true); // keys / gamepad move focus off the visible rows
+		RowsScrolls[RowTabs[Focused]]->ScrollWidgetIntoView(EntryButtons[Focused], true); // keys / gamepad move focus off the visible rows
 	}
 	ScrolledToRow = Focused;
 	Row = Row != INDEX_NONE ? Row : Focused;
@@ -429,6 +589,17 @@ FNavigationReply UShinobiSettingsWidget::NativeOnNavigation(const FGeometry& Geo
 		if (const int32 Row = GetFocusedRow(); Row != INDEX_NONE)
 		{
 			StepRow(Row, Direction == EUINavigation::Left ? -1 : 1);
+			return FNavigationReply::Stop();
+		}
+		// On the category tabs, the shown category follows focus along them.
+		if (const int32 Tab = GetFocusedCategoryTab(); Tab != INDEX_NONE)
+		{
+			const int32 Next = Tab + (Direction == EUINavigation::Left ? -1 : 1);
+			if (CategoryButtons.IsValidIndex(Next))
+			{
+				ShowCategoryTab(Next, false);
+				CategoryButtons[Next]->SetKeyboardFocus();
+			}
 			return FNavigationReply::Stop();
 		}
 	}
